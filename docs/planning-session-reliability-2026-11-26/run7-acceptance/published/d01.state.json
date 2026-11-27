@@ -1,0 +1,1981 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_4ca6b6e349664952bf19",
+      "words": "Bring in $1,000 of settled cash within 14 days. I have no money to put in, and I can give this at most 2 hours a week.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 100000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": 0,
+        "preProofSpendCapCents": 0,
+        "exposureCapCents": 0,
+        "proofCondition": "first settled payment from a buyer",
+        "ownerHoursPerWeek": 2,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "59de46a8dd94d17f1db2237d"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_4ca6b6e349664952bf19",
+        "contractDigest": "59de46a8dd94d17f1db2237d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+          "opportunityIds": [],
+          "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+        },
+        "alternatives": [
+          {
+            "title": "Gumroad template sold direct",
+            "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+          },
+          {
+            "title": "Upwork hourly work",
+            "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner sends 5 proposals to fixed-price blog-writing jobs on Upwork using only the free monthly Connects (no purchase)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Read result on day 4: count funded fixed-price contracts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 0.25,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "proposal-to-funded-contract rate for a zero-review profile",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "live proposals"
+          },
+          {
+            "name": "buyer-paid price for a 4-post fixed-price package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": "a funded contract at that price"
+          },
+          {
+            "name": "Upwork fixed-price security hold",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+            "dated": "2026-11-27",
+            "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+            "dated": "2026-11-27",
+            "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s3",
+            "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+            "dated": "2025-11-06",
+            "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+            "population": "213 freelance writers (sellers, not buyers)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s4",
+            "url": "https://gumroad.com/help/article/13-getting-paid",
+            "dated": "2026-11-27",
+            "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+            "population": "Gumroad sellers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_36fddb436e9b437389e1"
+          },
+          {
+            "id": "s5",
+            "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+            "dated": "2026-11-27",
+            "claim": "Hourly contracts are paid weekly after a security period",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_99e0d8097f4c44b4850a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer of any admitted route has been shown to buy: there is no buying signal and no measured close rate for a new zero-review Upwork profile, and without a contract funded by about day 4 no payment can clear Upwork's 5-day hold before day 14.",
+          "resolution": "Run a zero-cost test: on day 1 the owner (1 hour) sends 5 proposals to live fixed-price writing jobs with the free monthly Connects. Proof: at least one contract funded at >= $250 by day 4. Stop: no funded contract by day 4 — then no route reaches settled cash in 14 days at $0 and 4 owner hours; ask the owner to relax the window to 30 days or allow capital for Connects/subcontracting. Continue: a funded contract by day 4 — deliver, then send further proposals with the remaining hours.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "why": "No buying signal, no audience, ~35 sales needed, no established price"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_aeef6ea0d4be_03bf60",
+        "digest": "aeef6ea0d4be437eec1cdf69",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:30:18.248Z"
+      },
+      {
+        "goalId": "wst_4ca6b6e349664952bf19",
+        "contractDigest": "59de46a8dd94d17f1db2237d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+          "opportunityIds": [],
+          "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+        },
+        "alternatives": [
+          {
+            "title": "Gumroad template sold direct",
+            "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+          },
+          {
+            "title": "Upwork hourly work",
+            "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner sends 5 proposals to fixed-price blog-writing jobs on Upwork using only the free monthly Connects (no purchase)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Read result on day 4: count funded fixed-price contracts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 0.25,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "proposal-to-funded-contract rate for a zero-review profile",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "live proposals"
+          },
+          {
+            "name": "buyer-paid price for a 4-post fixed-price package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": "a funded contract at that price"
+          },
+          {
+            "name": "Upwork fixed-price security hold",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+            "dated": "2026-11-27",
+            "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+            "dated": "2026-11-27",
+            "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s3",
+            "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+            "dated": "2025-11-06",
+            "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+            "population": "213 freelance writers (sellers, not buyers)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s4",
+            "url": "https://gumroad.com/help/article/13-getting-paid",
+            "dated": "2026-11-27",
+            "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+            "population": "Gumroad sellers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_36fddb436e9b437389e1"
+          },
+          {
+            "id": "s5",
+            "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+            "dated": "2026-11-27",
+            "claim": "Hourly contracts are paid weekly after a security period",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_99e0d8097f4c44b4850a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer of any admitted route has been shown to buy: there is no buying signal and no measured close rate for a new zero-review Upwork profile, and without a contract funded by about day 4 no payment can clear Upwork's 5-day hold before day 14.",
+          "resolution": "Run a zero-cost test: on day 1 the owner (1 hour) sends 5 proposals to live fixed-price writing jobs with the free monthly Connects. Proof: at least one contract funded at >= $250 by day 4. Stop: no funded contract by day 4 — then no route reaches settled cash in 14 days at $0 and 4 owner hours; ask the owner to relax the window to 30 days or allow capital for Connects/subcontracting. Continue: a funded contract by day 4 — deliver, then send further proposals with the remaining hours.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "why": "No buying signal, no audience, ~35 sales needed, no established price"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_aeef6ea0d4be_48bd92",
+        "digest": "aeef6ea0d4be437eec1cdf69",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:30:23.477Z"
+      },
+      {
+        "goalId": "wst_4ca6b6e349664952bf19",
+        "contractDigest": "59de46a8dd94d17f1db2237d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+          "opportunityIds": [],
+          "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+        },
+        "alternatives": [
+          {
+            "title": "Gumroad template sold direct",
+            "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+          },
+          {
+            "title": "Upwork hourly work",
+            "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner sends 5 proposals to fixed-price blog-writing jobs on Upwork using only the free monthly Connects (no purchase)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Read result on day 4: count funded fixed-price contracts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 0.25,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "proposal-to-funded-contract rate for a zero-review profile",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "live proposals"
+          },
+          {
+            "name": "buyer-paid price for a 4-post fixed-price package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a funded contract at that price"
+          },
+          {
+            "name": "Upwork fixed-price security hold",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+            "dated": "2026-11-27",
+            "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+            "dated": "2026-11-27",
+            "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s3",
+            "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+            "dated": "2025-11-06",
+            "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+            "population": "213 freelance writers (sellers, not buyers)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s4",
+            "url": "https://gumroad.com/help/article/13-getting-paid",
+            "dated": "2026-11-27",
+            "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+            "population": "Gumroad sellers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_36fddb436e9b437389e1"
+          },
+          {
+            "id": "s5",
+            "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+            "dated": "2026-11-27",
+            "claim": "Hourly contracts are paid weekly after a security period",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_99e0d8097f4c44b4850a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer of any admitted route has been shown to buy: there is no buying signal and no measured close rate for a new zero-review Upwork profile, and without a contract funded by about day 4 no payment can clear Upwork's 5-day hold before day 14.",
+          "resolution": "Run a zero-cost test: on day 1 the owner (1 hour) sends 5 proposals to live fixed-price writing jobs with the free monthly Connects. Proof: at least one contract funded at >= $250 by day 4. Stop: no funded contract by day 4 — then no route reaches settled cash in 14 days at $0 and 4 owner hours; ask the owner to relax the window to 30 days or allow capital for Connects/subcontracting. Continue: a funded contract by day 4 — deliver, then send further proposals with the remaining hours.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "why": "No buying signal, no audience, ~35 sales needed, no established price"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_55f72d623df3_8139eb",
+        "digest": "55f72d623df3477856a26d28",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:30:30.796Z"
+      },
+      {
+        "goalId": "wst_4ca6b6e349664952bf19",
+        "contractDigest": "59de46a8dd94d17f1db2237d",
+        "parentRevisionId": "rev_55f72d623df3_8139eb",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+          "opportunityIds": [],
+          "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+        },
+        "alternatives": [
+          {
+            "title": "Gumroad template sold direct",
+            "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+          },
+          {
+            "title": "Upwork hourly work",
+            "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner sends as many proposals to fixed-price blog-writing jobs on Upwork as the free Connects allow (10 monthly plus any new-freelancer bonus; no purchase), each quoting $250 per 4-post package",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Read result on day 4: count funded fixed-price contracts and the owner hours the first delivery actually takes",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 0.25,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "proposal-to-funded-contract rate for a zero-review profile",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "live proposals"
+          },
+          {
+            "name": "buyer-paid price for a 4-post fixed-price package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a funded contract at that price"
+          },
+          {
+            "name": "Upwork fixed-price security hold",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+            "dated": "2026-11-27",
+            "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+            "dated": "2026-11-27",
+            "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s3",
+            "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+            "dated": "2025-11-06",
+            "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+            "population": "213 freelance writers (sellers, not buyers)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s4",
+            "url": "https://gumroad.com/help/article/13-getting-paid",
+            "dated": "2026-11-27",
+            "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+            "population": "Gumroad sellers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_36fddb436e9b437389e1"
+          },
+          {
+            "id": "s5",
+            "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+            "dated": "2026-11-27",
+            "claim": "Hourly contracts are paid weekly after a security period",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_99e0d8097f4c44b4850a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No route can be shown to settle $1,000 within 14 days at $0 and 4 owner hours: no buyer has been shown to buy (no buying signal, no measured close rate for a zero-review Upwork profile), and because Brain-produced writing is refused as unproved the owner must fulfil every package personally, with no evidence that 5 packages (about 20 posts, allowing for Upwork's fee) can be delivered in the ~2.75 owner hours left after the test, or approved by ~day 9 so each clears the 5-day hold by day 14.",
+          "resolution": "Zero-cost test sized to the target: on day 1 the owner (1 hour) sends as many proposals as the free Connects allow. Proof (by day 4): at least 5 funded fixed-price contracts at >= $250 AND the first delivery measured at <= 0.5 owner hours, so all 5 can be delivered and approved by day 9. Stop: fewer than 5 funded contracts by day 4, or the first delivery takes more than 0.5 owner hours — then no route reaches $1,000 settled; ask the owner to relax the window (30+ days), the hours (about 20 hours), or allow capital so a subcontractor or Brain-proved deliverable can fulfil. Continue: proof met — deliver all 5 and submit for approval by day 9.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "FULFILMENT",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: 4 packages gross, ~5 after the marketplace fee; ledger and proof ignore the fee",
+            "resolution": "Accepted: the proof now requires 5 funded contracts at >= $250, allowing for Upwork's freelancer fee (rate not established here)."
+          },
+          {
+            "finding": "Owner hours: 4 h total; test uses 1.25 h; fulfilment hours for owner-edited posts not evidenced",
+            "resolution": "Accepted: FULFILMENT is now a decisive link; the test measures the owner hours of the first delivery and stops above 0.5 h per package."
+          },
+          {
+            "finding": "Settlement: each contract must be approved by ~day 9; test says nothing about the other contracts",
+            "resolution": "Accepted: SETTLES_IN_TIME is a decisive link and the proof requires all 5 to be deliverable and approved by day 9."
+          },
+          {
+            "finding": "Proof/stop/continue should be sized to the target",
+            "resolution": "Accepted: proof is 5 funded contracts plus measured delivery hours; stop otherwise, with the relaxation to ask for."
+          },
+          {
+            "finding": "Proposals cost several Connects each; 5 proposals on 10 free Connects should be checked",
+            "resolution": "Accepted: the test no longer assumes 5 proposals; it sends as many as the free Connects allow, which makes reaching 5 funded contracts less likely and is reflected in the stop rule."
+          },
+          {
+            "finding": "Excluded Gumroad and hourly routes are reasoned correctly",
+            "resolution": "Kept unchanged."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "why": "No buying signal, no audience, ~35 sales needed, no established price"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "FULFILMENT",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3ce8401eea98_fa400d",
+        "digest": "3ce8401eea98668da0b80c49",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:36:33.360Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_4ca6b6e349664952bf19",
+      "contractDigest": "59de46a8dd94d17f1db2237d",
+      "parentRevisionId": "rev_55f72d623df3_8139eb",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+        "opportunityIds": [],
+        "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+      },
+      "alternatives": [
+        {
+          "title": "Gumroad template sold direct",
+          "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+        },
+        {
+          "title": "Upwork hourly work",
+          "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+        },
+        {
+          "title": "Fiverr gig",
+          "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Owner sends as many proposals to fixed-price blog-writing jobs on Upwork as the free Connects allow (10 monthly plus any new-freelancer bonus; no purchase), each quoting $250 per 4-post package",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s2"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "t2",
+          "kind": "OTHER",
+          "label": "Read result on day 4: count funded fixed-price contracts and the owner hours the first delivery actually takes",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "t1",
+          "evidence": [
+            "s1"
+          ],
+          "ownerHours": 0.25,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": 4,
+      "quantities": [
+        {
+          "name": "proposal-to-funded-contract rate for a zero-review profile",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "ratio",
+          "sources": [],
+          "needs": "live proposals"
+        },
+        {
+          "name": "buyer-paid price for a 4-post fixed-price package",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "a funded contract at that price"
+        },
+        {
+          "name": "Upwork fixed-price security hold",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+          "dated": "2026-11-27",
+          "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+          "population": "Upwork freelancers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+        },
+        {
+          "id": "s2",
+          "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+          "dated": "2026-11-27",
+          "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+          "population": "Upwork freelancers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+        },
+        {
+          "id": "s3",
+          "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+          "dated": "2025-11-06",
+          "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+          "population": "213 freelance writers (sellers, not buyers)",
+          "matchesBuyer": false,
+          "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+        },
+        {
+          "id": "s4",
+          "url": "https://gumroad.com/help/article/13-getting-paid",
+          "dated": "2026-11-27",
+          "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+          "population": "Gumroad sellers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_36fddb436e9b437389e1"
+        },
+        {
+          "id": "s5",
+          "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+          "dated": "2026-11-27",
+          "claim": "Hourly contracts are paid weekly after a security period",
+          "population": "Upwork freelancers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_99e0d8097f4c44b4850a"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No route can be shown to settle $1,000 within 14 days at $0 and 4 owner hours: no buyer has been shown to buy (no buying signal, no measured close rate for a zero-review Upwork profile), and because Brain-produced writing is refused as unproved the owner must fulfil every package personally, with no evidence that 5 packages (about 20 posts, allowing for Upwork's fee) can be delivered in the ~2.75 owner hours left after the test, or approved by ~day 9 so each clears the 5-day hold by day 14.",
+        "resolution": "Zero-cost test sized to the target: on day 1 the owner (1 hour) sends as many proposals as the free Connects allow. Proof (by day 4): at least 5 funded fixed-price contracts at >= $250 AND the first delivery measured at <= 0.5 owner hours, so all 5 can be delivered and approved by day 9. Stop: fewer than 5 funded contracts by day 4, or the first delivery takes more than 0.5 owner hours — then no route reaches $1,000 settled; ask the owner to relax the window (30+ days), the hours (about 20 hours), or allow capital so a subcontractor or Brain-proved deliverable can fulfil. Continue: proof met — deliver all 5 and submit for approval by day 9.",
+        "decisiveLinks": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "FULFILMENT",
+          "SETTLES_IN_TIME"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Recomputed: 4 packages gross, ~5 after the marketplace fee; ledger and proof ignore the fee",
+          "resolution": "Accepted: the proof now requires 5 funded contracts at >= $250, allowing for Upwork's freelancer fee (rate not established here)."
+        },
+        {
+          "finding": "Owner hours: 4 h total; test uses 1.25 h; fulfilment hours for owner-edited posts not evidenced",
+          "resolution": "Accepted: FULFILMENT is now a decisive link; the test measures the owner hours of the first delivery and stops above 0.5 h per package."
+        },
+        {
+          "finding": "Settlement: each contract must be approved by ~day 9; test says nothing about the other contracts",
+          "resolution": "Accepted: SETTLES_IN_TIME is a decisive link and the proof requires all 5 to be deliverable and approved by day 9."
+        },
+        {
+          "finding": "Proof/stop/continue should be sized to the target",
+          "resolution": "Accepted: proof is 5 funded contracts plus measured delivery hours; stop otherwise, with the relaxation to ask for."
+        },
+        {
+          "finding": "Proposals cost several Connects each; 5 proposals on 10 free Connects should be checked",
+          "resolution": "Accepted: the test no longer assumes 5 proposals; it sends as many as the free Connects allow, which makes reaching 5 funded contracts less likely and is reflected in the stop rule."
+        },
+        {
+          "finding": "Excluded Gumroad and hourly routes are reasoned correctly",
+          "resolution": "Kept unchanged."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_99e0d8097f4c44b4850a",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_36fddb436e9b437389e1",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_99e0d8097f4c44b4850a",
+          "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+        },
+        {
+          "opportunityId": "cop_36fddb436e9b437389e1",
+          "why": "No buying signal, no audience, ~35 sales needed, no established price"
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "CONVERSION",
+        "FULFILMENT",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_3ce8401eea98_fa400d",
+      "digest": "3ce8401eea98668da0b80c49",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_248ced2c9d5243089122/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:36:33.360Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3ce8401eea98_fa400d",
+      "digest": "3ce8401eea98668da0b80c49",
+      "contractDigest": "59de46a8dd94d17f1db2237d",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 1000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Gumroad digital template (Notion small-business finance trac\" needs [figure withheld] and keeps [figure withheld], 26× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying), so none of its figures is shown or adopted.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_2435d4e39ffc44c9b8c7",
+          "cop_99e0d8097f4c44b4850a",
+          "cop_36fddb436e9b437389e1"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 1000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "title": "Upwork fixed-price AI-assisted content writing (blog posts / product descriptions)",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 250,
+            "card": {
+              "payer": "Small businesses posting fixed-price writing jobs on Upwork",
+              "reachableChannel": "Upwork job feed + proposals (Connects; free monthly allocation of 10 on Basic plan)",
+              "offerScope": "Fixed-price package of 4 SEO blog posts (~1,200 words each), drafted by Brain, edited and submitted via the owner's Upwork account",
+              "priceCents": 25000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "content marketing",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Upwork job feed + proposals (Connects; free monthly allocation of 10 on Basic pl"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Upwork job feed + proposals (Connects; free monthly allocation of 10 on Basic plan)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fixed-price package of 4 SEO blog posts (~1,200 words each), drafted by Brain, edited and submitted via the owner's Upwork account to Small businesses posting fixed-price writing jobs on Upwork, reached through Upwork job feed + proposals (Connects; free monthly allocation of 10 on Basic plan), at $250; The owner (writes/edits and submits on Upwork) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner (writes/edits and submits on Upwork).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Fixed-price package of 4 SEO blog posts (~1,200 words each), drafted by Brain, edited and submitted via the owner's Upwork account",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Small businesses posting fixed-price writing jobs on Upwork",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; upwork content writer cost; https://www.upwork.com/resources/how-to-get-free-connects; upwork fixed price blog post jobs",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "title": "Upwork hourly contract: owner-run AI-assisted data cleanup / research",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 120,
+            "card": {
+              "payer": "Small businesses posting hourly data-entry or research jobs on Upwork",
+              "reachableChannel": "Upwork job feed + proposals with free Connects",
+              "offerScope": "Hourly data cleanup/research, owner bills hours",
+              "priceCents": 12000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 4,
+              "requiredCapabilities": [],
+              "industry": "admin / data services",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Upwork job feed + proposals with free Connects"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 120 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Upwork job feed + proposals with free Connects",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Hourly data cleanup/research, owner bills hours to Small businesses posting hourly data-entry or research jobs on Upwork, reached through Upwork job feed + proposals with free Connects, at $120; The owner delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "4 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Hourly data cleanup/research, owner bills hours",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Small businesses posting hourly data-entry or research jobs on Upwork",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$120",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$120",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "upwork data entry hourly rate; upwork data entry jobs; https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "title": "Gumroad digital template (Notion small-business finance tracker) sold direct",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 29,
+            "card": {
+              "payer": "Individuals and freelancers buying Notion templates on Gumroad",
+              "reachableChannel": "Gumroad profile plus free posts in Notion template communities (owner's accounts)",
+              "offerScope": "Notion template, one-time download",
+              "priceCents": 2900,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "digital products / templates",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Gumroad profile plus free posts in Notion template communities (owner's accounts"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 29 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 3, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "8 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Gumroad profile plus free posts in Notion template communities (owner's accounts)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Notion template, one-time download to Individuals and freelancers buying Notion templates on Gumroad, reached through Gumroad profile plus free posts in Notion template communities (owner's accounts), at $29; The owner (lists the template; Gumroad delivers the file automatically) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$3",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner (lists the template; Gumroad delivers the file automatically).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Notion template, one-time download",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Individuals and freelancers buying Notion templates on Gumroad",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$29",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$29",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://gumroad.com/help/article/13-getting-paid; https://checkoutpage.com/blog/gumroad-fees; notion template gumroad sales; gumroad new seller first sales",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "8 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 100000,
+          "daysLeft": 14,
+          "hoursCeiling": 4,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T08:32:38.405Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_55f72d623df3_8139eb",
+        "revisionDigest": "55f72d623df3477856a26d28",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_34d5ef3bcc604a04bdd5/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "No plan is the right conclusion (no route has a buying signal, an evidenced buyer-paid price, a measured close rate or an established fulfiller; the only price research - writers' self-reported 2021 per-post rates - was rejected at the gate), but the embedded test is presented as the way forward and its proof cannot decide the goal. $1,000 at $250 per package needs 4 settled packages (5 once Upwork's freelancer service fee is netted out), each of 4 ~1,200-word posts that the owner must fulfil personally (Brain-produced writing is refused as unproved), inside 4 owner hours in total (2 h/week x 2 weeks), of which the test itself uses 1.25 h. The card's '1 owner hour per sale' is a RECOMMENDATION, not evidence; producing/editing 16 posts in ~2.75 remaining hours is not plausible, and unknown hours are unknown, not zero. A day-4 proof of one funded $250 contract therefore cannot show the target is reachable; the decisive gap should include FULFILMENT/owner hours and settlement timing for four contracts, not only demand and conversion.",
+        "findings": [
+          "Recomputed: ceil(1000/250) = 4 packages gross; with a marketplace service fee (~10%) settled cash per package is ~$225, so 5 packages are needed for $1,000 settled. The plan's ledger and proof ignore the fee.",
+          "Owner hours: 4 h total in the window; test t1+t2 = 1.25 h; fulfilment hours for 16 owner-edited posts are not evidenced (card hours fact is RECOMMENDATION).",
+          "Settlement: each contract must be funded, delivered, approved and then pass the 5-day hold by day 14, i.e. approved by ~day 9; the test reads only 'funded by day 4' and says nothing about how the other 3-4 contracts settle in time.",
+          "Proof/stop/continue should be sized to the target: e.g. proof = enough funded contracts (>= 4-5 at >= $250) with owner-measured delivery hours fitting 4 h, else stop; one funded contract is not evidence the $1,000 can settle.",
+          "Unverified here (Upwork pages returned 403 to this reviewer): proposals typically cost several Connects each, so 5 proposals on 10 free Connects should be checked.",
+          "Excluded Gumroad and hourly routes are reasoned correctly (no audience/~35 sales needed; ~$30/h x 4 h << $1,000)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:34:58.405Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_3ce8401eea98_fa400d",
+        "revisionDigest": "3ce8401eea98668da0b80c49",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_34d5ef3bcc604a04bdd5/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is honest and the decisive gaps are now the right ones: no buyer is shown to buy (no signal, no close rate for a zero-review profile, no buyer-paid price - the only price research was rejected at the gate), the owner must fulfil personally, and settlement must clear Upwork's 5-day hold by day 14. The zero-cost test is now sized to the target: proof needs 5 funded contracts at >= $250 (4 gross, 5 allowing the freelancer fee) by day 4 and a first delivery measured at <= 0.5 owner hours, so 1.25 h (test) + 5 x 0.5 h = 3.75 h fits the 4 h (2 h/week x 2 weeks) and all 5 can be approved by ~day 9 to clear by day 14. Stop and continue rules are explicit, nothing is spent, and every earlier finding is answered.",
+        "findings": [
+          "Arithmetic checks: ceil(1000/250) = 4 gross, 5 net of a ~10% fee; owner hours 3.75 h <= 4 h at the 0.5 h cap; approval by day 9 + 5-day hold = day 14.",
+          "The proof bar is realistically hard (5 funded contracts from a handful of free-Connect proposals, and 4 owner-written posts in 0.5 h each package); the stop rule therefore matters most and names the relaxations to ask for (30+ days, ~20 h, or capital/subcontractor).",
+          "Upwork's freelancer fee rate is not established; the 5-contract proof is a reasonable allowance, not evidence.",
+          "Hourly and Gumroad exclusions remain correctly reasoned."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:38:35.380Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3ce8401eea98_fa400d",
+      "digest": "3ce8401eea98668da0b80c49",
+      "contractDigest": "59de46a8dd94d17f1db2237d",
+      "plan": {
+        "goalId": "wst_4ca6b6e349664952bf19",
+        "contractDigest": "59de46a8dd94d17f1db2237d",
+        "parentRevisionId": "rev_55f72d623df3_8139eb",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: test whether a zero-review Upwork profile can win a fixed-price writing contract inside the window",
+          "opportunityIds": [],
+          "why": "With $0 of capital and 4 owner hours in total, the only admitted routes are owner-performed (Brain-performed deliverables are refused as unproved). None has a recorded buying signal, an established price, a measured close rate or an established fulfiller; Fiverr (14-day clearance) and a subcontracted website resale (needs up-front capital) were refused outright. The decisive unknown is whether any buyer converts at all within the first days, so that payment clears (5-day Upwork hold) before day 14."
+        },
+        "alternatives": [
+          {
+            "title": "Gumroad template sold direct",
+            "why": "No audience, no measured sales rate, ~35 sales needed; new-seller payout holds reported (unverified) of 7-14 days"
+          },
+          {
+            "title": "Upwork hourly work",
+            "why": "Owner-performed hourly work at ~$30/h cannot reach $1,000 in 4 owner hours"
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: Fiverr's standard 14-day clearance after completion puts the first settled cash past day 14"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Owner sends as many proposals to fixed-price blog-writing jobs on Upwork as the free Connects allow (10 monthly plus any new-freelancer bonus; no purchase), each quoting $250 per 4-post package",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Read result on day 4: count funded fixed-price contracts and the owner hours the first delivery actually takes",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "t1",
+            "evidence": [
+              "s1"
+            ],
+            "ownerHours": 0.25,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "proposal-to-funded-contract rate for a zero-review profile",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "ratio",
+            "sources": [],
+            "needs": "live proposals"
+          },
+          {
+            "name": "buyer-paid price for a 4-post fixed-price package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "a funded contract at that price"
+          },
+          {
+            "name": "Upwork fixed-price security hold",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+            "dated": "2026-11-27",
+            "claim": "Approved fixed-price payments pass a 5-day security hold before withdrawal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s2",
+            "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+            "dated": "2026-11-27",
+            "claim": "Upwork Basic plan gives 10 free Connects a month; Connects otherwise cost $0.15 each; this is the channel that shows fixed-price writing jobs are posted",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s3",
+            "url": "https://peakfreelance.com/blog/freelance-writing-rates/",
+            "dated": "2025-11-06",
+            "claim": "$250-$399 is the most popular self-reported writer rate for a 1,500-word blog post (survey ~2021)",
+            "population": "213 freelance writers (sellers, not buyers)",
+            "matchesBuyer": false,
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7"
+          },
+          {
+            "id": "s4",
+            "url": "https://gumroad.com/help/article/13-getting-paid",
+            "dated": "2026-11-27",
+            "claim": "Gumroad pays out weekly; sources conflict on new-seller holds",
+            "population": "Gumroad sellers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_36fddb436e9b437389e1"
+          },
+          {
+            "id": "s5",
+            "url": "https://community.upwork.com/t5/Announcements/Faster-payouts-for-hourly-contracts/m-p/739991",
+            "dated": "2026-11-27",
+            "claim": "Hourly contracts are paid weekly after a security period",
+            "population": "Upwork freelancers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_99e0d8097f4c44b4850a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No route can be shown to settle $1,000 within 14 days at $0 and 4 owner hours: no buyer has been shown to buy (no buying signal, no measured close rate for a zero-review Upwork profile), and because Brain-produced writing is refused as unproved the owner must fulfil every package personally, with no evidence that 5 packages (about 20 posts, allowing for Upwork's fee) can be delivered in the ~2.75 owner hours left after the test, or approved by ~day 9 so each clears the 5-day hold by day 14.",
+          "resolution": "Zero-cost test sized to the target: on day 1 the owner (1 hour) sends as many proposals as the free Connects allow. Proof (by day 4): at least 5 funded fixed-price contracts at >= $250 AND the first delivery measured at <= 0.5 owner hours, so all 5 can be delivered and approved by day 9. Stop: fewer than 5 funded contracts by day 4, or the first delivery takes more than 0.5 owner hours — then no route reaches $1,000 settled; ask the owner to relax the window (30+ days), the hours (about 20 hours), or allow capital so a subcontractor or Brain-proved deliverable can fulfil. Continue: proof met — deliver all 5 and submit for approval by day 9.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "CONVERSION",
+            "FULFILMENT",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: 4 packages gross, ~5 after the marketplace fee; ledger and proof ignore the fee",
+            "resolution": "Accepted: the proof now requires 5 funded contracts at >= $250, allowing for Upwork's freelancer fee (rate not established here)."
+          },
+          {
+            "finding": "Owner hours: 4 h total; test uses 1.25 h; fulfilment hours for owner-edited posts not evidenced",
+            "resolution": "Accepted: FULFILMENT is now a decisive link; the test measures the owner hours of the first delivery and stops above 0.5 h per package."
+          },
+          {
+            "finding": "Settlement: each contract must be approved by ~day 9; test says nothing about the other contracts",
+            "resolution": "Accepted: SETTLES_IN_TIME is a decisive link and the proof requires all 5 to be deliverable and approved by day 9."
+          },
+          {
+            "finding": "Proof/stop/continue should be sized to the target",
+            "resolution": "Accepted: proof is 5 funded contracts plus measured delivery hours; stop otherwise, with the relaxation to ask for."
+          },
+          {
+            "finding": "Proposals cost several Connects each; 5 proposals on 10 free Connects should be checked",
+            "resolution": "Accepted: the test no longer assumes 5 proposals; it sends as many as the free Connects allow, which makes reaching 5 funded contracts less likely and is reflected in the stop rule."
+          },
+          {
+            "finding": "Excluded Gumroad and hourly routes are reasoned correctly",
+            "resolution": "Kept unchanged."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2435d4e39ffc44c9b8c7",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_99e0d8097f4c44b4850a",
+            "why": "Owner-performed hourly work cannot reach $1,000 within 4 owner hours; price and demand unestablished"
+          },
+          {
+            "opportunityId": "cop_36fddb436e9b437389e1",
+            "why": "No buying signal, no audience, ~35 sales needed, no established price"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "CONVERSION",
+          "FULFILMENT",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3ce8401eea98_fa400d",
+        "digest": "3ce8401eea98668da0b80c49",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:36:33.360Z"
+      },
+      "review": {
+        "revisionId": "rev_3ce8401eea98_fa400d",
+        "revisionDigest": "3ce8401eea98668da0b80c49",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_248ced2c9d5243089122/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_34d5ef3bcc604a04bdd5/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is honest and the decisive gaps are now the right ones: no buyer is shown to buy (no signal, no close rate for a zero-review profile, no buyer-paid price - the only price research was rejected at the gate), the owner must fulfil personally, and settlement must clear Upwork's 5-day hold by day 14. The zero-cost test is now sized to the target: proof needs 5 funded contracts at >= $250 (4 gross, 5 allowing the freelancer fee) by day 4 and a first delivery measured at <= 0.5 owner hours, so 1.25 h (test) + 5 x 0.5 h = 3.75 h fits the 4 h (2 h/week x 2 weeks) and all 5 can be approved by ~day 9 to clear by day 14. Stop and continue rules are explicit, nothing is spent, and every earlier finding is answered.",
+        "findings": [
+          "Arithmetic checks: ceil(1000/250) = 4 gross, 5 net of a ~10% fee; owner hours 3.75 h <= 4 h at the 0.5 h cap; approval by day 9 + 5-day hold = day 14.",
+          "The proof bar is realistically hard (5 funded contracts from a handful of free-Connect proposals, and 4 owner-written posts in 0.5 h each package); the stop rule therefore matters most and names the relaxations to ask for (30+ days, ~20 h, or capital/subcontractor).",
+          "Upwork's freelancer fee rate is not established; the 5-contract proof is a reasonable allowance, not evidence.",
+          "Hourly and Gumroad exclusions remain correctly reasoned."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:38:35.380Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Bring in $1,000 of settled cash within 14 days. I have no money to put in, and I can give this at most 2 hours a week.",
+        "terms": "346c215a50d1926f",
+        "openings": {
+          "cop_2435d4e39ffc44c9b8c7": "b99012e71bab8e65",
+          "cop_36fddb436e9b437389e1": "de3683a2188025ee",
+          "cop_99e0d8097f4c44b4850a": "4dd2a6929b0fa72d"
+        }
+      },
+      "at": "2026-11-27T08:38:47.597Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

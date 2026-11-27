@@ -1,0 +1,1221 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_f50eace310114ecfa2e6",
+      "words": "Earn $1,200 a month in recurring revenue within 14 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 120000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$1,200 a month of recurring revenue under signed monthly subscriptions, first month collected, by day 14, with no up-front capital",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "c6f397a3281ca4bf42bb8d5b"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_f50eace310114ecfa2e6",
+        "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed $280/month martial-arts retention-report subscriptions ($1,400 MRR)",
+          "opportunityIds": [
+            "cop_d1b9b70f6cb4430d8cfe"
+          ],
+          "why": "Five schools have signed written monthly subscriptions at $280 a month (card price fact; five WRITTEN_ACCEPTANCE agreements): $1,400 of monthly recurring revenue against the $1,200 target (all five are needed; four would give $1,120). Brain produces the spreadsheet report itself (PRODUCE_SPREADSHEET proved), direct cost $6 per report paid from receipts, no capital tied up, first cash usable 7 days after billing, inside the 14-day window. No new selling is needed and the owner does no work."
+        },
+        "alternatives": [
+          {
+            "title": "Sell additional subscriptions from the 310 listed schools",
+            "why": "Would add headroom, but no conversion rate is measured for cold schools; the signed five already carry the target, so it is not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Countersign the five signed $280/month subscriptions and issue first-month invoices",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 28000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Collect the five first-month payments ($1,400)",
+            "performer": "BRAIN",
+            "costCents": null,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each school's monthly member-retention and churn-risk spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 3000,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 140000,
+            "label": "First month from five schools at $280",
+            "settlesDay": 7,
+            "stepId": "s2"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Direct cost of five reports at $6",
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "signed monthly subscriptions",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "schools",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 28000,
+            "unit": "cents/month",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#price",
+            "dated": "2026-11",
+            "claim": "Five schools signed monthly subscriptions at $280 a month",
+            "population": "Five named martial-arts schools that signed",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per report",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "deals": 5,
+            "price": 280,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c564780fae59_e06958",
+        "digest": "c564780fae5930cfecf8bd43",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_367bd8b0da1041d493d0/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:09.776Z"
+      },
+      {
+        "goalId": "wst_f50eace310114ecfa2e6",
+        "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed $280/month martial-arts retention-report subscriptions ($1,400 MRR)",
+          "opportunityIds": [
+            "cop_d1b9b70f6cb4430d8cfe"
+          ],
+          "why": "Five schools have signed written monthly subscriptions at $280 a month (card price fact; five WRITTEN_ACCEPTANCE agreements): $1,400 of monthly recurring revenue against the $1,200 target (all five are needed; four would give $1,120). Brain produces the spreadsheet report itself (PRODUCE_SPREADSHEET proved), direct cost $6 per report paid from receipts, no capital tied up, first cash usable 7 days after billing, inside the 14-day window. No new selling is needed and the owner does no work."
+        },
+        "alternatives": [
+          {
+            "title": "Sell additional subscriptions from the 310 listed schools",
+            "why": "Would add headroom, but no conversion rate is measured for cold schools; the signed five already carry the target, so it is not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Countersign the five signed $280/month subscriptions and issue first-month invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 28000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Collect the five first-month payments ($1,400)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each school's monthly member-retention and churn-risk spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 3000,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 140000,
+            "label": "First month from five schools at $280",
+            "settlesDay": 7,
+            "stepId": "s2"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Direct cost of five reports at $6",
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "signed monthly subscriptions",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "schools",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 28000,
+            "unit": "cents/month",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#price",
+            "dated": "2026-11",
+            "claim": "Five schools signed monthly subscriptions at $280 a month",
+            "population": "Five named martial-arts schools that signed",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per report",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "deals": 5,
+            "price": 280,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8e12ebfa4f06_01d15e",
+        "digest": "8e12ebfa4f06d16b1172fce2",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_367bd8b0da1041d493d0/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:13.517Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_f50eace310114ecfa2e6",
+      "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the five signed $280/month martial-arts retention-report subscriptions ($1,400 MRR)",
+        "opportunityIds": [
+          "cop_d1b9b70f6cb4430d8cfe"
+        ],
+        "why": "Five schools have signed written monthly subscriptions at $280 a month (card price fact; five WRITTEN_ACCEPTANCE agreements): $1,400 of monthly recurring revenue against the $1,200 target (all five are needed; four would give $1,120). Brain produces the spreadsheet report itself (PRODUCE_SPREADSHEET proved), direct cost $6 per report paid from receipts, no capital tied up, first cash usable 7 days after billing, inside the 14-day window. No new selling is needed and the owner does no work."
+      },
+      "alternatives": [
+        {
+          "title": "Sell additional subscriptions from the 310 listed schools",
+          "why": "Would add headroom, but no conversion rate is measured for cold schools; the signed five already carry the target, so it is not needed."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Countersign the five signed $280/month subscriptions and issue first-month invoices",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "priceCents": 28000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "COLLECT",
+          "label": "Collect the five first-month payments ($1,400)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "s1",
+          "evidence": [
+            "s3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "DELIVER",
+          "label": "Produce and deliver each school's monthly member-retention and churn-risk spreadsheet",
+          "performer": "BRAIN",
+          "costCents": 3000,
+          "day": 7,
+          "dependsOn": "s2",
+          "evidence": [
+            "s2",
+            "s4"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 140000,
+          "label": "First month from five schools at $280",
+          "settlesDay": 7,
+          "stepId": "s2"
+        },
+        {
+          "day": 7,
+          "kind": "SPEND",
+          "amountCents": 3000,
+          "label": "Direct cost of five reports at $6",
+          "stepId": "s3"
+        }
+      ],
+      "proofDay": 7,
+      "quantities": [
+        {
+          "name": "signed monthly subscriptions",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "schools",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "monthly price",
+          "status": "EVIDENCED",
+          "value": 28000,
+          "unit": "cents/month",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per report",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "cents",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "days",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#price",
+          "dated": "2026-11",
+          "claim": "Five schools signed monthly subscriptions at $280 a month",
+          "population": "Five named martial-arts schools that signed",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $6 per report",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "7 days to first usable cash",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+          "deals": 5,
+          "price": 280,
+          "directCost": 6,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_8e12ebfa4f06_01d15e",
+      "digest": "8e12ebfa4f06d16b1172fce2",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_367bd8b0da1041d493d0/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:27:13.517Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_8e12ebfa4f06_01d15e",
+      "digest": "8e12ebfa4f06d16b1172fce2",
+      "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 3000,
+        "committedOpenCents": 0,
+        "preProofCents": 3000,
+        "maxExposureCents": 0,
+        "minCashCents": 137000,
+        "minCashDay": 7,
+        "collectedCents": 140000,
+        "collectedInWindowCents": 140000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 137000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Monthly member-retention and churn-risk report for martial-a\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Monthly member-retention and churn-risk report for martial-a\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1941× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Martial-arts school owners — Monthly member-ret\" needs [figure withheld] and keeps [figure withheld], 269× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Monthly member-retention and churn-risk report for martial-arts school\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_d1b9b70f6cb4430d8cfe"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Monthly member-retention and churn-risk report for martial-arts schools\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Monthly member-retention and churn-risk report for martial-arts schools\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Collect payment for \"Monthly member-retention and churn-risk report for martial-arts schools\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "title": "Monthly member-retention and churn-risk report for martial-arts schools",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1200,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Martial-arts school owners",
+              "reachableChannel": "The school owners who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:12.609Z",
+              "offerScope": "Monthly member-retention and churn-risk report for martial-arts schools",
+              "priceCents": 28000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "martial arts schools",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 28000,
+                "currency": "USD",
+                "deliverable": "Monthly member-retention and churn-risk report for martial-arts schools",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 28000,
+                "currency": "USD",
+                "deliverable": "Monthly member-retention and churn-risk report for martial-arts schools",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 28000,
+                "currency": "USD",
+                "deliverable": "Monthly member-retention and churn-risk report for martial-arts schools",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 28000,
+                "currency": "USD",
+                "deliverable": "Monthly member-retention and churn-risk report for martial-arts schools",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 28000,
+                "currency": "USD",
+                "deliverable": "Monthly member-retention and churn-risk report for martial-arts schools",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The school owners who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "310 martial-arts schools are listed in the state's two governing-body directories; each bills members monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly member-retention and churn-risk report for martial-arts schools to each buyer, billed monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Martial-arts school owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five schools signed monthly subscriptions at $280 a month (signed agreements, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 120000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": "MONTHLY",
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:24:37.833Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_8e12ebfa4f06_01d15e",
+        "revisionDigest": "8e12ebfa4f06d16b1172fce2",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_367bd8b0da1041d493d0/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8306045cbdbe40efbaac/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The goal is $1,200 a month of recurring revenue under signed monthly subscriptions with the first month collected by day 14. The single member has every link established by its card's EVIDENCE: five WRITTEN_ACCEPTANCE monthly subscriptions at $280/month (state AGREED) are real recurring prices these schools agreed to pay; delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $6 < $280; exposure $0; usable cash 7 days after billing. Arithmetic recomputed: 5 x $280 = $1,400 MRR >= $1,200; first month $1,400 collected day 7 of 14; costs 5 x $6 = $30 paid from receipts, $0 up-front; net $1,370. No new selling is relied on, so no unmeasured cold conversion enters the plan (the 310-school expansion is correctly left as an unneeded alternative). EXECUTABLE is right.",
+        "findings": [
+          "There is no slack in count: all five subscriptions are needed (four give $1,120 < $1,200). One cancellation before first payment fails the goal; adding a sixth signed school would give headroom, but that would need a measured conversion first.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1/s2, not an evidential gap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:33:19.802Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_8e12ebfa4f06_01d15e",
+      "digest": "8e12ebfa4f06d16b1172fce2",
+      "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+      "plan": {
+        "goalId": "wst_f50eace310114ecfa2e6",
+        "contractDigest": "c6f397a3281ca4bf42bb8d5b",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed $280/month martial-arts retention-report subscriptions ($1,400 MRR)",
+          "opportunityIds": [
+            "cop_d1b9b70f6cb4430d8cfe"
+          ],
+          "why": "Five schools have signed written monthly subscriptions at $280 a month (card price fact; five WRITTEN_ACCEPTANCE agreements): $1,400 of monthly recurring revenue against the $1,200 target (all five are needed; four would give $1,120). Brain produces the spreadsheet report itself (PRODUCE_SPREADSHEET proved), direct cost $6 per report paid from receipts, no capital tied up, first cash usable 7 days after billing, inside the 14-day window. No new selling is needed and the owner does no work."
+        },
+        "alternatives": [
+          {
+            "title": "Sell additional subscriptions from the 310 listed schools",
+            "why": "Would add headroom, but no conversion rate is measured for cold schools; the signed five already carry the target, so it is not needed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Countersign the five signed $280/month subscriptions and issue first-month invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 28000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Collect the five first-month payments ($1,400)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each school's monthly member-retention and churn-risk spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 3000,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 140000,
+            "label": "First month from five schools at $280",
+            "settlesDay": 7,
+            "stepId": "s2"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "Direct cost of five reports at $6",
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "signed monthly subscriptions",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "schools",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 28000,
+            "unit": "cents/month",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#price",
+            "dated": "2026-11",
+            "claim": "Five schools signed monthly subscriptions at $280 a month",
+            "population": "Five named martial-arts schools that signed",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per report",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_d1b9b70f6cb4430d8cfe#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_d1b9b70f6cb4430d8cfe",
+            "deals": 5,
+            "price": 280,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8e12ebfa4f06_01d15e",
+        "digest": "8e12ebfa4f06d16b1172fce2",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_367bd8b0da1041d493d0/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:13.517Z"
+      },
+      "review": {
+        "revisionId": "rev_8e12ebfa4f06_01d15e",
+        "revisionDigest": "8e12ebfa4f06d16b1172fce2",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_367bd8b0da1041d493d0/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8306045cbdbe40efbaac/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The goal is $1,200 a month of recurring revenue under signed monthly subscriptions with the first month collected by day 14. The single member has every link established by its card's EVIDENCE: five WRITTEN_ACCEPTANCE monthly subscriptions at $280/month (state AGREED) are real recurring prices these schools agreed to pay; delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $6 < $280; exposure $0; usable cash 7 days after billing. Arithmetic recomputed: 5 x $280 = $1,400 MRR >= $1,200; first month $1,400 collected day 7 of 14; costs 5 x $6 = $30 paid from receipts, $0 up-front; net $1,370. No new selling is relied on, so no unmeasured cold conversion enters the plan (the 310-school expansion is correctly left as an unneeded alternative). EXECUTABLE is right.",
+        "findings": [
+          "There is no slack in count: all five subscriptions are needed (four give $1,120 < $1,200). One cancellation before first payment fails the goal; adding a sixth signed school would give headroom, but that would need a measured conversion first.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1/s2, not an evidential gap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:33:19.802Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Earn $1,200 a month in recurring revenue within 14 days using no up-front capital.",
+        "terms": "f4ba01ade4d3bb59",
+        "openings": {
+          "cop_d1b9b70f6cb4430d8cfe": "0cf2f65519da15cd"
+        }
+      },
+      "at": "2026-11-27T08:37:14.516Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

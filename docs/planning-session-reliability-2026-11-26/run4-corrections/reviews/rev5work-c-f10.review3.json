@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_5a1a872a7df846ec8498",
+ "revision_id": "rev_f8cde6e076ce_825c1a",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-gamma",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "The plan is right: EXECUTABLE, three signed $1,600 golf-course acceptances, Brain fulfils at $20 each, deliver on day 5, $4,800 settles on day 15 of 30, and a $60 owner float is allowed because the goal sets no capital limit (stored capitalCeilingCents is null, which is no limit, not zero). The published figures misstate it, though. The owner's $60 is booked as a customer RECEIPT and its repayment as a REFUND. Brain's trace therefore reports $4,860 collected against $4,800 of customer cash, $60 of refunds although no buyer is refunded, maxExposure $0 and member capital $0, although $60 of the owner's own money is out from day 1 to day 15 and stays at risk if a course does not pay. Net ($4,740) and collected-in-window ($4,800) happen to come out right, but the collected, refund, exposure and capital lines would mislead the owner about how much buyers paid and what they put at risk. The float should be recorded as capital (for example member capital of $60 / peak funding), not as a receipt and a refund.",
+ "findings": [
+  "The owner float is booked as a RECEIPT, so collectedCents is $4,860 against $4,800 actually paid by customers. That overstates buyer cash by $60.",
+  "The float repayment is booked as a REFUND, so refundsCents shows $60 although no customer is refunded.",
+  "The $60 of owner capital is hidden: members[].capital is 0 and the trace's maxExposureCents is 0, although $60 of the owner's money is out from day 1 to day 15 and is lost if collection fails.",
+  "Fix: keep the plan, but record the $60 as owner capital or peak funding (members capital $60) instead of a receipt plus refund, so that collected = $4,800, refunds = $0, capital and exposure = $60, and net = $4,740."
+ ]
+}

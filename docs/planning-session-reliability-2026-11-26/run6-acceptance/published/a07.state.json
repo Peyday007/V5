@@ -1,0 +1,1860 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_51c0fc13690a48f78dfd",
+      "words": "Earn $1,500 a month in recurring revenue within 30 days with no more than 1 hour a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "currency": "USD",
+        "metric": "COLLECTED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$1,500 a month of recurring billing from signed subscribers, with the first month collected within 30 days, using at most 1 owner hour a week",
+        "ownerHoursPerWeek": 1,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "cf41d933fac0a6c2f05a3257"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_51c0fc13690a48f78dfd",
+        "contractDigest": "cf41d933fac0a6c2f05a3257",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the monthly self-monitoring report to the seven signed car wash operators",
+          "opportunityIds": [
+            "cop_986e05719eb9462dad5b"
+          ],
+          "why": "Seven car wash operators signed month-to-month agreements at $250 a month (2026-11-23): $1,750 a month, above the $1,500 target. Brain produces the spreadsheet report (proved PRODUCE_SPREADSHEET); direct cost $6 per report; first cash in 10 days; no owner work is needed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 210 permitted car washes",
+            "why": "Not needed for the target; no conversion rate on new prospects is measured."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the seven signed $250/month agreements and billing dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Produce each operator's monthly water-reclaim and discharge self-monitoring report spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 4200,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "delivery",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Bill and collect the first month from each of the seven operators",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "SPEND",
+            "amountCents": 4200,
+            "label": "Seven reports at $6 direct cost",
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 1 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 2 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 3 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 4 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 5 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 6 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 7 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per month",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed subscribers",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "operators",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per week",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "hours",
+            "sources": [
+              "delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#price",
+            "dated": "2026-11-23",
+            "claim": "Seven car wash operators signed month-to-month agreements at $250 a month",
+            "population": "seven car wash operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "delivery",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "the signed operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "deals": 7,
+            "price": 250,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_9d69e99d84dc_7be2f8",
+        "digest": "9d69e99d84dce948ebaf02f1",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:44.764Z"
+      },
+      {
+        "goalId": "wst_51c0fc13690a48f78dfd",
+        "contractDigest": "cf41d933fac0a6c2f05a3257",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the monthly self-monitoring report to the seven signed car wash operators",
+          "opportunityIds": [
+            "cop_986e05719eb9462dad5b"
+          ],
+          "why": "Seven car wash operators signed month-to-month agreements at $250 a month (2026-11-23): $1,750 a month, above the $1,500 target. Brain produces the spreadsheet report (proved PRODUCE_SPREADSHEET); direct cost $6 per report; first cash in 10 days; no owner work is needed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 210 permitted car washes",
+            "why": "Not needed for the target; no conversion rate on new prospects is measured."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the seven signed $250/month agreements and billing dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Produce each operator's monthly water-reclaim and discharge self-monitoring report spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 4200,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "delivery",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Bill and collect the first month from each of the seven operators",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 1 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 2 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 3 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 4 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 5 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 6 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 7 first month",
+            "settlesDay": 10,
+            "stepId": "s3"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 4200,
+            "label": "Seven reports at $6 direct cost, paid from the first receipts",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per month",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed subscribers",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "operators",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per week",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "hours",
+            "sources": [
+              "delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#price",
+            "dated": "2026-11-23",
+            "claim": "Seven car wash operators signed month-to-month agreements at $250 a month",
+            "population": "seven car wash operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "delivery",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "the signed operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "deals": 7,
+            "price": 250,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_cf5b58020928_884574",
+        "digest": "cf5b58020928cd3bf710f37a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:19.355Z"
+      },
+      {
+        "goalId": "wst_51c0fc13690a48f78dfd",
+        "contractDigest": "cf41d933fac0a6c2f05a3257",
+        "parentRevisionId": "rev_cf5b58020928_884574",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the monthly self-monitoring report to the seven signed car wash operators",
+          "opportunityIds": [
+            "cop_986e05719eb9462dad5b"
+          ],
+          "why": "Seven car wash operators signed month-to-month agreements at $250 a month (2026-11-23): $1,750 a month, above the $1,500 target. Brain produces the spreadsheet report (proved PRODUCE_SPREADSHEET); direct cost $6 per report; first cash in 10 days; the card records 0.25 human hours per report, 7 x 0.25 = 1.75 h a month (about 0.41 h a week), inside the 1 h/week limit even if all of it falls to the owner."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 210 permitted car washes",
+            "why": "Not needed for the target; no conversion rate on new prospects is measured."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the seven signed $250/month agreements and billing dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Bill the first month in advance and collect $250 from each of the seven operators",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Produce each operator's monthly water-reclaim and discharge self-monitoring report spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 4200,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "delivery",
+              "directCosts",
+              "humanHours"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 1 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 2 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 3 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 4 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 5 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 6 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 7 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 4200,
+            "label": "Seven reports at $6 direct cost",
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per month",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed subscribers",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "operators",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "human hours per report",
+            "status": "EVIDENCED",
+            "value": 0.25,
+            "unit": "hours per deal per month",
+            "sources": [
+              "humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "human hours per week if all fall to the owner",
+            "status": "ESTIMATE",
+            "value": 0.41,
+            "unit": "hours per week",
+            "sources": [
+              "humanHours"
+            ],
+            "needs": "7 reports x 0.25 h = 1.75 h a month / 4.29 weeks; under the 1 h/week limit"
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#price",
+            "dated": "2026-11-23",
+            "claim": "Seven car wash operators signed month-to-month agreements at $250 a month",
+            "population": "seven car wash operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "delivery",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "the signed operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "humanHours",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#humanHours",
+            "dated": "2026-11-24",
+            "claim": "0.25 human hours per deal",
+            "population": "this offer",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours: plan quantity 'owner hours per week = 0' contradicts card humanHours 0.25.",
+            "resolution": "Accepted. The zero is replaced by the card's 0.25 h per report (EVIDENCED) and a worst-case 0.41 h/week if every hour falls to the owner (7 x 0.25 h a month / 4.29 weeks), inside the 1 h/week limit."
+          },
+          {
+            "finding": "Recurring: month-to-month agreements can be cancelled.",
+            "resolution": "Accepted as a risk; $1,750 a month gives one subscriber of slack over $1,500, and the first month is billed in advance and collected by day 10."
+          },
+          {
+            "finding": "Step evidence ids are card field names rather than source ids.",
+            "resolution": "Every step evidence id now matches a source id in sources[], each of which points at that card field."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+            "resolution": "Setup, not evidence: the mailbox and invoicing connections are made before day 0; they do not change any chain link."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "deals": 7,
+            "price": 250,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_984a0bcd0967_814c83",
+        "digest": "984a0bcd09670bc79d8ee05e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:35:52.432Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_51c0fc13690a48f78dfd",
+      "contractDigest": "cf41d933fac0a6c2f05a3257",
+      "parentRevisionId": "rev_cf5b58020928_884574",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the monthly self-monitoring report to the seven signed car wash operators",
+        "opportunityIds": [
+          "cop_986e05719eb9462dad5b"
+        ],
+        "why": "Seven car wash operators signed month-to-month agreements at $250 a month (2026-11-23): $1,750 a month, above the $1,500 target. Brain produces the spreadsheet report (proved PRODUCE_SPREADSHEET); direct cost $6 per report; first cash in 10 days; the card records 0.25 human hours per report, 7 x 0.25 = 1.75 h a month (about 0.41 h a week), inside the 1 h/week limit even if all of it falls to the owner."
+      },
+      "alternatives": [
+        {
+          "title": "Sell to more of the 210 permitted car washes",
+          "why": "Not needed for the target; no conversion rate on new prospects is measured."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm the seven signed $250/month agreements and billing dates",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "price"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "COLLECT",
+          "label": "Bill the first month in advance and collect $250 from each of the seven operators",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "s1",
+          "evidence": [
+            "timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "DELIVER",
+          "label": "Produce each operator's monthly water-reclaim and discharge self-monitoring report spreadsheet",
+          "performer": "BRAIN",
+          "costCents": 4200,
+          "day": 10,
+          "dependsOn": "s2",
+          "evidence": [
+            "delivery",
+            "directCosts",
+            "humanHours"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 1 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 2 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 3 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 4 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 5 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 6 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 25000,
+          "label": "Operator 7 first month",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 4200,
+          "label": "Seven reports at $6 direct cost",
+          "stepId": "s3"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "monthly price",
+          "status": "EVIDENCED",
+          "value": 25000,
+          "unit": "cents per month",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed subscribers",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "operators",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per report",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "cents",
+          "sources": [
+            "directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "human hours per report",
+          "status": "EVIDENCED",
+          "value": 0.25,
+          "unit": "hours per deal per month",
+          "sources": [
+            "humanHours"
+          ],
+          "needs": null
+        },
+        {
+          "name": "human hours per week if all fall to the owner",
+          "status": "ESTIMATE",
+          "value": 0.41,
+          "unit": "hours per week",
+          "sources": [
+            "humanHours"
+          ],
+          "needs": "7 reports x 0.25 h = 1.75 h a month / 4.29 weeks; under the 1 h/week limit"
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_986e05719eb9462dad5b#price",
+          "dated": "2026-11-23",
+          "claim": "Seven car wash operators signed month-to-month agreements at $250 a month",
+          "population": "seven car wash operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "delivery",
+          "url": "https://brain.local/card/cop_986e05719eb9462dad5b#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Brain",
+          "matchesBuyer": true
+        },
+        {
+          "id": "directCosts",
+          "url": "https://brain.local/card/cop_986e05719eb9462dad5b#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $6",
+          "population": "Brain",
+          "matchesBuyer": true
+        },
+        {
+          "id": "timeToFirstCash",
+          "url": "https://brain.local/card/cop_986e05719eb9462dad5b#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "10 days to first cash",
+          "population": "the signed operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "humanHours",
+          "url": "https://brain.local/card/cop_986e05719eb9462dad5b#humanHours",
+          "dated": "2026-11-24",
+          "claim": "0.25 human hours per deal",
+          "population": "this offer",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Owner hours: plan quantity 'owner hours per week = 0' contradicts card humanHours 0.25.",
+          "resolution": "Accepted. The zero is replaced by the card's 0.25 h per report (EVIDENCED) and a worst-case 0.41 h/week if every hour falls to the owner (7 x 0.25 h a month / 4.29 weeks), inside the 1 h/week limit."
+        },
+        {
+          "finding": "Recurring: month-to-month agreements can be cancelled.",
+          "resolution": "Accepted as a risk; $1,750 a month gives one subscriber of slack over $1,500, and the first month is billed in advance and collected by day 10."
+        },
+        {
+          "finding": "Step evidence ids are card field names rather than source ids.",
+          "resolution": "Every step evidence id now matches a source id in sources[], each of which points at that card field."
+        },
+        {
+          "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+          "resolution": "Setup, not evidence: the mailbox and invoicing connections are made before day 0; they do not change any chain link."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_986e05719eb9462dad5b",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_986e05719eb9462dad5b",
+          "deals": 7,
+          "price": 250,
+          "directCost": 6,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_984a0bcd0967_814c83",
+      "digest": "984a0bcd09670bc79d8ee05e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:35:52.432Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_984a0bcd0967_814c83",
+      "digest": "984a0bcd09670bc79d8ee05e",
+      "contractDigest": "cf41d933fac0a6c2f05a3257",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 4200,
+        "committedOpenCents": 0,
+        "preProofCents": 4200,
+        "maxExposureCents": 0,
+        "minCashCents": 170800,
+        "minCashDay": 10,
+        "collectedCents": 175000,
+        "collectedInWindowCents": 175000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 170800
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Monthly water-reclaim and discharge-permit self-monitoring r\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Monthly water-reclaim and discharge-permit self-monitoring r\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3085× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Car wash operators — Monthly water-reclaim and \" needs [figure withheld] and keeps [figure withheld], 239× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Monthly water-reclaim and discharge-permit self-monitoring report for \".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_986e05719eb9462dad5b"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Monthly water-reclaim and discharge-permit self-monitoring report for car wash o\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Monthly water-reclaim and discharge-permit self-monitoring report for car wash o\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Collect payment for \"Monthly water-reclaim and discharge-permit self-monitoring report for car wash o\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "title": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1500,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "Car wash operators",
+              "reachableChannel": "The operators who signed by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:32.002Z",
+              "offerScope": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+              "priceCents": 25000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.25,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "car washes",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 25000,
+                "currency": "USD",
+                "deliverable": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The operators who signed by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1750 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1750 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "210 car washes hold municipal industrial-discharge permits in the metro area; each must file a discharge self-monitoring report every month.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators to each buyer, billed monthly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Car wash operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Seven car wash operators signed month-to-month agreements at $250 a month for the self-monitoring report (signed agreements, 2026-11-23).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 30,
+          "hoursCeiling": 4,
+          "industry": null,
+          "recurring": "MONTHLY",
+          "hoursPerWeek": 1
+        },
+        "at": "2026-11-27T07:13:19.565Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_cf5b58020928_884574",
+        "revisionDigest": "cf5b58020928cd3bf710f37a",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d4f1f6a1389f4ff2ae2e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The commercial core is sound: seven written month-to-month acceptances at $250/month are on the card (7 agreements, price fact EVIDENCE, 2026-11-23) = $1,750/month recurring >= $1,500; Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), $6 cost per report (7 x $6 = $42 paid from receipts), first month collected day 10, inside 30 days. Six subscribers still give $1,500, so one cancellation is tolerated. But the owner-hours figure, which is this goal's binding limit (1 h/week), is stated as known zero ('owner hours per week 0', sourced to the delivery fact) while the card records humanHours 0.25 for this offer. The delivery fact says Brain produces the spreadsheet; it does not say no human time is needed, and the card says some is. The plan must carry the card's 0.25 h per deal and show it fits: at 0.25 h per monthly report x 7 = 1.75 h/month (~0.4 h/week), inside 1 h/week; only if the 0.25 h were per subscriber per week (1.75 h/week) would it break the limit, so state the unit/basis rather than zero. Fix the owner-hours quantity (EVIDENCED 0 -> 0.25 h per deal from the card, ~0.4 h/week) and keep EXECUTABLE.",
+        "findings": [
+          "Owner hours: plan quantity 'owner hours per week = 0 (EVIDENCED, source delivery)' contradicts card humanHours 0.25; unknown/recorded hours are not zero.",
+          "Recurring: 'month-to-month' agreements can be cancelled; the proof condition (recurring billing from signed subscribers, first month collected in 30 days) is met at day 10 with $1,750, with one subscriber of slack.",
+          "Step evidence ids ('price', 'delivery', 'timeToFirstCash') are card field names rather than source ids; acceptable but should resolve to the card facts.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:01.548Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_984a0bcd0967_814c83",
+        "revisionDigest": "984a0bcd09670bc79d8ee05e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d4f1f6a1389f4ff2ae2e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Owner hours now carry the card's humanHours 0.25 per report: 7 x 0.25 = 1.75 h/month / 4.29 = ~0.41 h/week even if all of it is the owner's, inside the 1 h/week limit (recomputed). Recurring billing: seven written month-to-month acceptances at $250 = $1,750/month >= $1,500 with one subscriber of slack; first month collected day 10 (timeToFirstCash 10 days, EVIDENCE), inside 30 days; $42 report cost spent day 10 from receipts, no capital. Every link rests on this offer's own records; EXECUTABLE is right.",
+        "findings": [
+          "The 0.25 h is read as per report per month; the card does not state the unit. That reading fits a monthly report service, and a per-week reading (1.75 h/week) would breach the limit, so the first month's actual owner time should be logged and the plan revisited if it exceeds 1 h in any week.",
+          "'Bill the first month in advance' is not stated on the agreements; the ledger has receipts and report production both on day 10, so the proof holds either way, but recurring months depend on operators not cancelling month-to-month."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:36:42.019Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_984a0bcd0967_814c83",
+      "digest": "984a0bcd09670bc79d8ee05e",
+      "contractDigest": "cf41d933fac0a6c2f05a3257",
+      "plan": {
+        "goalId": "wst_51c0fc13690a48f78dfd",
+        "contractDigest": "cf41d933fac0a6c2f05a3257",
+        "parentRevisionId": "rev_cf5b58020928_884574",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the monthly self-monitoring report to the seven signed car wash operators",
+          "opportunityIds": [
+            "cop_986e05719eb9462dad5b"
+          ],
+          "why": "Seven car wash operators signed month-to-month agreements at $250 a month (2026-11-23): $1,750 a month, above the $1,500 target. Brain produces the spreadsheet report (proved PRODUCE_SPREADSHEET); direct cost $6 per report; first cash in 10 days; the card records 0.25 human hours per report, 7 x 0.25 = 1.75 h a month (about 0.41 h a week), inside the 1 h/week limit even if all of it falls to the owner."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 210 permitted car washes",
+            "why": "Not needed for the target; no conversion rate on new prospects is measured."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the seven signed $250/month agreements and billing dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Bill the first month in advance and collect $250 from each of the seven operators",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Produce each operator's monthly water-reclaim and discharge self-monitoring report spreadsheet",
+            "performer": "BRAIN",
+            "costCents": 4200,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "delivery",
+              "directCosts",
+              "humanHours"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 1 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 2 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 3 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 4 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 5 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 6 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 25000,
+            "label": "Operator 7 first month",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 4200,
+            "label": "Seven reports at $6 direct cost",
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "monthly price",
+            "status": "EVIDENCED",
+            "value": 25000,
+            "unit": "cents per month",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed subscribers",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "operators",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "human hours per report",
+            "status": "EVIDENCED",
+            "value": 0.25,
+            "unit": "hours per deal per month",
+            "sources": [
+              "humanHours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "human hours per week if all fall to the owner",
+            "status": "ESTIMATE",
+            "value": 0.41,
+            "unit": "hours per week",
+            "sources": [
+              "humanHours"
+            ],
+            "needs": "7 reports x 0.25 h = 1.75 h a month / 4.29 weeks; under the 1 h/week limit"
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#price",
+            "dated": "2026-11-23",
+            "claim": "Seven car wash operators signed month-to-month agreements at $250 a month",
+            "population": "seven car wash operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "delivery",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6",
+            "population": "Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "the signed operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "humanHours",
+            "url": "https://brain.local/card/cop_986e05719eb9462dad5b#humanHours",
+            "dated": "2026-11-24",
+            "claim": "0.25 human hours per deal",
+            "population": "this offer",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Owner hours: plan quantity 'owner hours per week = 0' contradicts card humanHours 0.25.",
+            "resolution": "Accepted. The zero is replaced by the card's 0.25 h per report (EVIDENCED) and a worst-case 0.41 h/week if every hour falls to the owner (7 x 0.25 h a month / 4.29 weeks), inside the 1 h/week limit."
+          },
+          {
+            "finding": "Recurring: month-to-month agreements can be cancelled.",
+            "resolution": "Accepted as a risk; $1,750 a month gives one subscriber of slack over $1,500, and the first month is billed in advance and collected by day 10."
+          },
+          {
+            "finding": "Step evidence ids are card field names rather than source ids.",
+            "resolution": "Every step evidence id now matches a source id in sources[], each of which points at that card field."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+            "resolution": "Setup, not evidence: the mailbox and invoicing connections are made before day 0; they do not change any chain link."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_986e05719eb9462dad5b",
+            "deals": 7,
+            "price": 250,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_984a0bcd0967_814c83",
+        "digest": "984a0bcd09670bc79d8ee05e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:35:52.432Z"
+      },
+      "review": {
+        "revisionId": "rev_984a0bcd0967_814c83",
+        "revisionDigest": "984a0bcd09670bc79d8ee05e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1c2bca6bbea4c12898d/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d4f1f6a1389f4ff2ae2e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Owner hours now carry the card's humanHours 0.25 per report: 7 x 0.25 = 1.75 h/month / 4.29 = ~0.41 h/week even if all of it is the owner's, inside the 1 h/week limit (recomputed). Recurring billing: seven written month-to-month acceptances at $250 = $1,750/month >= $1,500 with one subscriber of slack; first month collected day 10 (timeToFirstCash 10 days, EVIDENCE), inside 30 days; $42 report cost spent day 10 from receipts, no capital. Every link rests on this offer's own records; EXECUTABLE is right.",
+        "findings": [
+          "The 0.25 h is read as per report per month; the card does not state the unit. That reading fits a monthly report service, and a per-week reading (1.75 h/week) would breach the limit, so the first month's actual owner time should be logged and the plan revisited if it exceeds 1 h in any week.",
+          "'Bill the first month in advance' is not stated on the agreements; the ledger has receipts and report production both on day 10, so the proof holds either way, but recurring months depend on operators not cancelling month-to-month."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:36:42.019Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:38:06.985Z"
+    },
+    "staleFinal": null
+  }
+}

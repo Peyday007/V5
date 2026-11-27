@@ -1,0 +1,88 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "phase": "VERIFIED",
+    "needId": "cnd_df9635b075a14ac6bcd8",
+    "opportunityId": "cop_e0716d82a55d4527b332",
+    "field": "revenueRange",
+    "verifier": {
+      "kind": "APP_SESSION",
+      "id": "wkr_e053549969e147889b2e/verifier-1",
+      "model": "claude-opus-5-5"
+    },
+    "researcher": {
+      "kind": "APP_SESSION",
+      "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+      "model": "claude-opus-5-5"
+    },
+    "fragmentStatus": "BLOCKED",
+    "gateReasons": [
+      "No claim in this fragment survived the evidence gate.",
+      "4 claim(s) failed: scope, date, geography and definitions match.",
+      "1 required evidence lane(s) have no accepted claim: answer (The revenueRange is recorded on this card.)",
+      "The accepted claims rest on 0 independent source(s), below the 1 this fragment requires."
+    ],
+    "claims": [
+      {
+        "claimId": "clm_dbdcfacbc4be4a998869",
+        "accepted": false,
+        "rejectionReason": "Scope does not match on geography (unstated vs \"the market this question names\")."
+      },
+      {
+        "claimId": "clm_8d74655e996746bca2f6",
+        "accepted": false,
+        "rejectionReason": "Scope does not match on geography (unstated vs \"the market this question names\")."
+      },
+      {
+        "claimId": "clm_444db268c55d48f9a1b1",
+        "accepted": false,
+        "rejectionReason": "Scope does not match on geography (unstated vs \"the market this question names\")."
+      },
+      {
+        "claimId": "clm_08b4110c8eb949af84b2",
+        "accepted": false,
+        "rejectionReason": "Scope does not match on geography (unstated vs \"the market this question names\"), definitions (mismatch)."
+      }
+    ],
+    "answered": null,
+    "unanswered": {
+      "state": "NO_SUPPORT",
+      "detail": "The research finished and nothing it found supports an answer here. The field stays unknown, which is the honest outcome rather than a blank filled in to close a need."
+    },
+    "input": {
+      "field": "revenueRange",
+      "before": {
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+      },
+      "after": {
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+      }
+    },
+    "missing": {
+      "before": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "after": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ]
+    },
+    "rerun": {
+      "completed": true,
+      "verdict": "NOT_VIABLE",
+      "at": "2026-11-27T00:29:04.895Z"
+    }
+  }
+}

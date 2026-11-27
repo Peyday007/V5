@@ -1,0 +1,315 @@
+{
+ "contractDigest": "5da291d375dc4e0cc397b9f5",
+ "parentRevisionId": "rev_96f2efce8e0a_081459",
+ "stance": "EXECUTABLE",
+ "strategy": {
+  "title": "Sell an allergen-labelled weekly meal-plan workbook on the digital-download marketplace",
+  "opportunityIds": [
+   "cop_cced31d747dd49439d3c"
+  ],
+  "why": "Every link is on the card as sourced evidence: marketplace shoppers are reachable through the listing and search, comparable workbooks list at $29, 2,300 comparable sales/yr (~190/month) exceed the 40 needed, measured conversion is 60 paid of 1,500 visitors (4%), Brain produces the spreadsheet, direct cost $3 < $29, exposure $0, first cash in 3 days. 40 sales x $29 = $1,160 gross, $1,040 after direct costs, both above $1,000."
+ },
+ "alternatives": [
+  {
+   "title": "No other opening in this world",
+   "why": "The Brain run considered only this opening; nothing else to combine."
+  }
+ ],
+ "steps": [
+  {
+   "id": "build",
+   "kind": "OTHER",
+   "label": "Brain produces the allergen-labelled weekly meal-plan workbook spreadsheet",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 1,
+   "dependsOn": null,
+   "evidence": [
+    "delivery"
+   ],
+   "ownerHours": 0
+  },
+  {
+   "id": "reach",
+   "kind": "REACH",
+   "label": "Publish the listing on the marketplace (listing + search)",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 2,
+   "dependsOn": "build",
+   "evidence": [
+    "reachableChannel",
+    "buyerVolume"
+   ],
+   "ownerHours": 0
+  },
+  {
+   "id": "offer",
+   "kind": "OFFER",
+   "label": "Offer the workbook at $29",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 2,
+   "dependsOn": "reach",
+   "evidence": [
+    "price"
+   ],
+   "ownerHours": 0
+  },
+  {
+   "id": "sell",
+   "kind": "SELL",
+   "label": "Sell to marketplace shoppers; 4% visitor conversion over ~1,000 visitors",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 3,
+   "dependsOn": "offer",
+   "evidence": [
+    "conversionRate",
+    "buyerVolume"
+   ],
+   "ownerHours": 0
+  },
+  {
+   "id": "deliver",
+   "kind": "DELIVER",
+   "label": "Owner sends/confirms each digital delivery (0.1 h per deal x 40); $3 direct cost per sale",
+   "performer": "OWNER",
+   "costCents": 12000,
+   "day": 3,
+   "dependsOn": "sell",
+   "evidence": [
+    "directCost",
+    "delivery"
+   ],
+   "ownerHours": 4
+  },
+  {
+   "id": "collect",
+   "kind": "COLLECT",
+   "label": "Marketplace payouts settle ~3 days after each sale; last sales by day 26",
+   "performer": "BRAIN",
+   "costCents": 0,
+   "day": 29,
+   "dependsOn": "deliver",
+   "evidence": [
+    "timeToFirstCash"
+   ],
+   "ownerHours": 0
+  }
+ ],
+ "cash": [
+  {
+   "day": 10,
+   "kind": "RECEIPT",
+   "amountCents": 29000,
+   "label": "10 sales x $29 (days 3-7)",
+   "settlesDay": 10
+  },
+  {
+   "day": 10,
+   "kind": "FEE",
+   "amountCents": 3000,
+   "label": "direct cost $3 x 10",
+   "settlesDay": null
+  },
+  {
+   "day": 17,
+   "kind": "RECEIPT",
+   "amountCents": 29000,
+   "label": "10 sales x $29 (days 8-14)",
+   "settlesDay": 17
+  },
+  {
+   "day": 17,
+   "kind": "FEE",
+   "amountCents": 3000,
+   "label": "direct cost $3 x 10",
+   "settlesDay": null
+  },
+  {
+   "day": 24,
+   "kind": "RECEIPT",
+   "amountCents": 29000,
+   "label": "10 sales x $29 (days 15-21)",
+   "settlesDay": 24
+  },
+  {
+   "day": 24,
+   "kind": "FEE",
+   "amountCents": 3000,
+   "label": "direct cost $3 x 10",
+   "settlesDay": null
+  },
+  {
+   "day": 29,
+   "kind": "RECEIPT",
+   "amountCents": 29000,
+   "label": "10 sales x $29 (days 22-26)",
+   "settlesDay": 29
+  },
+  {
+   "day": 29,
+   "kind": "FEE",
+   "amountCents": 3000,
+   "label": "direct cost $3 x 10",
+   "settlesDay": null
+  }
+ ],
+ "proofDay": 29,
+ "quantities": [
+  {
+   "name": "price",
+   "status": "EVIDENCED",
+   "value": 29,
+   "unit": "USD/deal",
+   "sources": [
+    "s1"
+   ]
+  },
+  {
+   "name": "conversionRate",
+   "status": "EVIDENCED",
+   "value": 0.04,
+   "unit": "paid/visitor",
+   "sources": [
+    "s2"
+   ]
+  },
+  {
+   "name": "buyerVolume",
+   "status": "EVIDENCED",
+   "value": 2300,
+   "unit": "comparable sales/12 months",
+   "sources": [
+    "s3"
+   ]
+  },
+  {
+   "name": "directCost",
+   "status": "EVIDENCED",
+   "value": 3,
+   "unit": "USD/deal",
+   "sources": [
+    "s4"
+   ]
+  },
+  {
+   "name": "timeToFirstCash",
+   "status": "EVIDENCED",
+   "value": 3,
+   "unit": "days",
+   "sources": [
+    "s5"
+   ]
+  },
+  {
+   "name": "delivery",
+   "status": "EVIDENCED",
+   "value": 1,
+   "unit": "Brain-produced spreadsheet",
+   "sources": [
+    "s6"
+   ]
+  },
+  {
+   "name": "reachableChannel",
+   "status": "EVIDENCED",
+   "value": 1000,
+   "unit": "visitors reachable",
+   "sources": [
+    "s7"
+   ]
+  },
+  {
+   "name": "deals",
+   "status": "ESTIMATE",
+   "value": 40,
+   "unit": "deals",
+   "sources": [
+    "s2",
+    "s7"
+   ]
+  }
+ ],
+ "sources": [
+  {
+   "id": "s1",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#price",
+   "dated": "2026-11-26",
+   "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace (listing prices, 2026-11).",
+   "population": "Marketplace shoppers planning allergen-free meals",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s2",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#conversionRates",
+   "dated": "2026-11-26",
+   "claim": "60 paid pre-orders from 1500 unique visitors",
+   "population": "Marketplace shoppers planning allergen-free meals",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s3",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#buyerVolume",
+   "dated": "2026-11-26",
+   "claim": "The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months across 40 sellers; buyers return each season.",
+   "population": "Marketplace shoppers planning allergen-free meals",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s4",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#directCosts",
+   "dated": "2026-11-26",
+   "claim": "$3",
+   "population": "This offer",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s5",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#timeToFirstCash",
+   "dated": "2026-11-26",
+   "claim": "3 days",
+   "population": "This offer",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s6",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#delivery",
+   "dated": "2026-11-26",
+   "claim": "A spreadsheet Brain produces.",
+   "population": "This offer",
+   "matchesBuyer": true
+  },
+  {
+   "id": "s7",
+   "url": "https://brain.local/card/cop_cced31d747dd49439d3c#reachableChannel",
+   "dated": "2026-11-26",
+   "claim": "The marketplace listing and its search",
+   "population": "Marketplace shoppers planning allergen-free meals",
+   "matchesBuyer": true
+  }
+ ],
+ "validation": null,
+ "noPlan": null,
+ "reach": null,
+ "answers": [],
+ "chain": [
+  {
+   "opportunityId": "cop_cced31d747dd49439d3c",
+   "missing": []
+  }
+ ],
+ "excluded": [],
+ "members": [
+  {
+   "opportunityId": "cop_cced31d747dd49439d3c",
+   "deals": 40,
+   "price": 29,
+   "directCost": 3,
+   "capital": 0
+  }
+ ],
+ "resolves": [],
+ "constraints": []
+}

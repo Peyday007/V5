@@ -1,0 +1,769 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_f0f6f50013124c34a2d3",
+      "words": "Collect $2,000 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 28,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "d9817a6399e2f8fb4131b8fb"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_f0f6f50013124c34a2d3",
+        "contractDigest": "d9817a6399e2f8fb4131b8fb",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the owner's hours cannot fulfil enough signed pattern orders",
+          "opportunityIds": [],
+          "why": "Eight boutiques signed orders at $300 (=$2,400). Reaching $2,000 needs 7 deals; the owner personally drafts each pattern set at 5 hours, so 7 deals need 35 owner hours against a ceiling of 12 (3 h/week x 4 weeks). 12 hours covers 2 deals = $600."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil 2 orders within 12 hours",
+            "why": "Brings $600, far short of $2,000."
+          },
+          {
+            "title": "Subcontract drafting",
+            "why": "No subcontractor, price or capability is on record; the card names the owner as fulfiller."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "orders",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per pattern set",
+            "status": "EVIDENCED",
+            "value": 30000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per pattern set",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#price",
+            "dated": "2026-11-24",
+            "claim": "Eight bridal boutiques signed orders at $300 per pattern set",
+            "population": "Bridal boutique owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#humanHours",
+            "dated": "2026-11-24",
+            "claim": "5 hours of the owner's work per pattern set; the owner drafts personally",
+            "population": "Bridal boutique owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OWNER_HOURS: 7 deals x 5 owner hours = 35 hours, but the goal allows 3 h/week x 4 weeks = 12 hours, which fulfils only 2 deals ($600).",
+          "resolution": "Owner raises the time allowance to about 9 hours a week (35 hours over 4 weeks), or lowers the target to $600; or Brain finds a pattern drafter who can fulfil the orders and the card is updated.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9b52e90db57e4b57aa09",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Raise owner time to ~9 hours/week (35 hours in the window) to fulfil 7 orders for $2,100, or lower the target to $600 (2 orders in 12 hours).",
+            "basis": [
+              {
+                "opportunityId": "cop_9b52e90db57e4b57aa09",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_9b52e90db57e4b57aa09",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_3c5cc94ba985_01fc08",
+        "digest": "3c5cc94ba985c3d00e9d85c8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fa0d84d81aae47db85fe/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.060Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_f0f6f50013124c34a2d3",
+      "contractDigest": "d9817a6399e2f8fb4131b8fb",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the owner's hours cannot fulfil enough signed pattern orders",
+        "opportunityIds": [],
+        "why": "Eight boutiques signed orders at $300 (=$2,400). Reaching $2,000 needs 7 deals; the owner personally drafts each pattern set at 5 hours, so 7 deals need 35 owner hours against a ceiling of 12 (3 h/week x 4 weeks). 12 hours covers 2 deals = $600."
+      },
+      "alternatives": [
+        {
+          "title": "Fulfil 2 orders within 12 hours",
+          "why": "Brings $600, far short of $2,000."
+        },
+        {
+          "title": "Subcontract drafting",
+          "why": "No subcontractor, price or capability is on record; the card names the owner as fulfiller."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "signed orders",
+          "status": "EVIDENCED",
+          "value": 8,
+          "unit": "orders",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per pattern set",
+          "status": "EVIDENCED",
+          "value": 30000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours per pattern set",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "hours",
+          "sources": [
+            "s_hours"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals needed",
+          "status": "EVIDENCED",
+          "value": 7,
+          "unit": "deals",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours needed",
+          "status": "EVIDENCED",
+          "value": 35,
+          "unit": "hours",
+          "sources": [
+            "s_hours"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#price",
+          "dated": "2026-11-24",
+          "claim": "Eight bridal boutiques signed orders at $300 per pattern set",
+          "population": "Bridal boutique owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_hours",
+          "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#humanHours",
+          "dated": "2026-11-24",
+          "claim": "5 hours of the owner's work per pattern set; the owner drafts personally",
+          "population": "Bridal boutique owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "OWNER_HOURS: 7 deals x 5 owner hours = 35 hours, but the goal allows 3 h/week x 4 weeks = 12 hours, which fulfils only 2 deals ($600).",
+        "resolution": "Owner raises the time allowance to about 9 hours a week (35 hours over 4 weeks), or lowers the target to $600; or Brain finds a pattern drafter who can fulfil the orders and the card is updated.",
+        "decisiveLinks": []
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_9b52e90db57e4b57aa09",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "OWNER_HOURS",
+          "suggestion": "Raise owner time to ~9 hours/week (35 hours in the window) to fulfil 7 orders for $2,100, or lower the target to $600 (2 orders in 12 hours).",
+          "basis": [
+            {
+              "opportunityId": "cop_9b52e90db57e4b57aa09",
+              "field": "price"
+            },
+            {
+              "opportunityId": "cop_9b52e90db57e4b57aa09",
+              "field": "fulfillment"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_3c5cc94ba985_01fc08",
+      "digest": "3c5cc94ba985c3d00e9d85c8",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fa0d84d81aae47db85fe/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:17:45.060Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3c5cc94ba985_01fc08",
+      "digest": "3c5cc94ba985c3d00e9d85c8",
+      "contractDigest": "d9817a6399e2f8fb4131b8fb",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: the agreed deals need 40 owner hours, more than the 12 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1743× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_9b52e90db57e4b57aa09"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 1.9324271019385952
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 2000 USD still needed — the openings held reach at most 2400 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_9b52e90db57e4b57aa09",
+            "title": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2000,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Bridal boutique owners",
+              "reachableChannel": "The boutiques that signed orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:51.377Z",
+              "offerScope": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 5,
+              "requiredCapabilities": [],
+              "industry": "bridal boutiques",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 30000,
+                "currency": "USD",
+                "deliverable": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The boutiques that signed orders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 2400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 2400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Bridal boutique owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Eight bridal boutiques signed orders at $300 per pattern set (signed orders, 2026-11-24).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 28,
+          "hoursCeiling": 12,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T07:13:25.301Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_3c5cc94ba985_01fc08",
+        "revisionDigest": "3c5cc94ba985c3d00e9d85c8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fa0d84d81aae47db85fe/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f9c7b1d385b44cfeb1fd/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct and names a true constraint, not missing evidence. Recomputed: $2,000 / $300 = 6.67, so 7 orders; 7 x 5 owner hours (card humanHours=5; fulfillmentOwner = the owner personally) = 35 h, against 3 h/week x 4 weeks = 12 h. 12 h fulfils floor(12/5)=2 orders = $600. Even with all 8 signed orders evidenced, the owner-hours limit cannot be met, so the gap is a constraint. No alternative fulfiller is on record, so subcontracting cannot be assumed. Price is real signed buyer orders, cost $0, settlement 7 days within 28, so no other link is the decisive one.",
+        "findings": [
+          "Arithmetic verified: 7 deals x 5 h = 35 h > 12 h ceiling; 2 deals = $600 fit.",
+          "Brain's own check reports 40 h (all 8 agreed deals); the revision's 35 h (minimum 7 deals) is the correct minimum to reach target and the conclusion is the same.",
+          "Resolution options (raise hours to ~9/week, lower target to $600, or record a drafter) are coherent; note 35 h/4 weeks = 8.75 h/week and that selling/collection time would add to it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:18:49.153Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3c5cc94ba985_01fc08",
+      "digest": "3c5cc94ba985c3d00e9d85c8",
+      "contractDigest": "d9817a6399e2f8fb4131b8fb",
+      "plan": {
+        "goalId": "wst_f0f6f50013124c34a2d3",
+        "contractDigest": "d9817a6399e2f8fb4131b8fb",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the owner's hours cannot fulfil enough signed pattern orders",
+          "opportunityIds": [],
+          "why": "Eight boutiques signed orders at $300 (=$2,400). Reaching $2,000 needs 7 deals; the owner personally drafts each pattern set at 5 hours, so 7 deals need 35 owner hours against a ceiling of 12 (3 h/week x 4 weeks). 12 hours covers 2 deals = $600."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil 2 orders within 12 hours",
+            "why": "Brings $600, far short of $2,000."
+          },
+          {
+            "title": "Subcontract drafting",
+            "why": "No subcontractor, price or capability is on record; the card names the owner as fulfiller."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "orders",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per pattern set",
+            "status": "EVIDENCED",
+            "value": 30000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per pattern set",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 7,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#price",
+            "dated": "2026-11-24",
+            "claim": "Eight bridal boutiques signed orders at $300 per pattern set",
+            "population": "Bridal boutique owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_9b52e90db57e4b57aa09#humanHours",
+            "dated": "2026-11-24",
+            "claim": "5 hours of the owner's work per pattern set; the owner drafts personally",
+            "population": "Bridal boutique owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OWNER_HOURS: 7 deals x 5 owner hours = 35 hours, but the goal allows 3 h/week x 4 weeks = 12 hours, which fulfils only 2 deals ($600).",
+          "resolution": "Owner raises the time allowance to about 9 hours a week (35 hours over 4 weeks), or lowers the target to $600; or Brain finds a pattern drafter who can fulfil the orders and the card is updated.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9b52e90db57e4b57aa09",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Raise owner time to ~9 hours/week (35 hours in the window) to fulfil 7 orders for $2,100, or lower the target to $600 (2 orders in 12 hours).",
+            "basis": [
+              {
+                "opportunityId": "cop_9b52e90db57e4b57aa09",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_9b52e90db57e4b57aa09",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_3c5cc94ba985_01fc08",
+        "digest": "3c5cc94ba985c3d00e9d85c8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fa0d84d81aae47db85fe/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.060Z"
+      },
+      "review": {
+        "revisionId": "rev_3c5cc94ba985_01fc08",
+        "revisionDigest": "3c5cc94ba985c3d00e9d85c8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fa0d84d81aae47db85fe/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f9c7b1d385b44cfeb1fd/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct and names a true constraint, not missing evidence. Recomputed: $2,000 / $300 = 6.67, so 7 orders; 7 x 5 owner hours (card humanHours=5; fulfillmentOwner = the owner personally) = 35 h, against 3 h/week x 4 weeks = 12 h. 12 h fulfils floor(12/5)=2 orders = $600. Even with all 8 signed orders evidenced, the owner-hours limit cannot be met, so the gap is a constraint. No alternative fulfiller is on record, so subcontracting cannot be assumed. Price is real signed buyer orders, cost $0, settlement 7 days within 28, so no other link is the decisive one.",
+        "findings": [
+          "Arithmetic verified: 7 deals x 5 h = 35 h > 12 h ceiling; 2 deals = $600 fit.",
+          "Brain's own check reports 40 h (all 8 agreed deals); the revision's 35 h (minimum 7 deals) is the correct minimum to reach target and the conclusion is the same.",
+          "Resolution options (raise hours to ~9/week, lower target to $600, or record a drafter) are coherent; note 35 h/4 weeks = 8.75 h/week and that selling/collection time would add to it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:18:49.153Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:20:08.575Z"
+    },
+    "staleFinal": null
+  }
+}

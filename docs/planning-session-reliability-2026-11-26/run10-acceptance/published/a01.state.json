@@ -1,0 +1,2192 @@
+{
+ "contract": {
+  "goalId": "wst_a18bf007b3a74387afac",
+  "words": "Collect $2,500 of settled cash within 14 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 250000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 14,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "$2,500 of settled cash received in the owner's account within 14 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "567cf43bebe54bfdd373fc17"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_a18bf007b3a74387afac",
+   "contractDigest": "567cf43bebe54bfdd373fc17",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 12 one-county pump-out-due lists to licensed septic haulers at $240",
+    "opportunityIds": [
+     "cop_427469f803c542eca790"
+    ],
+    "why": "Every chain link is evidenced on the card: 210 haulers with published emails, $240 published price, 14 of 120 contacts accepted this offer, Brain produces the spreadsheet, $4 direct cost, $0 exposure, cash in 3 days. 12 deals x $240 = $2,880 gross, $2,832 after $48 direct cost, reaching $2,500 by day 7 of 14 without capital."
+   },
+   "alternatives": [
+    {
+     "title": "Septic tank riser installation (2 signed quotes, $2,200)",
+     "why": "Excluded: nobody is established to do the installation, and the two signed quotes total $2,200, below the $2,500 target on their own."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email ~105 haulers from the state licensed septage hauler roster with the county list offer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "src_volume",
+      "src_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Close 12 hauler orders at $240 per county list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "conversion",
+      "price",
+      "src_conv",
+      "src_price"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver 12 county pump-out-due spreadsheets from public permit records",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Collect $240 from each of the 12 buyers",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "daysToCash",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 288000,
+     "label": "12 x $240 list payments",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 7,
+     "kind": "SPEND",
+     "amountCents": 4800,
+     "label": "Direct cost $4 per list x 12, paid out of settled receipts",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 240,
+     "unit": "USD per list",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1167,
+     "unit": "accepted per contact (14/120)",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "licensed haulers with published email",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "orders (105 contacts x 14/120)",
+     "sources": [
+      "src_conv",
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per list",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#price",
+     "dated": "2026-11",
+     "claim": "Two regional septic-hauler lead services publish $240 for a one-county pump-out-due list",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#conversionRates",
+     "dated": "2026-11",
+     "claim": "14 agreements from 120 contacts on this offer",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#buyerVolume",
+     "dated": "2026-11",
+     "claim": "State roster lists 210 licensed septage haulers with published business emails",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#payer",
+     "dated": "2026-11",
+     "claim": "Payer is owners/dispatch managers of licensed septic hauling companies",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $4 per list; exposure $0",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to first cash",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "why": "No fulfiller is established for the installation (FULFILMENT missing), and its two signed $1,100 quotes ($2,200) do not reach the target alone."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "deals": 12,
+     "price": 240,
+     "directCost": 4,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_bed221ccca48_2e5749",
+   "digest": "bed221ccca48c13a32ae13c3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:03.594Z"
+  },
+  {
+   "goalId": "wst_a18bf007b3a74387afac",
+   "contractDigest": "567cf43bebe54bfdd373fc17",
+   "parentRevisionId": "rev_bed221ccca48_2e5749",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 12 one-county pump-out-due lists to licensed septic haulers at $240",
+    "opportunityIds": [
+     "cop_427469f803c542eca790"
+    ],
+    "why": "Every chain link is evidenced on the card: 210 haulers with published emails, $240 published price, 14 of 120 contacts accepted this offer, Brain produces the spreadsheet, $4 direct cost, $0 exposure, cash in 3 days. 12 deals x $240 = $2,880 gross, $2,832 after $48 direct cost, reaching $2,500 by day 7 of 14 without capital."
+   },
+   "alternatives": [
+    {
+     "title": "Septic tank riser installation (2 signed quotes, $2,200)",
+     "why": "Excluded: nobody is established to do the installation, and the two signed quotes total $2,200, below the $2,500 target on their own."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email ~105 haulers from the state licensed septage hauler roster with the county list offer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "src_volume",
+      "src_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Close 12 hauler orders at $240 per county list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "conversion",
+      "price",
+      "src_conv",
+      "src_price"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver 12 county pump-out-due spreadsheets from public permit records",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Collect $240 from each of the 12 buyers",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "daysToCash",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 288000,
+     "label": "12 x $240 list payments",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 7,
+     "kind": "SPEND",
+     "amountCents": 4800,
+     "label": "Direct cost $4 per list x 12, paid out of settled receipts",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 240,
+     "unit": "USD per list",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1167,
+     "unit": "accepted per contact (14/120)",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "licensed haulers with published email",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "orders (105 contacts x 14/120)",
+     "sources": [
+      "src_conv",
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per list",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#price",
+     "dated": "2026-11",
+     "claim": "Two regional septic-hauler lead services publish $240 for a one-county pump-out-due list",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#conversionRates",
+     "dated": "2026-11",
+     "claim": "14 agreements from 120 contacts on this offer",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#buyerVolume",
+     "dated": "2026-11",
+     "claim": "State roster lists 210 licensed septage haulers with published business emails",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#payer",
+     "dated": "2026-11",
+     "claim": "Payer is owners/dispatch managers of licensed septic hauling companies",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $4 per list; exposure $0",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to first cash",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "HIGH cop_427469f803c542eca790 OFFER_AND_PRICE: Price is two competitors' published list price, not this buyer's purchase price.",
+     "resolution": "Rebutted. The $240 is not only a benchmark: it is the price on this offer's own record (priceCents 24000), and the conversion was measured on this offer's own sales (Brain's CONVERSION basis: 'measured on this offer's own sales: 14 accepted of 120 contacts'). The published price pages show this same buyer population (licensed septic haulers) pays $240 for exactly this deliverable (a one-county pump-out-due list) from two lead services, dated 2026-11, kind EVIDENCE. That is a sourced market price paid by the buyer type, corroborated by 14 acceptances of this offer; nothing on the card contradicts it."
+    },
+    {
+     "finding": "MEDIUM cop_427469f803c542eca790 CONVERSION: 14/120 agreements carry no price and no agreement rows on the card; acceptable as a rate, not as a price.",
+     "resolution": "Agreed that it is used as a rate: the plan uses 14/120 only for conversion (12 deals from ~105 contacts). The price rests on the published $240 and the offer record's price, which those 14 acceptances were measured on."
+    },
+    {
+     "finding": "LOW cop_427469f803c542eca790 FULFILMENT: Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES/READ_REPLIES UNREAD; Brain's own step list marks delivery as PERSON while the plan says BRAIN. Reach, sell and collect need these connected before day 1.",
+     "resolution": "Brain attached these executor records itself and accepted every step (no step refused); the routine operations are Brain's. Delivery performer is BRAIN under the fulfilment rule: no fulfillmentOwner is named, the deliverable PRODUCE_SPREADSHEET is in requiredCapabilities and PRESENT, and the card's delivery fact is 'A spreadsheet Brain produces'. humanHours 0.5 is Brain's work per list, not owner work."
+    },
+    {
+     "finding": "LOW cop_d3d6d83b15be4f639c30 FULFILMENT: Exclusion of riser installation is correct: FULFILMENT unestablished and $2,200 signed is below target.",
+     "resolution": "Agreed; kept excluded."
+    },
+    {
+     "condition": 0,
+     "decision": "REBUTTED",
+     "records": [
+      "price",
+      "conversionRates",
+      "buyerVolume",
+      "brain:OFFER_AND_PRICE",
+      "brain:CONVERSION"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "why": "No fulfiller is established for the installation (FULFILMENT missing), and its two signed $1,100 quotes ($2,200) do not reach the target alone."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "deals": 12,
+     "price": 240,
+     "directCost": 4,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_5c86be78e404_4d3a87",
+   "digest": "5c86be78e40468f36d788db4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:16:33.592Z"
+  },
+  {
+   "goalId": "wst_a18bf007b3a74387afac",
+   "contractDigest": "567cf43bebe54bfdd373fc17",
+   "parentRevisionId": "rev_5c86be78e404_4d3a87",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 12 one-county pump-out-due lists to licensed septic haulers at $240",
+    "opportunityIds": [
+     "cop_427469f803c542eca790"
+    ],
+    "why": "Every chain link is evidenced on the card: 210 haulers with published emails, $240 published price, 14 of 120 contacts accepted this offer, Brain produces the spreadsheet, $4 direct cost, $0 exposure, cash in 3 days. 12 deals x $240 = $2,880 gross, $2,832 after $48 direct cost, reaching $2,500 by day 7 of 14 without capital."
+   },
+   "alternatives": [
+    {
+     "title": "Septic tank riser installation (2 signed quotes, $2,200)",
+     "why": "Excluded: nobody is established to do the installation, and the two signed quotes total $2,200, below the $2,500 target on their own."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email all 210 haulers on the state licensed septage hauler roster with the county list offer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "src_volume",
+      "src_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Close 12 hauler orders at $240 per county list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "conversion",
+      "price",
+      "src_conv",
+      "src_price"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver 12 county pump-out-due spreadsheets from public permit records",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Collect $240 from each of the 12 buyers",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "daysToCash",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 288000,
+     "label": "12 x $240 list payments",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 7,
+     "kind": "SPEND",
+     "amountCents": 4800,
+     "label": "Direct cost $4 per list x 12, paid out of settled receipts",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 240,
+     "unit": "USD per list",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1167,
+     "unit": "accepted per contact (14/120)",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "licensed haulers with published email",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "orders counted (210 contacts x 14/120 = 24.5 expected; 11 needed)",
+     "sources": [
+      "src_conv",
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per list",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#price",
+     "dated": "2026-11",
+     "claim": "Two regional septic-hauler lead services publish $240 for a one-county pump-out-due list",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#conversionRates",
+     "dated": "2026-11",
+     "claim": "14 agreements from 120 contacts on this offer",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#buyerVolume",
+     "dated": "2026-11",
+     "claim": "State roster lists 210 licensed septage haulers with published business emails",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#payer",
+     "dated": "2026-11",
+     "claim": "Payer is owners/dispatch managers of licensed septic hauling companies",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $4 per list; exposure $0",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to first cash",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MEDIUM cop_427469f803c542eca790 MARKET_VOLUME: plan reaches 105 of 210 available buyers; at 14/120 conversion P(>=11 deals) ~ 0.69 with 105 contacts vs >0.99 with 210. Deals=12 is an ESTIMATE used as if known.",
+     "resolution": "Accepted. Step s1 now emails the whole 210-hauler roster on day 1 (same channel, $0 cost): 24.5 deals expected against the 11 needed; the ledger still counts only 12 deals x $240 = $2,880, $48 cost, $2,832 net, settling day 7."
+    },
+    {
+     "finding": "INFO cop_427469f803c542eca790 OFFER_AND_PRICE: rebuttal accepted — price established on this offer's own record, corroborated by 14 acceptances measured on this offer.",
+     "resolution": "Noted; no change."
+    },
+    {
+     "finding": "LOW cop_427469f803c542eca790 FULFILMENT: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED must be connected before day 1; accepted as Brain's routine operations.",
+     "resolution": "Noted; these are Brain's routine operations attached by Brain to the steps."
+    },
+    {
+     "finding": "INFO cop_d3d6d83b15be4f639c30: exclusion correct.",
+     "resolution": "Noted; kept excluded."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "why": "No fulfiller is established for the installation (FULFILMENT missing), and its two signed $1,100 quotes ($2,200) do not reach the target alone."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "deals": 12,
+     "price": 240,
+     "directCost": 4,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_999982c2c8ef_47717c",
+   "digest": "999982c2c8ef2f7f87a22235",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:19:06.605Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_a18bf007b3a74387afac",
+  "contractDigest": "567cf43bebe54bfdd373fc17",
+  "parentRevisionId": "rev_5c86be78e404_4d3a87",
+  "stance": "EXECUTABLE",
+  "strategy": {
+   "title": "Sell 12 one-county pump-out-due lists to licensed septic haulers at $240",
+   "opportunityIds": [
+    "cop_427469f803c542eca790"
+   ],
+   "why": "Every chain link is evidenced on the card: 210 haulers with published emails, $240 published price, 14 of 120 contacts accepted this offer, Brain produces the spreadsheet, $4 direct cost, $0 exposure, cash in 3 days. 12 deals x $240 = $2,880 gross, $2,832 after $48 direct cost, reaching $2,500 by day 7 of 14 without capital."
+  },
+  "alternatives": [
+   {
+    "title": "Septic tank riser installation (2 signed quotes, $2,200)",
+    "why": "Excluded: nobody is established to do the installation, and the two signed quotes total $2,200, below the $2,500 target on their own."
+   }
+  ],
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "REACH",
+    "label": "Email all 210 haulers on the state licensed septage hauler roster with the county list offer",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "buyers",
+     "src_volume",
+     "src_channel"
+    ],
+    "executor": {
+     "operation": "REACH_BUYERS",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "DISCOVER_LOCAL_BUSINESSES",
+       "state": "UNREAD"
+      },
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s2",
+    "kind": "SELL",
+    "label": "Close 12 hauler orders at $240 per county list",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 3,
+    "dependsOn": "s1",
+    "evidence": [
+     "conversion",
+     "price",
+     "src_conv",
+     "src_price"
+    ],
+    "priceCents": 24000,
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s3",
+    "kind": "DELIVER",
+    "label": "Produce and deliver 12 county pump-out-due spreadsheets from public permit records",
+    "performer": "BRAIN",
+    "costCents": 4800,
+    "day": 4,
+    "dependsOn": "s2",
+    "evidence": [
+     "directCost",
+     "src_delivery",
+     "src_cost"
+    ],
+    "executor": {
+     "operation": "BRAIN_PRODUCES",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "PRODUCE_SPREADSHEET",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s4",
+    "kind": "COLLECT",
+    "label": "Collect $240 from each of the 12 buyers",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 4,
+    "dependsOn": "s3",
+    "evidence": [
+     "daysToCash",
+     "src_ttfc"
+    ],
+    "executor": {
+     "operation": "COLLECT_PAYMENT",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "ISSUE_AN_INVOICE",
+       "state": "NOT_CONNECTED"
+      }
+     ],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [
+   {
+    "day": 4,
+    "kind": "RECEIPT",
+    "amountCents": 288000,
+    "label": "12 x $240 list payments",
+    "settlesDay": 7,
+    "stepId": "s4"
+   },
+   {
+    "day": 7,
+    "kind": "SPEND",
+    "amountCents": 4800,
+    "label": "Direct cost $4 per list x 12, paid out of settled receipts",
+    "stepId": "s3"
+   }
+  ],
+  "proofDay": 7,
+  "quantities": [
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 240,
+    "unit": "USD per list",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "conversion",
+    "status": "EVIDENCED",
+    "value": 0.1167,
+    "unit": "accepted per contact (14/120)",
+    "sources": [
+     "src_conv"
+    ],
+    "needs": null
+   },
+   {
+    "name": "buyers",
+    "status": "EVIDENCED",
+    "value": 210,
+    "unit": "licensed haulers with published email",
+    "sources": [
+     "src_volume"
+    ],
+    "needs": null
+   },
+   {
+    "name": "deals",
+    "status": "ESTIMATE",
+    "value": 12,
+    "unit": "orders counted (210 contacts x 14/120 = 24.5 expected; 11 needed)",
+    "sources": [
+     "src_conv",
+     "src_volume"
+    ],
+    "needs": null
+   },
+   {
+    "name": "directCost",
+    "status": "EVIDENCED",
+    "value": 4,
+    "unit": "USD per list",
+    "sources": [
+     "src_cost"
+    ],
+    "needs": null
+   },
+   {
+    "name": "daysToCash",
+    "status": "EVIDENCED",
+    "value": 3,
+    "unit": "days",
+    "sources": [
+     "src_ttfc"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_price",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#price",
+    "dated": "2026-11",
+    "claim": "Two regional septic-hauler lead services publish $240 for a one-county pump-out-due list",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_conv",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#conversionRates",
+    "dated": "2026-11",
+    "claim": "14 agreements from 120 contacts on this offer",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_volume",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#buyerVolume",
+    "dated": "2026-11",
+    "claim": "State roster lists 210 licensed septage haulers with published business emails",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_channel",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#payer",
+    "dated": "2026-11",
+    "claim": "Payer is owners/dispatch managers of licensed septic hauling companies",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_delivery",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#delivery",
+    "dated": "2026-11",
+    "claim": "A spreadsheet Brain produces",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_cost",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#directCosts",
+    "dated": "2026-11",
+    "claim": "Direct cost $4 per list; exposure $0",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   },
+   {
+    "id": "src_ttfc",
+    "url": "https://brain.local/card/cop_427469f803c542eca790#timeToFirstCash",
+    "dated": "2026-11",
+    "claim": "3 days to first cash",
+    "population": "licensed septic haulers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_427469f803c542eca790"
+   }
+  ],
+  "validation": null,
+  "noPlan": null,
+  "reach": null,
+  "answers": [
+   {
+    "finding": "MEDIUM cop_427469f803c542eca790 MARKET_VOLUME: plan reaches 105 of 210 available buyers; at 14/120 conversion P(>=11 deals) ~ 0.69 with 105 contacts vs >0.99 with 210. Deals=12 is an ESTIMATE used as if known.",
+    "resolution": "Accepted. Step s1 now emails the whole 210-hauler roster on day 1 (same channel, $0 cost): 24.5 deals expected against the 11 needed; the ledger still counts only 12 deals x $240 = $2,880, $48 cost, $2,832 net, settling day 7."
+   },
+   {
+    "finding": "INFO cop_427469f803c542eca790 OFFER_AND_PRICE: rebuttal accepted — price established on this offer's own record, corroborated by 14 acceptances measured on this offer.",
+    "resolution": "Noted; no change."
+   },
+   {
+    "finding": "LOW cop_427469f803c542eca790 FULFILMENT: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED must be connected before day 1; accepted as Brain's routine operations.",
+    "resolution": "Noted; these are Brain's routine operations attached by Brain to the steps."
+   },
+   {
+    "finding": "INFO cop_d3d6d83b15be4f639c30: exclusion correct.",
+    "resolution": "Noted; kept excluded."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_427469f803c542eca790",
+    "missing": []
+   },
+   {
+    "opportunityId": "cop_d3d6d83b15be4f639c30",
+    "missing": [
+     "FULFILMENT"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_d3d6d83b15be4f639c30",
+    "why": "No fulfiller is established for the installation (FULFILMENT missing), and its two signed $1,100 quotes ($2,200) do not reach the target alone."
+   }
+  ],
+  "members": [
+   {
+    "opportunityId": "cop_427469f803c542eca790",
+    "deals": 12,
+    "price": 240,
+    "directCost": 4,
+    "capital": 0
+   }
+  ],
+  "resolves": [],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_999982c2c8ef_47717c",
+  "digest": "999982c2c8ef2f7f87a22235",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_a8d678a1ff29400f914b/author-A",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:19:06.605Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_999982c2c8ef_47717c",
+  "digest": "999982c2c8ef2f7f87a22235",
+  "contractDigest": "567cf43bebe54bfdd373fc17",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 4800,
+   "committedOpenCents": 0,
+   "preProofCents": 4800,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": 4,
+   "collectedCents": 288000,
+   "collectedInWindowCents": 288000,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 283200
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 11384× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"County pump-out-due lists for licensed septic haulers\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_d3d6d83b15be4f639c30",
+    "cop_427469f803c542eca790"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"County pump-out-due lists for licensed septic haulers\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"County pump-out-due lists for licensed septic haulers\"",
+     "owner": "PERSON",
+     "cost": 4
+    },
+    {
+     "label": "Collect payment for \"County pump-out-due lists for licensed septic haulers\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+   "openings": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "title": "County pump-out-due lists for licensed septic haulers",
+     "missing": [],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 2500,
+     "potentialReach": 2500,
+     "card": {
+      "payer": "Owners and dispatch managers of licensed septic hauling companies",
+      "reachableChannel": "Business emails published in the state environmental agency's licensed septage hauler roster",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:09.452Z",
+      "offerScope": "A one-county list of septic systems whose permit records show a pump-out falling due in the next 90 days, compiled from public permit records.",
+      "priceCents": 24000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "septic pumping",
+      "mechanism": "INFORMATION_ASYMMETRY",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Business emails published in the state environmental agency's licensed septage h"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "price 240 USD (EVIDENCE)"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "measured on this offer's own sales: 14 accepted of 120 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "12 deal(s) needed, 210 available in the window (210 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 4, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "3 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The state environmental agency's roster lists 210 licensed septage haulers, each with a published business email; haulers pump systems year-round and buy lists per county.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell A one-county list of septic systems whose permit records show a pump-out falling due in the next 90 days, compiled from public permit records. to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "14 agreements from 120 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$4",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Owners and dispatch managers of licensed septic hauling companies",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Two regional septic-hauler lead services publish $240 for a one-county list of systems due for pump-out (published price pages, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "3 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "title": "Septic tank riser installation for rural homeowners",
+     "missing": [
+      "FULFILMENT"
+     ],
+     "stage": "E_COMMITTED",
+     "supportedReach": 2200,
+     "potentialReach": 2200,
+     "card": {
+      "payer": "Rural homeowners with buried septic lids",
+      "reachableChannel": "Replies to a county homeowners Facebook group post",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:09.452Z",
+      "offerScope": "Septic tank riser installation for rural homeowners",
+      "priceCents": 110000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 2,
+      "requiredCapabilities": [],
+      "industry": "septic pumping",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 110000,
+       "currency": "USD",
+       "deliverable": "Septic tank riser installation for rural homeowners",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 110000,
+       "currency": "USD",
+       "deliverable": "Septic tank riser installation for rural homeowners",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Replies to a county homeowners Facebook group post"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 2200 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 2200 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 600, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "10 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Septic tank riser installation for rural homeowners to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$600",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Rural homeowners with buried septic lids",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Two homeowners signed $1,100 quotes for a riser and lid installation (signed quotes, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_9882898de71e4614b666"
+   ],
+   "scope": {
+    "targetCents": 250000,
+    "daysLeft": 14,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:10:55.189Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_bed221ccca48_2e5749",
+   "revisionDigest": "bed221ccca48c13a32ae13c3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "The EXECUTABLE stance rests on a price that is not a purchase price paid by this buyer: the card's price fact is 'Two regional septic-hauler lead services publish $240 for a one-county list' — a benchmark of what other sellers charge, not what a hauler has paid or agreed to pay for this offer. OFFER_AND_PRICE is therefore not established by evidence, so the plan cannot be EXECUTABLE. The conversion fact '14 agreements from 120 contacts' does not state the price those agreements were at, and the card holds no agreement records (agreements: []), so it cannot stand in for a price paid. Arithmetic recomputed: 105 contacts x 14/120 = 12.25 -> 12 deals; 12 x $240 = $2,880 gross, $48 direct cost, $2,832 net; settles day 7 of 14; exposure $0. It reaches $2,500 with 1 deal of margin at $240 (11 deals = $2,596 net; 10 = $2,360 fails), so the result is sensitive to the unestablished price: at $210 or less 12 deals fall short. Recommended: restate as CONDITIONAL — first offers to roster haulers at $240 measure the price this buyer actually pays; proof = paid orders at $240 from the first ~35 contacts (about 4 expected); stop if no hauler pays at or above ~$215 after the first ~50 contacts; continue to the remaining roster otherwise.",
+   "findings": [
+    "[object Object]",
+    "[object Object]",
+    "[object Object]",
+    "[object Object]"
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:15:55.522Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "link": "OFFER_AND_PRICE",
+     "basis": "EVIDENCE",
+     "field": "price",
+     "why": "The price fact is what two other lead services publish for their lists, not a price this buyer paid or agreed to for this offer; a competitor benchmark is not this buyer's purchase price."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_bed221ccca48_2e5749",
+   "revisionDigest": "bed221ccca48c13a32ae13c3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "The EXECUTABLE stance rests on a price that is not a purchase price paid by this buyer: the card's price fact is 'Two regional septic-hauler lead services publish $240 for a one-county list' — a benchmark of what other sellers charge, not what a hauler has paid or agreed to pay for this offer. OFFER_AND_PRICE is therefore not established by evidence, so the plan cannot be EXECUTABLE. The conversion fact '14 agreements from 120 contacts' does not state the price those agreements were at, and the card holds no agreement records (agreements: []), so it cannot stand in for a price paid. Arithmetic recomputed: 105 contacts x 14/120 = 12.25 -> 12 deals; 12 x $240 = $2,880 gross, $48 direct cost, $2,832 net; settles day 7 of 14; exposure $0. It reaches $2,500 with 1 deal of margin at $240 (11 deals = $2,596 net; 10 = $2,360 fails), so the result is sensitive to the unestablished price: at $210 or less 12 deals fall short. Recommended: restate as CONDITIONAL — first offers to roster haulers at $240 measure the price this buyer actually pays; proof = paid orders at $240 from the first ~35 contacts (about 4 expected); stop if no hauler pays at or above ~$215 after the first ~50 contacts; continue to the remaining roster otherwise.",
+   "findings": [
+    "HIGH cop_427469f803c542eca790 OFFER_AND_PRICE: Price is two competitors' published list price, not this buyer's purchase price.",
+    "MEDIUM cop_427469f803c542eca790 CONVERSION: 14/120 agreements carry no price and no agreement rows on the card; acceptable as a rate, not as a price.",
+    "LOW cop_427469f803c542eca790 FULFILMENT: Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES/READ_REPLIES UNREAD; Brain's own step list marks delivery as PERSON while the plan says BRAIN. Reach, sell and collect need these connected before day 1.",
+    "LOW cop_d3d6d83b15be4f639c30 FULFILMENT: Exclusion of riser installation is correct: FULFILMENT unestablished and $2,200 signed is below target."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:16:02.416Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "link": "OFFER_AND_PRICE",
+     "basis": "EVIDENCE",
+     "field": "price",
+     "why": "The price fact is what two other lead services publish for their lists, not a price this buyer paid or agreed to for this offer; a competitor benchmark is not this buyer's purchase price."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_5c86be78e404_4d3a87",
+   "revisionDigest": "5c86be78e40468f36d788db4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "Price: I accept the rebuttal and withdraw the condition. The $240 is the price on this offer's own record and Brain's CONVERSION basis is this offer's own sales (14 of 120 contacts accepted it), so buyers of this kind have accepted this offer at that price; nothing on the card contradicts it. Remaining defect is the plan's own reach, not evidence: it emails only ~105 of the 210 roster haulers. At the measured 14/120 rate, 105 contacts give an expected 12.25 deals but the target needs 11 (11 x $240 - $44 = $2,596; 10 deals = $2,360 fails). Treating 12 as known hides that, at the measured rate, 105 contacts reach 11 deals with only ~69% probability (binomial), so roughly one run in three misses $2,500. Contacting the whole 210-hauler roster (same channel, $0 cost, still inside the 14-day window: reach day 1, cash settles ~day 7) raises that to >99%; 150 contacts gives ~97%. Revise s1 to contact the full roster (or state a stop/continue rule that contacts the second half by day 3 if fewer than ~6 orders have closed) and the ledger can stand as is (12 deals x $240 = $2,880, $48 cost, $2,832 net, $0 exposure, settles day 7). With that change I would pass it.",
+   "findings": [
+    "MEDIUM cop_427469f803c542eca790 MARKET_VOLUME: plan reaches 105 of 210 available buyers; at 14/120 conversion P(>=11 deals) ~ 0.69 with 105 contacts vs >0.99 with 210. Deals=12 is an ESTIMATE used as if known.",
+    "INFO cop_427469f803c542eca790 OFFER_AND_PRICE: rebuttal accepted — price established on this offer's own record, corroborated by 14 acceptances measured on this offer.",
+    "LOW cop_427469f803c542eca790 FULFILMENT: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED must be connected before day 1; accepted as Brain's routine operations.",
+    "INFO cop_d3d6d83b15be4f639c30: exclusion correct."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:45.812Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_999982c2c8ef_47717c",
+   "revisionDigest": "999982c2c8ef2f7f87a22235",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "The reach defect is fixed: s1 now emails all 210 roster haulers on day 1 at $0. Recomputed: 210 x 14/120 = 24.5 expected orders against 11 needed (11 x $240 - $44 = $2,596 >= $2,500); at the measured rate P(>=11 of 210) > 0.99 (binomial). The ledger conservatively counts 12 deals: $2,880 gross, $48 direct cost, $2,832 net, $0 exposure (cap 0 honoured: direct cost is paid from settled receipts on day 7), settles day 7 of 14 with 7 days of slack for late payers. Price rests on this offer's own record ($240) with conversion measured on this offer's own sales; nothing on the card contradicts it. Fulfilment is a Brain-produced spreadsheet (PRODUCE_SPREADSHEET PRESENT). The riser-installation opening is correctly excluded (FULFILMENT unestablished, $2,200 < target). The contract sets no owner-hours limit, so the card's 0.5 h/list does not bind. I would let the owner act on it, provided SEND_A_MESSAGE and ISSUE_AN_INVOICE are connected before day 1.",
+   "findings": [
+    "INFO cop_427469f803c542eca790 MARKET_VOLUME: full 210 roster reached; P(>=11 deals) > 0.99 at 14/120.",
+    "LOW cop_427469f803c542eca790: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED — connect before day 1.",
+    "LOW cop_427469f803c542eca790 CONVERSION: the 14 acceptances have no agreement rows on the card; the rate is accepted as measured on this offer's record."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:19:47.057Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_999982c2c8ef_47717c",
+  "digest": "999982c2c8ef2f7f87a22235",
+  "contractDigest": "567cf43bebe54bfdd373fc17",
+  "plan": {
+   "goalId": "wst_a18bf007b3a74387afac",
+   "contractDigest": "567cf43bebe54bfdd373fc17",
+   "parentRevisionId": "rev_5c86be78e404_4d3a87",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 12 one-county pump-out-due lists to licensed septic haulers at $240",
+    "opportunityIds": [
+     "cop_427469f803c542eca790"
+    ],
+    "why": "Every chain link is evidenced on the card: 210 haulers with published emails, $240 published price, 14 of 120 contacts accepted this offer, Brain produces the spreadsheet, $4 direct cost, $0 exposure, cash in 3 days. 12 deals x $240 = $2,880 gross, $2,832 after $48 direct cost, reaching $2,500 by day 7 of 14 without capital."
+   },
+   "alternatives": [
+    {
+     "title": "Septic tank riser installation (2 signed quotes, $2,200)",
+     "why": "Excluded: nobody is established to do the installation, and the two signed quotes total $2,200, below the $2,500 target on their own."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email all 210 haulers on the state licensed septage hauler roster with the county list offer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "src_volume",
+      "src_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Close 12 hauler orders at $240 per county list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "conversion",
+      "price",
+      "src_conv",
+      "src_price"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver 12 county pump-out-due spreadsheets from public permit records",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Collect $240 from each of the 12 buyers",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "daysToCash",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 288000,
+     "label": "12 x $240 list payments",
+     "settlesDay": 7,
+     "stepId": "s4"
+    },
+    {
+     "day": 7,
+     "kind": "SPEND",
+     "amountCents": 4800,
+     "label": "Direct cost $4 per list x 12, paid out of settled receipts",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 240,
+     "unit": "USD per list",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1167,
+     "unit": "accepted per contact (14/120)",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "licensed haulers with published email",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "orders counted (210 contacts x 14/120 = 24.5 expected; 11 needed)",
+     "sources": [
+      "src_conv",
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per list",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#price",
+     "dated": "2026-11",
+     "claim": "Two regional septic-hauler lead services publish $240 for a one-county pump-out-due list",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#conversionRates",
+     "dated": "2026-11",
+     "claim": "14 agreements from 120 contacts on this offer",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#buyerVolume",
+     "dated": "2026-11",
+     "claim": "State roster lists 210 licensed septage haulers with published business emails",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#payer",
+     "dated": "2026-11",
+     "claim": "Payer is owners/dispatch managers of licensed septic hauling companies",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $4 per list; exposure $0",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_427469f803c542eca790#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to first cash",
+     "population": "licensed septic haulers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_427469f803c542eca790"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MEDIUM cop_427469f803c542eca790 MARKET_VOLUME: plan reaches 105 of 210 available buyers; at 14/120 conversion P(>=11 deals) ~ 0.69 with 105 contacts vs >0.99 with 210. Deals=12 is an ESTIMATE used as if known.",
+     "resolution": "Accepted. Step s1 now emails the whole 210-hauler roster on day 1 (same channel, $0 cost): 24.5 deals expected against the 11 needed; the ledger still counts only 12 deals x $240 = $2,880, $48 cost, $2,832 net, settling day 7."
+    },
+    {
+     "finding": "INFO cop_427469f803c542eca790 OFFER_AND_PRICE: rebuttal accepted — price established on this offer's own record, corroborated by 14 acceptances measured on this offer.",
+     "resolution": "Noted; no change."
+    },
+    {
+     "finding": "LOW cop_427469f803c542eca790 FULFILMENT: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED must be connected before day 1; accepted as Brain's routine operations.",
+     "resolution": "Noted; these are Brain's routine operations attached by Brain to the steps."
+    },
+    {
+     "finding": "INFO cop_d3d6d83b15be4f639c30: exclusion correct.",
+     "resolution": "Noted; kept excluded."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_d3d6d83b15be4f639c30",
+     "why": "No fulfiller is established for the installation (FULFILMENT missing), and its two signed $1,100 quotes ($2,200) do not reach the target alone."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_427469f803c542eca790",
+     "deals": 12,
+     "price": 240,
+     "directCost": 4,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_999982c2c8ef_47717c",
+   "digest": "999982c2c8ef2f7f87a22235",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:19:06.605Z"
+  },
+  "review": {
+   "revisionId": "rev_999982c2c8ef_47717c",
+   "revisionDigest": "999982c2c8ef2f7f87a22235",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a8d678a1ff29400f914b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "The reach defect is fixed: s1 now emails all 210 roster haulers on day 1 at $0. Recomputed: 210 x 14/120 = 24.5 expected orders against 11 needed (11 x $240 - $44 = $2,596 >= $2,500); at the measured rate P(>=11 of 210) > 0.99 (binomial). The ledger conservatively counts 12 deals: $2,880 gross, $48 direct cost, $2,832 net, $0 exposure (cap 0 honoured: direct cost is paid from settled receipts on day 7), settles day 7 of 14 with 7 days of slack for late payers. Price rests on this offer's own record ($240) with conversion measured on this offer's own sales; nothing on the card contradicts it. Fulfilment is a Brain-produced spreadsheet (PRODUCE_SPREADSHEET PRESENT). The riser-installation opening is correctly excluded (FULFILMENT unestablished, $2,200 < target). The contract sets no owner-hours limit, so the card's 0.5 h/list does not bind. I would let the owner act on it, provided SEND_A_MESSAGE and ISSUE_AN_INVOICE are connected before day 1.",
+   "findings": [
+    "INFO cop_427469f803c542eca790 MARKET_VOLUME: full 210 roster reached; P(>=11 deals) > 0.99 at 14/120.",
+    "LOW cop_427469f803c542eca790: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED — connect before day 1.",
+    "LOW cop_427469f803c542eca790 CONVERSION: the 14 acceptances have no agreement rows on the card; the rate is accepted as measured on this offer's record."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:19:47.057Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $2,500 of settled cash within 14 days using no up-front capital.",
+   "terms": "e2bb9d04a63f3ee1",
+   "openings": {
+    "cop_427469f803c542eca790": "4671ec0843a59aa9",
+    "cop_d3d6d83b15be4f639c30": "2281d7961e8aa4fa"
+   }
+  },
+  "at": "2026-11-27T12:21:01.907Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

@@ -1,0 +1,659 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_c7d26b5acc724f2c8113",
+      "words": "Collect $2,000,000 of settled cash within 14 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$2,000,000 of settled cash collected within 14 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "fc105a8e00b86a126647ac85"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_c7d26b5acc724f2c8113",
+        "contractDigest": "fc105a8e00b86a126647ac85",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening's whole market is worth $540,000, far below $2,000,000",
+          "opportunityIds": [],
+          "why": "The single opening sells a $450 workbook to veterinary clinics; the evidenced population is 1,200 licensed clinics, so even every clinic buying once at $450 brings $540,000. At the evidenced 12% conversion (36 of 300) about 144 sales = $64,800 are realistic. $2,000,000 in 14 days is out of reach of the evidence."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the vet workbook to every clinic",
+            "why": "Rejected: 1,200 x $450 = $540,000 maximum, 27% of the target even at 100% conversion."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover and research further openings with counted buyer populations that could add the missing ~$1.46M",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 450,
+            "unit": "USD",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum market value",
+            "status": "ESTIMATE",
+            "value": 540000,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 veterinary clinics licensed by the state board",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Market volume: the counted market (1,200 clinics x $450) is at most $540,000, so no plan from the openings held reaches $2,000,000 within 14 days.",
+          "resolution": "Lower the target to what the held opening supports (at most $540,000; about $65,000 at the evidenced conversion), or have Brain discover additional counted markets before planning."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_257bb909f06a4067ac19",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_257bb909f06a4067ac19",
+            "why": "Its whole counted market ($540,000) cannot carry a $2,000,000 target"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to about $540,000 (every clinic buying), or realistically ~$65,000 at the evidenced 12% conversion."
+          }
+        ],
+        "revisionId": "rev_1bd3fb7ba57c_87cd39",
+        "digest": "1bd3fb7ba57cb67387af1deb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2b2bcaf69ddd4bdc89b9/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:05.786Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_c7d26b5acc724f2c8113",
+      "contractDigest": "fc105a8e00b86a126647ac85",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the only opening's whole market is worth $540,000, far below $2,000,000",
+        "opportunityIds": [],
+        "why": "The single opening sells a $450 workbook to veterinary clinics; the evidenced population is 1,200 licensed clinics, so even every clinic buying once at $450 brings $540,000. At the evidenced 12% conversion (36 of 300) about 144 sales = $64,800 are realistic. $2,000,000 in 14 days is out of reach of the evidence."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the vet workbook to every clinic",
+          "why": "Rejected: 1,200 x $450 = $540,000 maximum, 27% of the target even at 100% conversion."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Discover and research further openings with counted buyer populations that could add the missing ~$1.46M",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 450,
+          "unit": "USD",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyer population",
+          "status": "EVIDENCED",
+          "value": 1200,
+          "unit": "clinics",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion rate",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "fraction of visitors",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum market value",
+          "status": "ESTIMATE",
+          "value": 540000,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_257bb909f06a4067ac19#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "1,200 veterinary clinics licensed by the state board",
+          "population": "Veterinary clinics",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_257bb909f06a4067ac19#price",
+          "dated": "2026-11-24",
+          "claim": "Price $450",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_257bb909f06a4067ac19#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "36 paid pre-orders from 300 unique visitors",
+          "population": "visitors",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Market volume: the counted market (1,200 clinics x $450) is at most $540,000, so no plan from the openings held reaches $2,000,000 within 14 days.",
+        "resolution": "Lower the target to what the held opening supports (at most $540,000; about $65,000 at the evidenced conversion), or have Brain discover additional counted markets before planning."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_257bb909f06a4067ac19",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_257bb909f06a4067ac19",
+          "why": "Its whole counted market ($540,000) cannot carry a $2,000,000 target"
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to about $540,000 (every clinic buying), or realistically ~$65,000 at the evidenced 12% conversion."
+        }
+      ],
+      "revisionId": "rev_1bd3fb7ba57c_87cd39",
+      "digest": "1bd3fb7ba57cb67387af1deb",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_2b2bcaf69ddd4bdc89b9/author-3",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:16:05.786Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_1bd3fb7ba57c_87cd39",
+      "digest": "1bd3fb7ba57cb67387af1deb",
+      "contractDigest": "fc105a8e00b86a126647ac85",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $540,000, so they cannot reach the $2,000,000 still needed. To make it supportable, target: lower the target to about $540,000, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_257bb909f06a4067ac19"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_257bb909f06a4067ac19",
+            "title": "Controlled-substance log reconciliation workbook for veterinary clinics",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 90000,
+            "potentialReach": 90000,
+            "card": {
+              "payer": "Veterinary clinic managers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:13.963Z",
+              "offerScope": "Controlled-substance log reconciliation workbook for veterinary clinics",
+              "priceCents": 45000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "veterinary clinics",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "1,200 veterinary clinics are licensed by the state board; each must reconcile its controlled-substance log quarterly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Controlled-substance log reconciliation workbook for veterinary clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "36 paid pre-orders from 300 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Veterinary clinic managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$450",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 200000000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:25.087Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_1bd3fb7ba57c_87cd39",
+        "revisionDigest": "1bd3fb7ba57cb67387af1deb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2b2bcaf69ddd4bdc89b9/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f3b6f561b9b84e229402/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a TARGET constraint is right: the evidenced market is 1,200 clinics reconciling quarterly, so within 14 days at most one $450 sale each = $540,000 even at 100% conversion, below $2,000,000; this is a limit the full evidence cannot fit, matching Brain NOT_VIABLE ($540,000 max). Arithmetic checked.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:16.438Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_1bd3fb7ba57c_87cd39",
+      "digest": "1bd3fb7ba57cb67387af1deb",
+      "contractDigest": "fc105a8e00b86a126647ac85",
+      "plan": {
+        "goalId": "wst_c7d26b5acc724f2c8113",
+        "contractDigest": "fc105a8e00b86a126647ac85",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening's whole market is worth $540,000, far below $2,000,000",
+          "opportunityIds": [],
+          "why": "The single opening sells a $450 workbook to veterinary clinics; the evidenced population is 1,200 licensed clinics, so even every clinic buying once at $450 brings $540,000. At the evidenced 12% conversion (36 of 300) about 144 sales = $64,800 are realistic. $2,000,000 in 14 days is out of reach of the evidence."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the vet workbook to every clinic",
+            "why": "Rejected: 1,200 x $450 = $540,000 maximum, 27% of the target even at 100% conversion."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover and research further openings with counted buyer populations that could add the missing ~$1.46M",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 450,
+            "unit": "USD",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyer population",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion rate",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "fraction of visitors",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum market value",
+            "status": "ESTIMATE",
+            "value": 540000,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 veterinary clinics licensed by the state board",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_257bb909f06a4067ac19#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "visitors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Market volume: the counted market (1,200 clinics x $450) is at most $540,000, so no plan from the openings held reaches $2,000,000 within 14 days.",
+          "resolution": "Lower the target to what the held opening supports (at most $540,000; about $65,000 at the evidenced conversion), or have Brain discover additional counted markets before planning."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_257bb909f06a4067ac19",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_257bb909f06a4067ac19",
+            "why": "Its whole counted market ($540,000) cannot carry a $2,000,000 target"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to about $540,000 (every clinic buying), or realistically ~$65,000 at the evidenced 12% conversion."
+          }
+        ],
+        "revisionId": "rev_1bd3fb7ba57c_87cd39",
+        "digest": "1bd3fb7ba57cb67387af1deb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2b2bcaf69ddd4bdc89b9/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:05.786Z"
+      },
+      "review": {
+        "revisionId": "rev_1bd3fb7ba57c_87cd39",
+        "revisionDigest": "1bd3fb7ba57cb67387af1deb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_2b2bcaf69ddd4bdc89b9/author-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f3b6f561b9b84e229402/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a TARGET constraint is right: the evidenced market is 1,200 clinics reconciling quarterly, so within 14 days at most one $450 sale each = $540,000 even at 100% conversion, below $2,000,000; this is a limit the full evidence cannot fit, matching Brain NOT_VIABLE ($540,000 max). Arithmetic checked.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:16.438Z"
+      },
+      "at": "2026-11-27T00:23:35.571Z"
+    },
+    "staleFinal": null
+  }
+}

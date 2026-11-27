@@ -1,0 +1,240 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_04e0f543881d_2c8223",
+      "digest": "04e0f543881d72f97ef9f4e7",
+      "contractDigest": "606ea2976c3699a8fc81ebc6",
+      "plan": {
+        "goalId": "wst_e038449966b74757ae58",
+        "contractDigest": "606ea2976c3699a8fc81ebc6",
+        "parentRevisionId": "rev_d655d340c4f0_eddefc",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: no held opening can carry $10,000 settled within 16 days",
+          "opportunityIds": [],
+          "why": "The only $10,000 figure is GitHub's bug-bounty reward for a critical vulnerability - a reward, not a price GitHub pays for a deliverable, and a spreadsheet is not a vulnerability finding. The templates sell at $9 with no reachable channel, buyer count, close rate or settlement timing; the target would need ~1,112 sales in 16 days. Domain brokerage is $75 'often', with no fulfiller."
+        },
+        "alternatives": [
+          {
+            "title": "Spreadsheet templates at $9",
+            "why": "Not establishable yet: at $9 the target needs about 1,112 sales in 16 days, and the buyer count, reachable channel, close rate and settlement timing are all unknown. That is not an evidenced ceiling; it is unmeasured."
+          },
+          {
+            "title": "GitHub bug bounty",
+            "why": "A bounty is a contingent reward, not a purchase; there is no offer, no buyer commitment, and the work (finding a critical vulnerability) is not what Brain's proved capability produces."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Answer the open research needs: template buyer count, channel and frequency; a purchase price GitHub pays for a deliverable; a domain-brokerage price and fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_bounty",
+              "s_tprice"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "templatePrice",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "USD",
+            "sources": [
+              "s_tprice"
+            ],
+            "needs": null
+          },
+          {
+            "name": "templateSalesNeeded",
+            "status": "ESTIMATE",
+            "value": 1112,
+            "unit": "sales in 16 days",
+            "sources": [
+              "s_tprice"
+            ],
+            "needs": "buyer volume and channel"
+          },
+          {
+            "name": "templateBuyerVolume",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [],
+            "needs": "buyer count research"
+          },
+          {
+            "name": "githubPurchasePrice",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s_bounty"
+            ],
+            "needs": "a price for a deliverable, not a bounty"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_bounty",
+            "url": "https://brain.local/card/cop_9d64f754a4624f95baab#price",
+            "dated": "2026-07-27",
+            "claim": "GitHub's bug bounty pays $10,000 for a critical vulnerability finding",
+            "population": "Security researchers (bounty)",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_tprice",
+            "url": "https://brain.local/card/cop_dc2bb1fc84cb43889a1f#price",
+            "dated": "2026-11-24",
+            "claim": "Spreadsheet templates sell for $9 on template marketplaces",
+            "population": "Small business operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_dprice",
+            "url": "https://brain.local/card/cop_6886441d0f6b4d65b9a6#price",
+            "dated": "2026-11-24",
+            "claim": "Flat-fee domain brokers often charge $75 per transaction",
+            "population": "Domain buyers or sellers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No opening has both an established purchase price and an established buyer volume and channel that could carry $10,000 within 16 days. GitHub's $10,000 is a bug-bounty reward, not a purchase price. The $9 templates would need about 1,112 sales, and nobody has counted their buyers, found a published channel to them, measured a close rate or found when the money would settle.",
+          "resolution": "Measure what is missing. (1) For the templates: count the reachable buyers and how often each buys (research need cnd_b594ab3d67494c498fc5), with the published channel that reaches them, then a live listing to measure close rate and payout timing. (2) For GitHub: find a price GitHub is published as paying for a deliverable (cnd_bdb93b0ea2a34b04a055), since the bounty is not one. (3) For domain brokerage: a published price (cnd_3c9a711be1bb4eb793af) and a fulfiller. Re-plan when any of these shows $10,000 reachable within 16 days and $375.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME",
+            "REACHABLE_BUYER"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "TARGET and DEADLINE are listed as constraints, but the decisive gap is missing evidence.",
+            "resolution": "Accepted. Constraints removed. Nothing evidenced shows the target or window ruling out a fully evidenced opening."
+          },
+          {
+            "finding": "'At most ~$1,800' presents an unknown as known.",
+            "resolution": "Accepted. The $1,800 figure is removed. Template buyer volume is stated as UNKNOWN, not as a ceiling."
+          },
+          {
+            "finding": "Remove the constraints or justify them; keep the research resolution as the only owner-facing instruction.",
+            "resolution": "Accepted. Constraints removed. The resolution names the measurements (research needs cnd_b594ab3d67494c498fc5, cnd_bdb93b0ea2a34b04a055, cnd_3c9a711be1bb4eb793af), and decisiveLinks and resolves match them."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_dc2bb1fc84cb43889a1f",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_9d64f754a4624f95baab",
+            "missing": [
+              "REACHABLE_BUYER",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_6886441d0f6b4d65b9a6",
+            "missing": [
+              "REACHABLE_BUYER",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_9d64f754a4624f95baab",
+            "why": "The $10,000 is a bug-bounty reward, not a purchase price; there is no buyer commitment and a spreadsheet does not deliver a vulnerability finding."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME",
+          "REACHABLE_BUYER",
+          "CONVERSION",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_9d64f754a4624f95baab",
+            "link": "FULFILMENT",
+            "reason": "Brain counts PRODUCE_SPREADSHEET as fulfilment, but the deliverable that pays (a critical vulnerability finding) is security research, not a spreadsheet; nobody has shown Brain can produce it."
+          },
+          {
+            "opportunityId": "cop_9d64f754a4624f95baab",
+            "link": "ECONOMICS",
+            "reason": "With no purchase price (only a contingent bounty) the $355 cost cannot be shown to be below what is paid, so economics is not established."
+          }
+        ],
+        "revisionId": "rev_04e0f543881d_2c8223",
+        "digest": "04e0f543881d72f97ef9f4e7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_310f1d54bb9d4870965f/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T03:02:44.431Z"
+      },
+      "review": {
+        "revisionId": "rev_04e0f543881d_2c8223",
+        "revisionDigest": "04e0f543881d72f97ef9f4e7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_310f1d54bb9d4870965f/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_635b88dcf63d4405b2a6/reviewer-epsilon",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct, and the revision fixes every earlier defect. The TARGET and DEADLINE constraints and the unevidenced $1,800 ceiling are removed. Template buyer volume is stated as UNKNOWN rather than as a cap. The decisive gap is now purely evidential: no opening has both an established purchase price and an established buyer volume and channel that could carry $10,000 in 16 days. GitHub's $10,000 is a bug-bounty reward, not a purchase price for a spreadsheet deliverable, so the exclusion and the FULFILMENT/ECONOMICS disagreements are sound. The domain fee is 'often $75' with no fulfiller. The resolution names the specific research needs (cnd_b594ab3d67494c498fc5, cnd_bdb93b0ea2a34b04a055, cnd_3c9a711be1bb4eb793af) and when to re-plan. decisiveLinks and resolves match the chain. The owner can act on it.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T03:04:58.111Z"
+      },
+      "at": "2026-11-27T03:05:40.797Z"
+    }
+  }
+}

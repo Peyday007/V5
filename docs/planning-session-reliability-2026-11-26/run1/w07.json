@@ -1,0 +1,25 @@
+{
+  "id": "ho-07-translation-owner-hours-exceeded",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_92756bbc41ef_0f7c4d",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names relax OWNER_HOURS, OWNER_HOURS broken, FULFILMENT",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

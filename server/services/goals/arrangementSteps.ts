@@ -678,6 +678,22 @@ const refOf = (input: { source: { ref: string } | null } | null | undefined): st
 const ids = (...xs: (string | null | undefined)[]) => [...new Set(xs.filter((x): x is string => typeof x === 'string' && x.length > 0))];
 const valueOf = (m: ModelInput | null | undefined): number | null => (m ? (m.value ?? m.high ?? m.low ?? null) : null);
 
+/**
+ * Who fulfils an opening from its own record alone — `openingMember`'s rule without a modelled
+ * pathway: a named fulfiller who is the owner is the owner; another named fulfiller is a provider;
+ * nobody named and a deliverable capability required is Brain; otherwise nobody. The app-session
+ * planning checks read it so a session's delivery step is held to the same performer the planner
+ * would give it. Pure.
+ */
+export function recordFulfiller(o: { fulfillmentOwner: string | null; requiredCapabilities: readonly string[] }): OpeningFulfiller {
+  const named = (o.fulfillmentOwner ?? '').trim();
+  const capability = o.requiredCapabilities.find((c) => DELIVERABLE_IDS.has(c)) ?? null;
+  if (named && fulfillerIsOwner(named)) return { by: 'OWNER', hours: null };
+  if (named) return { by: 'PROVIDER', name: named.slice(0, 120) };
+  if (capability) return { by: 'BRAIN', capability };
+  return { by: 'NOBODY', why: 'nobody is named to fulfil it and it requires no deliverable Brain produces' };
+}
+
 /** One modelled opening as a chain member, from what the plan already read of it. Pure. */
 export function openingMember(
   one: ModelledOpportunity,

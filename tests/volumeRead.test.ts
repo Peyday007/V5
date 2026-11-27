@@ -145,8 +145,15 @@ describe('readVolume: real stated volume is read', () => {
 describe('readVolume: the supply side and web counts are never buyers', () => {
   it('reads sales over a trailing span as market purchases, never its sellers as buyers', () => {
     const text = 'The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months across 40 sellers; buyers return each season.';
-    expect(readVolume(text, 30, 'Home cooks buying meal-plan workbooks')).toMatchObject({ deals: 191, buyers: null, counted: 'ORDERS' });
-    expect(readVolume(text, 360)).toMatchObject({ deals: 2300, buyers: null });
+    // Spread across 40 sellers, the category's 191 monthly orders are one listing's average share of about 4 (mv-04, 2026-11-27).
+    expect(readVolume(text, 30, 'Home cooks buying meal-plan workbooks')).toMatchObject({ deals: 4, buyers: null, counted: 'ORDERS' });
+    expect(readVolume(text, 30)!.basis).toMatch(/across 40 sellers.*average share is 4 in 30 days/);
+    expect(readVolume(text, 360)).toMatchObject({ deals: 57, buyers: null });
+    // Controls: the same total with no sellers named is the market's whole rate, and a total across a few sellers leaves each a large share.
+    expect(readVolume('The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months.', 30)).toMatchObject({ deals: 191, buyers: null });
+    expect(readVolume('The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months across 4 sellers.', 30)).toMatchObject({ deals: 47 });
+    // A count of units that buy is not a count of sellers: orders from 40 stores are 40 buyers ordering.
+    expect(readVolume('The distributor shows 2,300 orders in the last 12 months from 40 stores.', 30)!.deals).toBe(191);
   });
 
   it.each([

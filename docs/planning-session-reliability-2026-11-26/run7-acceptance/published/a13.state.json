@@ -1,0 +1,1389 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_5504258c495a4721b05f",
+      "words": "Collect $4,000 of settled cash within 21 days with no more than 4 hours a week of owner time and no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": 4,
+        "proofCondition": "$4,000 of settled cash received within 21 days",
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "6913a7b21fc65db823744367"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_5504258c495a4721b05f",
+        "contractDigest": "6913a7b21fc65db823744367",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+          "opportunityIds": [],
+          "why": "Six farms signed at $900 ($5,400), settling in 7 days, but the owner personally fulfils each flight at 8 hours; $4,000 needs 5 flights = 40 owner hours against the 12 hours (4 h/week x 3 weeks) the objective allows. At most one flight (8 h, $900) fits."
+        },
+        "alternatives": [
+          {
+            "title": "Fly one or two of the signed flights",
+            "why": "One flight fits (8 h, $900); far short of $4,000."
+          },
+          {
+            "title": "Subcontract the flights to a drone pilot",
+            "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a drone pilot who can fly the signed field-set flights for under $900 each, so the owner is not the fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per flight",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per flight",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "flights needed for target",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours allowed in window",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "hours",
+            "sources": [],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per flight, fulfilled by the owner personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+            "dated": "2026-11-24",
+            "claim": "Six farms signed scouting orders at $900 per field-set flight",
+            "population": "row-crop farm operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment capacity: the only recorded fulfiller is the owner at 8 hours per flight; 5 flights ($4,500) need 40 owner hours against the 12 allowed, so the signed demand cannot be fulfilled inside the limit.",
+          "resolution": "Raise the owner-hours limit to at least 40 hours in the window (about 13.3 h/week), or have Brain find and price a drone pilot who fulfils the flights instead of the owner, then re-plan.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours over the 21 days (about 13.3 h/week) for 5 flights, or let a subcontracted pilot fulfil.",
+            "basis": [
+              {
+                "opportunityId": "cop_621c07f4db5a4443a0a4",
+                "field": "humanHours"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "link": "FULFILMENT",
+            "reason": "Brain marks fulfilment ok because the owner fulfils personally (a PERSON fact), but humanHours is 8 per flight and the owner may give only 12 hours in the window; 5 flights need 40 hours, so fulfilment of the needed volume is not established inside the limit."
+          }
+        ],
+        "revisionId": "rev_2d411d6cc565_3ec36a",
+        "digest": "2d411d6cc565be8f3d5f3d62",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:52.948Z"
+      },
+      {
+        "goalId": "wst_5504258c495a4721b05f",
+        "contractDigest": "6913a7b21fc65db823744367",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+          "opportunityIds": [],
+          "why": "Six farms signed at $900 ($5,400), settling in 7 days, but the owner personally fulfils each flight at 8 hours; $4,000 needs 5 flights = 40 owner hours against the 12 hours (4 h/week x 3 weeks) the objective allows. At most one flight (8 h, $900) fits."
+        },
+        "alternatives": [
+          {
+            "title": "Fly one or two of the signed flights",
+            "why": "One flight fits (8 h, $900); far short of $4,000."
+          },
+          {
+            "title": "Subcontract the flights to a drone pilot",
+            "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a drone pilot who can fly the signed field-set flights for under $900 each, so the owner is not the fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per flight",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per flight",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "flights needed for target",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per flight, fulfilled by the owner personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+            "dated": "2026-11-24",
+            "claim": "Six farms signed scouting orders at $900 per field-set flight",
+            "population": "row-crop farm operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment: who flies the six signed $900 flights rests only on a person saying the owner does it personally, and the 8 hours per flight is a card figure no EVIDENCE fact supports. At that figure 5 flights ($4,500) would need 40 owner hours against the 12 the objective allows, so fulfilment of the needed volume inside the limit is not established.",
+          "resolution": "Establish the fulfiller and the measured hours per flight: have Brain find and price a licensed drone pilot who flies the signed field sets for under $900 each (so the owner is not the fulfiller), or, if the owner must fly, measure the hours per flight; if it is 8 h the owner-hours limit would have to allow about 40 hours in the window. Re-plan once one is recorded.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "link": "FULFILMENT",
+            "reason": "Brain marks fulfilment ok on a PERSON fact only (the owner does the work personally); no EVIDENCE fact establishes the fulfiller or its hours, and the card humanHours is 8 per flight and the owner may give only 12 hours in the window; 5 flights need 40 hours, so fulfilment of the needed volume is not established inside the limit."
+          }
+        ],
+        "revisionId": "rev_ebc2d2198e67_1f271d",
+        "digest": "ebc2d2198e67525c1da9ff59",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:14.879Z"
+      },
+      {
+        "goalId": "wst_5504258c495a4721b05f",
+        "contractDigest": "6913a7b21fc65db823744367",
+        "parentRevisionId": "rev_ebc2d2198e67_1f271d",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+          "opportunityIds": [],
+          "why": "Six farms signed at $900 ($5,400), settling in 7 days, but the owner personally fulfils each flight at 8 hours; $4,000 needs 5 flights = 40 owner hours against the 12 hours (4 h/week x 3 weeks) the objective allows. At most one flight (8 h, $900) fits."
+        },
+        "alternatives": [
+          {
+            "title": "Fly one or two of the signed flights",
+            "why": "One flight fits (8 h, $900); far short of $4,000."
+          },
+          {
+            "title": "Subcontract the flights to a drone pilot",
+            "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a drone pilot who can fly the signed field-set flights for under $900 each, so the owner is not the fulfiller",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per flight",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per flight",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "flights needed for target",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per flight, fulfilled by the owner personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+            "dated": "2026-11-24",
+            "claim": "Six farms signed scouting orders at $900 per field-set flight",
+            "population": "row-crop farm operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment: who flies the six signed $900 flights rests only on a person saying the owner does it personally, and the 8 hours per flight is a card figure no EVIDENCE fact supports. At that figure 5 flights ($4,500) would need 40 owner hours against the 12 the objective allows, so fulfilment of the needed volume inside the limit is not established.",
+          "resolution": "Establish the fulfiller and the measured hours per flight: have Brain find and price a licensed drone pilot who flies the signed field sets for under $900 each (so the owner is not the fulfiller), or, if the owner must fly, measure the hours per flight; if it is 8 h the owner-hours limit would have to allow about 40 hours in the window. Re-plan once one is recorded.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours in the 21 days (about 13.3 h/week) for 5 flights, or let a priced subcontracted pilot fulfil.",
+            "basis": [
+              {
+                "opportunityId": "cop_621c07f4db5a4443a0a4",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_de9d56dbf47c_39cdb0",
+        "digest": "de9d56dbf47c81fb6f720297",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:32:19.446Z"
+      },
+      {
+        "goalId": "wst_5504258c495a4721b05f",
+        "contractDigest": "6913a7b21fc65db823744367",
+        "parentRevisionId": "rev_ebc2d2198e67_1f271d",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+          "opportunityIds": [],
+          "why": "Six farms signed at $900 ($5,400), settling in 7 days at $40 cost and no capital, but the owner states he fulfils each flight personally and the card records 8 hours per flight; $4,000 needs 5 flights = 40 owner hours (all six agreed = 48 h) against the 12 hours (4 h/week x 3 weeks) the objective allows. Only one flight (8 h, $900) fits, so the owner-hours limit rules out every plan."
+        },
+        "alternatives": [
+          {
+            "title": "Fly one or two of the signed flights",
+            "why": "One flight fits (8 h, $900); far short of $4,000."
+          },
+          {
+            "title": "Subcontract the flights to a drone pilot",
+            "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find and price a licensed drone pilot who can fly the signed field-set flights for under $900 each, which would lift the owner-hours limit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per flight",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "hours",
+            "sources": [
+              "s_hours",
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per flight",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "flights needed for target",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per flight, fulfilled by the owner personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+            "dated": "2026-11-24",
+            "claim": "Six farms signed scouting orders at $900 per field-set flight",
+            "population": "row-crop farm operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Owner hours: every link of the drone-scouting opening is established (six written acceptances at $900, $40 cost, 7-day settlement, the owner as stated fulfiller), but at 8 owner hours per flight the 5 flights needed for $4,000 take 40 hours against the 12 the objective allows; at most $900 fits inside the limit.",
+          "resolution": "Either the owner allows at least 40 hours over the 21 days (about 13.3 h/week), or Brain finds and prices a licensed drone pilot who flies the signed field sets for under $900 each so the owner is no longer the fulfiller, then re-plans.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: ceil(4000/900) = 5 flights; 5 x 8 h = 40 h vs 12 h allowed; only 1 flight fits.",
+            "resolution": "Accepted; the revision now states 40 h needed (48 h for all six agreed) against 12 h, max $900 in the limit."
+          },
+          {
+            "finding": "Price, cost, settlement and exposure are established; the only failing element is owner hours.",
+            "resolution": "Accepted; chain now has no missing link for the opening."
+          },
+          {
+            "finding": "decisiveGap should be OWNER_HOURS (constraint), not FULFILMENT (missing evidence).",
+            "resolution": "Accepted: the owner's statement that he fulfils personally (card fulfillment fact) plus the card's 8 humanHours fix the figure; OWNER_HOURS constraint added with basis fulfillment, decisiveLinks emptied."
+          },
+          {
+            "finding": "Internal inconsistency: owner hours per flight marked ESTIMATE while s_hours is cited for it.",
+            "resolution": "Accepted; the quantity is now EVIDENCED from s_hours and s_ful."
+          },
+          {
+            "finding": "Disagreement on FULFILMENT has no specific contradicting record.",
+            "resolution": "Accepted; the FULFILMENT disagreement is removed and Brain's basis stands."
+          },
+          {
+            "finding": "Resolution paths are right: price a pilot under $900/flight, or raise the hours limit to >= 40 h.",
+            "resolution": "Kept both as the constraint suggestion and the research step."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours in the 21 days (about 13.3 h/week) for 5 flights, or let a priced subcontracted pilot fulfil.",
+            "basis": [
+              {
+                "opportunityId": "cop_621c07f4db5a4443a0a4",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_6a7529ad1929_dc3008",
+        "digest": "6a7529ad192970bc799b5718",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:32:42.449Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_5504258c495a4721b05f",
+      "contractDigest": "6913a7b21fc65db823744367",
+      "parentRevisionId": "rev_ebc2d2198e67_1f271d",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+        "opportunityIds": [],
+        "why": "Six farms signed at $900 ($5,400), settling in 7 days at $40 cost and no capital, but the owner states he fulfils each flight personally and the card records 8 hours per flight; $4,000 needs 5 flights = 40 owner hours (all six agreed = 48 h) against the 12 hours (4 h/week x 3 weeks) the objective allows. Only one flight (8 h, $900) fits, so the owner-hours limit rules out every plan."
+      },
+      "alternatives": [
+        {
+          "title": "Fly one or two of the signed flights",
+          "why": "One flight fits (8 h, $900); far short of $4,000."
+        },
+        {
+          "title": "Subcontract the flights to a drone pilot",
+          "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Find and price a licensed drone pilot who can fly the signed field-set flights for under $900 each, which would lift the owner-hours limit",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_hours"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "owner hours per flight",
+          "status": "EVIDENCED",
+          "value": 8,
+          "unit": "hours",
+          "sources": [
+            "s_hours",
+            "s_ful"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per flight",
+          "status": "EVIDENCED",
+          "value": 900,
+          "unit": "USD",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "flights needed for target",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "deals",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_hours",
+          "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+          "dated": "2026-11-24",
+          "claim": "8 hours of work per flight, fulfilled by the owner personally",
+          "population": "the six signed farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_621c07f4db5a4443a0a4"
+        },
+        {
+          "id": "s_ful",
+          "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "The owner does the work personally",
+          "population": "the six signed farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_621c07f4db5a4443a0a4"
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+          "dated": "2026-11-24",
+          "claim": "Six farms signed scouting orders at $900 per field-set flight",
+          "population": "row-crop farm operators",
+          "matchesBuyer": true,
+          "opportunityId": "cop_621c07f4db5a4443a0a4"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Owner hours: every link of the drone-scouting opening is established (six written acceptances at $900, $40 cost, 7-day settlement, the owner as stated fulfiller), but at 8 owner hours per flight the 5 flights needed for $4,000 take 40 hours against the 12 the objective allows; at most $900 fits inside the limit.",
+        "resolution": "Either the owner allows at least 40 hours over the 21 days (about 13.3 h/week), or Brain finds and prices a licensed drone pilot who flies the signed field sets for under $900 each so the owner is no longer the fulfiller, then re-plans.",
+        "decisiveLinks": []
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Recomputed: ceil(4000/900) = 5 flights; 5 x 8 h = 40 h vs 12 h allowed; only 1 flight fits.",
+          "resolution": "Accepted; the revision now states 40 h needed (48 h for all six agreed) against 12 h, max $900 in the limit."
+        },
+        {
+          "finding": "Price, cost, settlement and exposure are established; the only failing element is owner hours.",
+          "resolution": "Accepted; chain now has no missing link for the opening."
+        },
+        {
+          "finding": "decisiveGap should be OWNER_HOURS (constraint), not FULFILMENT (missing evidence).",
+          "resolution": "Accepted: the owner's statement that he fulfils personally (card fulfillment fact) plus the card's 8 humanHours fix the figure; OWNER_HOURS constraint added with basis fulfillment, decisiveLinks emptied."
+        },
+        {
+          "finding": "Internal inconsistency: owner hours per flight marked ESTIMATE while s_hours is cited for it.",
+          "resolution": "Accepted; the quantity is now EVIDENCED from s_hours and s_ful."
+        },
+        {
+          "finding": "Disagreement on FULFILMENT has no specific contradicting record.",
+          "resolution": "Accepted; the FULFILMENT disagreement is removed and Brain's basis stands."
+        },
+        {
+          "finding": "Resolution paths are right: price a pilot under $900/flight, or raise the hours limit to >= 40 h.",
+          "resolution": "Kept both as the constraint suggestion and the research step."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_621c07f4db5a4443a0a4",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "OWNER_HOURS",
+          "suggestion": "Allow at least 40 owner hours in the 21 days (about 13.3 h/week) for 5 flights, or let a priced subcontracted pilot fulfil.",
+          "basis": [
+            {
+              "opportunityId": "cop_621c07f4db5a4443a0a4",
+              "field": "fulfillment"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_6a7529ad1929_dc3008",
+      "digest": "6a7529ad192970bc799b5718",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_24e6e7c9e8154f52a762/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:32:42.449Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_6a7529ad1929_dc3008",
+      "digest": "6a7529ad192970bc799b5718",
+      "contractDigest": "6913a7b21fc65db823744367",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: the agreed deals need 48 owner hours, more than the 12 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3213× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Row-crop farm operators — Drone multispectral c\" needs [figure withheld] and keeps [figure withheld], 830× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Row-crop farm operators\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_621c07f4db5a4443a0a4"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Row-crop farm operators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Row-crop farm operators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 79.50791497181916
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 5400 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "title": "Drone multispectral crop-scouting flights for row-crop farms",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Row-crop farm operators",
+              "reachableChannel": "The farm operators who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:54.396Z",
+              "offerScope": "Drone multispectral crop-scouting flights for row-crop farms",
+              "priceCents": 90000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 8,
+              "requiredCapabilities": [],
+              "industry": "row-crop farming",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 90000,
+                "currency": "USD",
+                "deliverable": "Drone multispectral crop-scouting flights for row-crop farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The farm operators who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 5400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 5400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 40, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Drone multispectral crop-scouting flights for row-crop farms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$40",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Row-crop farm operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Six farms signed scouting orders at $900 per field-set flight.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 21,
+          "hoursCeiling": 12,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 4
+        },
+        "at": "2026-11-27T08:24:37.753Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ebc2d2198e67_1f271d",
+        "revisionDigest": "ebc2d2198e67525c1da9ff59",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_db137a783a9a415c85a1/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "NO_PLAN is the right stance, but it names the wrong decisive gap. The record does establish who fulfils: the owner's own statement that he does the work personally (a PERSON fact about himself, which Brain accepts as the FULFILMENT basis), and the card carries 8 human hours per flight - the revision itself cites that as source s_hours dated 2026-11-24 while also claiming no evidence supports it. On that record the goal fails a limit, not a missing link: $4,000 at $900 needs 5 flights = 40 owner hours (Brain counts the six agreed deals at 48 h) against 4 h/week x 3 weeks = 12 h. That is an OWNER_HOURS constraint the evidence decides - even with every link held the target cannot fit the limit - and it should be stated as a constraint (basis: card fulfillment + humanHours), with the subcontracted-pilot research as the way to lift it. The disagreement against Brain's FULFILMENT link cites no contradicting record, only the hours limit, so it should be dropped.",
+        "findings": [
+          "Recomputed: ceil(4000/900) = 5 flights; 5 x 8 h = 40 h (6 agreed x 8 = 48 h) vs 12 h allowed; only 1 flight (8 h, $900) fits, so max in-window cash under the limit is $900.",
+          "Price ($900 x 6 written acceptances = $5,400), cost $40/flight, 7-day settlement and $0 exposure are all established; the only failing element is owner hours.",
+          "decisiveGap should be OWNER_HOURS (constraint), not FULFILMENT (missing evidence); constraints[] is empty although the revision's own arithmetic shows the limit binding.",
+          "Internal inconsistency: quantity 'owner hours per flight' marked ESTIMATE and decisiveGap says no evidence supports 8 h, while source s_hours (dated, matchesBuyer true) is cited for exactly that figure.",
+          "Disagreement on FULFILMENT has no specific contradicting record; Brain's basis (the owner's own statement) stands.",
+          "Resolution paths are right: find and price a pilot under $900/flight (then hours ~0 and 5+ flights fit), or the owner raises the hours limit to >= 40 h in the window."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:30:23.931Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_de9d56dbf47c_39cdb0",
+        "revisionDigest": "de9d56dbf47c81fb6f720297",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_db137a783a9a415c85a1/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "This revision (already superseded by rev_6a7529ad1929_dc3008) keeps the same decisive gap as rev_ebc2d2198e67_1f271d: it names FULFILMENT as unestablished, although the owner's own statement that he flies personally plus the card's 8 h/flight establish the fulfiller, and the binding problem is the owner-hours limit (5 flights x 8 h = 40 h, all six = 48 h, vs 12 h allowed). The decisive gap should be an OWNER_HOURS constraint, as the newer revision states.",
+        "findings": [
+          "Same mislabelled decisive gap as the prior REVISE: missing-evidence framing where the evidence decides a limit.",
+          "Superseded by rev_6a7529ad1929_dc3008, which corrects it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:34:16.734Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_6a7529ad1929_dc3008",
+        "revisionDigest": "6a7529ad192970bc799b5718",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_db137a783a9a415c85a1/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with the right decisive gap. Every link of the drone-scouting opening is established (six written acceptances at $900 = $5,400, $40 cost, 7-day settlement, $0 capital, the owner as his own stated fulfiller at 8 h per flight), and the evidence itself rules out the goal: ceil($4,000/$900) = 5 flights x 8 h = 40 owner hours (all six = 48 h, matching Brain's check) against 4 h/week x 3 weeks = 12 h. Only one flight ($900) fits. It is correctly stated as an OWNER_HOURS constraint cited to the card's fulfillment fact, the unfounded FULFILMENT disagreement is gone, and both ways out (owner allows >= 40 h, ~13.3 h/week; or a priced subcontracted pilot under $900/flight) are named with a research step at $0.",
+        "findings": [
+          "Arithmetic checks: 40 h needed vs 12 h allowed; max in-limit cash $900.",
+          "Constraint basis cites the fulfillment fact; humanHours (8) is on the card and is the figure Brain uses.",
+          "Subcontracting is correctly treated as unestablished (no other fulfiller recorded) rather than assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:36:54.286Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_6a7529ad1929_dc3008",
+      "digest": "6a7529ad192970bc799b5718",
+      "contractDigest": "6913a7b21fc65db823744367",
+      "plan": {
+        "goalId": "wst_5504258c495a4721b05f",
+        "contractDigest": "6913a7b21fc65db823744367",
+        "parentRevisionId": "rev_ebc2d2198e67_1f271d",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 12 owner hours: each signed scouting flight needs 8 hours of the owner",
+          "opportunityIds": [],
+          "why": "Six farms signed at $900 ($5,400), settling in 7 days at $40 cost and no capital, but the owner states he fulfils each flight personally and the card records 8 hours per flight; $4,000 needs 5 flights = 40 owner hours (all six agreed = 48 h) against the 12 hours (4 h/week x 3 weeks) the objective allows. Only one flight (8 h, $900) fits, so the owner-hours limit rules out every plan."
+        },
+        "alternatives": [
+          {
+            "title": "Fly one or two of the signed flights",
+            "why": "One flight fits (8 h, $900); far short of $4,000."
+          },
+          {
+            "title": "Subcontract the flights to a drone pilot",
+            "why": "No fulfiller other than the owner is recorded on the card; a subcontractor would have to be found and priced first."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find and price a licensed drone pilot who can fly the signed field-set flights for under $900 each, which would lift the owner-hours limit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "owner hours per flight",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "hours",
+            "sources": [
+              "s_hours",
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per flight",
+            "status": "EVIDENCED",
+            "value": 900,
+            "unit": "USD",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "flights needed for target",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per flight, fulfilled by the owner personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "the six signed farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_621c07f4db5a4443a0a4#price",
+            "dated": "2026-11-24",
+            "claim": "Six farms signed scouting orders at $900 per field-set flight",
+            "population": "row-crop farm operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_621c07f4db5a4443a0a4"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Owner hours: every link of the drone-scouting opening is established (six written acceptances at $900, $40 cost, 7-day settlement, the owner as stated fulfiller), but at 8 owner hours per flight the 5 flights needed for $4,000 take 40 hours against the 12 the objective allows; at most $900 fits inside the limit.",
+          "resolution": "Either the owner allows at least 40 hours over the 21 days (about 13.3 h/week), or Brain finds and prices a licensed drone pilot who flies the signed field sets for under $900 each so the owner is no longer the fulfiller, then re-plans.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Recomputed: ceil(4000/900) = 5 flights; 5 x 8 h = 40 h vs 12 h allowed; only 1 flight fits.",
+            "resolution": "Accepted; the revision now states 40 h needed (48 h for all six agreed) against 12 h, max $900 in the limit."
+          },
+          {
+            "finding": "Price, cost, settlement and exposure are established; the only failing element is owner hours.",
+            "resolution": "Accepted; chain now has no missing link for the opening."
+          },
+          {
+            "finding": "decisiveGap should be OWNER_HOURS (constraint), not FULFILMENT (missing evidence).",
+            "resolution": "Accepted: the owner's statement that he fulfils personally (card fulfillment fact) plus the card's 8 humanHours fix the figure; OWNER_HOURS constraint added with basis fulfillment, decisiveLinks emptied."
+          },
+          {
+            "finding": "Internal inconsistency: owner hours per flight marked ESTIMATE while s_hours is cited for it.",
+            "resolution": "Accepted; the quantity is now EVIDENCED from s_hours and s_ful."
+          },
+          {
+            "finding": "Disagreement on FULFILMENT has no specific contradicting record.",
+            "resolution": "Accepted; the FULFILMENT disagreement is removed and Brain's basis stands."
+          },
+          {
+            "finding": "Resolution paths are right: price a pilot under $900/flight, or raise the hours limit to >= 40 h.",
+            "resolution": "Kept both as the constraint suggestion and the research step."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_621c07f4db5a4443a0a4",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours in the 21 days (about 13.3 h/week) for 5 flights, or let a priced subcontracted pilot fulfil.",
+            "basis": [
+              {
+                "opportunityId": "cop_621c07f4db5a4443a0a4",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_6a7529ad1929_dc3008",
+        "digest": "6a7529ad192970bc799b5718",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:32:42.449Z"
+      },
+      "review": {
+        "revisionId": "rev_6a7529ad1929_dc3008",
+        "revisionDigest": "6a7529ad192970bc799b5718",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_24e6e7c9e8154f52a762/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_db137a783a9a415c85a1/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with the right decisive gap. Every link of the drone-scouting opening is established (six written acceptances at $900 = $5,400, $40 cost, 7-day settlement, $0 capital, the owner as his own stated fulfiller at 8 h per flight), and the evidence itself rules out the goal: ceil($4,000/$900) = 5 flights x 8 h = 40 owner hours (all six = 48 h, matching Brain's check) against 4 h/week x 3 weeks = 12 h. Only one flight ($900) fits. It is correctly stated as an OWNER_HOURS constraint cited to the card's fulfillment fact, the unfounded FULFILMENT disagreement is gone, and both ways out (owner allows >= 40 h, ~13.3 h/week; or a priced subcontracted pilot under $900/flight) are named with a research step at $0.",
+        "findings": [
+          "Arithmetic checks: 40 h needed vs 12 h allowed; max in-limit cash $900.",
+          "Constraint basis cites the fulfillment fact; humanHours (8) is on the card and is the figure Brain uses.",
+          "Subcontracting is correctly treated as unestablished (no other fulfiller recorded) rather than assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:36:54.286Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 21 days with no more than 4 hours a week of owner time and no up-front capital.",
+        "terms": "a18cb720a5c27079",
+        "openings": {
+          "cop_621c07f4db5a4443a0a4": "c487442975f8f41e"
+        }
+      },
+      "at": "2026-11-27T08:37:28.190Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

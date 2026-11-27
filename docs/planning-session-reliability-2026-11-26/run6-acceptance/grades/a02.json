@@ -1,0 +1,36 @@
+{
+  "id": "ac-02-tattoo-listing-owner-hours",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_6bf585cc5c2c_37a22a",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_87c2f1df5e5749bcb5ab/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [tattooForms] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

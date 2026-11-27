@@ -1,0 +1,617 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d5a0fbe35a2c4ea3a0e4",
+      "words": "Collect $20,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 2000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "c3f273a743e120f631b2adb1"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d5a0fbe35a2c4ea3a0e4",
+        "contractDigest": "c3f273a743e120f631b2adb1",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: one district buyer cannot carry a $20,000 target",
+          "opportunityIds": [],
+          "why": "The only opening is one organisation (Cedar Valley USD) with an evidenced $6,000 purchase order that would settle on day 30 of 45. $20,000 needs at least 4 such deals ($6,000 x 4 = $24,000), and nothing on the card counts any other buyer of this work or how often they buy, nor has any buyer agreed to buy from us. One organisation is not a population, so the target is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on the Cedar Valley purchase order alone",
+            "why": "Worth at most $6,000 settled on day 30 — 30% of the target; worth doing as a measurement but it cannot be the plan."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per reconciliation",
+            "status": "EVIDENCED",
+            "value": 6000,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers of this kind",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [],
+            "needs": "A count of school districts/yearbook offices that buy photo-roster reconciliation through a published channel, with purchase frequency"
+          },
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "Offers to reachable buyers and their outcomes"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_523780f090a3466f8ad2#price",
+            "dated": "2026-11-12",
+            "claim": "Cedar Valley USD approved a $6,000 PO for yearbook photo-roster reconciliation",
+            "population": "Cedar Valley Unified School District only",
+            "matchesBuyer": true,
+            "opportunityId": "cop_523780f090a3466f8ad2"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_523780f090a3466f8ad2#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "30 days to first cash",
+            "population": "Cedar Valley Unified School District",
+            "matchesBuyer": true,
+            "opportunityId": "cop_523780f090a3466f8ad2"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Only one buyer organisation is evidenced; $20,000 needs at least 4 deals at $6,000 and nobody has counted how many other districts buy this work or how often, nor has any buyer agreed to buy from us.",
+          "resolution": "Research the buyer population (count of districts/yearbook offices posting or buying photo-roster reconciliation through procurement portals, with frequency) and bid on the Cedar Valley PO as the first live close-rate measurement; re-plan once a count of at least 4 reachable buyers inside 15 days of posting is recorded.",
+          "decisiveLinks": [
+            "MARKET_VOLUME",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_523780f090a3466f8ad2",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_2fd782e548de_60655b",
+        "digest": "2fd782e548de511b4b55ab52",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a277b16e0a8d44eeb00f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:24.173Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d5a0fbe35a2c4ea3a0e4",
+      "contractDigest": "c3f273a743e120f631b2adb1",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: one district buyer cannot carry a $20,000 target",
+        "opportunityIds": [],
+        "why": "The only opening is one organisation (Cedar Valley USD) with an evidenced $6,000 purchase order that would settle on day 30 of 45. $20,000 needs at least 4 such deals ($6,000 x 4 = $24,000), and nothing on the card counts any other buyer of this work or how often they buy, nor has any buyer agreed to buy from us. One organisation is not a population, so the target is not established."
+      },
+      "alternatives": [
+        {
+          "title": "Bid on the Cedar Valley purchase order alone",
+          "why": "Worth at most $6,000 settled on day 30 — 30% of the target; worth doing as a measurement but it cannot be the plan."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per reconciliation",
+          "status": "EVIDENCED",
+          "value": 6000,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals needed",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "deals",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable buyers of this kind",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "buyers",
+          "sources": [],
+          "needs": "A count of school districts/yearbook offices that buy photo-roster reconciliation through a published channel, with purchase frequency"
+        },
+        {
+          "name": "close rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "share",
+          "sources": [],
+          "needs": "Offers to reachable buyers and their outcomes"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_523780f090a3466f8ad2#price",
+          "dated": "2026-11-12",
+          "claim": "Cedar Valley USD approved a $6,000 PO for yearbook photo-roster reconciliation",
+          "population": "Cedar Valley Unified School District only",
+          "matchesBuyer": true,
+          "opportunityId": "cop_523780f090a3466f8ad2"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_523780f090a3466f8ad2#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "30 days to first cash",
+          "population": "Cedar Valley Unified School District",
+          "matchesBuyer": true,
+          "opportunityId": "cop_523780f090a3466f8ad2"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Only one buyer organisation is evidenced; $20,000 needs at least 4 deals at $6,000 and nobody has counted how many other districts buy this work or how often, nor has any buyer agreed to buy from us.",
+        "resolution": "Research the buyer population (count of districts/yearbook offices posting or buying photo-roster reconciliation through procurement portals, with frequency) and bid on the Cedar Valley PO as the first live close-rate measurement; re-plan once a count of at least 4 reachable buyers inside 15 days of posting is recorded.",
+        "decisiveLinks": [
+          "MARKET_VOLUME",
+          "CONVERSION"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_523780f090a3466f8ad2",
+          "missing": [
+            "CONVERSION",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME",
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_2fd782e548de_60655b",
+      "digest": "2fd782e548de511b4b55ab52",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_a277b16e0a8d44eeb00f/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:57:24.173Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_2fd782e548de_60655b",
+      "digest": "2fd782e548de511b4b55ab52",
+      "contractDigest": "c3f273a743e120f631b2adb1",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Student photo-roster reconciliation for Cedar Valley Unified\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 46555× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Yearbook adviser Cedar Valley Unified School Di\" needs [figure withheld] and keeps [figure withheld], 5894× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Student photo-roster reconciliation for Cedar Valley Unified School Di\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_523780f090a3466f8ad2"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Student photo-roster reconciliation for Cedar Valley Unified School District's y\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Student photo-roster reconciliation for Cedar Valley Unified School District's y\"",
+            "owner": "PERSON",
+            "cost": 60
+          },
+          {
+            "label": "Collect payment for \"Student photo-roster reconciliation for Cedar Valley Unified School District's y\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Sell \"Student photo-roster reconciliation for Cedar Valley Unified School District's y\": offer it to its reachable buyers at 6000 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+        "openings": [
+          {
+            "opportunityId": "cop_523780f090a3466f8ad2",
+            "title": "Student photo-roster reconciliation for Cedar Valley Unified School District's yearbook office",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 6000,
+            "potentialReach": 20000,
+            "card": {
+              "payer": "Yearbook adviser, Cedar Valley Unified School District",
+              "reachableChannel": "The district's procurement portal",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:40.556Z",
+              "offerScope": "Student photo-roster reconciliation for Cedar Valley Unified School District's yearbook office",
+              "priceCents": 600000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "K-12 yearbook production",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The district's procurement portal"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 6000 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "16 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "4 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 60, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "30 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Student photo-roster reconciliation for Cedar Valley Unified School District's yearbook office to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$60",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Yearbook adviser, Cedar Valley Unified School District",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Cedar Valley Unified School District approved a $6,000 purchase order for yearbook photo-roster reconciliation (board minutes, 2026-11-12).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "30 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_36bd1d23e7964cd98186",
+          "cnd_7a6e1f98e5f846e1b909"
+        ],
+        "scope": {
+          "targetCents": 2000000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:57.451Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_2fd782e548de_60655b",
+        "revisionDigest": "2fd782e548de511b4b55ab52",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a277b16e0a8d44eeb00f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_dbbdf3475b1b4851a24c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. The only opening is a single organisation (Cedar Valley USD) whose own board-approved $6,000 PO is a real purchase price for this buyer and settles on day 30 of 45, but $20,000 / $6,000 = 3.33, so at least 4 such sales are needed and the card holds no count of other buyers of this work or how often they buy (MARKET_VOLUME) and no buyer agreement or close rate (CONVERSION). One organisation is not a population. The gap is missing evidence a research question can answer (buyer count), not a live-test-only unknown, so CONDITIONAL would overreach; and it is not mis-stated as a constraint (constraints is empty). decisiveLinks name exactly the two links Brain also shows unestablished; the ledger is empty, consistent with no steps; zero capital fits the $0 exposure cap.",
+        "findings": [
+          "Arithmetic checked: 20000/6000 = 3.33 -> 4 deals; 4 x 6000 = 24000 >= 20000. One deal = 30% of target.",
+          "Price is the buyer's own approved purchase order (EVIDENCE, board minutes 2026-11-12), not a benchmark; buying signal verified 2026-11-24.",
+          "Settlement: 30 days to first cash against 45 days, so any additional buyer must be closed within ~15 days of the start; the resolution correctly requires buyers reachable inside 15 days of posting.",
+          "'deals needed' is labelled EVIDENCED though it is a derived quantity; harmless here because it is arithmetic over an evidenced price.",
+          "Minor: the card's delivery fact says Brain produces the spreadsheet while the card lists 2 human hours and Brain's step assigns delivery to PERSON; owner hours are unconstrained in this contract so it does not change the stance, but a later plan must state who delivers."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:58:17.416Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_2fd782e548de_60655b",
+      "digest": "2fd782e548de511b4b55ab52",
+      "contractDigest": "c3f273a743e120f631b2adb1",
+      "plan": {
+        "goalId": "wst_d5a0fbe35a2c4ea3a0e4",
+        "contractDigest": "c3f273a743e120f631b2adb1",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: one district buyer cannot carry a $20,000 target",
+          "opportunityIds": [],
+          "why": "The only opening is one organisation (Cedar Valley USD) with an evidenced $6,000 purchase order that would settle on day 30 of 45. $20,000 needs at least 4 such deals ($6,000 x 4 = $24,000), and nothing on the card counts any other buyer of this work or how often they buy, nor has any buyer agreed to buy from us. One organisation is not a population, so the target is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on the Cedar Valley purchase order alone",
+            "why": "Worth at most $6,000 settled on day 30 — 30% of the target; worth doing as a measurement but it cannot be the plan."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per reconciliation",
+            "status": "EVIDENCED",
+            "value": 6000,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals needed",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers of this kind",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers",
+            "sources": [],
+            "needs": "A count of school districts/yearbook offices that buy photo-roster reconciliation through a published channel, with purchase frequency"
+          },
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "Offers to reachable buyers and their outcomes"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_523780f090a3466f8ad2#price",
+            "dated": "2026-11-12",
+            "claim": "Cedar Valley USD approved a $6,000 PO for yearbook photo-roster reconciliation",
+            "population": "Cedar Valley Unified School District only",
+            "matchesBuyer": true,
+            "opportunityId": "cop_523780f090a3466f8ad2"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_523780f090a3466f8ad2#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "30 days to first cash",
+            "population": "Cedar Valley Unified School District",
+            "matchesBuyer": true,
+            "opportunityId": "cop_523780f090a3466f8ad2"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Only one buyer organisation is evidenced; $20,000 needs at least 4 deals at $6,000 and nobody has counted how many other districts buy this work or how often, nor has any buyer agreed to buy from us.",
+          "resolution": "Research the buyer population (count of districts/yearbook offices posting or buying photo-roster reconciliation through procurement portals, with frequency) and bid on the Cedar Valley PO as the first live close-rate measurement; re-plan once a count of at least 4 reachable buyers inside 15 days of posting is recorded.",
+          "decisiveLinks": [
+            "MARKET_VOLUME",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_523780f090a3466f8ad2",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_2fd782e548de_60655b",
+        "digest": "2fd782e548de511b4b55ab52",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a277b16e0a8d44eeb00f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:24.173Z"
+      },
+      "review": {
+        "revisionId": "rev_2fd782e548de_60655b",
+        "revisionDigest": "2fd782e548de511b4b55ab52",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a277b16e0a8d44eeb00f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_dbbdf3475b1b4851a24c/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. The only opening is a single organisation (Cedar Valley USD) whose own board-approved $6,000 PO is a real purchase price for this buyer and settles on day 30 of 45, but $20,000 / $6,000 = 3.33, so at least 4 such sales are needed and the card holds no count of other buyers of this work or how often they buy (MARKET_VOLUME) and no buyer agreement or close rate (CONVERSION). One organisation is not a population. The gap is missing evidence a research question can answer (buyer count), not a live-test-only unknown, so CONDITIONAL would overreach; and it is not mis-stated as a constraint (constraints is empty). decisiveLinks name exactly the two links Brain also shows unestablished; the ledger is empty, consistent with no steps; zero capital fits the $0 exposure cap.",
+        "findings": [
+          "Arithmetic checked: 20000/6000 = 3.33 -> 4 deals; 4 x 6000 = 24000 >= 20000. One deal = 30% of target.",
+          "Price is the buyer's own approved purchase order (EVIDENCE, board minutes 2026-11-12), not a benchmark; buying signal verified 2026-11-24.",
+          "Settlement: 30 days to first cash against 45 days, so any additional buyer must be closed within ~15 days of the start; the resolution correctly requires buyers reachable inside 15 days of posting.",
+          "'deals needed' is labelled EVIDENCED though it is a derived quantity; harmless here because it is arithmetic over an evidenced price.",
+          "Minor: the card's delivery fact says Brain produces the spreadsheet while the card lists 2 human hours and Brain's step assigns delivery to PERSON; owner hours are unconstrained in this contract so it does not change the stance, but a later plan must state who delivers."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:58:17.416Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $20,000 of settled cash within 45 days using no up-front capital.",
+        "terms": "387da1a0b30b1f8d",
+        "openings": {
+          "cop_523780f090a3466f8ad2": "a76ae04f663e702f"
+        }
+      },
+      "at": "2026-11-27T11:00:36.590Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

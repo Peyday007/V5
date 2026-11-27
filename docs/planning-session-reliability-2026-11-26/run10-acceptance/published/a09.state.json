@@ -1,0 +1,1606 @@
+{
+ "contract": {
+  "goalId": "wst_7b6f2a799a954e66b009",
+  "words": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 600000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "6000 USD of settled cash collected within 30 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "7695a6ed178f9b8256e50a6b"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_7b6f2a799a954e66b009",
+   "contractDigest": "7695a6ed178f9b8256e50a6b",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 6 Brain-produced crane permit application packets at $1,200 to crane rental companies",
+    "opportunityIds": [
+     "cop_fe7d0b4bfbf84cf48f1d"
+    ],
+    "why": "Every chain link is established on the card: 140 reachable buyers (licensing board list, monthly permit filings), a $1,200 market price from two published fee schedules, 10% conversion measured on this offer's own sales (9/90), Brain fulfils (PRODUCE_SPREADSHEET), $25 cost, $0 exposure, cash usable 7 days after sale. 6 deals = $7,200 gross, $7,050 net of costs, against a $6,000 target; ~60-70 contacts needed of 140."
+   },
+   "alternatives": [
+    {
+     "title": "Sell exactly 5 packets",
+     "why": "5 x $1,200 = $6,000 reaches the target only gross with no margin for a missed deal; 6 gives slack."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email operations managers of 70 of the 140 crane rental companies on the state licensing board list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer a complete critical-lift street-use and crane permit application packet at $1,200, payable on order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "price"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 6 orders at $1,200 (10% measured conversion on 70 contacts = 7 expected)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "offer",
+     "evidence": [
+      "conversionRates",
+      "price"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $1,200 per order; usable 7 days after sale",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "sell",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces each permit packet spreadsheet ($25 direct cost each, paid from collected cash)",
+     "performer": "BRAIN",
+     "costCents": 15000,
+     "day": 14,
+     "dependsOn": "collect",
+     "evidence": [
+      "delivery",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 720000,
+     "label": "6 orders x $1,200",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 15000,
+     "label": "Direct cost 6 x $25",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 1200,
+     "unit": "USD per packet",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "companies, each filing monthly",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 25,
+     "unit": "USD per packet",
+     "sources": [
+      "directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days",
+     "sources": [
+      "timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "deals",
+     "sources": [
+      "conversionRates",
+      "buyerVolume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#price",
+     "dated": "2026-10",
+     "claim": "Two permit-expediting firms publish $1,200 for a complete city crane and street-use permit application packet",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 agreements from 90 contacts on this offer's own sales",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "140 crane rental companies on the state licensing board list, each filing city lift permits monthly",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "directCosts",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#directCosts",
+     "dated": "2026-11",
+     "claim": "$25 direct cost per packet",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "timeToFirstCash",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "7 days to first cash",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "delivery",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "deals": 6,
+     "price": 1200,
+     "directCost": 25,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1f8d4fe2512a_9273b4",
+   "digest": "1f8d4fe2512a1f5889db2cab",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:03.288Z"
+  },
+  {
+   "goalId": "wst_7b6f2a799a954e66b009",
+   "contractDigest": "7695a6ed178f9b8256e50a6b",
+   "parentRevisionId": "rev_1f8d4fe2512a_9273b4",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell 6 Brain-produced crane permit application packets at $1,200 to crane rental companies",
+    "opportunityIds": [
+     "cop_fe7d0b4bfbf84cf48f1d"
+    ],
+    "why": "Every chain link is established on the card: 140 reachable buyers (licensing board list, monthly permit filings), a $1,200 market price from two published fee schedules, 10% conversion measured on this offer's own sales (9/90), Brain fulfils (PRODUCE_SPREADSHEET), $25 cost, $0 exposure, cash usable 7 days after sale. 6 deals = $7,200 gross, $7,050 net of costs, against a $6,000 target; all 140 listed buyers are contacted (14 expected orders at 10%), so 6 is reached with high probability."
+   },
+   "alternatives": [
+    {
+     "title": "Sell exactly 5 packets",
+     "why": "5 x $1,200 = $6,000 reaches the target only gross with no margin for a missed deal; 6 gives slack."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email operations managers of all 140 crane rental companies on the state licensing board list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer a complete critical-lift street-use and crane permit application packet at $1,200, payable on order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "price"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 6 orders at $1,200 (10% measured conversion on all 140 contacts = 14 expected; P(>=6) about 0.996)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "offer",
+     "evidence": [
+      "conversionRates",
+      "price"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $1,200 per order; usable 7 days after sale",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "sell",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces each permit packet spreadsheet ($25 direct cost each, paid from collected cash)",
+     "performer": "BRAIN",
+     "costCents": 15000,
+     "day": 14,
+     "dependsOn": "collect",
+     "evidence": [
+      "delivery",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 720000,
+     "label": "6 orders x $1,200",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 15000,
+     "label": "Direct cost 6 x $25",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 1200,
+     "unit": "USD per packet",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "companies, each filing monthly",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 25,
+     "unit": "USD per packet",
+     "sources": [
+      "directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days",
+     "sources": [
+      "timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "deals",
+     "sources": [
+      "conversionRates",
+      "buyerVolume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#price",
+     "dated": "2026-10",
+     "claim": "Two permit-expediting firms publish $1,200 for a complete city crane and street-use permit application packet",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 agreements from 90 contacts on this offer's own sales",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "140 crane rental companies on the state licensing board list, each filing city lift permits monthly",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "directCosts",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#directCosts",
+     "dated": "2026-11",
+     "claim": "$25 direct cost per packet",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "timeToFirstCash",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "7 days to first cash",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "delivery",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic checks: 6 x $1,200 = $7,200 gross, $150 cost, $7,050 net, exposure 0.",
+     "resolution": "Agreed; unchanged."
+    },
+    {
+     "finding": "OFFER_AND_PRICE: price fact is a competitor fee schedule, not this buyer's purchase price; scope differs.",
+     "resolution": "Rebutted. The card's price fact (EVIDENCE, published fee schedules 2026-10) is what crane-rental buyers pay a supplier for 'a complete city crane and street-use permit application packet' - word for word the card's offerScope, the same deliverable sold to the same payer. Two independent published schedules agree, nothing contradicts them, and Brain's own OFFER_AND_PRICE basis is 'price 1200 USD (EVIDENCE)'. A published supplier price for the identical offer is a purchase price, not a reward, estimate or quote somebody only said. The delivery field describes the format Brain produces it in, not a narrower offer."
+    },
+    {
+     "finding": "Conversion 9/90 has no stated price; no agreement recorded.",
+     "resolution": "Rebutted. Brain's CONVERSION basis is 'measured on this offer's own sales: 9 accepted of 90 contacts'; the offer on this card is priced at priceCents 120000 ($1,200). The agreements list being empty does not unmeasure a conversion recorded as EVIDENCE; the plan does not count any existing agreement toward the target, it sells 6 new orders."
+    },
+    {
+     "finding": "Plan contacts only 70 of 140 buyers; use the whole list.",
+     "resolution": "Accepted: REACH now contacts all 140 listed companies (14 expected orders at 10%, P(>=6) about 0.996)."
+    },
+    {
+     "finding": "Executor gaps; delivery owner PERSON in Brain's steps; humanHours 1 vs unstated owner hours.",
+     "resolution": "Under the fulfilment rule the card names no fulfillmentOwner and requiredCapabilities is PRODUCE_SPREADSHEET, which Brain has proved (brain:FULFILMENT), so DELIVER's performer is BRAIN and humanHours 1 is the fulfiller's work per deal, not owner work; the goal states no owner-hour ceiling in any case. Messaging/invoicing connections are routine Brain operations Brain's check accepted with no problem; they are execution set-up, not unestablished chain links."
+    },
+    {
+     "finding": "Brain's own acceptance is CANDIDATE_ONLY / NEEDS_EVIDENCE.",
+     "resolution": "Brain's verdict is about a calibrated 90% probability, not a chain link: its own nextTest says 'Every link is established and the cautious numbers reach the target'. All eight links are ok on the card; contacting all 140 buyers makes the 6-order requirement near-certain at the measured rate."
+    },
+    {
+     "condition": 0,
+     "decision": "REBUTTED",
+     "finding": "OFFER_AND_PRICE condition on field price",
+     "resolution": "The price fact is a published supplier price for the identical offer scope to this payer, sourced from two schedules and uncontradicted; Brain's link basis accepts it as EVIDENCE.",
+     "records": [
+      "price",
+      "offerScope",
+      "payer",
+      "brain:OFFER_AND_PRICE",
+      "brain:CONVERSION"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "deals": 6,
+     "price": 1200,
+     "directCost": 25,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_b7a0cd09ae78_2c04fc",
+   "digest": "b7a0cd09ae7830ddb1fe1922",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:20:14.397Z"
+  },
+  {
+   "goalId": "wst_7b6f2a799a954e66b009",
+   "contractDigest": "7695a6ed178f9b8256e50a6b",
+   "parentRevisionId": "rev_b7a0cd09ae78_2c04fc",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the crane permit packet's price is established",
+    "opportunityIds": [],
+    "why": "The card's record changed: its price fact now reads $120 (EVIDENCE) while the card's priceCents still says $1,200. The two figures contradict each other, so no price is established. At $1,200, 6 sales from 140 monthly-filing buyers at the measured 10% conversion reach $6,000; at $120, 140 buyers x 10% = 14 orders = $1,680, far short (50+ sales needed). The price decides whether any plan exists."
+   },
+   "alternatives": [
+    {
+     "title": "Sell at $1,200 as a conditional live test",
+     "why": "The price is a recorded, researchable fact that is contradicted on the card itself, not an unknown only a live test can measure; resolve the record first."
+    },
+    {
+     "title": "Sell at $120",
+     "why": "Even every one of the 140 buyers buying once yields $16,800 gross, but at the measured 10% conversion only ~14 orders ($1,680) are expected in 30 days, far below $6,000."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish what crane rental companies actually pay for a complete crane and street-use permit application packet (the published fee schedules, with source and date) and correct the card's contradictory price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per packet",
+     "sources": [
+      "price"
+     ],
+     "needs": "A single sourced price: the card's price fact says $120 while its priceCents says $1,200"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "companies, each filing monthly",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#price",
+     "dated": "2026-11",
+     "claim": "The card's price fact now reads $120, contradicting the card's priceCents of $1,200",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 agreements from 90 contacts on this offer's own sales",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "140 crane rental companies on the state licensing board list, each filing city lift permits monthly",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the card carries two contradictory prices ($120 price fact vs $1,200 priceCents), so no price is established; whether 140 buyers at 10% conversion can carry $6,000 (MARKET_VOLUME) depends entirely on which is true - 6 sales at $1,200 suffice, while at $120 the whole expected yield is ~$1,680.",
+    "resolution": "Research and record the published price buyers pay for this packet (answering Brain's revenueRange question with source and date); if $1,200 is confirmed, resubmit as EXECUTABLE selling 6 packets to the 140 listed buyers; if $120, the target is out of reach from this opening and new openings are needed.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic and ledger verified: collectedInWindow $7,200, spend $150, net $7,050, min cash 0.",
+     "resolution": "Superseded: the card's price fact changed to $120, contradicting the $1,200 priceCents, so the $7,200 figure is no longer established; the plan is now NO_PLAN pending the price."
+    },
+    {
+     "finding": "OFFER_AND_PRICE condition withdrawn: published supplier price for the identical scope.",
+     "resolution": "The record that supported it changed: the price fact now reads $120 and Brain's OFFER_AND_PRICE basis is 'no single price on the card'. The link is now unestablished and is the decisive gap."
+    },
+    {
+     "finding": "REACH extended to all 140 buyers as requested.",
+     "resolution": "Kept in the resolution: if $1,200 is confirmed the plan reaches all 140 listed buyers."
+    },
+    {
+     "finding": "Residual execution set-up: SEND_A_MESSAGE and ISSUE_AN_INVOICE NOT_CONNECTED; Brain CANDIDATE_ONLY.",
+     "resolution": "No selling steps remain in this NO_PLAN revision; the only step is BRAIN research, which Brain's executor supports."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_78b2f10310e6_b8020c",
+   "digest": "78b2f10310e6b5ef2ca24998",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:27:26.424Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_7b6f2a799a954e66b009",
+  "contractDigest": "7695a6ed178f9b8256e50a6b",
+  "parentRevisionId": "rev_b7a0cd09ae78_2c04fc",
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan until the crane permit packet's price is established",
+   "opportunityIds": [],
+   "why": "The card's record changed: its price fact now reads $120 (EVIDENCE) while the card's priceCents still says $1,200. The two figures contradict each other, so no price is established. At $1,200, 6 sales from 140 monthly-filing buyers at the measured 10% conversion reach $6,000; at $120, 140 buyers x 10% = 14 orders = $1,680, far short (50+ sales needed). The price decides whether any plan exists."
+  },
+  "alternatives": [
+   {
+    "title": "Sell at $1,200 as a conditional live test",
+    "why": "The price is a recorded, researchable fact that is contradicted on the card itself, not an unknown only a live test can measure; resolve the record first."
+   },
+   {
+    "title": "Sell at $120",
+    "why": "Even every one of the 140 buyers buying once yields $16,800 gross, but at the measured 10% conversion only ~14 orders ($1,680) are expected in 30 days, far below $6,000."
+   }
+  ],
+  "steps": [
+   {
+    "id": "research",
+    "kind": "RESEARCH",
+    "label": "Establish what crane rental companies actually pay for a complete crane and street-use permit application packet (the published fee schedules, with source and date) and correct the card's contradictory price",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "price"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "price",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD per packet",
+    "sources": [
+     "price"
+    ],
+    "needs": "A single sourced price: the card's price fact says $120 while its priceCents says $1,200"
+   },
+   {
+    "name": "conversion",
+    "status": "EVIDENCED",
+    "value": 0.1,
+    "unit": "agreements per contact",
+    "sources": [
+     "conversionRates"
+    ],
+    "needs": null
+   },
+   {
+    "name": "reachable buyers",
+    "status": "EVIDENCED",
+    "value": 140,
+    "unit": "companies, each filing monthly",
+    "sources": [
+     "buyerVolume"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "price",
+    "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#price",
+    "dated": "2026-11",
+    "claim": "The card's price fact now reads $120, contradicting the card's priceCents of $1,200",
+    "population": "Operations managers at regional crane rental companies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+   },
+   {
+    "id": "conversionRates",
+    "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#conversionRates",
+    "dated": "2026-11",
+    "claim": "9 agreements from 90 contacts on this offer's own sales",
+    "population": "Operations managers at regional crane rental companies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+   },
+   {
+    "id": "buyerVolume",
+    "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#buyerVolume",
+    "dated": "2026-11",
+    "claim": "140 crane rental companies on the state licensing board list, each filing city lift permits monthly",
+    "population": "Operations managers at regional crane rental companies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "OFFER_AND_PRICE: the card carries two contradictory prices ($120 price fact vs $1,200 priceCents), so no price is established; whether 140 buyers at 10% conversion can carry $6,000 (MARKET_VOLUME) depends entirely on which is true - 6 sales at $1,200 suffice, while at $120 the whole expected yield is ~$1,680.",
+   "resolution": "Research and record the published price buyers pay for this packet (answering Brain's revenueRange question with source and date); if $1,200 is confirmed, resubmit as EXECUTABLE selling 6 packets to the 140 listed buyers; if $120, the target is out of reach from this opening and new openings are needed.",
+   "decisiveLinks": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ]
+  },
+  "reach": null,
+  "answers": [
+   {
+    "finding": "Arithmetic and ledger verified: collectedInWindow $7,200, spend $150, net $7,050, min cash 0.",
+    "resolution": "Superseded: the card's price fact changed to $120, contradicting the $1,200 priceCents, so the $7,200 figure is no longer established; the plan is now NO_PLAN pending the price."
+   },
+   {
+    "finding": "OFFER_AND_PRICE condition withdrawn: published supplier price for the identical scope.",
+    "resolution": "The record that supported it changed: the price fact now reads $120 and Brain's OFFER_AND_PRICE basis is 'no single price on the card'. The link is now unestablished and is the decisive gap."
+   },
+   {
+    "finding": "REACH extended to all 140 buyers as requested.",
+    "resolution": "Kept in the resolution: if $1,200 is confirmed the plan reaches all 140 listed buyers."
+   },
+   {
+    "finding": "Residual execution set-up: SEND_A_MESSAGE and ISSUE_AN_INVOICE NOT_CONNECTED; Brain CANDIDATE_ONLY.",
+    "resolution": "No selling steps remain in this NO_PLAN revision; the only step is BRAIN research, which Brain's executor supports."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "OFFER_AND_PRICE",
+   "MARKET_VOLUME"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_78b2f10310e6_b8020c",
+  "digest": "78b2f10310e6b5ef2ca24998",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_059e51fc73fb43ab9180/author-C",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:27:26.424Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_78b2f10310e6_b8020c",
+  "digest": "78b2f10310e6b5ef2ca24998",
+  "contractDigest": "7695a6ed178f9b8256e50a6b",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: cannot reach the 6000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 37982× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Critical-lift street-use and crane permit application packet\" needs [figure withheld] and keeps [figure withheld], 635× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Operations managers at regional crane rental companies\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_fe7d0b4bfbf84cf48f1d"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Critical-lift street-use and crane permit application packets for crane rental c\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Critical-lift street-use and crane permit application packets for crane rental c\"",
+     "owner": "PERSON",
+     "cost": 25
+    },
+    {
+     "label": "Research the buyers",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Research the price",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Research settlement",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Research the cost per deal",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Research repeat purchases",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Reach Operations managers at regional crane rental companies",
+     "owner": "BRAIN",
+     "cost": null
+    },
+    {
+     "label": "Validate the offer with Operations managers at regional crane rental companies",
+     "owner": "BRAIN",
+     "cost": null
+    },
+    {
+     "label": "Deliver and confirm",
+     "owner": "PERSON",
+     "cost": 49.85241491033792
+    },
+    {
+     "label": "Collect payment for \"Critical-lift street-use and crane permit application packets for crane rental c\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Collect payment",
+     "owner": "PERSON",
+     "cost": 0
+    },
+    {
+     "label": "Run the next group",
+     "owner": "BRAIN",
+     "cost": null
+    }
+   ],
+   "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "title": "Critical-lift street-use and crane permit application packets for crane rental companies",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 0,
+     "potentialReach": 6000,
+     "card": {
+      "payer": "Operations managers at regional crane rental companies",
+      "reachableChannel": "Operations emails in the state crane-operator licensing board's company list",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:53.250Z",
+      "offerScope": "Critical-lift street-use and crane permit application packets for crane rental companies",
+      "priceCents": 120000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "crane rental",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Operations emails in the state crane-operator licensing board's company list"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "no single price on the card"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "measured on this offer's own sales: 9 accepted of 90 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "51 deal(s) needed at the measured rate means asking 814 prospects, but the market holds only 140 (140 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days): at that rate it yields about 8.7"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 25, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "7 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The state licensing board lists 140 crane rental companies, each with a published operations email; each files city lift permits monthly.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Critical-lift street-use and crane permit application packets for crane rental companies to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "9 agreements from 90 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$25",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Operations managers at regional crane rental companies",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "$120",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "7 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_8e0298f6338f4674aaf3"
+   ],
+   "scope": {
+    "targetCents": 600000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:26:37.302Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_1f8d4fe2512a_9273b4",
+   "revisionDigest": "1f8d4fe2512a1f5889db2cab",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "EXECUTABLE rests on a price that is not shown to be what this buyer pays. The card's price fact is that two permit-expediting firms publish $1,200 for a complete crane/street-use permit packet: a benchmark of what other sellers (full-service expediters) charge, not a price crane rental companies have paid for this offer, a Brain-produced spreadsheet. The 9/90 conversion is on this offer's own sales but the card does not say at what price those agreements were made, and no agreement is recorded. With the price unestablished, 6 x $1,200 = $7,200 is not evidenced; the plan should be CONDITIONAL on a live price test (offer at $1,200 to the first contacts; proof = orders at $1,200; stop if none at that price) or carry the price from the measured sales.",
+   "findings": [
+    "Arithmetic checks: 6 x $1,200 = $7,200 gross, 6 x $25 = $150 cost, $7,050 net, minimum cash 0, exposure 0 - inside the $0 capital limit since costs are paid after collection (day 14).",
+    "OFFER_AND_PRICE: price fact is a competitor fee schedule (two expediting firms), not this buyer's purchase price for this deliverable; the comparator is a full-service expediting packet while the delivery is a spreadsheet Brain produces - scope differs.",
+    "Conversion 9/90 has no stated price; agreements list is empty, so no sale at $1,200 is on record.",
+    "Plan contacts only 70 of 140 buyers: at the measured 10%, P(>=6 orders) is about 0.71; contacting all 140 raises it to about 0.996 at no cost. The plan should use the whole list.",
+    "Executor gaps: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED, and Brain's check lists the delivery step owner as PERSON while the plan says BRAIN; the card records humanHours 1 against unstated owner hours.",
+    "Brain's own acceptance is CANDIDATE_ONLY / NEEDS_EVIDENCE for this revision."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:39.395Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "link": "OFFER_AND_PRICE",
+     "basis": "EVIDENCE",
+     "field": "price",
+     "why": "The price fact is what two permit-expediting firms publish for their own full-service packet - another seller's fee, not a price crane rental companies have paid for this Brain-produced spreadsheet offer."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_1f8d4fe2512a_9273b4",
+   "revisionDigest": "1f8d4fe2512a1f5889db2cab",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "EXECUTABLE rests on a price that is not shown to be what this buyer pays. The card's price fact is that two permit-expediting firms publish $1,200 for a complete crane/street-use permit packet: a benchmark of what other sellers (full-service expediters) charge, not a price crane rental companies have paid for this offer, a Brain-produced spreadsheet. The 9/90 conversion is on this offer's own sales but the card does not say at what price those agreements were made, and no agreement is recorded. With the price unestablished, 6 x $1,200 = $7,200 is not evidenced; the plan should be CONDITIONAL on a live price test (offer at $1,200 to the first contacts; proof = orders at $1,200; stop if none at that price) or carry the price from the measured sales.",
+   "findings": [
+    "Arithmetic checks: 6 x $1,200 = $7,200 gross, 6 x $25 = $150 cost, $7,050 net, minimum cash 0, exposure 0 - inside the $0 capital limit since costs are paid after collection (day 14).",
+    "OFFER_AND_PRICE: price fact is a competitor fee schedule (two expediting firms), not this buyer's purchase price for this deliverable; the comparator is a full-service expediting packet while the delivery is a spreadsheet Brain produces - scope differs.",
+    "Conversion 9/90 has no stated price; agreements list is empty, so no sale at $1,200 is on record.",
+    "Plan contacts only 70 of 140 buyers: at the measured 10%, P(>=6 orders) is about 0.71; contacting all 140 raises it to about 0.996 at no cost. The plan should use the whole list.",
+    "Executor gaps: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED, and Brain's check lists the delivery step owner as PERSON while the plan says BRAIN; the card records humanHours 1 against unstated owner hours.",
+    "Brain's own acceptance is CANDIDATE_ONLY / NEEDS_EVIDENCE for this revision."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:50.483Z",
+   "conditions": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "link": "OFFER_AND_PRICE",
+     "basis": "EVIDENCE",
+     "field": "price",
+     "why": "The price fact is what two permit-expediting firms publish for their own full-service packet - another seller's fee, not a price crane rental companies have paid for this Brain-produced spreadsheet offer."
+    }
+   ]
+  },
+  {
+   "revisionId": "rev_b7a0cd09ae78_2c04fc",
+   "revisionDigest": "b7a0cd09ae7830ddb1fe1922",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "I accept the rebuttal of my price condition: the card's price fact is two published supplier fee schedules for 'a complete city crane and street-use permit application packet', the card's own offerScope sold to the same payer, uncontradicted, and conversion (9/90) is recorded as measured on this offer's own sales at the card price of $1,200. I hold no record contradicting either. The plan now reaches all 140 listed buyers. Recomputed: 6 x $1,200 = $7,200 gross, 6 x $25 = $150 paid from collected cash on day 14, net $7,050 >= $6,000; exposure and owner funding 0 (cap 0 respected); receipts usable day 14 inside 30; market 140 buyers filing monthly vs 6 needed; at 10% on 140 contacts the expected orders are 14 and P(>=6) is about 0.996 (binomial). Every chain link is established on the card and Brain finds no problem in the ledger.",
+   "findings": [
+    "Arithmetic and ledger verified: collectedInWindow $7,200, spend $150, net $7,050, min cash 0.",
+    "OFFER_AND_PRICE condition withdrawn: published supplier price for the identical scope to this payer, not a reward, bounty, another buyer's figure or someone's word.",
+    "REACH extended to all 140 buyers as requested.",
+    "Residual execution set-up, not a chain-link gap: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and must be connected before day 1; Brain's acceptance layer still reports CANDIDATE_ONLY on calibration, which the owner should know while acting."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:21:52.210Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_78b2f10310e6_b8020c",
+   "revisionDigest": "78b2f10310e6b5ef2ca24998",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "The record changed: the card's EVIDENCE price fact now reads $120 while priceCents still says $1,200, and Brain's OFFER_AND_PRICE basis is 'no single price on the card'. Withdrawing the EXECUTABLE plan is right - nothing now evidences $1,200. Recomputed: at $120 (net $95 after the $25 cost) the target needs 50 sales gross / 64 net; the measured 10% on all 140 monthly-filing buyers yields ~14 orders = $1,680 gross ($1,330 net), so this opening cannot carry $6,000 at $120; at $1,200 six sales suffice. The decisive gap (OFFER_AND_PRICE, with MARKET_VOLUME following from it) is named, and the resolution covers both outcomes. Acceptable for the owner to act on: settle the price before selling.",
+   "findings": [
+    "Arithmetic verified for both prices: $120 -> ~$1,680 expected (64 net sales needed vs ~14); $1,200 -> 6 needed vs ~14 expected.",
+    "The $120 figure is the card's only EVIDENCE price; priceCents is the offer's own number. Until research shows a buyer-paid $1,200, the default reading is $120, under which this opening is infeasible for $6,000 - the revision could state that as a TARGET/opening constraint rather than only 'contradictory'.",
+    "No selling steps, $0 spend, research step performed by BRAIN - inside every limit."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:15.870Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_78b2f10310e6_b8020c",
+  "digest": "78b2f10310e6b5ef2ca24998",
+  "contractDigest": "7695a6ed178f9b8256e50a6b",
+  "plan": {
+   "goalId": "wst_7b6f2a799a954e66b009",
+   "contractDigest": "7695a6ed178f9b8256e50a6b",
+   "parentRevisionId": "rev_b7a0cd09ae78_2c04fc",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the crane permit packet's price is established",
+    "opportunityIds": [],
+    "why": "The card's record changed: its price fact now reads $120 (EVIDENCE) while the card's priceCents still says $1,200. The two figures contradict each other, so no price is established. At $1,200, 6 sales from 140 monthly-filing buyers at the measured 10% conversion reach $6,000; at $120, 140 buyers x 10% = 14 orders = $1,680, far short (50+ sales needed). The price decides whether any plan exists."
+   },
+   "alternatives": [
+    {
+     "title": "Sell at $1,200 as a conditional live test",
+     "why": "The price is a recorded, researchable fact that is contradicted on the card itself, not an unknown only a live test can measure; resolve the record first."
+    },
+    {
+     "title": "Sell at $120",
+     "why": "Even every one of the 140 buyers buying once yields $16,800 gross, but at the measured 10% conversion only ~14 orders ($1,680) are expected in 30 days, far below $6,000."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish what crane rental companies actually pay for a complete crane and street-use permit application packet (the published fee schedules, with source and date) and correct the card's contradictory price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per packet",
+     "sources": [
+      "price"
+     ],
+     "needs": "A single sourced price: the card's price fact says $120 while its priceCents says $1,200"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "companies, each filing monthly",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#price",
+     "dated": "2026-11",
+     "claim": "The card's price fact now reads $120, contradicting the card's priceCents of $1,200",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 agreements from 90 contacts on this offer's own sales",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_fe7d0b4bfbf84cf48f1d#buyerVolume",
+     "dated": "2026-11",
+     "claim": "140 crane rental companies on the state licensing board list, each filing city lift permits monthly",
+     "population": "Operations managers at regional crane rental companies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the card carries two contradictory prices ($120 price fact vs $1,200 priceCents), so no price is established; whether 140 buyers at 10% conversion can carry $6,000 (MARKET_VOLUME) depends entirely on which is true - 6 sales at $1,200 suffice, while at $120 the whole expected yield is ~$1,680.",
+    "resolution": "Research and record the published price buyers pay for this packet (answering Brain's revenueRange question with source and date); if $1,200 is confirmed, resubmit as EXECUTABLE selling 6 packets to the 140 listed buyers; if $120, the target is out of reach from this opening and new openings are needed.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic and ledger verified: collectedInWindow $7,200, spend $150, net $7,050, min cash 0.",
+     "resolution": "Superseded: the card's price fact changed to $120, contradicting the $1,200 priceCents, so the $7,200 figure is no longer established; the plan is now NO_PLAN pending the price."
+    },
+    {
+     "finding": "OFFER_AND_PRICE condition withdrawn: published supplier price for the identical scope.",
+     "resolution": "The record that supported it changed: the price fact now reads $120 and Brain's OFFER_AND_PRICE basis is 'no single price on the card'. The link is now unestablished and is the decisive gap."
+    },
+    {
+     "finding": "REACH extended to all 140 buyers as requested.",
+     "resolution": "Kept in the resolution: if $1,200 is confirmed the plan reaches all 140 listed buyers."
+    },
+    {
+     "finding": "Residual execution set-up: SEND_A_MESSAGE and ISSUE_AN_INVOICE NOT_CONNECTED; Brain CANDIDATE_ONLY.",
+     "resolution": "No selling steps remain in this NO_PLAN revision; the only step is BRAIN research, which Brain's executor supports."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_fe7d0b4bfbf84cf48f1d",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_78b2f10310e6_b8020c",
+   "digest": "78b2f10310e6b5ef2ca24998",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:27:26.424Z"
+  },
+  "review": {
+   "revisionId": "rev_78b2f10310e6_b8020c",
+   "revisionDigest": "78b2f10310e6b5ef2ca24998",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_059e51fc73fb43ab9180/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_3541e5bf7cf64671ae85/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "The record changed: the card's EVIDENCE price fact now reads $120 while priceCents still says $1,200, and Brain's OFFER_AND_PRICE basis is 'no single price on the card'. Withdrawing the EXECUTABLE plan is right - nothing now evidences $1,200. Recomputed: at $120 (net $95 after the $25 cost) the target needs 50 sales gross / 64 net; the measured 10% on all 140 monthly-filing buyers yields ~14 orders = $1,680 gross ($1,330 net), so this opening cannot carry $6,000 at $120; at $1,200 six sales suffice. The decisive gap (OFFER_AND_PRICE, with MARKET_VOLUME following from it) is named, and the resolution covers both outcomes. Acceptable for the owner to act on: settle the price before selling.",
+   "findings": [
+    "Arithmetic verified for both prices: $120 -> ~$1,680 expected (64 net sales needed vs ~14); $1,200 -> 6 needed vs ~14 expected.",
+    "The $120 figure is the card's only EVIDENCE price; priceCents is the offer's own number. Until research shows a buyer-paid $1,200, the default reading is $120, under which this opening is infeasible for $6,000 - the revision could state that as a TARGET/opening constraint rather than only 'contradictory'.",
+    "No selling steps, $0 spend, research step performed by BRAIN - inside every limit."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:29:15.870Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+   "terms": "a1d602d61e0a382a",
+   "openings": {
+    "cop_fe7d0b4bfbf84cf48f1d": "6c0d86e896b3719c"
+   }
+  },
+  "at": "2026-11-27T12:31:40.061Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

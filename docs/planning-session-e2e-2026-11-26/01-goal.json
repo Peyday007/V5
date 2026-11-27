@@ -1,0 +1,41 @@
+{
+  "ok": true,
+  "goalId": "wst_41630d3c657640bc828f",
+  "title": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cum",
+  "target": {
+    "metric": "COLLECTED_CASH",
+    "amountCents": 1000000,
+    "currency": "USD",
+    "projectId": "prj_1597a7180e33412c9009",
+    "capitalCeilingCents": 200000,
+    "hoursCeiling": null,
+    "resources": null,
+    "capitalBeforeProofCents": 30000,
+    "capitalPerWeekCents": null,
+    "setAt": "2026-11-26T22:02:02.203Z"
+  },
+  "reading": {
+    "text": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement; no required physical work by the owner.",
+    "kind": "CASH",
+    "metric": "COLLECTED_CASH",
+    "amount": 10000,
+    "currency": "USD",
+    "deadline": "2026-12-26T22:02:02.203Z",
+    "deadlineHours": 720,
+    "windowDays": 30,
+    "capitalCeiling": 2000,
+    "hoursCeiling": null,
+    "beforeProof": 300,
+    "capitalPerWeek": null,
+    "recurring": null,
+    "hoursPerWeek": null,
+    "industry": null,
+    "capitalAssumed": null,
+    "resources": [],
+    "constraints": [
+      "Maximum total spending: $2,000",
+      "Maximum cumulative spending before proof of demand: $300"
+    ],
+    "unread": []
+  }
+}

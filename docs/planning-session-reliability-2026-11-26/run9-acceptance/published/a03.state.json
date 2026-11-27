@@ -1,0 +1,3198 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_3b15c5803a6a427f909a",
+      "words": "Collect $500 of settled cash within 14 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 50000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$500 of settled cash within 14 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "c01039e5806050a01711a68c"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_3b15c5803a6a427f909a",
+        "contractDigest": "c01039e5806050a01711a68c",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the fabric-yardage and foam-cut estimator on the existing listing",
+          "opportunityIds": [
+            "cop_26c6202227184b219fe8"
+          ],
+          "why": "Every link is evidenced on the card: $39 price from 44 paid orders, 4% conversion measured on this listing's own visitors, a steady ~37 unique visitors a day, Brain produces the spreadsheet itself, $2 cost, $0 exposure, 3 days to cash. Over 11 selling days ~407 visitors at 4% gives ~16 sales; the plan counts 14 x $39 = $546 settled by day 14 ($518 after costs), with the $2 per-sale cost paid out of proceeds so no capital goes out first."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered reupholstery for interior designers",
+            "why": "A signed $1,200 order but no fulfiller is established."
+          },
+          {
+            "title": "Foam insert resale",
+            "why": "Loses $3 on each insert."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the estimator live on the seller's own listing, which draws ~37 unique visitors a day",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 14 sales at $39 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 14 copies",
+            "performer": "BRAIN",
+            "costCents": 2800,
+            "day": 12,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 2800,
+            "label": "Direct cost $2 x 14",
+            "stepId": "deliver"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 54600,
+            "label": "14 x $39",
+            "settlesDay": 15,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 39,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 37,
+            "unit": "unique listing visitors per day",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#price",
+            "dated": "2026-11-24",
+            "claim": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "44 paid pre-orders from 1100 unique listing visitors (4%)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,100 unique visitors in the last 30 days, about 37 a day at a steady rate (listing analytics)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "The seller's own digital-download listing",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$2 direct cost per sale",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "why": "FULFILMENT: no upholsterer is named on the card to do the reupholstery (no fulfillmentOwner, no capability Brain holds), so the signed $1,200 work order has nobody to deliver it."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "why": "ECONOMICS: the drop-ship supplier charges $48 per insert delivered against a $45 sale price, so every one of the 20 signed orders loses $3."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "deals": 14,
+            "price": 39,
+            "directCost": 2,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_e64b017f4224_0e1799",
+        "digest": "e64b017f4224934895d0f870",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:59:28.263Z"
+      },
+      {
+        "goalId": "wst_3b15c5803a6a427f909a",
+        "contractDigest": "c01039e5806050a01711a68c",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the fabric-yardage and foam-cut estimator on the existing listing",
+          "opportunityIds": [
+            "cop_26c6202227184b219fe8"
+          ],
+          "why": "Every link is evidenced on the card: $39 price from 44 paid orders, 4% conversion measured on this listing's own visitors, a steady ~37 unique visitors a day, Brain produces the spreadsheet itself, $2 cost, $0 exposure, 3 days to cash. Over 11 selling days ~407 visitors at 4% gives ~16 sales; the plan counts 14 x $39 = $546 settled by day 14 ($518 after costs), with the $2 per-sale cost paid out of proceeds so no capital goes out first."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered reupholstery for interior designers",
+            "why": "A signed $1,200 order but no fulfiller is established."
+          },
+          {
+            "title": "Foam insert resale",
+            "why": "Loses $3 on each insert."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the estimator live on the seller's own listing, which draws ~37 unique visitors a day",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 14 sales at $39 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 14 copies",
+            "performer": "BRAIN",
+            "costCents": 2800,
+            "day": 12,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 2800,
+            "label": "Direct cost $2 x 14",
+            "stepId": "deliver"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 54600,
+            "label": "14 x $39",
+            "settlesDay": 15,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 39,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 37,
+            "unit": "unique listing visitors per day",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 14,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#price",
+            "dated": "2026-11-24",
+            "claim": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "44 paid pre-orders from 1100 unique listing visitors (4%)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,100 unique visitors in the last 30 days, about 37 a day at a steady rate (listing analytics)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "The seller's own digital-download listing",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$2 direct cost per sale",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "why": "FULFILMENT: no upholsterer is named on the card to do the reupholstery (no fulfillmentOwner, no capability Brain holds), so the signed $1,200 work order has nobody to deliver it."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "why": "ECONOMICS: the drop-ship supplier charges $48 per insert delivered against a $45 sale price, so every one of the 20 signed orders loses $3."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "deals": 14,
+            "price": 39,
+            "directCost": 2,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "link": "ECONOMICS",
+            "reason": "Established on this opening: card directCosts $700 against the signed $1,200 work order price (card price fact), $0 exposure, so each deal makes $500. Brain's merged basis 'each deal loses money: 48 against 45' is the foam-insert opening's figures (cop_6e33416036fb4e91a1d2), not this one's."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "link": "FULFILMENT",
+            "reason": "Established on this opening: card fulfillmentOwner names FoamDirect Wholesale with a drop-ship price list of $48 per insert delivered (fulfillment fact, EVIDENCE). Brain's merged basis 'nobody has established who would do the work' belongs to the brokered-reupholstery opening (cop_4273fa0286264c60bdc8). The foam opening still fails on ECONOMICS."
+          }
+        ],
+        "revisionId": "rev_af2d71967eee_2a3e47",
+        "digest": "af2d71967eee6a442ed68127",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:59:35.035Z"
+      },
+      {
+        "goalId": "wst_3b15c5803a6a427f909a",
+        "contractDigest": "c01039e5806050a01711a68c",
+        "parentRevisionId": "rev_af2d71967eee_2a3e47",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the fabric-yardage and foam-cut estimator on the existing listing",
+          "opportunityIds": [
+            "cop_26c6202227184b219fe8"
+          ],
+          "why": "Every link is evidenced on the card: $39 price from 44 paid orders on this listing, 4% conversion measured on this listing's own visitors (44 of 1,100), a steady ~37 unique visitors a day (1,100 per 30 days), Brain produces the spreadsheet itself, $2 cost, $0 exposure, 3 days to cash. Sales accrue continuously at ~1.5 a day; only sales closed by day 11 settle by day 14. The plan counts 13 sales in three tranches (5 by day 4, 4 more by day 8, 4 more by day 11) settling on days 7, 11 and 14: 13 x $39 = $507 settled within the window ($481 after the $2 costs, which are paid out of each tranche's own proceeds, so no capital goes out first). Expected sales by day 11 are ~407 visitors x 4% = ~16, so 13 has headroom of ~3; shortfall test: fewer than 5 settled-or-pending sales by day 5, or fewer than 9 by day 8, means the window will be missed and the owner is told then."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered reupholstery for interior designers",
+            "why": "A signed $1,200 order but no fulfiller is established."
+          },
+          {
+            "title": "Foam insert resale",
+            "why": "Loses $3 on each insert."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the estimator live on the seller's own listing, which draws ~37 unique visitors a day",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "List the estimator at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell1",
+            "kind": "SELL",
+            "label": "Days 1-4: ~148 visitors x 4% = ~6 expected; count 5 sales at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 5 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 1000,
+            "day": 4,
+            "dependsOn": "sell1",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect 5 x $39 through the listing (settles day 7)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell2",
+            "kind": "SELL",
+            "label": "Days 5-8: ~148 visitors x 4% = ~6 expected; count 4 more sales at $39 (stop test: fewer than 9 total by day 8)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 4 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 800,
+            "day": 8,
+            "dependsOn": "sell2",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect 4 x $39 through the listing (settles day 11)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell3",
+            "kind": "SELL",
+            "label": "Days 9-11: ~111 visitors x 4% = ~4.4 expected; count 4 more sales at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 4 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 800,
+            "day": 11,
+            "dependsOn": "sell3",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect 4 x $39 through the listing (settles day 14)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 19500,
+            "label": "5 x $39",
+            "settlesDay": 7,
+            "stepId": "collect1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 1000,
+            "label": "$2 x 5 direct cost, paid from the tranche-1 receipt that settles day 7",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 15600,
+            "label": "4 x $39",
+            "settlesDay": 11,
+            "stepId": "collect2"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 800,
+            "label": "$2 x 4 direct cost, paid from the tranche-2 receipt that settles day 11",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 15600,
+            "label": "4 x $39",
+            "settlesDay": 14,
+            "stepId": "collect3"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 800,
+            "label": "$2 x 4 direct cost, paid from the tranche-3 receipt that settles day 14",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 39,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 37,
+            "unit": "unique listing visitors per day",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 13,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#price",
+            "dated": "2026-11-24",
+            "claim": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "44 paid pre-orders from 1100 unique listing visitors (4%)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,100 unique visitors in the last 30 days, about 37 a day at a steady rate (listing analytics)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "The seller's own digital-download listing",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$2 direct cost per sale",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": 0,
+            "resolution": "ACCEPTED: the off-by-one is fixed; receipts settle on days 7, 11 and 14 and proofDay is 14, inside the 14-day window."
+          },
+          {
+            "finding": 1,
+            "resolution": "ACCEPTED: sales are modelled as three tranches of continuous daily sales (days 1-4, 5-8, 9-11), each settling 3 days after it closes."
+          },
+          {
+            "finding": 2,
+            "resolution": "ACCEPTED: the count is cut to 13 ($507 settled, which meets the $500 settled-cash target) against ~16 expected by day 11, and the plan states the shortfall test: fewer than 5 sales by day 5 or fewer than 9 by day 8 means the window will be missed."
+          },
+          {
+            "finding": 3,
+            "resolution": "ACCEPTED: each tranche's $2-per-sale SPEND is dated on the day that tranche's receipt settles and labelled as paid from it, so cash never goes below zero against the $0 capital limit (card exposure $0, peakFundingCents 0)."
+          },
+          {
+            "finding": 4,
+            "resolution": "ACCEPTED (no change needed): the plan uses the card's buyerVolume fact, 1,100 visitors per 30 days (~37/day), not Brain's 15,400 figure."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "why": "FULFILMENT: no upholsterer is named on the card to do the reupholstery (no fulfillmentOwner, no capability Brain holds), so the signed $1,200 work order has nobody to deliver it."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "why": "ECONOMICS: the drop-ship supplier charges $48 per insert delivered against a $45 sale price, so every one of the 20 signed orders loses $3."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "deals": 13,
+            "price": 39,
+            "directCost": 2,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "link": "ECONOMICS",
+            "reason": "Established on this opening: card directCosts $700 against the signed $1,200 work order price (card price fact), $0 exposure, so each deal makes $500. Brain's merged basis 'each deal loses money: 48 against 45' is the foam-insert opening's figures (cop_6e33416036fb4e91a1d2), not this one's."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "link": "FULFILMENT",
+            "reason": "Established on this opening: card fulfillmentOwner names FoamDirect Wholesale with a drop-ship price list of $48 per insert delivered (fulfillment fact, EVIDENCE). Brain's merged basis 'nobody has established who would do the work' belongs to the brokered-reupholstery opening (cop_4273fa0286264c60bdc8). The foam opening still fails on ECONOMICS."
+          },
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "link": "MARKET_VOLUME",
+            "reason": "Established, but on a smaller figure than Brain's basis: the card's buyerVolume fact is 1,100 unique visitors in the last 30 days (~37 a day), not 1,100 a day; ~518 visitors in the window (~407 by day 11) at 4% still give ~16 sales against the 13 needed."
+          }
+        ],
+        "revisionId": "rev_82e72e972dd3_072e31",
+        "digest": "82e72e972dd378a42ebbde30",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:11:56.236Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_3b15c5803a6a427f909a",
+      "contractDigest": "c01039e5806050a01711a68c",
+      "parentRevisionId": "rev_af2d71967eee_2a3e47",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the fabric-yardage and foam-cut estimator on the existing listing",
+        "opportunityIds": [
+          "cop_26c6202227184b219fe8"
+        ],
+        "why": "Every link is evidenced on the card: $39 price from 44 paid orders on this listing, 4% conversion measured on this listing's own visitors (44 of 1,100), a steady ~37 unique visitors a day (1,100 per 30 days), Brain produces the spreadsheet itself, $2 cost, $0 exposure, 3 days to cash. Sales accrue continuously at ~1.5 a day; only sales closed by day 11 settle by day 14. The plan counts 13 sales in three tranches (5 by day 4, 4 more by day 8, 4 more by day 11) settling on days 7, 11 and 14: 13 x $39 = $507 settled within the window ($481 after the $2 costs, which are paid out of each tranche's own proceeds, so no capital goes out first). Expected sales by day 11 are ~407 visitors x 4% = ~16, so 13 has headroom of ~3; shortfall test: fewer than 5 settled-or-pending sales by day 5, or fewer than 9 by day 8, means the window will be missed and the owner is told then."
+      },
+      "alternatives": [
+        {
+          "title": "Brokered reupholstery for interior designers",
+          "why": "A signed $1,200 order but no fulfiller is established."
+        },
+        {
+          "title": "Foam insert resale",
+          "why": "Loses $3 on each insert."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Keep the estimator live on the seller's own listing, which draws ~37 unique visitors a day",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume",
+            "s_channel"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "List the estimator at $39",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 3900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell1",
+          "kind": "SELL",
+          "label": "Days 1-4: ~148 visitors x 4% = ~6 expected; count 5 sales at $39",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_volume",
+            "s_price"
+          ],
+          "priceCents": 3900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "Brain delivers the 5 spreadsheets as each sale lands",
+          "performer": "BRAIN",
+          "costCents": 1000,
+          "day": 4,
+          "dependsOn": "sell1",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Collect 5 x $39 through the listing (settles day 7)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell2",
+          "kind": "SELL",
+          "label": "Days 5-8: ~148 visitors x 4% = ~6 expected; count 4 more sales at $39 (stop test: fewer than 9 total by day 8)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_volume",
+            "s_price"
+          ],
+          "priceCents": 3900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "Brain delivers the 4 spreadsheets as each sale lands",
+          "performer": "BRAIN",
+          "costCents": 800,
+          "day": 8,
+          "dependsOn": "sell2",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Collect 4 x $39 through the listing (settles day 11)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell3",
+          "kind": "SELL",
+          "label": "Days 9-11: ~111 visitors x 4% = ~4.4 expected; count 4 more sales at $39",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 11,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_volume",
+            "s_price"
+          ],
+          "priceCents": 3900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver3",
+          "kind": "DELIVER",
+          "label": "Brain delivers the 4 spreadsheets as each sale lands",
+          "performer": "BRAIN",
+          "costCents": 800,
+          "day": 11,
+          "dependsOn": "sell3",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect3",
+          "kind": "COLLECT",
+          "label": "Collect 4 x $39 through the listing (settles day 14)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 11,
+          "dependsOn": "deliver3",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 19500,
+          "label": "5 x $39",
+          "settlesDay": 7,
+          "stepId": "collect1"
+        },
+        {
+          "day": 7,
+          "kind": "SPEND",
+          "amountCents": 1000,
+          "label": "$2 x 5 direct cost, paid from the tranche-1 receipt that settles day 7",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 15600,
+          "label": "4 x $39",
+          "settlesDay": 11,
+          "stepId": "collect2"
+        },
+        {
+          "day": 11,
+          "kind": "SPEND",
+          "amountCents": 800,
+          "label": "$2 x 4 direct cost, paid from the tranche-2 receipt that settles day 11",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 11,
+          "kind": "RECEIPT",
+          "amountCents": 15600,
+          "label": "4 x $39",
+          "settlesDay": 14,
+          "stepId": "collect3"
+        },
+        {
+          "day": 14,
+          "kind": "SPEND",
+          "amountCents": 800,
+          "label": "$2 x 4 direct cost, paid from the tranche-3 receipt that settles day 14",
+          "stepId": "deliver3"
+        }
+      ],
+      "proofDay": 14,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 39,
+          "unit": "USD per sale",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.04,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 37,
+          "unit": "unique listing visitors per day",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 2,
+          "unit": "USD per sale",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 13,
+          "unit": "sales",
+          "sources": [
+            "s_conv",
+            "s_volume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#price",
+          "dated": "2026-11-24",
+          "claim": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history)",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "44 paid pre-orders from 1100 unique listing visitors (4%)",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "1,100 unique visitors in the last 30 days, about 37 a day at a steady rate (listing analytics)",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_channel",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "The seller's own digital-download listing",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$2 direct cost per sale",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_26c6202227184b219fe8#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "3 days to first cash",
+          "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_26c6202227184b219fe8"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": 0,
+          "resolution": "ACCEPTED: the off-by-one is fixed; receipts settle on days 7, 11 and 14 and proofDay is 14, inside the 14-day window."
+        },
+        {
+          "finding": 1,
+          "resolution": "ACCEPTED: sales are modelled as three tranches of continuous daily sales (days 1-4, 5-8, 9-11), each settling 3 days after it closes."
+        },
+        {
+          "finding": 2,
+          "resolution": "ACCEPTED: the count is cut to 13 ($507 settled, which meets the $500 settled-cash target) against ~16 expected by day 11, and the plan states the shortfall test: fewer than 5 sales by day 5 or fewer than 9 by day 8 means the window will be missed."
+        },
+        {
+          "finding": 3,
+          "resolution": "ACCEPTED: each tranche's $2-per-sale SPEND is dated on the day that tranche's receipt settles and labelled as paid from it, so cash never goes below zero against the $0 capital limit (card exposure $0, peakFundingCents 0)."
+        },
+        {
+          "finding": 4,
+          "resolution": "ACCEPTED (no change needed): the plan uses the card's buyerVolume fact, 1,100 visitors per 30 days (~37/day), not Brain's 15,400 figure."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_26c6202227184b219fe8",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_4273fa0286264c60bdc8",
+          "missing": [
+            "FULFILMENT"
+          ]
+        },
+        {
+          "opportunityId": "cop_6e33416036fb4e91a1d2",
+          "missing": [
+            "ECONOMICS"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_4273fa0286264c60bdc8",
+          "why": "FULFILMENT: no upholsterer is named on the card to do the reupholstery (no fulfillmentOwner, no capability Brain holds), so the signed $1,200 work order has nobody to deliver it."
+        },
+        {
+          "opportunityId": "cop_6e33416036fb4e91a1d2",
+          "why": "ECONOMICS: the drop-ship supplier charges $48 per insert delivered against a $45 sale price, so every one of the 20 signed orders loses $3."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_26c6202227184b219fe8",
+          "deals": 13,
+          "price": 39,
+          "directCost": 2,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_4273fa0286264c60bdc8",
+          "link": "ECONOMICS",
+          "reason": "Established on this opening: card directCosts $700 against the signed $1,200 work order price (card price fact), $0 exposure, so each deal makes $500. Brain's merged basis 'each deal loses money: 48 against 45' is the foam-insert opening's figures (cop_6e33416036fb4e91a1d2), not this one's."
+        },
+        {
+          "opportunityId": "cop_6e33416036fb4e91a1d2",
+          "link": "FULFILMENT",
+          "reason": "Established on this opening: card fulfillmentOwner names FoamDirect Wholesale with a drop-ship price list of $48 per insert delivered (fulfillment fact, EVIDENCE). Brain's merged basis 'nobody has established who would do the work' belongs to the brokered-reupholstery opening (cop_4273fa0286264c60bdc8). The foam opening still fails on ECONOMICS."
+        },
+        {
+          "opportunityId": "cop_26c6202227184b219fe8",
+          "link": "MARKET_VOLUME",
+          "reason": "Established, but on a smaller figure than Brain's basis: the card's buyerVolume fact is 1,100 unique visitors in the last 30 days (~37 a day), not 1,100 a day; ~518 visitors in the window (~407 by day 11) at 4% still give ~16 sales against the 13 needed."
+        }
+      ],
+      "revisionId": "rev_82e72e972dd3_072e31",
+      "digest": "82e72e972dd378a42ebbde30",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_500e196c1fde4c8794dd/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:11:56.236Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_82e72e972dd3_072e31",
+      "digest": "82e72e972dd378a42ebbde30",
+      "contractDigest": "c01039e5806050a01711a68c",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 2600,
+        "committedOpenCents": 0,
+        "preProofCents": 2600,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 4,
+        "collectedCents": 50700,
+        "collectedInWindowCents": 50700,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 48100
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Fabric-yardage and foam-cut estimator spreadsheet for reupho\" (reaches the target in 56.3% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3656× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Residential interior designers — Brokered reuph\" needs [figure withheld] and keeps [figure withheld], 1041× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Fabric-yardage and foam-cut estimator spreadsheet for reupholstery pro\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_26c6202227184b219fe8",
+          "cop_4273fa0286264c60bdc8",
+          "cop_6e33416036fb4e91a1d2"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects\"",
+            "owner": "PERSON",
+            "cost": 2
+          },
+          {
+            "label": "Collect payment for \"Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "title": "Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 500,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Independent upholsterers and DIY reupholstery hobbyists",
+              "reachableChannel": "The seller's own digital-download listing",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:06.217Z",
+              "offerScope": "Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects",
+              "priceCents": 3900,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "furniture upholstery",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The seller's own digital-download listing"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 39 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own inbound page: 44 money-committed pre-orders from 1100 unique visitors"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "14 deal(s) needed, 15400 available in the window (1100 visitors opportunities a day are stated, so 15400 in 14 days, each one trial of the measured rate)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 2, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "3 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "This seller's own listing drew 1,100 unique visitors in the last 30 days (listing analytics), about 37 a day, at a steady rate.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "44 paid pre-orders from 1100 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$2",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent upholsterers and DIY reupholstery hobbyists",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "title": "Brokered reupholstery of client furniture for interior designers",
+            "missing": [
+              "FULFILMENT"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 500,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Residential interior designers",
+              "reachableChannel": "Signed work order by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:06.217Z",
+              "offerScope": "Brokered reupholstery of client furniture for interior designers",
+              "priceCents": 120000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "furniture upholstery",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Brokered reupholstery of client furniture for interior designers",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed work order by email | reach: Signed order forms"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1200 USD | a buyer agreed to 900 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1200 USD | buyers have agreed to 900 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work | fulfilled by FoamDirect Wholesale (drop-ship price list: $48 per insert delivered) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 700, tied up 0 | each deal loses money: a cost of 48 against a price of 45"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 14 left | 5 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered reupholstery of client furniture for interior designers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$700",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Residential interior designers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "One designer signed a $1,200 work order for two reupholstered armchairs.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "title": "Resale of high-density foam cushion inserts to upholstery shops",
+            "missing": [
+              "ECONOMICS"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 500,
+            "potentialReach": 500,
+            "card": {
+              "payer": "Upholstery shop owners",
+              "reachableChannel": "Signed order forms",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:06.217Z",
+              "offerScope": "Resale of high-density foam cushion inserts to upholstery shops",
+              "priceCents": 4500,
+              "currency": "USD",
+              "fulfillmentOwner": "FoamDirect Wholesale (drop-ship price list: $48 per insert delivered)",
+              "peakFundingCents": 0,
+              "humanHours": 0.1,
+              "requiredCapabilities": [],
+              "industry": "furniture upholstery",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 4500,
+                "currency": "USD",
+                "deliverable": "Resale of high-density foam cushion inserts to upholstery shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed work order by email | reach: Signed order forms"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1200 USD | a buyer agreed to 900 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1200 USD | buyers have agreed to 900 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work | fulfilled by FoamDirect Wholesale (drop-ship price list: $48 per insert delivered) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 700, tied up 0 | each deal loses money: a cost of 48 against a price of 45"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 14 left | 5 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Resale of high-density foam cushion inserts to upholstery shops to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$48",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "FoamDirect Wholesale (drop-ship price list: $48 per insert delivered) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Upholstery shop owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Twenty shops ordered cut-to-size foam inserts at $45 each.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_4fa4ebddf8ac4435aeb3",
+          "cnd_6f5ad537f5a144eabdde",
+          "cnd_ab179425787d40d5b691"
+        ],
+        "scope": {
+          "targetCents": 50000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:56:18.505Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_af2d71967eee_2a3e47",
+        "revisionDigest": "af2d71967eee6a442ed68127",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_af7fbba27a484a249993/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The opening is sound but the ledger does not settle inside the window. The plan's why says 'settled by day 14', yet the cash line books all 14 sales on day 12 with settlesDay 15 and proofDay is 15, one day past the 14-day window. Money must settle in the window, so the ledger as written misses the proof condition. The fix is in the plan's own evidence: sales accrue daily at ~37 visitors x 4% = ~1.5/day, and only sales closed by day 11 settle (3 days) by day 14. $500 / $39 = 12.8, so 13 sales ($507 gross, $481 after $2 costs - note: the target is settled cash collected, $507 >= $500) are needed; days 1-11 give ~407 visitors x 4% = ~16 expected sales. Rebook receipts as daily/weekly tranches each settling 3 days after sale, all by day 14, and cut the count to what settles. Everything else recomputes: price $39 is 44 paid orders on this listing (real price from this buyer population); conversion 44/1100 = 4% measured on this listing; cost $2 < $39; exposure $0 against a $0 capital limit; Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved). Exclusions are right: reupholstery has no fulfiller on its card; foam inserts cost $48 vs $45 price.",
+        "findings": [
+          "SETTLES_IN_TIME (ledger): proofDay 15 and receipt settlesDay 15 versus windowDays 14; the why's 'settled by day 14' contradicts the plan's own cash lines.",
+          "Schedule models 14 sales closing at once on day 11; at a steady ~1.5 sales/day the right model is continuous sales, which is what makes the window work.",
+          "Headroom is thin: expected ~16 sales by day 11 against 13 needed; at Poisson variance roughly a 1-in-5 chance of falling short, so state the shortfall test (e.g. fewer than 6 sales by day 5) rather than presenting 14 as certain.",
+          "Cost timing: delivery on day 12 precedes settlement; the $2/sale must come out of proceeds as stated since the contract allows $0 capital - the ledger's day-15 SPEND should be tied to the receipt it is paid from.",
+          "Brain's own MARKET_VOLUME basis reads '1100 visitors a day ... 15400 in 14 days'; the card says 1,100 per 30 days (~37/day). The plan correctly uses 37/day; do not rely on Brain's 15,400 figure. The author's disagreements about Brain's merged link bases for the two excluded openings are correct."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:08:51.019Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_82e72e972dd3_072e31",
+        "revisionDigest": "82e72e972dd378a42ebbde30",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_af7fbba27a484a249993/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "My settlement finding is resolved: sales are modelled as three continuous tranches (days 1-4, 5-8, 9-11) settling 3 days later on days 7, 11 and 14, proofDay 14, inside the 14-day window. Recomputed: 5 + 4 + 4 = 13 sales x $39 = $507 settled >= $500 (12 would be $468, so 13 is the minimum); expected ~148 + 148 + 111 = ~407 visitors x 4% = ~16 sales by day 11, each tranche counting fewer than expected (5 vs ~6, 4 vs ~6, 4 vs ~4.4). Costs $26 are paid from each tranche's own settled proceeds, so cash never goes negative against the $0 capital limit. Price is 44 paid orders on this listing; conversion 44/1,100 measured on it; Brain produces the spreadsheet. The shortfall test (fewer than 5 by day 5, fewer than 9 by day 8) is stated. Exclusions and disagreements with Brain's merged link bases are correct.",
+        "findings": [
+          "Margin is ~3 sales on a Poisson mean of ~16 (roughly a 1-in-5 chance of falling below 13): the owner should treat the day-5 and day-8 tests as real stop signals.",
+          "Tranche 3's settlement lands exactly on day 14, the last day of the window; any payout delay on the marketplace beyond 3 days pushes $156 out of the window."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:13:13.018Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_82e72e972dd3_072e31",
+      "digest": "82e72e972dd378a42ebbde30",
+      "contractDigest": "c01039e5806050a01711a68c",
+      "plan": {
+        "goalId": "wst_3b15c5803a6a427f909a",
+        "contractDigest": "c01039e5806050a01711a68c",
+        "parentRevisionId": "rev_af2d71967eee_2a3e47",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the fabric-yardage and foam-cut estimator on the existing listing",
+          "opportunityIds": [
+            "cop_26c6202227184b219fe8"
+          ],
+          "why": "Every link is evidenced on the card: $39 price from 44 paid orders on this listing, 4% conversion measured on this listing's own visitors (44 of 1,100), a steady ~37 unique visitors a day (1,100 per 30 days), Brain produces the spreadsheet itself, $2 cost, $0 exposure, 3 days to cash. Sales accrue continuously at ~1.5 a day; only sales closed by day 11 settle by day 14. The plan counts 13 sales in three tranches (5 by day 4, 4 more by day 8, 4 more by day 11) settling on days 7, 11 and 14: 13 x $39 = $507 settled within the window ($481 after the $2 costs, which are paid out of each tranche's own proceeds, so no capital goes out first). Expected sales by day 11 are ~407 visitors x 4% = ~16, so 13 has headroom of ~3; shortfall test: fewer than 5 settled-or-pending sales by day 5, or fewer than 9 by day 8, means the window will be missed and the owner is told then."
+        },
+        "alternatives": [
+          {
+            "title": "Brokered reupholstery for interior designers",
+            "why": "A signed $1,200 order but no fulfiller is established."
+          },
+          {
+            "title": "Foam insert resale",
+            "why": "Loses $3 on each insert."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the estimator live on the seller's own listing, which draws ~37 unique visitors a day",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "List the estimator at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell1",
+            "kind": "SELL",
+            "label": "Days 1-4: ~148 visitors x 4% = ~6 expected; count 5 sales at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 5 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 1000,
+            "day": 4,
+            "dependsOn": "sell1",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect 5 x $39 through the listing (settles day 7)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell2",
+            "kind": "SELL",
+            "label": "Days 5-8: ~148 visitors x 4% = ~6 expected; count 4 more sales at $39 (stop test: fewer than 9 total by day 8)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 4 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 800,
+            "day": 8,
+            "dependsOn": "sell2",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect 4 x $39 through the listing (settles day 11)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell3",
+            "kind": "SELL",
+            "label": "Days 9-11: ~111 visitors x 4% = ~4.4 expected; count 4 more sales at $39",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_volume",
+              "s_price"
+            ],
+            "priceCents": 3900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Brain delivers the 4 spreadsheets as each sale lands",
+            "performer": "BRAIN",
+            "costCents": 800,
+            "day": 11,
+            "dependsOn": "sell3",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect 4 x $39 through the listing (settles day 14)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 19500,
+            "label": "5 x $39",
+            "settlesDay": 7,
+            "stepId": "collect1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 1000,
+            "label": "$2 x 5 direct cost, paid from the tranche-1 receipt that settles day 7",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 15600,
+            "label": "4 x $39",
+            "settlesDay": 11,
+            "stepId": "collect2"
+          },
+          {
+            "day": 11,
+            "kind": "SPEND",
+            "amountCents": 800,
+            "label": "$2 x 4 direct cost, paid from the tranche-2 receipt that settles day 11",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 15600,
+            "label": "4 x $39",
+            "settlesDay": 14,
+            "stepId": "collect3"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 800,
+            "label": "$2 x 4 direct cost, paid from the tranche-3 receipt that settles day 14",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 39,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 37,
+            "unit": "unique listing visitors per day",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 13,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#price",
+            "dated": "2026-11-24",
+            "claim": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "44 paid pre-orders from 1100 unique listing visitors (4%)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,100 unique visitors in the last 30 days, about 37 a day at a steady rate (listing analytics)",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "The seller's own digital-download listing",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$2 direct cost per sale",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_26c6202227184b219fe8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Unique visitors to the seller's own estimator listing (independent upholsterers and DIY reupholstery hobbyists)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_26c6202227184b219fe8"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": 0,
+            "resolution": "ACCEPTED: the off-by-one is fixed; receipts settle on days 7, 11 and 14 and proofDay is 14, inside the 14-day window."
+          },
+          {
+            "finding": 1,
+            "resolution": "ACCEPTED: sales are modelled as three tranches of continuous daily sales (days 1-4, 5-8, 9-11), each settling 3 days after it closes."
+          },
+          {
+            "finding": 2,
+            "resolution": "ACCEPTED: the count is cut to 13 ($507 settled, which meets the $500 settled-cash target) against ~16 expected by day 11, and the plan states the shortfall test: fewer than 5 sales by day 5 or fewer than 9 by day 8 means the window will be missed."
+          },
+          {
+            "finding": 3,
+            "resolution": "ACCEPTED: each tranche's $2-per-sale SPEND is dated on the day that tranche's receipt settles and labelled as paid from it, so cash never goes below zero against the $0 capital limit (card exposure $0, peakFundingCents 0)."
+          },
+          {
+            "finding": 4,
+            "resolution": "ACCEPTED (no change needed): the plan uses the card's buyerVolume fact, 1,100 visitors per 30 days (~37/day), not Brain's 15,400 figure."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "why": "FULFILMENT: no upholsterer is named on the card to do the reupholstery (no fulfillmentOwner, no capability Brain holds), so the signed $1,200 work order has nobody to deliver it."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "why": "ECONOMICS: the drop-ship supplier charges $48 per insert delivered against a $45 sale price, so every one of the 20 signed orders loses $3."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "deals": 13,
+            "price": 39,
+            "directCost": 2,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_4273fa0286264c60bdc8",
+            "link": "ECONOMICS",
+            "reason": "Established on this opening: card directCosts $700 against the signed $1,200 work order price (card price fact), $0 exposure, so each deal makes $500. Brain's merged basis 'each deal loses money: 48 against 45' is the foam-insert opening's figures (cop_6e33416036fb4e91a1d2), not this one's."
+          },
+          {
+            "opportunityId": "cop_6e33416036fb4e91a1d2",
+            "link": "FULFILMENT",
+            "reason": "Established on this opening: card fulfillmentOwner names FoamDirect Wholesale with a drop-ship price list of $48 per insert delivered (fulfillment fact, EVIDENCE). Brain's merged basis 'nobody has established who would do the work' belongs to the brokered-reupholstery opening (cop_4273fa0286264c60bdc8). The foam opening still fails on ECONOMICS."
+          },
+          {
+            "opportunityId": "cop_26c6202227184b219fe8",
+            "link": "MARKET_VOLUME",
+            "reason": "Established, but on a smaller figure than Brain's basis: the card's buyerVolume fact is 1,100 unique visitors in the last 30 days (~37 a day), not 1,100 a day; ~518 visitors in the window (~407 by day 11) at 4% still give ~16 sales against the 13 needed."
+          }
+        ],
+        "revisionId": "rev_82e72e972dd3_072e31",
+        "digest": "82e72e972dd378a42ebbde30",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:11:56.236Z"
+      },
+      "review": {
+        "revisionId": "rev_82e72e972dd3_072e31",
+        "revisionDigest": "82e72e972dd378a42ebbde30",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_500e196c1fde4c8794dd/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_af7fbba27a484a249993/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "My settlement finding is resolved: sales are modelled as three continuous tranches (days 1-4, 5-8, 9-11) settling 3 days later on days 7, 11 and 14, proofDay 14, inside the 14-day window. Recomputed: 5 + 4 + 4 = 13 sales x $39 = $507 settled >= $500 (12 would be $468, so 13 is the minimum); expected ~148 + 148 + 111 = ~407 visitors x 4% = ~16 sales by day 11, each tranche counting fewer than expected (5 vs ~6, 4 vs ~6, 4 vs ~4.4). Costs $26 are paid from each tranche's own settled proceeds, so cash never goes negative against the $0 capital limit. Price is 44 paid orders on this listing; conversion 44/1,100 measured on it; Brain produces the spreadsheet. The shortfall test (fewer than 5 by day 5, fewer than 9 by day 8) is stated. Exclusions and disagreements with Brain's merged link bases are correct.",
+        "findings": [
+          "Margin is ~3 sales on a Poisson mean of ~16 (roughly a 1-in-5 chance of falling below 13): the owner should treat the day-5 and day-8 tests as real stop signals.",
+          "Tranche 3's settlement lands exactly on day 14, the last day of the window; any payout delay on the marketplace beyond 3 days pushes $156 out of the window."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:13:13.018Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $500 of settled cash within 14 days using no up-front capital.",
+        "terms": "ac65e7204e5de28a",
+        "openings": {
+          "cop_26c6202227184b219fe8": "8339453820d4bdcc",
+          "cop_4273fa0286264c60bdc8": "a6a90066e2bc2048",
+          "cop_6e33416036fb4e91a1d2": "13e06bcff8c2092c"
+        }
+      },
+      "at": "2026-11-27T11:14:10.171Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

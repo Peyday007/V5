@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_35fa2fa5f9f84c018bec",
+ "revision_id": "rev_777f27a5b7a0_d8b49c",
+ "verdict": "PASS",
+ "reasons": "NO_PLAN on the deadline is correct: the card's EVIDENCE timeToFirstCash is 60 days through university accounts payable against a 21-day window, so none of the five $1,200 written acceptances ($6,000) settles in time; this is a limit the evidence itself decides, matching Brain's SETTLES_IN_TIME judgement. Collected-in-window is $0 by construction.",
+ "findings": [
+  "The alternative and DEADLINE suggestion claim every other link is established and five labs then bring $6,000, but FULFILMENT rests only on Brain's PRODUCE_SPREADSHEET capability while the deliverable is a drafted IACUC protocol amendment; the card's delivery fact ('A spreadsheet Brain produces') does not match the offer scope, so fulfilment of the actual deliverable is not established. (Recorded as a finding, not a condition: it does not change the NO_PLAN stance, only the resolution's $6,000 promise.)",
+  "A deadline of exactly 60 days leaves no margin if time-to-cash is measured from delivery rather than from today."
+ ],
+ "conditions": [],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-iota",
+ "reviewer_model": "claude-opus-5-5"
+}

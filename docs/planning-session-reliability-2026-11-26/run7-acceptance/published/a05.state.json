@@ -1,0 +1,1264 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_2619aeb5565341ddad17",
+      "words": "Collect $15,000 of settled cash within 45 days with at most $2,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": 1500000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 1500000,
+        "proofCondition": "$15,000 of settled cash collected by day 45 with no more than $15,000 of capital committed (the goal's stored capital ceiling)",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {
+        "totalSpendCapCents": "The goal's stored terms now set the capital ceiling at $15,000, replacing the $2,000 in the original message.",
+        "exposureCapCents": "Same: stored capital ceiling $15,000."
+      },
+      "version": 2,
+      "digest": "23c558007ef60cab6180d4cd"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_2619aeb5565341ddad17",
+        "contractDigest": "47ea2aed6b67265382652f5e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a $2,000 capital ceiling: the only opening needs $6,800 tied up per forklift",
+          "opportunityIds": [],
+          "why": "The forklift resale opening is otherwise fully established (two written purchase agreements at $9,500 payable on delivery, dealer quote $6,800 per unit incl. delivery, 12 days to cash), but each unit must be bought from Midstate Lift Trucks for $6,800 before the buyer pays on delivery. Peak funding of $6,800 is 3.4x the owner's $2,000 capital ceiling, so not even one deal can be done inside the limit; nothing else is held."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the capital ceiling to $6,800 and run the two signed deals sequentially",
+            "why": "Buy unit 1 ($6,800), deliver and collect $9,500 by about day 12, recycle that cash into unit 2, collect the second $9,500 by about day 24: $19,000 of settled receipts inside 45 days with peak exposure $6,800."
+          },
+          {
+            "title": "Ask the dealer for payment terms (pay after buyer settles) or a buyer deposit",
+            "why": "Would move peak funding to under $2,000, but no such term is on the card; it would need to be negotiated and recorded first."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "peak capital per unit",
+            "status": "EVIDENCED",
+            "value": 680000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital ceiling",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [],
+            "needs": null
+          },
+          {
+            "name": "price per unit (signed)",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#exposure",
+            "dated": "2026-11-24",
+            "claim": "Each refurbished unit ties up $6,800 (dealer quote incl. delivery) before the buyer pays",
+            "population": "Midstate Lift Trucks quote",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#price",
+            "dated": "2026-11-24",
+            "claim": "Two warehouses signed purchase agreements at $9,500 per unit, payable on delivery",
+            "population": "Regional warehouse operators (2 signed)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: each forklift deal needs $6,800 paid to the dealer before the $9,500 is collected on delivery, which exceeds the $2,000 capital ceiling; no opening held fits inside it.",
+          "resolution": "Owner raises the capital ceiling to at least $6,800 (both signed deals then run sequentially, recycling the first unit's proceeds, for $19,000 settled by ~day 24), or Brain negotiates dealer pay-after-delivery terms / buyer deposits that bring peak funding under $2,000 and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "why": "Needs $6,800 of capital tied up per unit (card exposure/peakFunding), above the $2,000 ceiling"
+          }
+        ],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to $6,800 (one unit at a time, proceeds recycled into the second)",
+            "basis": [
+              {
+                "opportunityId": "cop_55000679ccae4b19b87f",
+                "field": "exposure"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_31578be0b9e5_3cbda8",
+        "digest": "31578be0b9e5c53d4d34bbaf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:33.685Z"
+      },
+      {
+        "goalId": "wst_2619aeb5565341ddad17",
+        "contractDigest": "47ea2aed6b67265382652f5e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a $2,000 capital ceiling: the only opening needs $6,800 tied up per forklift",
+          "opportunityIds": [],
+          "why": "The forklift resale opening is otherwise fully established (two written purchase agreements at $9,500 payable on delivery, dealer quote $6,800 per unit incl. delivery, 12 days to cash), but each unit must be bought from Midstate Lift Trucks for $6,800 before the buyer pays on delivery. Peak funding of $6,800 is 3.4x the owner's $2,000 capital ceiling, so not even one deal can be done inside the limit; nothing else is held."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the capital ceiling to $6,800 and run the two signed deals sequentially",
+            "why": "Buy unit 1 ($6,800), deliver and collect $9,500 by about day 12, recycle that cash into unit 2, collect the second $9,500 by about day 24: $19,000 of settled receipts inside 45 days with peak exposure $6,800."
+          },
+          {
+            "title": "Ask the dealer for payment terms (pay after buyer settles) or a buyer deposit",
+            "why": "Would move peak funding to under $2,000, but no such term is on the card; it would need to be negotiated and recorded first."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "peak capital per unit",
+            "status": "EVIDENCED",
+            "value": 680000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per unit (signed)",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#exposure",
+            "dated": "2026-11-24",
+            "claim": "Each refurbished unit ties up $6,800 (dealer quote incl. delivery) before the buyer pays",
+            "population": "Midstate Lift Trucks quote",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#price",
+            "dated": "2026-11-24",
+            "claim": "Two warehouses signed purchase agreements at $9,500 per unit, payable on delivery",
+            "population": "Regional warehouse operators (2 signed)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: each forklift deal needs $6,800 paid to the dealer before the $9,500 is collected on delivery, which exceeds the $2,000 capital ceiling; no opening held fits inside it.",
+          "resolution": "Owner raises the capital ceiling to at least $6,800 (both signed deals then run sequentially, recycling the first unit's proceeds, for $19,000 settled by ~day 24), or Brain negotiates dealer pay-after-delivery terms / buyer deposits that bring peak funding under $2,000 and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "why": "Needs $6,800 of capital tied up per unit (card exposure/peakFunding), above the $2,000 ceiling"
+          }
+        ],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to $6,800 (one unit at a time, proceeds recycled into the second)",
+            "basis": [
+              {
+                "opportunityId": "cop_55000679ccae4b19b87f",
+                "field": "exposure"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_eda5a832bd9d_97a4f8",
+        "digest": "eda5a832bd9d1450a69185a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:43.443Z"
+      },
+      {
+        "goalId": "wst_2619aeb5565341ddad17",
+        "contractDigest": "23c558007ef60cab6180d4cd",
+        "parentRevisionId": "rev_eda5a832bd9d_97a4f8",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the two signed $9,500 forklift purchase agreements through Midstate Lift Trucks ($19,000 settled by day 12)",
+          "opportunityIds": [
+            "cop_55000679ccae4b19b87f"
+          ],
+          "why": "The goal's capital ceiling is now $15,000. Two warehouses signed written purchase agreements at $9,500 per refurbished unit, payable on delivery (card price fact, two WRITTEN_ACCEPTANCE agreements). Midstate Lift Trucks quoted $6,800 per unit including delivery (fulfilment fact). Buying both units at once ties up $13,600, inside the $15,000 ceiling; both buyers pay $9,500 on delivery, usable 12 days out (timeToFirstCash), so $19,000 settles by day 12 of 45 against the $15,000 target (both deals needed: one gives $9,500). Margin $2,700 per unit, $5,400 net."
+        },
+        "alternatives": [
+          {
+            "title": "Run the two units one after the other",
+            "why": "Peak capital $6,800 instead of $13,600, second unit settles around day 24; unnecessary now that $15,000 is allowed, and slower."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm delivery dates with the two warehouses that signed at $9,500 per unit, payable on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 950000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Midstate Lift Trucks supplies and delivers two refurbished 5,000 lb electric forklifts ($6,800 each incl. delivery)",
+            "performer": "Midstate Lift Trucks",
+            "costCents": 1360000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Midstate Lift Trucks",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Collect $9,500 from each warehouse on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "s1",
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 1360000,
+            "label": "Pay Midstate for two units at $6,800 incl. delivery",
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 1900000,
+            "label": "Two warehouses pay $9,500 on delivery",
+            "settlesDay": 12,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "warehouses",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit incl. delivery",
+            "status": "EVIDENCED",
+            "value": 680000,
+            "unit": "cents",
+            "sources": [
+              "s2",
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#price",
+            "dated": "2026-11-24",
+            "claim": "Two warehouses signed purchase agreements at $9,500 per refurbished unit, payable on delivery",
+            "population": "The two regional warehouses that signed",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Midstate Lift Trucks quoted $6,800 per refurbished unit incl. delivery",
+            "population": "Supplier quote",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#exposure",
+            "dated": "2026-11-24",
+            "claim": "$6,800 tied up per unit until the buyer pays",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The contract also records a total spend cap of $2,000; raising exposure alone may not suffice, the resolution should state both.",
+            "resolution": "The goal's stored terms now set the capital ceiling at $15,000; the contract was re-recorded with both the total spend cap and the exposure cap at $15,000. The plan spends $13,600 in total and that is also its peak exposure, inside both."
+          },
+          {
+            "finding": "The dealer pay-after-delivery or buyer-deposit alternative is not on the card and needs to be negotiated first.",
+            "resolution": "Agreed; it is no longer needed and the plan does not rely on it."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "deals": 2,
+            "price": 9500,
+            "directCost": 6800,
+            "capital": 6800
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_22da02e7f4cd_6e5b1b",
+        "digest": "22da02e7f4cdd91a91893e46",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:46:53.752Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_2619aeb5565341ddad17",
+      "contractDigest": "23c558007ef60cab6180d4cd",
+      "parentRevisionId": "rev_eda5a832bd9d_97a4f8",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fulfil the two signed $9,500 forklift purchase agreements through Midstate Lift Trucks ($19,000 settled by day 12)",
+        "opportunityIds": [
+          "cop_55000679ccae4b19b87f"
+        ],
+        "why": "The goal's capital ceiling is now $15,000. Two warehouses signed written purchase agreements at $9,500 per refurbished unit, payable on delivery (card price fact, two WRITTEN_ACCEPTANCE agreements). Midstate Lift Trucks quoted $6,800 per unit including delivery (fulfilment fact). Buying both units at once ties up $13,600, inside the $15,000 ceiling; both buyers pay $9,500 on delivery, usable 12 days out (timeToFirstCash), so $19,000 settles by day 12 of 45 against the $15,000 target (both deals needed: one gives $9,500). Margin $2,700 per unit, $5,400 net."
+      },
+      "alternatives": [
+        {
+          "title": "Run the two units one after the other",
+          "why": "Peak capital $6,800 instead of $13,600, second unit settles around day 24; unnecessary now that $15,000 is allowed, and slower."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm delivery dates with the two warehouses that signed at $9,500 per unit, payable on delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "priceCents": 950000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "DELIVER",
+          "label": "Midstate Lift Trucks supplies and delivers two refurbished 5,000 lb electric forklifts ($6,800 each incl. delivery)",
+          "performer": "Midstate Lift Trucks",
+          "costCents": 1360000,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "s2",
+            "s3"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Midstate Lift Trucks",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "COLLECT",
+          "label": "Collect $9,500 from each warehouse on delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 12,
+          "dependsOn": "s2",
+          "evidence": [
+            "s1",
+            "s4"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 1360000,
+          "label": "Pay Midstate for two units at $6,800 incl. delivery",
+          "stepId": "s2"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 1900000,
+          "label": "Two warehouses pay $9,500 on delivery",
+          "settlesDay": 12,
+          "stepId": "s3"
+        }
+      ],
+      "proofDay": 12,
+      "quantities": [
+        {
+          "name": "signed buyers",
+          "status": "EVIDENCED",
+          "value": 2,
+          "unit": "warehouses",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per unit",
+          "status": "EVIDENCED",
+          "value": 950000,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier cost per unit incl. delivery",
+          "status": "EVIDENCED",
+          "value": 680000,
+          "unit": "cents",
+          "sources": [
+            "s2",
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 12,
+          "unit": "days",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_55000679ccae4b19b87f#price",
+          "dated": "2026-11-24",
+          "claim": "Two warehouses signed purchase agreements at $9,500 per refurbished unit, payable on delivery",
+          "population": "The two regional warehouses that signed",
+          "matchesBuyer": true,
+          "opportunityId": "cop_55000679ccae4b19b87f"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_55000679ccae4b19b87f#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Midstate Lift Trucks quoted $6,800 per refurbished unit incl. delivery",
+          "population": "Supplier quote",
+          "matchesBuyer": true,
+          "opportunityId": "cop_55000679ccae4b19b87f"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_55000679ccae4b19b87f#exposure",
+          "dated": "2026-11-24",
+          "claim": "$6,800 tied up per unit until the buyer pays",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_55000679ccae4b19b87f"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_55000679ccae4b19b87f#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "12 days to usable cash",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_55000679ccae4b19b87f"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "The contract also records a total spend cap of $2,000; raising exposure alone may not suffice, the resolution should state both.",
+          "resolution": "The goal's stored terms now set the capital ceiling at $15,000; the contract was re-recorded with both the total spend cap and the exposure cap at $15,000. The plan spends $13,600 in total and that is also its peak exposure, inside both."
+        },
+        {
+          "finding": "The dealer pay-after-delivery or buyer-deposit alternative is not on the card and needs to be negotiated first.",
+          "resolution": "Agreed; it is no longer needed and the plan does not rely on it."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_55000679ccae4b19b87f",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_55000679ccae4b19b87f",
+          "deals": 2,
+          "price": 9500,
+          "directCost": 6800,
+          "capital": 6800
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_22da02e7f4cd_6e5b1b",
+      "digest": "22da02e7f4cdd91a91893e46",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_d1c255ad02df4467acf3/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:46:53.752Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_22da02e7f4cd_6e5b1b",
+      "digest": "22da02e7f4cdd91a91893e46",
+      "contractDigest": "23c558007ef60cab6180d4cd",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 1360000,
+        "committedOpenCents": 0,
+        "preProofCents": 1360000,
+        "maxExposureCents": 1360000,
+        "minCashCents": 140000,
+        "minCashDay": 1,
+        "collectedCents": 1900000,
+        "collectedInWindowCents": 1900000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 540000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Refurbished 5,000 lb electric forklifts resold to regional w\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Refurbished 5,000 lb electric forklifts resold to regional w\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Fulfil \"Constructed: Reverse: own the buyer, pay a supplier to deliver, and keep the mar\" through a supplier at the c…) it would reach 0% (p50 $25,952): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Refurbished 5,000 lb electric forklifts resold to regional warehouses\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_55000679ccae4b19b87f"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Refurbished 5,000 lb electric forklifts resold to regional warehouses\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Refurbished 5,000 lb electric forklifts resold to regional warehouses\"",
+            "owner": "PERSON",
+            "cost": 6800
+          },
+          {
+            "label": "Collect payment for \"Refurbished 5,000 lb electric forklifts resold to regional warehouses\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "title": "Refurbished 5,000 lb electric forklifts resold to regional warehouses",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 15000,
+            "potentialReach": 15000,
+            "card": {
+              "payer": "Regional warehouse operators",
+              "reachableChannel": "The warehouse operations managers who signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:06.537Z",
+              "offerScope": "Refurbished 5,000 lb electric forklifts resold to regional warehouses",
+              "priceCents": 950000,
+              "currency": "USD",
+              "fulfillmentOwner": "Midstate Lift Trucks (dealer quote, $6,800 per refurbished unit incl. delivery)",
+              "peakFundingCents": 680000,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "warehouse material handling",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 950000,
+                "currency": "USD",
+                "deliverable": "Refurbished 5,000 lb electric forklifts resold to regional warehouses",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 950000,
+                "currency": "USD",
+                "deliverable": "Refurbished 5,000 lb electric forklifts resold to regional warehouses",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The warehouse operations managers who signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 19000 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 19000 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Midstate Lift Trucks (dealer quote, $6,800 per refurbished unit incl. delivery) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6800, tied up 6800"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Refurbished 5,000 lb electric forklifts resold to regional warehouses to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6800",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$6800",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Midstate Lift Trucks (dealer quote, $6,800 per refurbished unit incl. delivery) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Regional warehouse operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Two warehouses signed purchase agreements at $9,500 per refurbished unit, payable on delivery.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_617d6c4b7b2e438db470"
+        ],
+        "scope": {
+          "targetCents": 1500000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:45:38.389Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_eda5a832bd9d_97a4f8",
+        "revisionDigest": "eda5a832bd9d1450a69185a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_789f910ecd814ac48155/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and the decisive gap is a real constraint, not missing evidence. The only opening held (refurbished forklift resale) is otherwise established on its card's EVIDENCE: two WRITTEN_ACCEPTANCE purchase agreements at $9,500 payable on delivery, fulfiller Midstate Lift Trucks on a dealer quote of $6,800 per unit incl. delivery, 12 days to usable cash. But its EVIDENCE exposure fact is $6,800 (card peakFunding $6,800), paid to the dealer before the buyer pays. Recomputed: one unit alone ties up $6,800 = 3.4x the $2,000 capital ceiling, so not even one deal fits; even with all the evidence in hand the limit cannot be met, which is what makes it a constraint. Target check for the suggested resolution: 2 x $9,500 = $19,000 >= $15,000, and both units are needed (one gives $9,500 < $15,000); run sequentially, unit 1 settles about day 12 and unit 2 about day 24, inside 45, with peak exposure $6,800. Nothing else is held, so no smaller plan exists. The constraint names its basis (cop_55000679ccae4b19b87f exposure).",
+        "findings": [
+          "The contract also records a total spend cap of $2,000. Running both units sequentially spends $13,600 in total (2 x $6,800) even though only $6,800 is out at once; if the owner's words are read as 'at most $2,000 committed at any time' (the proof condition), raising the exposure ceiling to $6,800 suffices, but if the total spend cap stands it must also rise to $13,600. The resolution should state both.",
+          "The dealer pay-after-delivery or buyer-deposit alternative is correctly presented as not on the card and needing to be negotiated and recorded before it can count."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:33:03.880Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_22da02e7f4cd_6e5b1b",
+        "revisionDigest": "22da02e7f4cdd91a91893e46",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_789f910ecd814ac48155/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The goal's stored capital ceiling is now $15,000 (stored.capitalCeilingCents 1500000), and the contract was re-recorded at version 2 with both the total spend cap and exposure cap at $15,000 and an explanation that the stored terms replace the $2,000 in the original message. Under that ceiling the forklift resale is executable with every link established by the card's EVIDENCE: two WRITTEN_ACCEPTANCE purchase agreements at $9,500 per unit payable on delivery; the recorded fulfiller Midstate Lift Trucks on a dealer quote of $6,800 per unit incl. delivery; exposure $6,800 per unit; 12 days to usable cash. Arithmetic recomputed: 2 x $9,500 = $19,000 >= $15,000 (both needed; one gives $9,500); spend 2 x $6,800 = $13,600 = peak exposure, inside $15,000 on both caps; net $5,400; minimum cash $15,000 - $13,600 = $1,400 of headroom; settled day 12 of 45. The plan answers my earlier finding: the total spend cap was raised with the exposure cap, so the $13,600 total also fits. EXECUTABLE is right.",
+        "findings": [
+          "The plan rests on the stored goal row's $15,000 ceiling; the owner's message text (goal title and OBJECTIVE) still reads 'at most $2,000 of capital'. If that row was not the owner's own decision, the plan exceeds the owner's limit by $11,600; the record should show who set it.",
+          "The sequential alternative keeps peak exposure at $6,800 (half) and still settles by about day 24 of 45; it is the lower-risk way to run the same two deals if either buyer might not pay on delivery, and costs only time the window has.",
+          "Delivery dates are not on the card; any delivery after day 33 would push its cash past day 45. Confirm them in s1. SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:49:00.655Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_22da02e7f4cd_6e5b1b",
+      "digest": "22da02e7f4cdd91a91893e46",
+      "contractDigest": "23c558007ef60cab6180d4cd",
+      "plan": {
+        "goalId": "wst_2619aeb5565341ddad17",
+        "contractDigest": "23c558007ef60cab6180d4cd",
+        "parentRevisionId": "rev_eda5a832bd9d_97a4f8",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the two signed $9,500 forklift purchase agreements through Midstate Lift Trucks ($19,000 settled by day 12)",
+          "opportunityIds": [
+            "cop_55000679ccae4b19b87f"
+          ],
+          "why": "The goal's capital ceiling is now $15,000. Two warehouses signed written purchase agreements at $9,500 per refurbished unit, payable on delivery (card price fact, two WRITTEN_ACCEPTANCE agreements). Midstate Lift Trucks quoted $6,800 per unit including delivery (fulfilment fact). Buying both units at once ties up $13,600, inside the $15,000 ceiling; both buyers pay $9,500 on delivery, usable 12 days out (timeToFirstCash), so $19,000 settles by day 12 of 45 against the $15,000 target (both deals needed: one gives $9,500). Margin $2,700 per unit, $5,400 net."
+        },
+        "alternatives": [
+          {
+            "title": "Run the two units one after the other",
+            "why": "Peak capital $6,800 instead of $13,600, second unit settles around day 24; unnecessary now that $15,000 is allowed, and slower."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm delivery dates with the two warehouses that signed at $9,500 per unit, payable on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 950000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Midstate Lift Trucks supplies and delivers two refurbished 5,000 lb electric forklifts ($6,800 each incl. delivery)",
+            "performer": "Midstate Lift Trucks",
+            "costCents": 1360000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Midstate Lift Trucks",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Collect $9,500 from each warehouse on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "s1",
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 1360000,
+            "label": "Pay Midstate for two units at $6,800 incl. delivery",
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 1900000,
+            "label": "Two warehouses pay $9,500 on delivery",
+            "settlesDay": 12,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "warehouses",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit incl. delivery",
+            "status": "EVIDENCED",
+            "value": 680000,
+            "unit": "cents",
+            "sources": [
+              "s2",
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#price",
+            "dated": "2026-11-24",
+            "claim": "Two warehouses signed purchase agreements at $9,500 per refurbished unit, payable on delivery",
+            "population": "The two regional warehouses that signed",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Midstate Lift Trucks quoted $6,800 per refurbished unit incl. delivery",
+            "population": "Supplier quote",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#exposure",
+            "dated": "2026-11-24",
+            "claim": "$6,800 tied up per unit until the buyer pays",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_55000679ccae4b19b87f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_55000679ccae4b19b87f"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The contract also records a total spend cap of $2,000; raising exposure alone may not suffice, the resolution should state both.",
+            "resolution": "The goal's stored terms now set the capital ceiling at $15,000; the contract was re-recorded with both the total spend cap and the exposure cap at $15,000. The plan spends $13,600 in total and that is also its peak exposure, inside both."
+          },
+          {
+            "finding": "The dealer pay-after-delivery or buyer-deposit alternative is not on the card and needs to be negotiated first.",
+            "resolution": "Agreed; it is no longer needed and the plan does not rely on it."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_55000679ccae4b19b87f",
+            "deals": 2,
+            "price": 9500,
+            "directCost": 6800,
+            "capital": 6800
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_22da02e7f4cd_6e5b1b",
+        "digest": "22da02e7f4cdd91a91893e46",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:46:53.752Z"
+      },
+      "review": {
+        "revisionId": "rev_22da02e7f4cd_6e5b1b",
+        "revisionDigest": "22da02e7f4cdd91a91893e46",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1c255ad02df4467acf3/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_789f910ecd814ac48155/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The goal's stored capital ceiling is now $15,000 (stored.capitalCeilingCents 1500000), and the contract was re-recorded at version 2 with both the total spend cap and exposure cap at $15,000 and an explanation that the stored terms replace the $2,000 in the original message. Under that ceiling the forklift resale is executable with every link established by the card's EVIDENCE: two WRITTEN_ACCEPTANCE purchase agreements at $9,500 per unit payable on delivery; the recorded fulfiller Midstate Lift Trucks on a dealer quote of $6,800 per unit incl. delivery; exposure $6,800 per unit; 12 days to usable cash. Arithmetic recomputed: 2 x $9,500 = $19,000 >= $15,000 (both needed; one gives $9,500); spend 2 x $6,800 = $13,600 = peak exposure, inside $15,000 on both caps; net $5,400; minimum cash $15,000 - $13,600 = $1,400 of headroom; settled day 12 of 45. The plan answers my earlier finding: the total spend cap was raised with the exposure cap, so the $13,600 total also fits. EXECUTABLE is right.",
+        "findings": [
+          "The plan rests on the stored goal row's $15,000 ceiling; the owner's message text (goal title and OBJECTIVE) still reads 'at most $2,000 of capital'. If that row was not the owner's own decision, the plan exceeds the owner's limit by $11,600; the record should show who set it.",
+          "The sequential alternative keeps peak exposure at $6,800 (half) and still settles by about day 24 of 45; it is the lower-risk way to run the same two deals if either buyer might not pay on delivery, and costs only time the window has.",
+          "Delivery dates are not on the card; any delivery after day 33 would push its cash past day 45. Confirm them in s1. SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:49:00.655Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $15,000 of settled cash within 45 days with at most $2,000 of capital.",
+        "terms": "bc71a57645c57d10",
+        "openings": {
+          "cop_55000679ccae4b19b87f": "455a4ec0b7d26cf6"
+        }
+      },
+      "at": "2026-11-27T08:53:47.378Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

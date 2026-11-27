@@ -1,0 +1,162 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_54673b49d0ee_1588da",
+      "digest": "54673b49d0ee0bd813c87164",
+      "contractDigest": "dc77acb8ec931c890dcb96d9",
+      "plan": {
+        "goalId": "wst_81dbf8d114cf42da98ad",
+        "contractDigest": "dc77acb8ec931c890dcb96d9",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening loses $250 on every permit it brokers",
+          "opportunityIds": [],
+          "why": "The six written acceptances at $1,100 ($6,600) would carry the $5,000 target in time (12 days to cash), but the evidenced direct cost of the quoted fulfiller CityScout Permit Services is $1,350 per deal, above the $1,100 price. Every deal loses $250, so more deals only lose more; with $0 up-front capital the owner also cannot fund the $250 gap per deal. No other opening is held."
+        },
+        "alternatives": [
+          {
+            "title": "Broker the six agreed permits anyway",
+            "why": "Six deals at $1,100 against $1,350 cost lose $1,500 net and need money the owner has not put up; settled cash collected is not profit and the goal forbids up-front capital."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Obtain a written fulfiller quote below $1,100 per permit (CityScout renegotiation or another permit service), or re-agree a price above $1,350 plus margin with the six production companies",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_cost",
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 1100,
+            "unit": "USD per deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1350,
+            "unit": "USD per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "marginPerDeal",
+            "status": "EVIDENCED",
+            "value": -250,
+            "unit": "USD per deal",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_11813219f0ff437aadd9#price",
+            "dated": "2026-11-24",
+            "claim": "Price $1,100 per permit, six written acceptances at that amount",
+            "population": "Independent production companies",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_11813219f0ff437aadd9#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $1,350 per deal (CityScout Permit Services quote)",
+            "population": "Independent production companies",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "ECONOMICS: the evidenced direct cost ($1,350, CityScout's quote) exceeds the agreed price ($1,100), so each brokered permit loses $250 and no number of deals reaches $5,000 without losing money and needing capital the goal forbids.",
+          "resolution": "Get a written fulfiller quote under $1,100 (renegotiate CityScout or source another permit service from the regional film office listings), or re-agree a price above $1,350 with the six buyers; failing either, research new openings that can carry $5,000 within 30 days.",
+          "decisiveLinks": [
+            "ECONOMICS"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_11813219f0ff437aadd9",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_54673b49d0ee_1588da",
+        "digest": "54673b49d0ee0bd813c87164",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_094f381f0a2a4b8eb4c0/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:53:05.211Z"
+      },
+      "review": {
+        "revisionId": "rev_54673b49d0ee_1588da",
+        "revisionDigest": "54673b49d0ee0bd813c87164",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_094f381f0a2a4b8eb4c0/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_851f2fec45e44cf19e5e/reviewer-beta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with decisive gap ECONOMICS is correct and matches Brain's judgement. Six written acceptances at $1,100 ($6,600) would carry $5,000 in 12 days, but the evidenced fulfiller cost (CityScout quote) is $1,350 per deal: each deal loses $250, six lose $1,500, which the owner would have to fund against a $0 up-front capital term. This is a decided gap, not a missing-evidence one, and the resolution (cheaper written fulfiller quote or re-agreed price above $1,350, else new openings) addresses it directly with BRAIN performing. No cash is booked, nothing unknown is used.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T02:58:54.737Z"
+      },
+      "at": "2026-11-27T03:04:13.690Z"
+    }
+  }
+}

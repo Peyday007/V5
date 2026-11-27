@@ -644,8 +644,9 @@ export async function readComparableLedger(
 }
 
 /** The stated probability moved by the bucket's measured gap, kept strictly inside (0, 1). */
-export function correctedProbability(stated: number, correction: BucketCorrection | null): number {
-  if (!correction) return stated;
+export function correctedProbability(stated: number | null, correction: BucketCorrection | null): number | null {
+  // An unknown forecast stays unknown: a calibration shift is never applied to a figure nobody stated.
+  if (stated === null || !correction) return stated;
   return Math.round(Math.min(0.99, Math.max(0.01, stated + correction.shift)) * 1000) / 1000;
 }
 
@@ -856,7 +857,7 @@ export async function readDecision(id: string): Promise<DecisionRecord | null> {
 }
 
 /** Decisions with no outcome yet, oldest first: what the operator owes a verification. */
-export async function openDecisions(limit = 10): Promise<{ id: string; kind: string; goalId: string | null; outcome: string; probability: number; dueAt: string; overdue: boolean }[]> {
+export async function openDecisions(limit = 10): Promise<{ id: string; kind: string; goalId: string | null; outcome: string; probability: number | null; dueAt: string; overdue: boolean }[]> {
   const rows = await getDb().all<{ entity_id: string; payload: string }>(
     `SELECT entity_id, payload FROM project_events WHERE event_type = 'OPERATOR_DECISION'
        AND entity_id NOT IN (SELECT entity_id FROM project_events WHERE event_type = 'OPERATOR_DECISION_VERIFIED' AND entity_id IS NOT NULL)

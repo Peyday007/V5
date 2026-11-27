@@ -1,0 +1,26 @@
+{
+  "cases": 12,
+  "passed": 11,
+  "reliability": 0.9166666666666666,
+  "wilson95": {
+    "low": 0.6461140782014047,
+    "high": 0.9851352905492264
+  },
+  "criticalFailures": 0,
+  "published": 12,
+  "usable": 11,
+  "e2e": 11,
+  "e2eFailures": {
+    "VERDICT_INCORRECT": 1,
+    "OPENING_UNACCOUNTED": 1
+  },
+  "failures": [
+    {
+      "id": "al-08-forklift-objective-change",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    }
+  ]
+}

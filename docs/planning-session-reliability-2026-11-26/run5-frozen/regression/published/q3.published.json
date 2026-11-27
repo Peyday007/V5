@@ -1,0 +1,228 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_826783ae3714_d8d0f3",
+      "digest": "826783ae371438ef94f25293",
+      "contractDigest": "524a351e5485f535a8faf0d2",
+      "plan": {
+        "goalId": "wst_fddf674fb3be45a6bf13",
+        "contractDigest": "524a351e5485f535a8faf0d2",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no opening has a reachable, counted buyer population at an established price that can carry $10,000 in 16 days",
+          "opportunityIds": [],
+          "why": "The $9 spreadsheet templates are the only opening with an evidenced price buyers pay and a fulfiller (Brain), but $10,000 needs about 1,112 sales in 16 days and nothing establishes a channel to reach those buyers, how many exist, a close rate, or when money settles. The GitHub $10,000 is a bug-bounty reward for a critical vulnerability, not a purchase price, and Brain's spreadsheet capability does not produce a vulnerability finding. The $75 domain-brokerage fee is 'often' charged by brokers, with no fulfiller and no buyer channel."
+        },
+        "alternatives": [
+          {
+            "title": "Pursue the GitHub bug bounty",
+            "why": "A bounty is a discretionary reward for a finding, not a price for a deliverable; no fulfiller can produce a critical vulnerability on demand and payout timing is unknown."
+          },
+          {
+            "title": "Domain purchase assistance at $75",
+            "why": "Needs 134 transactions, has no fulfiller, no reachable buyers and no settlement time."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "For the $9 templates: find a published channel (a template marketplace category) with a counted number of buyers and sales per month, and its payout time",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "templatePrice",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "USD per template",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "templateSalesNeeded",
+            "status": "ESTIMATE",
+            "value": 1112,
+            "unit": "sales in 16 days",
+            "sources": [
+              "s1"
+            ],
+            "needs": "Arithmetic: $10,000 / $9"
+          },
+          {
+            "name": "templateBuyerVolume",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "reachable buyers and purchases per month",
+            "sources": [],
+            "needs": "A counted buyer population on a published channel"
+          },
+          {
+            "name": "templateConversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales per buyer offered",
+            "sources": [],
+            "needs": "A measured close rate"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_d916a00952a945b19a28#price",
+            "dated": "2026-11-24",
+            "claim": "Spreadsheet templates for small businesses sell for $9 on template marketplaces",
+            "population": "Small business operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_d916a00952a945b19a28#payer",
+            "dated": "2026-11-24",
+            "claim": "Small business operators (no channel or count recorded)",
+            "population": "Small business operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_5c04dae0b7ff442285b0#price",
+            "dated": "2026-07-27",
+            "claim": "GitHub's bug bounty pays $10,000 for a critical vulnerability finding (Tech Times, 2026-07-27): a reward, not a purchase price",
+            "population": "Security researchers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_8b98cab4401047eba2cc#price",
+            "dated": "2026-11-24",
+            "claim": "Flat-fee domain brokers charge a service fee, often $75 per transaction",
+            "population": "Domain buyers or sellers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No opening has a reachable, counted buyer population buying at an established price: the $9 templates need about 1,112 sales in 16 days with no channel, no buyer count, no close rate and no settlement time; the other two openings rest on a bounty reward and an 'often' fee with no fulfiller.",
+          "resolution": "Research a template marketplace category that publishes its buyer and monthly sales counts and payout time, and look for a higher-priced opening with an established buyer price, a reachable counted population and a fulfiller; re-plan once one carries $10,000 inside 16 days and $375.",
+          "decisiveLinks": [
+            "REACHABLE_BUYER",
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d916a00952a945b19a28",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_5c04dae0b7ff442285b0",
+            "missing": [
+              "REACHABLE_BUYER",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_8b98cab4401047eba2cc",
+            "missing": [
+              "REACHABLE_BUYER",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_5c04dae0b7ff442285b0",
+            "why": "The $10,000 is a bug-bounty reward for a critical vulnerability finding, not a price GitHub pays for a deliverable; no fulfiller can produce a finding on demand."
+          },
+          {
+            "opportunityId": "cop_8b98cab4401047eba2cc",
+            "why": "$75 is what brokers 'often' charge, not an established price for this offer; no fulfiller, no reachable buyers, no settlement time; 134 transactions would be needed."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "REACHABLE_BUYER",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_5c04dae0b7ff442285b0",
+            "link": "FULFILMENT",
+            "reason": "Brain marks fulfilment proved because PRODUCE_SPREADSHEET is proved, but the deliverable is a critical security vulnerability finding in GitHub's software; a spreadsheet does not fulfil it and no fulfiller with that capability is named on the card."
+          }
+        ],
+        "revisionId": "rev_826783ae3714_d8d0f3",
+        "digest": "826783ae371438ef94f25293",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e788d8c3809745f4a61f/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:18:50.559Z"
+      },
+      "review": {
+        "revisionId": "rev_826783ae3714_d8d0f3",
+        "revisionDigest": "826783ae371438ef94f25293",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e788d8c3809745f4a61f/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f8cff5831e3d45d097a1/reviewer-zeta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and its decisive gap is evidence, not a fabricated constraint (constraints is empty). Templates: $9 price and Brain fulfilment established, but Brain's links[] show REACHABLE_BUYER, CONVERSION, MARKET_VOLUME and SETTLES_IN_TIME unestablished; $10,000 / $9 = 1,112 sales in 16 days with no channel or count. GitHub: the $10,000 is a bug-bounty reward for a finding, not a purchase price for a deliverable, correctly excluded; the FULFILMENT disagreement is supported (a spreadsheet does not produce a critical vulnerability finding). Domain brokerage: $75 is what brokers 'often' charge, Brain itself marks price and fulfilment unestablished; 134 transactions would be needed. Nothing is spent; the research step is the right resolution within $375.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T05:21:27.268Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:22:00.390Z"
+    }
+  }
+}

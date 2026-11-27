@@ -1,0 +1,36 @@
+{
+  "id": "ac-07-car-wash-monthly-owner-hours",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_984a0bcd0967_814c83",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_d4f1f6a1389f4ff2ae2e/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [washCompliance] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

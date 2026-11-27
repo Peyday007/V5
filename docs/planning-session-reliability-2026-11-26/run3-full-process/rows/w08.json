@@ -1,0 +1,35 @@
+{
+  "id": "ho-08-aviation-unfunded",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_4bd97cc85883_3ce44e",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_fb7325aa0e464b328e01/reviewer-3",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names relax CAPITAL, CAPITAL broken",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

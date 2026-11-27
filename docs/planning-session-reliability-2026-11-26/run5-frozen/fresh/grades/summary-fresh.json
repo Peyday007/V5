@@ -1,0 +1,39 @@
+{
+  "cases": 14,
+  "passed": 11,
+  "reliability": 0.7857142857142857,
+  "wilson95": {
+    "low": 0.5241027622679172,
+    "high": 0.9242875166308363
+  },
+  "criticalFailures": 0,
+  "published": 14,
+  "usable": 11,
+  "e2e": 11,
+  "e2eFailures": {
+    "VERDICT_INCORRECT": 3
+  },
+  "failures": [
+    {
+      "id": "fx-15-varroa-counts",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "fx-16-lab-code-crosswalk",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "fx-18-vet-drug-inventory",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    }
+  ]
+}

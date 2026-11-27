@@ -1,0 +1,797 @@
+[
+  {
+    "id": "al-01-septic-pumpout-lists",
+    "heldOut": true,
+    "description": "Lists at $240 from a counted roster of 210 licensed haulers, each with a published email, converting a measured 14 of 120 contacts (11.7%): 210 × 11.7% ≈ 24 orders × $240 ≈ $5,880 against $2,500 in 14 days (11 orders = $2,640), paid in 3 days, $4 cost, Brain compiles from public records. Executable. The riser installs have two signed quotes but nobody to install them, so a correct plan does not use them.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "septic pumping",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "objective": "Collect $2,500 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "septicList",
+        "title": "County pump-out-due lists for licensed septic haulers",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "septic pumping",
+        "payer": "Owners and dispatch managers of licensed septic hauling companies",
+        "channel": "Business emails published in the state environmental agency's licensed septage hauler roster",
+        "offer": "A one-county list of septic systems whose permit records show a pump-out falling due in the next 90 days, compiled from public permit records.",
+        "price": 240,
+        "priceEvidence": "Two regional septic-hauler lead services publish $240 for a one-county list of systems due for pump-out (published price pages, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state environmental agency's roster lists 210 licensed septage haulers, each with a published business email; haulers pump systems year-round and buy lists per county.",
+        "conversion": {
+          "paid": 14,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "septicRisers",
+        "title": "Septic tank riser installation for rural homeowners",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "septic pumping",
+        "payer": "Rural homeowners with buried septic lids",
+        "channel": "Replies to a county homeowners Facebook group post",
+        "price": 1100,
+        "priceEvidence": "Two homeowners signed $1,100 quotes for a riser and lid installation (signed quotes, 2026-11).",
+        "cost": 600,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 2,
+        "performer": "NOBODY",
+        "agreements": [
+          1100,
+          1100
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "septicRisers"
+      ]
+    }
+  },
+  {
+    "id": "al-02-pt-denial-tracker",
+    "heldOut": true,
+    "description": "Seven clinics signed $650 orders paid net 7: 7 × $650 = $4,550 against $4,000 in 30 days; Brain builds it at $8, nothing tied up. Executable on the signed orders alone. The monitoring opening's $50 is what Medicare reimburses a clinic per patient, money paid to the clinic by an insurer, not what a clinic pays for a set-up: not a purchase price, and a correct plan does not count it.",
+    "dimensions": {
+      "capital": "large",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "outpatient physical therapy",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days with at most $3,000 of capital.",
+    "openings": [
+      {
+        "key": "ptDenials",
+        "title": "Insurance-denial appeal tracker workbook for outpatient physical therapy clinics",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "outpatient physical therapy",
+        "payer": "Billing managers at independent outpatient PT clinics",
+        "channel": "Billing-manager emails in the state physical therapy association's member directory",
+        "price": 650,
+        "priceEvidence": "Seven clinic billing managers signed order forms at $650 each for the denial-appeal tracker, invoiced net 7 (signed order forms, 2026-11-18 to 2026-11-24).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          650,
+          650,
+          650,
+          650,
+          650,
+          650,
+          650
+        ]
+      },
+      {
+        "key": "ptRtm",
+        "title": "Remote therapeutic monitoring set-up for PT clinics",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "outpatient physical therapy",
+        "payer": "Clinic owners at outpatient PT practices",
+        "channel": "Billing-manager emails in the state physical therapy association's member directory",
+        "price": 50,
+        "priceEvidence": "Medicare reimburses clinics about $50 per patient per month for remote therapeutic monitoring device supply (CPT 98977, 2026 physician fee schedule).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state physical therapy association's directory lists 480 member clinics; each treats Medicare patients weekly.",
+        "conversion": {
+          "paid": 12,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 3000,
+      "mustNotUse": [
+        "ptRtm"
+      ],
+      "notAPurchasePrice": [
+        "ptRtm"
+      ]
+    }
+  },
+  {
+    "id": "al-03-process-server-owner-hours",
+    "heldOut": true,
+    "description": "Twenty firms accepted $95 serves, but the owner serves the papers personally at 3 hours a serve. $1,500 needs 16 serves (16 × $95 = $1,520) = 48 owner hours, against 4 hours a week × 3 weeks = 12 allowed; 12 hours covers 4 serves = $380. No other performer is established. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "legal process serving",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $1,500 of settled cash within 21 days with no more than 4 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "serve",
+        "title": "Same-week service of process for small litigation firms",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "legal process serving",
+        "payer": "Paralegals and office managers at small litigation firms",
+        "channel": "The county bar association's small-firm section referral list",
+        "price": 95,
+        "priceEvidence": "The county's three largest process-serving firms list $95 for standard service completed within 7 days (published rate cards, 2026-10).",
+        "cost": 12,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 3,
+        "performer": "OWNER",
+        "agreements": [
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95,
+          95
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "al-04-pool-log-binder-owner-hours",
+    "heldOut": true,
+    "description": "Nine pool service owners signed $375 orders Brain fulfils: 9 × $375 = $3,375 against $3,000 in 28 days, paid in 5 days, $6 cost, no owner hours (2 a week × 4 weeks = 8 allowed). Executable. The technician shifts are an hourly wage the owner would work, not a price a buyer pays for a deliverable, and 160 hours would break the owner-hours limit anyway: a correct plan does not use them.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "commercial pool service",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "poolLogs",
+        "title": "Inspection-ready chemical log binder for commercial pool service companies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "commercial pool service",
+        "payer": "Owners of pool service companies that maintain HOA and hotel pools",
+        "channel": "Emails in the county health department's licensed public-pool operator list",
+        "price": 375,
+        "priceEvidence": "Nine pool service owners signed $375 orders for the inspection-ready log binder, payable on delivery (signed order forms, 2026-11).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          375,
+          375,
+          375,
+          375,
+          375,
+          375,
+          375,
+          375,
+          375
+        ]
+      },
+      {
+        "key": "poolTech",
+        "title": "Seasonal pool technician shifts for a resort hotel group",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "commercial pool service",
+        "payer": "Resort hotel group",
+        "channel": "The hotel group's careers page",
+        "price": 28,
+        "priceEvidence": "The resort hotel group's job posting pays seasonal pool technicians $28 an hour, paid biweekly.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "OWNER",
+        "volume": "The posting lists 160 open technician hours this month."
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 8,
+      "mustNotUse": [
+        "poolTech"
+      ],
+      "notAPurchasePrice": [
+        "poolTech"
+      ]
+    }
+  },
+  {
+    "id": "al-05-christmas-tree-capital",
+    "heldOut": true,
+    "description": "Three lots signed $9,000 trailer loads payable on delivery; the grower is paid $6,300 in full at pickup. One load ties up $6,300 against a $1,500 limit, and nothing evidences a buyer prepaying. The margin ($2,700 a load, $8,100 for three) and timing would reach $5,000 in 25 days, so the capital limit alone rules it out.",
+    "dimensions": {
+      "capital": "small",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "Christmas tree wholesale",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $5,000 of settled cash within 25 days with at most $1,500 of capital.",
+    "openings": [
+      {
+        "key": "trees",
+        "title": "Wholesale Fraser fir trailer loads for nonprofit fundraiser tree lots",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "Christmas tree wholesale",
+        "payer": "Volunteer organisers of church and school Christmas tree fundraiser lots",
+        "channel": "Organiser contacts listed by the regional Christmas tree growers' association",
+        "price": 9000,
+        "priceEvidence": "Three fundraiser-lot organisers signed to buy a 300-tree trailer load at $9,000, payable on delivery (signed purchase agreements, 2026-11-20).",
+        "cost": 6300,
+        "capital": 6300,
+        "daysToCash": 6,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Blue Ridge Fir Farms (quoted $6,300 a load, payment in full at pickup)",
+        "agreements": [
+          9000,
+          9000,
+          9000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 1500
+    }
+  },
+  {
+    "id": "al-06-hospice-single-award",
+    "heldOut": true,
+    "description": "One named hospice awarded one $3,800 contract; nothing shows it or anyone else buys again. The evidenced reach is $3,800 against $10,000 in 45 days. Modelling the hospice as a population of repeat buyers invents the other $6,200. No plan; how many deals exist is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "hospice care",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $10,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "hospice",
+        "title": "Bereavement follow-up mailing program for Cedar Valley Hospice",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "hospice care",
+        "payer": "Cedar Valley Hospice (bereavement program coordinator)",
+        "channel": "The contact named in Cedar Valley Hospice's solicitation",
+        "price": 3800,
+        "priceEvidence": "Cedar Valley Hospice awarded a single $3,800 contract for a 13-month bereavement mailing program (award letter, 2026-11-15).",
+        "cost": 400,
+        "capital": 0,
+        "daysToCash": 30,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "PrintPost Direct (quoted $400 for print and postage)",
+        "agreements": [
+          3800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "hospice"
+      },
+      "payerDealsMax": {
+        "hospice": 1
+      }
+    }
+  },
+  {
+    "id": "al-07-embroidery-net",
+    "heldOut": true,
+    "description": "The objective counts money kept after supplier costs. Eight studios signed $1,200 polo orders costing $840: 8 × $360 = $2,880 kept against $2,000 in 30 days; studios pay on proof approval before the embroiderer's net-15 invoice, so nothing is tied up. Executable on the polos. The jackets bring $9,000 gross but cost $1,560 against a $1,500 price, losing $60 each: a plan that counts them, or counts gross, is unsound.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "custom embroidery",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $2,000 of net cash after supplier costs within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "polos",
+        "title": "Brokered embroidered staff polos for independent fitness studios",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "custom embroidery",
+        "payer": "Owners of independent fitness studios",
+        "channel": "Studio owners' emails from the regional fitness business association",
+        "price": 1200,
+        "priceEvidence": "Eight studio owners signed $1,200 orders for 40 embroidered staff polos each, paid in full on proof approval (signed orders, 2026-11).",
+        "cost": 840,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms)",
+        "agreements": [
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200
+        ]
+      },
+      {
+        "key": "jackets",
+        "title": "Brokered embroidered winter jackets for independent fitness studios",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "custom embroidery",
+        "payer": "Owners of independent fitness studios",
+        "channel": "Studio owners' emails from the regional fitness business association",
+        "price": 1500,
+        "priceEvidence": "Six studio owners signed $1,500 orders for 20 embroidered winter jackets each (signed orders, 2026-11).",
+        "cost": 1560,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Stitchline Embroidery Co. (quoted $1,560 per 20-jacket order)",
+        "agreements": [
+          1500,
+          1500,
+          1500,
+          1500,
+          1500,
+          1500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "jackets"
+      ]
+    }
+  },
+  {
+    "id": "al-08-forklift-objective-change",
+    "heldOut": true,
+    "description": "First reading (open objective): the signed bowling workbooks alone carry it (9 × $400 = $3,600 ≥ $3,000). The owner then restricts the goal to forklift operator training: four plants signed $950 sessions delivered by a quoted OSHA-authorised trainer at $520, invoiced net 10: 4 × $950 = $3,800 ≥ $3,000 inside 30 days, $1,720 kept. Executable after the change on the sessions only; bowling is out of scope and the audit's $1,500 is only the owner's word.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "forklift operator training",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $3,000 of settled cash within 30 days in a single industry the owner names: forklift operator training, using no up-front capital."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "forkliftAudit"
+      ]
+    },
+    "openings": [
+      {
+        "key": "bowling",
+        "title": "League standings and handicap workbook for bowling centers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "bowling centers",
+        "payer": "League coordinators at independent bowling centers",
+        "channel": "Emails in the state bowling proprietors' association directory",
+        "price": 400,
+        "priceEvidence": "Nine league coordinators signed $400 orders for the league workbook (signed orders, 2026-11).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400,
+          400
+        ]
+      },
+      {
+        "key": "forklift",
+        "title": "On-site OSHA forklift operator certification sessions for small manufacturers",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "forklift operator training",
+        "payer": "Plant managers and EHS coordinators at small manufacturers",
+        "channel": "The regional manufacturers' association member email list",
+        "price": 950,
+        "priceEvidence": "Four plant managers signed $950 orders for an on-site forklift certification session for up to six operators, invoiced net 10 (signed orders, 2026-11).",
+        "cost": 520,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $520 a session, available weekly in December)",
+        "agreements": [
+          950,
+          950,
+          950,
+          950
+        ]
+      },
+      {
+        "key": "forkliftAudit",
+        "title": "Forklift fleet inspection and operator-records audit for small manufacturers",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "forklift operator training",
+        "payer": "Plant managers and EHS coordinators at small manufacturers",
+        "channel": "The regional manufacturers' association member email list",
+        "price": 1500,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says plants would pay about $1,500 for a fleet inspection and records audit.",
+        "cost": 300,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Dale Ruiz, OSHA-authorised forklift trainer (quoted $300 an audit)",
+        "volume": "The regional manufacturers' association lists 260 member plants that run forklifts.",
+        "conversion": {
+          "paid": 3,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "bowling",
+        "forkliftAudit"
+      ],
+      "targetAfterChange": 3000
+    }
+  },
+  {
+    "id": "al-09-crane-permit-price-contradicted",
+    "heldOut": true,
+    "description": "First reading: 140 counted companies × a measured 10% (9 of 90 contacts) ≈ 14 packets × $1,200 ≈ $16,800 against $6,000 in 30 days, Brain prepares them at $25: executable. Then a new source states the packet sells for $120; at $120 the same measured 14 packets bring $1,680, far short of $6,000, so which price holds decides whether any plan exists. With the price contested no executable plan is established; the price is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "crane rental",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CONTRADICTING_EVIDENCE",
+          "opening": "crane",
+          "field": "price",
+          "value": 120
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "crane",
+        "title": "Critical-lift street-use and crane permit application packets for crane rental companies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "crane rental",
+        "payer": "Operations managers at regional crane rental companies",
+        "channel": "Operations emails in the state crane-operator licensing board's company list",
+        "price": 1200,
+        "priceEvidence": "Two permit-expediting firms publish $1,200 for a complete city crane and street-use permit application packet (published fee schedules, 2026-10).",
+        "cost": 25,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state licensing board lists 140 crane rental companies, each with a published operations email; each files city lift permits monthly.",
+        "conversion": {
+          "paid": 9,
+          "of": 90,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "crane"
+      }
+    }
+  },
+  {
+    "id": "al-10-insurance-agency-volume-estimate",
+    "heldOut": true,
+    "description": "Workbooks at an evidenced $290, a measured 6 of 50 contacts (12%), Brain produces them at $4. $3,500 needs 13 sales, i.e. about 110 reachable agencies at 12%; the only population figure is Brain's own estimate of 400 agencies, which establishes nothing, and only 50 contacts are evidenced. How many buyers exist is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent insurance agencies",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "agency",
+        "title": "Policy-renewal retention workbook for independent insurance agencies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent insurance agencies",
+        "payer": "Agency principals at independent property-and-casualty agencies",
+        "channel": "Published agency emails and LinkedIn messages to agency principals",
+        "price": 290,
+        "priceEvidence": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "Brain estimates that roughly 400 agencies in the region would buy a renewal workbook this quarter.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 6,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "al-11-mushroom-net45-deadline",
+    "heldOut": true,
+    "description": "Five chefs signed $600 monthly-supply orders ($3,000 against $2,000), with a quoted farm at $380, but chefs pay net 45 after the month's last delivery: the first cash arrives on day 45 or later against a 14-day deadline. No cash can settle in time. Infeasible on the deadline.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "specialty mushroom farming",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "mushrooms",
+        "title": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "specialty mushroom farming",
+        "payer": "Executive chefs at independent restaurants",
+        "channel": "Direct calls to chefs introduced by the farm",
+        "price": 600,
+        "priceEvidence": "Five executive chefs signed $600 orders for a month of weekly lion's mane and oyster mushroom deliveries, payable net 45 after the month's last delivery (signed orders, 2026-11).",
+        "cost": 380,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60)",
+        "agreements": [
+          600,
+          600,
+          600,
+          600,
+          600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "al-12-pickleball-counted-market",
+    "heldOut": true,
+    "description": "The state association counts 85 member clubs in total, each needing one $300 workbook: the whole counted market is 85 × $300 = $25,500 against a $40,000 target, at 100% conversion (the measured rate is 25%, ≈ $6,375). No plan reaches it. Infeasible on the target.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "pickleball clubs",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $40,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "pickleball",
+        "title": "Court-booking and league-ladder workbook for pickleball clubs",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "pickleball clubs",
+        "payer": "Club managers and league directors at pickleball clubs",
+        "channel": "Emails in the state pickleball association's member-club directory",
+        "price": 300,
+        "priceEvidence": "Pickleball club managers pay $300 for comparable court-booking workbooks (marketplace listings, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state pickleball association's directory counts 85 member clubs in total; each needs one workbook.",
+        "conversion": {
+          "paid": 10,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  }
+]

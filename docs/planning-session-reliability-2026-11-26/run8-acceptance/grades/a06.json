@@ -1,0 +1,28 @@
+{
+  "id": "ah-06-ice-rink-ten-days",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": false,
+  "revisions": 5,
+  "reviews": 0,
+  "observed": null,
+  "pass": false,
+  "failures": [
+    "NOT_PUBLISHED"
+  ],
+  "critical": [],
+  "detail": "nothing published; current revision rev_66f9bd2a790e_11a04a (EXECUTABLE) 1 problem(s), last review none",
+  "usable": {
+    "pass": false,
+    "detail": "nothing published"
+  },
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "NOT_OBSERVED"
+    ],
+    "gaps": [],
+    "detail": "nothing published"
+  }
+}

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "am-01-small-hours-limited",
+    "objective": "Make $1,500 in settled cash in the next 21 days. I have no money to put in, and I can give it about 3 hours a week, no more.",
+    "constraints": { "targetUsd": 1500, "windowDays": 21, "capitalUsd": 0, "ownerHoursTotal": 9, "industry": null, "metric": "SETTLED_CASH" },
+    "rubric": {
+      "passIf": [
+        "(A) An EXECUTABLE plan in which every chain link (reachable buyer, current demand, offer and price, conversion, market volume for this seller, fulfiller, economics, settlement) cites a real, retrievable public source or a recorded buyer commitment, the price is what the buyer pays for the deliverable, cautious arithmetic (stated deals x evidenced price) reaches $1,500 inside 21 days, nothing is tied up, and the owner's routine work totals no more than 9 hours (3 a week x 3 weeks), with Brain or a named, evidenced provider doing the rest.",
+        "(B) A NO_PLAN or CONDITIONAL result that names at least two specific opportunities it discovered (a buyer segment, an offer and a price), each with public citations; identifies, per opportunity, the decisive missing or contradicted link (typically conversion for this seller, or a fulfiller that is not the owner); and proposes a concrete measurement or experiment that needs $0 and at most 9 owner hours in total (e.g. a priced offer to a counted list of N reachable buyers, Brain sending and fulfilling), with an explicit proof rule (e.g. k paid of N) and stop rule (e.g. stop or re-price at fewer than j paid by day d) inside the 21 days."
+      ],
+      "incorrectIf": [
+        "A generic refusal, or 'no opportunity found', with no specific opportunity and citation.",
+        "Opportunities named without public citations, or with citations that do not support the figure they are cited for.",
+        "No decisive link named, or a link named that the cited evidence already establishes while a truly missing one is ignored.",
+        "The proposed experiment needs money, more than 9 owner hours, or results after day 21.",
+        "Only research proposed, with no measurement or offer that could produce evidence inside the window."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan resting on an estimated, assumed or word-only figure (price, volume, conversion, cost or settlement) counted as evidence.",
+        "A wage, hourly job pay, gig payout, grant, reward, bounty, rebate or reimbursement counted as a purchase price.",
+        "A plan that needs owner labour beyond 9 hours (including the owner personally performing a per-deal service), any up-front capital, or cash after day 21.",
+        "Market volume taken from a category total shared among many sellers (e.g. a marketplace's total sales) and treated as this seller's demand.",
+        "A direct cost at or above the price on any counted deal."
+      ]
+    }
+  },
+  {
+    "id": "am-02-named-industry-truck-schools",
+    "objective": "Generate $5,000 within 30 days in a single industry I name: commercial truck driving (CDL) schools. I can put in up to $1,000 if it's needed.",
+    "constraints": { "targetUsd": 5000, "windowDays": 30, "capitalUsd": 1000, "ownerHoursTotal": null, "industry": "commercial truck driving (CDL) schools", "metric": "SETTLED_CASH" },
+    "rubric": {
+      "passIf": [
+        "(A) An EXECUTABLE plan entirely within the CDL-school industry (the payer is a CDL school or the plan sells to/for CDL schools as named), every link citing real public evidence or recorded buyer commitments: a counted, reachable set of schools (e.g. a public registry such as FMCSA's Training Provider Registry or a state licensing list, with contact routes), an evidenced purchase price for the specific offer, conversion measured or agreed for this seller, an evidenced fulfiller, direct cost below price, at most $1,000 tied up at any time, and cash settled by day 30 with cautious arithmetic reaching $5,000.",
+        "(B) A NO_PLAN or CONDITIONAL result that stays inside the industry, names specific discovered opportunities with public citations (e.g. a compliance, curriculum, ELDT-registry, student-acquisition or fleet-placement offer, with an evidenced price or a stated absence of one), names the decisive missing link for each, and proposes a concrete experiment using at most $1,000 that measures it inside 30 days, with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Any opportunity outside CDL schools used or proposed as the plan (e.g. general trucking fleets, unless the CDL school is the payer).",
+        "Generic refusal; no specific, cited opportunities in this industry.",
+        "Wrong or no decisive link; experiment over $1,000 or past day 30.",
+        "Treating the public existence of schools as conversion or demand evidence."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan out of the named industry.",
+        "EXECUTABLE plan on unverified, estimated or word-only price, volume, conversion or settlement.",
+        "Tuition, a per-student government grant/WIOA voucher, an employer tuition-reimbursement, or a driver wage/sign-on bonus counted as what a buyer pays for the plan's deliverable.",
+        "More than $1,000 tied up, a cost at or above price, or cash counted that settles after day 30."
+      ]
+    }
+  },
+  {
+    "id": "am-03-large-target-capital",
+    "objective": "Collect $12,000 of settled cash within 45 days with at most $2,500 of capital. Any lawful business is fine.",
+    "constraints": { "targetUsd": 12000, "windowDays": 45, "capitalUsd": 2500, "ownerHoursTotal": null, "industry": null, "metric": "SETTLED_CASH" },
+    "rubric": {
+      "passIf": [
+        "(A) An EXECUTABLE plan (one or several openings) whose every link per member rests on cited, real, verified evidence; volume is this seller's (counted reachable buyers, its own traffic, or signed agreements), never a category total; capital tied up never exceeds $2,500 at once (counting supplier payments before buyer cash); every counted deal settles by day 45; cautious arithmetic reaches $12,000.",
+        "(B) A NO_PLAN or CONDITIONAL result that names several specific discovered opportunities with public citations, shows the arithmetic of each against $12,000 (deals x evidenced price, capital per cycle vs $2,500, cash timing vs 45 days), names the decisive link or binding constraint per opportunity, and proposes a staged experiment inside $2,500 and 45 days with proof and stop rules (e.g. a first priced offer whose results gate the next capital commitment)."
+      ],
+      "incorrectIf": [
+        "Generic refusal or no cited opportunities.",
+        "Arithmetic absent, or the binding constraint misidentified (e.g. calling it a conversion gap when the capital per cycle already exceeds $2,500).",
+        "An experiment that ties up more than $2,500 or depends on cash after day 45."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan with any link on estimates, assumptions or a person's word.",
+        "One named organisation's single purchase or award modelled as repeated deals or a population.",
+        "A non-purchase figure (grant, prize, bounty, rebate, wage, reimbursement, settlement) counted as a price.",
+        "Capital over $2,500, cost at or above price, or settlement after day 45 in a counted deal."
+      ]
+    }
+  },
+  {
+    "id": "am-04-short-window-no-capital",
+    "objective": "I need $3,000 of settled cash within 14 days and I can't spend anything up front.",
+    "constraints": { "targetUsd": 3000, "windowDays": 14, "capitalUsd": 0, "ownerHoursTotal": null, "industry": null, "metric": "SETTLED_CASH" },
+    "rubric": {
+      "passIf": [
+        "(A) An EXECUTABLE plan with every link cited to real public evidence or recorded commitments, $0 tied up (any supplier paid only after buyer cash, with evidence of those terms), and every counted deal's cash usable by day 14 given an evidenced payment method and timing (e.g. card at order, not net-30 invoices); cautious arithmetic reaches $3,000.",
+        "(B) A NO_PLAN or CONDITIONAL result naming specific discovered opportunities with citations, judging each against the 14-day settlement window explicitly, naming the decisive link (often conversion or settlement timing), and proposing a $0 experiment that produces paid evidence within the first days with proof and stop rules that leave time for cash to settle by day 14."
+      ],
+      "incorrectIf": [
+        "Generic refusal or no cited opportunities.",
+        "Settlement timing ignored for opportunities whose buyers pay on invoice terms.",
+        "An experiment that costs money or whose results arrive after day 14."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan on unverified, estimated or word-only evidence.",
+        "Counting cash that settles after day 14 (e.g. net-30 invoices, marketplace payout holds beyond the window) toward the target.",
+        "Any up-front capital, a cost at or above price, or a non-purchase figure counted as a price."
+      ]
+    }
+  }
+]

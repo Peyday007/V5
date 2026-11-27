@@ -1,0 +1,110 @@
+[
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "septic pumping",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "am-01-small-hours-limited",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Make $1,500 in settled cash in the next 21 days. I have no money to put in, and I can give it about 3 hours a week, no more.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "septic pumping",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "am-02-named-industry-truck-schools",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Generate $5,000 within 30 days in a single industry I name: commercial truck driving (CDL) schools. I can put in up to $1,000 if it's needed.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "septic pumping",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "am-03-large-target-capital",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Collect $12,000 of settled cash within 45 days with at most $2,500 of capital. Any lawful business is fine.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "septic pumping",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "am-04-short-window-no-capital",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "I need $3,000 of settled cash within 14 days and I can't spend anything up front.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ }
+]

@@ -1,0 +1,3552 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_e67dca9418f14a8191f5",
+      "words": "Collect $3,000 of settled cash within 45 days. I can invest up to $3,000, but I can give it at most 1 hour a week of my own time — Brain and any contractors have to do the rest.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": 300000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "First paid order settled in the owner's account before scaling spend",
+        "ownerHoursPerWeek": 1,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "49e3abe358c4c863a768861a"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_e67dca9418f14a8191f5",
+        "contractDigest": "49e3abe358c4c863a768861a",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+          "opportunityIds": [
+            "cop_c1286faf4beb4256bcdc"
+          ],
+          "why": "Smallest cash at risk per test and buyer-funded fulfilment: each order's $50 Fiverr cost is incurred only after the buyer's $300 is paid, so the only pre-proof spend is $47 of sending tooling. Eleven orders settle $3,201 net of Stripe fees inside 45 days if they close by day 30; owner time is 3.2 of the 6 hours allowed. Whether cold buyers pay $300 and at what close rate is unknown and is measured by the first 14 days of sending."
+        },
+        "alternatives": [
+          {
+            "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+            "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+          },
+          {
+            "title": "Upwork fixed-price content jobs with a subcontracted writer",
+            "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OTHER",
+            "label": "Owner opens a Stripe account in his name and approves the Instantly subscription and the test budget",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain builds lists of US local service businesses with incomplete Google Business Profiles and sends personalised cold email through Instantly Growth ($47/month, two months)",
+            "performer": "BRAIN",
+            "costCents": 9400,
+            "day": 2,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "close rate"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "a1",
+            "kind": "OTHER",
+            "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [],
+            "ownerHours": 2.2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr GBP seller performs the optimization through client-granted manager access; ordered only after the buyer has paid",
+            "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "costCents": 55000,
+            "day": 10,
+            "dependsOn": "a1",
+            "evidence": [
+              "fulfiller cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order) and pay out to the owner's bank",
+            "performer": "BRAIN",
+            "costCents": 9900,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 32,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 2",
+            "stepId": "r1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 paid GBP orders at $300",
+            "settlesDay": 24,
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "FEE",
+            "amountCents": 1800,
+            "label": "Stripe fees on 2 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Fiverr fulfilment for 2 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 24,
+            "stepId": "c1"
+          },
+          {
+            "day": 18,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 24,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 24,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 30,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 34,
+            "stepId": "c1"
+          },
+          {
+            "day": 30,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 30,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per email sent",
+            "sources": [],
+            "needs": "Measured by the first 14 days of sending"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 300,
+            "unit": "USD per order",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+          },
+          {
+            "name": "fulfiller cost",
+            "status": "ESTIMATE",
+            "value": 50,
+            "unit": "USD per order",
+            "sources": [
+              "s2"
+            ],
+            "needs": "Confirmed on the first order"
+          },
+          {
+            "name": "orders needed",
+            "status": "ESTIMATE",
+            "value": 11,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "3000 / (300 - 9) = 10.3, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $300 per one-time GBP optimization",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 14, at least 2 orders paid at $300 through the Stripe link from no more than 1,000 cold emails, and the first order delivered by the Fiverr seller and accepted by the buyer.",
+          "stop": [
+            "0 paid orders after 1,000 emails by day 14: stop sending and cancel Instantly; total loss $47",
+            "Fewer than 5 paid orders by day 24: the remaining orders cannot settle by day 45; stop and report the measured close rate",
+            "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+          ],
+          "continue": [
+            "2 or more paid orders by day 14 with the first delivery accepted: keep sending to reach 11 paid orders by day 30, each fulfiller order placed only after the buyer pays"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "deals": 11,
+            "price": 300,
+            "directCost": 50,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_47398441279a_1a919b",
+        "digest": "47398441279ab864b2ac4fc7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:25:13.985Z"
+      },
+      {
+        "goalId": "wst_e67dca9418f14a8191f5",
+        "contractDigest": "49e3abe358c4c863a768861a",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+          "opportunityIds": [
+            "cop_c1286faf4beb4256bcdc"
+          ],
+          "why": "Smallest cash at risk per test and buyer-funded fulfilment: each order's $50 Fiverr cost is incurred only after the buyer's $300 is paid, so the only pre-proof spend is $47 of sending tooling. Eleven orders settle $3,201 net of Stripe fees inside 45 days if they close by day 30; owner time is 3.2 of the 6 hours allowed. Whether cold buyers pay $300 and at what close rate is unknown and is measured by the first 14 days of sending."
+        },
+        "alternatives": [
+          {
+            "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+            "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+          },
+          {
+            "title": "Upwork fixed-price content jobs with a subcontracted writer",
+            "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OTHER",
+            "label": "Owner opens a Stripe account in his name and approves the Instantly subscription and the test budget",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain builds lists of US local service businesses with incomplete Google Business Profiles and sends personalised cold email through Instantly Growth ($47/month, two months)",
+            "performer": "BRAIN",
+            "costCents": 9400,
+            "day": 2,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "close rate"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "a1",
+            "kind": "OTHER",
+            "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "orders needed"
+            ],
+            "ownerHours": 2.2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr GBP seller performs the optimization through client-granted manager access; ordered only after the buyer has paid",
+            "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "costCents": 55000,
+            "day": 10,
+            "dependsOn": "a1",
+            "evidence": [
+              "fulfiller cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order) and pay out to the owner's bank",
+            "performer": "BRAIN",
+            "costCents": 9900,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "s4"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 32,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 2",
+            "stepId": "r1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 paid GBP orders at $300",
+            "settlesDay": 24,
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "FEE",
+            "amountCents": 1800,
+            "label": "Stripe fees on 2 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Fiverr fulfilment for 2 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 24,
+            "stepId": "c1"
+          },
+          {
+            "day": 18,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 24,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 24,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 30,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 34,
+            "stepId": "c1"
+          },
+          {
+            "day": 30,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 30,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per email sent",
+            "sources": [],
+            "needs": "Measured by the first 14 days of sending"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 300,
+            "unit": "USD per order",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+          },
+          {
+            "name": "fulfiller cost",
+            "status": "ESTIMATE",
+            "value": 50,
+            "unit": "USD per order",
+            "sources": [
+              "s2"
+            ],
+            "needs": "Confirmed on the first order"
+          },
+          {
+            "name": "orders needed",
+            "status": "ESTIMATE",
+            "value": 11,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "3000 / (300 - 9) = 10.3, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $300 per one-time GBP optimization",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 14, at least 2 orders paid at $300 through the Stripe link from no more than 1,000 cold emails, and the first order delivered by the Fiverr seller and accepted by the buyer.",
+          "stop": [
+            "0 paid orders after 1,000 emails by day 14: stop sending and cancel Instantly; total loss $47",
+            "Fewer than 5 paid orders by day 24: the remaining orders cannot settle by day 45; stop and report the measured close rate",
+            "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+          ],
+          "continue": [
+            "2 or more paid orders by day 14 with the first delivery accepted: keep sending to reach 11 paid orders by day 30, each fulfiller order placed only after the buyer pays"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "deals": 11,
+            "price": 300,
+            "directCost": 50,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_517ed9e531f4_2f85d2",
+        "digest": "517ed9e531f410ae0e8cb79c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:25:23.076Z"
+      },
+      {
+        "goalId": "wst_e67dca9418f14a8191f5",
+        "contractDigest": "49e3abe358c4c863a768861a",
+        "parentRevisionId": "rev_517ed9e531f4_2f85d2",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+          "opportunityIds": [
+            "cop_c1286faf4beb4256bcdc"
+          ],
+          "why": "Smallest test: about $165 of outlay before any order (sending tooling $105 plus the first two $50 Fiverr jobs and their Stripe fees), $250 before proof. Proof is the contract's: the first Stripe payout settled in the owner's bank, assumed at the slow end on day 28 (14 days after the first payment on day 14); no fulfilment beyond the two test orders and no month-two tooling is bought before it. Eleven orders at $300 settle $3,201 net of Stripe fees by day 42; owner time is 3.2 of the 6 hours allowed and at most 1 hour in any week. Whether cold buyers pay $300, at what rate, and when Stripe first pays out are unknown and are measured by the test."
+        },
+        "alternatives": [
+          {
+            "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+            "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+          },
+          {
+            "title": "Upwork fixed-price content jobs with a subcontracted writer",
+            "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OTHER",
+            "label": "Owner opens a Stripe account in his name and approves the Instantly, domain and mailbox spend and the test budget",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain registers 3 sending domains (~$11 each), 3 Google Workspace mailboxes (~$8.40/month each, two months) and Instantly Growth ($47/month, two months: 5,000 emails and 1,000 uploaded contacts a month); warms the mailboxes days 1-7, then emails US local service businesses with incomplete Google Business Profiles from day 8 - 300 contacts before proof, up to 2,000 contacts in total",
+            "performer": "BRAIN",
+            "costCents": 17740,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "contacts needed"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link, delivered within 10 business days of payment",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "close rate"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "a1",
+            "kind": "OTHER",
+            "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders, at most 0.6 h in any week)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "orders needed"
+            ],
+            "ownerHours": 2.2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr GBP seller performs the optimization through client-granted manager access: the 2 test orders on day 14; every later order is placed only after the first Stripe payout has settled (proof)",
+            "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "costCents": 55000,
+            "day": 14,
+            "dependsOn": "a1",
+            "evidence": [
+              "fulfiller cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order); first payout assumed at the slow end, 14 days after the first live payment, then the 2-business-day rolling schedule",
+            "performer": "BRAIN",
+            "costCents": 9900,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "s4",
+              "first payout delay"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3300,
+            "label": "3 sending domains",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 paid GBP orders at $300",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 1800,
+            "label": "Stripe fees on 2 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Fiverr fulfilment for 2 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 21,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 30,
+            "stepId": "c1"
+          },
+          {
+            "day": 21,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 32,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 36,
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 38,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 42,
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 28,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per contact emailed",
+            "sources": [],
+            "needs": "Measured on the first 300 contacts (days 8-14); the plan needs at least 2 per 300 (0.67%) to reach 11 orders within Instantly Growth's 2,000 contacts over two months"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 300,
+            "unit": "USD per order",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+          },
+          {
+            "name": "fulfiller cost",
+            "status": "ESTIMATE",
+            "value": 50,
+            "unit": "USD per order",
+            "sources": [
+              "s2"
+            ],
+            "needs": "Confirmed on the first order"
+          },
+          {
+            "name": "first payout delay",
+            "status": "UNKNOWN",
+            "value": 14,
+            "unit": "days from first live payment to first payout",
+            "sources": [
+              "s4"
+            ],
+            "needs": "Measured by the first payout; planned at the slow end (14 days)"
+          },
+          {
+            "name": "contacts needed",
+            "status": "ESTIMATE",
+            "value": 1650,
+            "unit": "contacts emailed (about 6,600 emails in a 4-step sequence)",
+            "sources": [
+              "s3"
+            ],
+            "needs": "11 orders at the continue threshold of 2 per 300 contacts; within Growth's 1,000 contacts and 5,000 emails a month over two months"
+          },
+          {
+            "name": "orders needed",
+            "status": "ESTIMATE",
+            "value": 11,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "3000 / (300 - 9) = 10.3, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $300 per one-time GBP optimization",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "The first Stripe payout - the 2 test orders paid at $300 from the first 300 contacts - settled in the owner's bank account, expected by day 28, with the first Fiverr delivery accepted by its buyer.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 300 contacts by day 14: stop sending; loss about $105 of tooling. (Derived: proof could then not settle by day 28, and the 9 remaining orders could not be taken and settled in the 17 days left at a rate below 2 per 300 within Growth's contact limit.)",
+            "First payout not settled by day 30: stop scaling - after it, 9 orders would need to be paid by about day 41 to settle on the 2-business-day schedule by day 45, faster than any rate the test can have shown",
+            "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+          ],
+          "continue": [
+            "Payout settled by day 28-30 at 2 or more orders per 300 contacts: buy month-two tooling, place the Fiverr orders for buyers who paid while proof was pending, and keep sending up to 2,000 contacts to reach 11 orders paid by day 38 (last settlement about day 42)"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof must be the first payout settled in the owner's bank",
+            "resolution": "Accepted. Proof is now the first Stripe payout settled (planned day 28, 14 days after the first payment); no fulfilment beyond the two test orders and no month-two tooling is bought before it; orders paid while proof is pending are fulfilled on day 28 under a 10-business-day delivery promise."
+          },
+          {
+            "finding": "Recompute the schedule with the gate moved",
+            "resolution": "Accepted. Receipts: 2 on day 14 settle day 28; 3 on day 21 settle day 30; 3 on day 32 settle day 36; 3 on day 38 settle day 42 - all 11 inside 45 days."
+          },
+          {
+            "finding": "Correct the pre-proof and buyer-funded statements",
+            "resolution": "Accepted. The strategy now states about $165 outlay before the first order and about $250 before proof, and no longer calls fulfilment buyer-funded in cash terms."
+          },
+          {
+            "finding": "State the sending volume needed",
+            "resolution": "Accepted. Instantly Growth allows 5,000 emails and 1,000 uploaded contacts a month; the plan needs about 1,650 contacts (2 orders per 300) over two months, and the mailboxes and domains it needs are now costed in r1."
+          },
+          {
+            "finding": "The stop rule should be derived from the moved settlement date",
+            "resolution": "Accepted. The stop rules now derive from proof on day 28-30 and the 2-business-day payout schedule ending at day 45."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "deals": 11,
+            "price": 300,
+            "directCost": 50,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_16b8771d5474_509ddc",
+        "digest": "16b8771d5474970d1ef044b7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:57.168Z"
+      },
+      {
+        "goalId": "wst_e67dca9418f14a8191f5",
+        "contractDigest": "49e3abe358c4c863a768861a",
+        "parentRevisionId": "rev_517ed9e531f4_2f85d2",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+          "opportunityIds": [
+            "cop_c1286faf4beb4256bcdc"
+          ],
+          "why": "Smallest test: about $165 of outlay before any order (sending tooling $105 plus the first two $50 Fiverr jobs and their Stripe fees), $250 before proof. Proof is the contract's: the first Stripe payout settled in the owner's bank, assumed at the slow end on day 28 (14 days after the first payment on day 14); no fulfilment beyond the two test orders and no month-two tooling is bought before it. Eleven orders at $300 settle $3,201 net of Stripe fees by day 42; owner time is 3.2 of the 6 hours allowed and at most 1 hour in any week. Whether cold buyers pay $300, at what rate, and when Stripe first pays out are unknown and are measured by the test."
+        },
+        "alternatives": [
+          {
+            "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+            "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+          },
+          {
+            "title": "Upwork fixed-price content jobs with a subcontracted writer",
+            "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OTHER",
+            "label": "Owner opens a Stripe account in his name and approves the Instantly, domain and mailbox spend and the test budget",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain registers 3 sending domains (~$11 each), 3 Google Workspace mailboxes (~$8.40/month each, two months) and Instantly Growth ($47/month, two months: 5,000 emails and 1,000 uploaded contacts a month); warms the mailboxes days 1-7, then emails US local service businesses with incomplete Google Business Profiles from day 8 - 300 contacts before proof, up to 2,000 contacts in total",
+            "performer": "BRAIN",
+            "costCents": 17740,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "contacts needed"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link, delivered within 10 business days of payment",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "close rate"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "a1",
+            "kind": "OTHER",
+            "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders, at most 0.6 h in any week)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "orders needed"
+            ],
+            "ownerHours": 2.2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr GBP seller performs the optimization through client-granted manager access: the 2 test orders on day 14; every later order is placed only after the first Stripe payout has settled (proof)",
+            "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "costCents": 55000,
+            "day": 14,
+            "dependsOn": "a1",
+            "evidence": [
+              "fulfiller cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order); first payout assumed at the slow end, 14 days after the first live payment, then the 2-business-day rolling schedule",
+            "performer": "BRAIN",
+            "costCents": 9900,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "s4",
+              "first payout delay"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3300,
+            "label": "3 sending domains",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 paid GBP orders at $300",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 1800,
+            "label": "Stripe fees on 2 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Fiverr fulfilment for 2 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 21,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 30,
+            "stepId": "c1"
+          },
+          {
+            "day": 21,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 29,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 32,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 36,
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 38,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 42,
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 28,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per contact emailed",
+            "sources": [],
+            "needs": "Measured on the first 300 contacts (days 8-14); the plan needs at least 2 per 300 (0.67%) to reach 11 orders within Instantly Growth's 2,000 contacts over two months"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 300,
+            "unit": "USD per order",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+          },
+          {
+            "name": "fulfiller cost",
+            "status": "ESTIMATE",
+            "value": 50,
+            "unit": "USD per order",
+            "sources": [
+              "s2"
+            ],
+            "needs": "Confirmed on the first order"
+          },
+          {
+            "name": "first payout delay",
+            "status": "ASSUMED",
+            "value": 14,
+            "unit": "days from first live payment to first payout",
+            "sources": [
+              "s4"
+            ],
+            "needs": "Measured by the first payout; planned at the slow end (14 days)"
+          },
+          {
+            "name": "contacts needed",
+            "status": "ESTIMATE",
+            "value": 1650,
+            "unit": "contacts emailed (about 6,600 emails in a 4-step sequence)",
+            "sources": [
+              "s3"
+            ],
+            "needs": "11 orders at the continue threshold of 2 per 300 contacts; within Growth's 1,000 contacts and 5,000 emails a month over two months"
+          },
+          {
+            "name": "orders needed",
+            "status": "ESTIMATE",
+            "value": 11,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "3000 / (300 - 9) = 10.3, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $300 per one-time GBP optimization",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "The first Stripe payout - the 2 test orders paid at $300 from the first 300 contacts - settled in the owner's bank account, expected by day 28, with the first Fiverr delivery accepted by its buyer.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 300 contacts by day 14: stop sending; loss about $105 of tooling. (Derived: proof could then not settle by day 28, and the 9 remaining orders could not be taken and settled in the 17 days left at a rate below 2 per 300 within Growth's contact limit.)",
+            "First payout not settled by day 30: stop scaling - after it, 9 orders would need to be paid by about day 41 to settle on the 2-business-day schedule by day 45, faster than any rate the test can have shown",
+            "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+          ],
+          "continue": [
+            "Payout settled by day 28-30 at 2 or more orders per 300 contacts: buy month-two tooling, place the Fiverr orders for buyers who paid while proof was pending, and keep sending up to 2,000 contacts to reach 11 orders paid by day 38 (last settlement about day 42)"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof must be the first payout settled in the owner's bank",
+            "resolution": "Accepted. Proof is now the first Stripe payout settled (planned day 28, 14 days after the first payment); no fulfilment beyond the two test orders and no month-two tooling is bought before it; orders paid while proof is pending are fulfilled on day 29 under a 10-business-day delivery promise."
+          },
+          {
+            "finding": "Recompute the schedule with the gate moved",
+            "resolution": "Accepted. Receipts: 2 on day 14 settle day 28; 3 on day 21 settle day 30; 3 on day 32 settle day 36; 3 on day 38 settle day 42 - all 11 inside 45 days."
+          },
+          {
+            "finding": "Correct the pre-proof and buyer-funded statements",
+            "resolution": "Accepted. The strategy now states about $165 outlay before the first order and about $250 before proof, and no longer calls fulfilment buyer-funded in cash terms."
+          },
+          {
+            "finding": "State the sending volume needed",
+            "resolution": "Accepted. Instantly Growth allows 5,000 emails and 1,000 uploaded contacts a month; the plan needs about 1,650 contacts (2 orders per 300) over two months, and the mailboxes and domains it needs are now costed in r1."
+          },
+          {
+            "finding": "The stop rule should be derived from the moved settlement date",
+            "resolution": "Accepted. The stop rules now derive from proof on day 28-30 and the 2-business-day payout schedule ending at day 45."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "deals": 11,
+            "price": 300,
+            "directCost": 50,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f48ee0697db5_6fa4da",
+        "digest": "f48ee0697db5e238543747f5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:29:07.200Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_e67dca9418f14a8191f5",
+      "contractDigest": "49e3abe358c4c863a768861a",
+      "parentRevisionId": "rev_517ed9e531f4_2f85d2",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+        "opportunityIds": [
+          "cop_c1286faf4beb4256bcdc"
+        ],
+        "why": "Smallest test: about $165 of outlay before any order (sending tooling $105 plus the first two $50 Fiverr jobs and their Stripe fees), $250 before proof. Proof is the contract's: the first Stripe payout settled in the owner's bank, assumed at the slow end on day 28 (14 days after the first payment on day 14); no fulfilment beyond the two test orders and no month-two tooling is bought before it. Eleven orders at $300 settle $3,201 net of Stripe fees by day 42; owner time is 3.2 of the 6 hours allowed and at most 1 hour in any week. Whether cold buyers pay $300, at what rate, and when Stripe first pays out are unknown and are measured by the test."
+      },
+      "alternatives": [
+        {
+          "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+          "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+        },
+        {
+          "title": "Upwork fixed-price content jobs with a subcontracted writer",
+          "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+        }
+      ],
+      "steps": [
+        {
+          "id": "o1",
+          "kind": "OTHER",
+          "label": "Owner opens a Stripe account in his name and approves the Instantly, domain and mailbox spend and the test budget",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s3",
+            "s4"
+          ],
+          "ownerHours": 1,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "r1",
+          "kind": "REACH",
+          "label": "Brain registers 3 sending domains (~$11 each), 3 Google Workspace mailboxes (~$8.40/month each, two months) and Instantly Growth ($47/month, two months: 5,000 emails and 1,000 uploaded contacts a month); warms the mailboxes days 1-7, then emails US local service businesses with incomplete Google Business Profiles from day 8 - 300 contacts before proof, up to 2,000 contacts in total",
+          "performer": "BRAIN",
+          "costCents": 17740,
+          "day": 1,
+          "dependsOn": "o1",
+          "evidence": [
+            "s3",
+            "contacts needed"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link, delivered within 10 business days of payment",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "r1",
+          "evidence": [
+            "price",
+            "close rate"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "a1",
+          "kind": "OTHER",
+          "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders, at most 0.6 h in any week)",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "s1",
+          "evidence": [
+            "orders needed"
+          ],
+          "ownerHours": 2.2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Fiverr GBP seller performs the optimization through client-granted manager access: the 2 test orders on day 14; every later order is placed only after the first Stripe payout has settled (proof)",
+          "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+          "costCents": 55000,
+          "day": 14,
+          "dependsOn": "a1",
+          "evidence": [
+            "fulfiller cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order); first payout assumed at the slow end, 14 days after the first live payment, then the 2-business-day rolling schedule",
+          "performer": "BRAIN",
+          "costCents": 9900,
+          "day": 14,
+          "dependsOn": "s1",
+          "evidence": [
+            "s4",
+            "first payout delay"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 4700,
+          "label": "Instantly Growth, month 1",
+          "stepId": "r1"
+        },
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 3300,
+          "label": "3 sending domains",
+          "stepId": "r1"
+        },
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 2520,
+          "label": "3 Google Workspace mailboxes, month 1",
+          "stepId": "r1"
+        },
+        {
+          "day": 31,
+          "kind": "SPEND",
+          "amountCents": 4700,
+          "label": "Instantly Growth, month 2 (after proof)",
+          "stepId": "r1"
+        },
+        {
+          "day": 31,
+          "kind": "SPEND",
+          "amountCents": 2520,
+          "label": "3 Google Workspace mailboxes, month 2 (after proof)",
+          "stepId": "r1"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 60000,
+          "label": "2 paid GBP orders at $300",
+          "settlesDay": 28,
+          "stepId": "c1"
+        },
+        {
+          "day": 14,
+          "kind": "FEE",
+          "amountCents": 1800,
+          "label": "Stripe fees on 2 orders",
+          "stepId": "c1"
+        },
+        {
+          "day": 14,
+          "kind": "SPEND",
+          "amountCents": 10000,
+          "label": "Fiverr fulfilment for 2 orders",
+          "stepId": "d1"
+        },
+        {
+          "day": 21,
+          "kind": "RECEIPT",
+          "amountCents": 90000,
+          "label": "3 paid GBP orders at $300",
+          "settlesDay": 30,
+          "stepId": "c1"
+        },
+        {
+          "day": 21,
+          "kind": "FEE",
+          "amountCents": 2700,
+          "label": "Stripe fees on 3 orders",
+          "stepId": "c1"
+        },
+        {
+          "day": 29,
+          "kind": "SPEND",
+          "amountCents": 15000,
+          "label": "Fiverr fulfilment for 3 orders",
+          "stepId": "d1"
+        },
+        {
+          "day": 32,
+          "kind": "RECEIPT",
+          "amountCents": 90000,
+          "label": "3 paid GBP orders at $300",
+          "settlesDay": 36,
+          "stepId": "c1"
+        },
+        {
+          "day": 32,
+          "kind": "FEE",
+          "amountCents": 2700,
+          "label": "Stripe fees on 3 orders",
+          "stepId": "c1"
+        },
+        {
+          "day": 32,
+          "kind": "SPEND",
+          "amountCents": 15000,
+          "label": "Fiverr fulfilment for 3 orders",
+          "stepId": "d1"
+        },
+        {
+          "day": 38,
+          "kind": "RECEIPT",
+          "amountCents": 90000,
+          "label": "3 paid GBP orders at $300",
+          "settlesDay": 42,
+          "stepId": "c1"
+        },
+        {
+          "day": 38,
+          "kind": "FEE",
+          "amountCents": 2700,
+          "label": "Stripe fees on 3 orders",
+          "stepId": "c1"
+        },
+        {
+          "day": 38,
+          "kind": "SPEND",
+          "amountCents": 15000,
+          "label": "Fiverr fulfilment for 3 orders",
+          "stepId": "d1"
+        }
+      ],
+      "proofDay": 28,
+      "quantities": [
+        {
+          "name": "close rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "paid orders per contact emailed",
+          "sources": [],
+          "needs": "Measured on the first 300 contacts (days 8-14); the plan needs at least 2 per 300 (0.67%) to reach 11 orders within Instantly Growth's 2,000 contacts over two months"
+        },
+        {
+          "name": "price",
+          "status": "ASSUMED",
+          "value": 300,
+          "unit": "USD per order",
+          "sources": [
+            "s1"
+          ],
+          "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+        },
+        {
+          "name": "fulfiller cost",
+          "status": "ESTIMATE",
+          "value": 50,
+          "unit": "USD per order",
+          "sources": [
+            "s2"
+          ],
+          "needs": "Confirmed on the first order"
+        },
+        {
+          "name": "first payout delay",
+          "status": "ASSUMED",
+          "value": 14,
+          "unit": "days from first live payment to first payout",
+          "sources": [
+            "s4"
+          ],
+          "needs": "Measured by the first payout; planned at the slow end (14 days)"
+        },
+        {
+          "name": "contacts needed",
+          "status": "ESTIMATE",
+          "value": 1650,
+          "unit": "contacts emailed (about 6,600 emails in a 4-step sequence)",
+          "sources": [
+            "s3"
+          ],
+          "needs": "11 orders at the continue threshold of 2 per 300 contacts; within Growth's 1,000 contacts and 5,000 emails a month over two months"
+        },
+        {
+          "name": "orders needed",
+          "status": "ESTIMATE",
+          "value": 11,
+          "unit": "orders",
+          "sources": [
+            "s1"
+          ],
+          "needs": "3000 / (300 - 9) = 10.3, rounded up"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+          "dated": "2026-11-27",
+          "claim": "Offer priced at $300 per one-time GBP optimization",
+          "population": "US local service businesses with an incomplete Google Business Profile",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+          "dated": "2026-11-27",
+          "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+          "population": "US local service businesses with an incomplete Google Business Profile",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+          "dated": "2026-11-27",
+          "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+          "population": "US local service businesses with an incomplete Google Business Profile",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+          "dated": "2026-11-27",
+          "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+          "population": "US local service businesses with an incomplete Google Business Profile",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": {
+        "proof": "The first Stripe payout - the 2 test orders paid at $300 from the first 300 contacts - settled in the owner's bank account, expected by day 28, with the first Fiverr delivery accepted by its buyer.",
+        "stop": [
+          "Fewer than 2 paid orders from the first 300 contacts by day 14: stop sending; loss about $105 of tooling. (Derived: proof could then not settle by day 28, and the 9 remaining orders could not be taken and settled in the 17 days left at a rate below 2 per 300 within Growth's contact limit.)",
+          "First payout not settled by day 30: stop scaling - after it, 9 orders would need to be paid by about day 41 to settle on the 2-business-day schedule by day 45, faster than any rate the test can have shown",
+          "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+        ],
+        "continue": [
+          "Payout settled by day 28-30 at 2 or more orders per 300 contacts: buy month-two tooling, place the Fiverr orders for buyers who paid while proof was pending, and keep sending up to 2,000 contacts to reach 11 orders paid by day 38 (last settlement about day 42)"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Proof must be the first payout settled in the owner's bank",
+          "resolution": "Accepted. Proof is now the first Stripe payout settled (planned day 28, 14 days after the first payment); no fulfilment beyond the two test orders and no month-two tooling is bought before it; orders paid while proof is pending are fulfilled on day 29 under a 10-business-day delivery promise."
+        },
+        {
+          "finding": "Recompute the schedule with the gate moved",
+          "resolution": "Accepted. Receipts: 2 on day 14 settle day 28; 3 on day 21 settle day 30; 3 on day 32 settle day 36; 3 on day 38 settle day 42 - all 11 inside 45 days."
+        },
+        {
+          "finding": "Correct the pre-proof and buyer-funded statements",
+          "resolution": "Accepted. The strategy now states about $165 outlay before the first order and about $250 before proof, and no longer calls fulfilment buyer-funded in cash terms."
+        },
+        {
+          "finding": "State the sending volume needed",
+          "resolution": "Accepted. Instantly Growth allows 5,000 emails and 1,000 uploaded contacts a month; the plan needs about 1,650 contacts (2 orders per 300) over two months, and the mailboxes and domains it needs are now costed in r1."
+        },
+        {
+          "finding": "The stop rule should be derived from the moved settlement date",
+          "resolution": "Accepted. The stop rules now derive from proof on day 28-30 and the 2-business-day payout schedule ending at day 45."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "timeToFirstCash",
+            "brain:SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_c1286faf4beb4256bcdc",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_17f8a25bd37c427a8137",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_2ea9da9c9114439b850a",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_17f8a25bd37c427a8137",
+          "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+        },
+        {
+          "opportunityId": "cop_2ea9da9c9114439b850a",
+          "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_c1286faf4beb4256bcdc",
+          "deals": 11,
+          "price": 300,
+          "directCost": 50,
+          "capital": 400
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_f48ee0697db5_6fa4da",
+      "digest": "f48ee0697db5e238543747f5",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_0813aa638b16429cb4f4/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:29:07.200Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f48ee0697db5_6fa4da",
+      "digest": "f48ee0697db5e238543747f5",
+      "contractDigest": "49e3abe358c4c863a768861a",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 82640,
+        "committedOpenCents": 0,
+        "preProofCents": 25020,
+        "maxExposureCents": 25020,
+        "minCashCents": 274980,
+        "minCashDay": 21,
+        "collectedCents": 330000,
+        "collectedInWindowCents": 330000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 247360
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_17f8a25bd37c427a8137",
+          "cop_2ea9da9c9114439b850a",
+          "cop_c1286faf4beb4256bcdc"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "title": "Website rebuild for local businesses, subcontracted to a Fiverr developer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "US local business with an outdated website",
+              "reachableChannel": "Cold email via Instantly, Stripe invoice 50% upfront",
+              "offerScope": "5-page mobile WordPress site rebuild with copy written by Brain",
+              "priceCents": 120000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr WordPress developer",
+              "peakFundingCents": 60000,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "Web design",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email via Instantly, Stripe invoice 50% upfront"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 400, tied up 600"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "21 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email via Instantly, Stripe invoice 50% upfront",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page mobile WordPress site rebuild with copy written by Brain to US local business with an outdated website, reached through Cold email via Instantly, Stripe invoice 50% upfront, at $1,200; Fiverr WordPress developer delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr WordPress developer.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page mobile WordPress site rebuild with copy written by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US local business with an outdated website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "local business website redesign price 2026; cold email web design close rate; fiverr wordpress website developer price",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "21 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "title": "Upwork fixed-price content jobs fulfilled by a subcontracted writer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 300,
+            "card": {
+              "payer": "Upwork client who posted a fixed-price article-writing job",
+              "reachableChannel": "Upwork proposals (Connects)",
+              "offerScope": "Blog articles to the posted brief",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance writer hired per article",
+              "peakFundingCents": 20000,
+              "humanHours": 0.3,
+              "requiredCapabilities": [],
+              "industry": "Content marketing",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Upwork proposals (Connects)"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 120, tied up 200"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "25 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Upwork proposals (Connects)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Blog articles to the posted brief to Upwork client who posted a fixed-price article-writing job, reached through Upwork proposals (Connects), at $300; Freelance writer hired per article delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$120",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance writer hired per article.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Blog articles to the posted brief",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Upwork client who posted a fixed-price article-writing job",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "upwork fixed price blog writing job budget; https://www.upwork.com/freelance-jobs/content-writing/; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "25 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "title": "Google Business Profile optimization for US local service businesses, resold with a Fiverr fulfiller",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 300,
+            "card": {
+              "payer": "Owner of a US local service business with an incomplete Google Business Profile",
+              "reachableChannel": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+              "offerScope": "One-time GBP audit and optimization delivered in 5 days with manager access granted by the client",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "peakFundingCents": 40000,
+              "humanHours": 0.2,
+              "requiredCapabilities": [],
+              "industry": "Local services marketing",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email via Instantly Growth plan ($47/mo), Stripe payment link"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 50, tied up 400"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One-time GBP audit and optimization delivered in 5 days with manager access granted by the client to Owner of a US local service business with an incomplete Google Business Profile, reached through Cold email via Instantly Growth plan ($47/mo), Stripe payment link, at $300; Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$50",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.2 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One-time GBP audit and optimization delivered in 5 days with manager access granted by the client",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Owner of a US local service business with an incomplete Google Business Profile",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://slashpost.ai/blogs/google-business-profile/google-business-profile-optimization-cost; https://fiverr.com/mprick1024/fully-optimize-your-google-business-profile-and-rank-you-in-the-map-pack; https://instantly.ai/cold-email-benchmark-report-2026; https://docs.stripe.com/payouts; https://instantly.ai/pricing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 45,
+          "hoursCeiling": 6,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 1
+        },
+        "at": "2026-11-27T07:22:01.639Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_517ed9e531f4_2f85d2",
+        "revisionDigest": "517ed9e531f410ae0e8cb79c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_466e4d05fa844bd4ab48/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "CONDITIONAL is the right stance (price, close rate and the Fiverr fulfiller are all RECOMMENDATION-only; a live test is the only way to measure them; the verified research found no buyer-paid price), and the arithmetic mostly holds: 11 x $300 = $3,300 gross, Stripe 2.9% + $0.30 = $9.00 x 11 = $99, settled $3,201 >= $3,000; costs $550 Fiverr + $94 Instantly + $99 fees = $743 <= $3,000 cap; owner hours 1 + 11 x 0.2 = 3.2 h of ~6.4 h (1 h/week x 45 days), with week 1 at exactly 1 h. But the validation contradicts the contract's proof condition: the contract says 'First paid order settled in the owner's account before scaling spend', while the plan's proof is '2 orders paid through the Stripe link by day 14', and its own ledger settles the first receipts on day 24 (card timeToFirstCash: first Stripe payout 7-14 days after the first live payment). The plan keeps sending and orders 3 more Fiverr jobs on day 18, i.e. scales spend before anything has settled. The strategy also claims the only pre-proof spend is $47; Brain's trace shows $165 pre-proof and $342 peak exposure because Fiverr is paid on day 10 while the buyer's money only lands on day 24, so fulfilment is not buyer-funded in cash terms.",
+        "findings": [
+          "Proof must be the first payout settled in the owner's bank (about day 17-24), not a Stripe payment; the continue rule and the day-18 batch must wait for it, or the plan must state that the scaling is within a ceiling the owner approved before proof.",
+          "Recompute the schedule with the gate moved: first settlement ~day 24 leaves ~21 days; check that 11 orders (or fewer, if the remaining ones settle on Stripe's rolling payout) still settle by day 45.",
+          "Correct the 'only $47 pre-proof' and 'buyer-funded fulfilment' statements: pre-proof outlay is $165 (Instantly $47 + Fiverr $100 + fees $18) and peak exposure $342.",
+          "State the sending volume needed: proof at >=2 orders per 1,000 emails implies ~5,500 emails for 11 orders by day 30; Instantly Growth's sending capacity and a list of that size are not on the card (buyerVolume for this opening is still an open, parked question).",
+          "The stop rule 'fewer than 5 paid orders by day 24' should be derived from the moved settlement date, not asserted."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:26:36.795Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "The card's timeToFirstCash (14 days) is only a RECOMMENDATION; the plan's proof and continue rule treat a Stripe payment as settled cash, so the first settlement date that gates scaling under the contract's proof condition is not established."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_f48ee0697db5_6fa4da",
+        "revisionDigest": "f48ee0697db5e238543747f5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_466e4d05fa844bd4ab48/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right and the revision now matches the contract. Price ($300), close rate, the Fiverr fulfiller and first-payout timing are all unestablished (RECOMMENDATION only; verified research rejected vendor benchmarks as this buyer's price) and each is measured by the bounded test. Proof is now the contract's: first Stripe payout settled in the owner's bank (planned at the slow end, day 28), and no fulfilment beyond the two test orders and no month-two tooling is bought before it (later Fiverr orders day 29+, month-two tooling day 31). Recomputed: 2+3+3+3 = 11 orders x $300 = $3,300; Stripe $9.00 x 11 = $99; settled $3,201 >= $3,000, last settlement day 42 of 45. Total spend $105.20 tooling + $72.20 month two + $550 Fiverr + $99 fees = $826.40 <= $3,000 (matches Brain's trace). Pre-proof outlay $105.20 + $100 + $18 + $27 = $250.20, as stated. Owner hours 1 + 11 x 0.2 = 3.2 of ~6.4, at most 1 h in any week (week 1: 1 h; later weeks <= 0.6 h). Contacts: 11 orders at 2/300 = 1,650 contacts within Instantly Growth's 1,000/month over two months; ~6,600 emails within 5,000/month. Stop rules are derived and bound the loss to ~$105 if the first 300 contacts do not convert.",
+        "findings": [
+          "Settled cash $3,201 by day 42; spend $826.40 under the $3,000 cap; pre-proof $250.20.",
+          "Owner time 3.2 h of 6.4 h, <= 1 h/week.",
+          "Residual risk, correctly left to the test: buyers paid on days 21-28 wait for proof before their Fiverr order (day 29); 'delivered within 10 business days of payment' still holds (day 21 + 10 business days ~ day 35, delivery ~day 32).",
+          "Contacts emailed days 8-14 will not have received a full 4-step sequence by the day-14 stop check; the stop is therefore conservative, not optimistic.",
+          "Executors SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED and must be connected before r1/s1/c1 run."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:30:24.049Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f48ee0697db5_6fa4da",
+      "digest": "f48ee0697db5e238543747f5",
+      "contractDigest": "49e3abe358c4c863a768861a",
+      "plan": {
+        "goalId": "wst_e67dca9418f14a8191f5",
+        "contractDigest": "49e3abe358c4c863a768861a",
+        "parentRevisionId": "rev_517ed9e531f4_2f85d2",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Resell one-time Google Business Profile optimization at $300 to US local service businesses by cold email, fulfilled by a Fiverr GBP seller",
+          "opportunityIds": [
+            "cop_c1286faf4beb4256bcdc"
+          ],
+          "why": "Smallest test: about $165 of outlay before any order (sending tooling $105 plus the first two $50 Fiverr jobs and their Stripe fees), $250 before proof. Proof is the contract's: the first Stripe payout settled in the owner's bank, assumed at the slow end on day 28 (14 days after the first payment on day 14); no fulfilment beyond the two test orders and no month-two tooling is bought before it. Eleven orders at $300 settle $3,201 net of Stripe fees by day 42; owner time is 3.2 of the 6 hours allowed and at most 1 hour in any week. Whether cold buyers pay $300, at what rate, and when Stripe first pays out are unknown and are measured by the test."
+        },
+        "alternatives": [
+          {
+            "title": "Website rebuild subcontracted to a Fiverr developer at $1,200",
+            "why": "Only three sales needed, but $600 deposits tied up per job, a 21-day time to cash and longer delivery leave less room to measure and still settle in 45 days; price and close rate equally unestablished."
+          },
+          {
+            "title": "Upwork fixed-price content jobs with a subcontracted writer",
+            "why": "Upwork holds fixed-price funds up to 14 days in review plus a 5-day security hold, so cash lands 25 days after work starts; a new profile's win rate is unknown and the $120 writer cost cuts margin."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OTHER",
+            "label": "Owner opens a Stripe account in his name and approves the Instantly, domain and mailbox spend and the test budget",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain registers 3 sending domains (~$11 each), 3 Google Workspace mailboxes (~$8.40/month each, two months) and Instantly Growth ($47/month, two months: 5,000 emails and 1,000 uploaded contacts a month); warms the mailboxes days 1-7, then emails US local service businesses with incomplete Google Business Profiles from day 8 - 300 contacts before proof, up to 2,000 contacts in total",
+            "performer": "BRAIN",
+            "costCents": 17740,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "contacts needed"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the one-time GBP audit and optimization at $300, paid up front by Stripe payment link, delivered within 10 business days of payment",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "close rate"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "a1",
+            "kind": "OTHER",
+            "label": "Owner approves each paid order and the fulfiller brief (about 12 minutes per order, 11 orders, at most 0.6 h in any week)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "orders needed"
+            ],
+            "ownerHours": 2.2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr GBP seller performs the optimization through client-granted manager access: the 2 test orders on day 14; every later order is placed only after the first Stripe payout has settled (proof)",
+            "performer": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+            "costCents": 55000,
+            "day": 14,
+            "dependsOn": "a1",
+            "evidence": [
+              "fulfiller cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr GBP optimization seller (gigs listed up to $50, 3-day delivery)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $300 per order through Stripe (card fee 2.9% + $0.30 = $9.00 per order); first payout assumed at the slow end, 14 days after the first live payment, then the 2-business-day rolling schedule",
+            "performer": "BRAIN",
+            "costCents": 9900,
+            "day": 14,
+            "dependsOn": "s1",
+            "evidence": [
+              "s4",
+              "first payout delay"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 3300,
+            "label": "3 sending domains",
+            "stepId": "r1"
+          },
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 1",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Growth, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 2520,
+            "label": "3 Google Workspace mailboxes, month 2 (after proof)",
+            "stepId": "r1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "2 paid GBP orders at $300",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "FEE",
+            "amountCents": 1800,
+            "label": "Stripe fees on 2 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Fiverr fulfilment for 2 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 21,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 30,
+            "stepId": "c1"
+          },
+          {
+            "day": 21,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 29,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 32,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 36,
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 32,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 38,
+            "kind": "RECEIPT",
+            "amountCents": 90000,
+            "label": "3 paid GBP orders at $300",
+            "settlesDay": 42,
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "FEE",
+            "amountCents": 2700,
+            "label": "Stripe fees on 3 orders",
+            "stepId": "c1"
+          },
+          {
+            "day": 38,
+            "kind": "SPEND",
+            "amountCents": 15000,
+            "label": "Fiverr fulfilment for 3 orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 28,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid orders per contact emailed",
+            "sources": [],
+            "needs": "Measured on the first 300 contacts (days 8-14); the plan needs at least 2 per 300 (0.67%) to reach 11 orders within Instantly Growth's 2,000 contacts over two months"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 300,
+            "unit": "USD per order",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A cold buyer paying $300; published guides put one-time GBP setup at $300-$500 but that was not accepted as this buyer's price"
+          },
+          {
+            "name": "fulfiller cost",
+            "status": "ESTIMATE",
+            "value": 50,
+            "unit": "USD per order",
+            "sources": [
+              "s2"
+            ],
+            "needs": "Confirmed on the first order"
+          },
+          {
+            "name": "first payout delay",
+            "status": "ASSUMED",
+            "value": 14,
+            "unit": "days from first live payment to first payout",
+            "sources": [
+              "s4"
+            ],
+            "needs": "Measured by the first payout; planned at the slow end (14 days)"
+          },
+          {
+            "name": "contacts needed",
+            "status": "ESTIMATE",
+            "value": 1650,
+            "unit": "contacts emailed (about 6,600 emails in a 4-step sequence)",
+            "sources": [
+              "s3"
+            ],
+            "needs": "11 orders at the continue threshold of 2 per 300 contacts; within Growth's 1,000 contacts and 5,000 emails a month over two months"
+          },
+          {
+            "name": "orders needed",
+            "status": "ESTIMATE",
+            "value": 11,
+            "unit": "orders",
+            "sources": [
+              "s1"
+            ],
+            "needs": "3000 / (300 - 9) = 10.3, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $300 per one-time GBP optimization",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#fulfillment",
+            "dated": "2026-11-27",
+            "claim": "Fiverr GBP optimization seller, gigs listed up to $50, 3-day delivery",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email via Instantly Growth plan ($47/mo), Stripe payment link",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_c1286faf4beb4256bcdc#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "14 days to first usable cash (Stripe first payout 7-14 days after first live payment)",
+            "population": "US local service businesses with an incomplete Google Business Profile",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "The first Stripe payout - the 2 test orders paid at $300 from the first 300 contacts - settled in the owner's bank account, expected by day 28, with the first Fiverr delivery accepted by its buyer.",
+          "stop": [
+            "Fewer than 2 paid orders from the first 300 contacts by day 14: stop sending; loss about $105 of tooling. (Derived: proof could then not settle by day 28, and the 9 remaining orders could not be taken and settled in the 17 days left at a rate below 2 per 300 within Growth's contact limit.)",
+            "First payout not settled by day 30: stop scaling - after it, 9 orders would need to be paid by about day 41 to settle on the 2-business-day schedule by day 45, faster than any rate the test can have shown",
+            "A delivered order is disputed or refunded: pause sales and replace the fulfiller"
+          ],
+          "continue": [
+            "Payout settled by day 28-30 at 2 or more orders per 300 contacts: buy month-two tooling, place the Fiverr orders for buyers who paid while proof was pending, and keep sending up to 2,000 contacts to reach 11 orders paid by day 38 (last settlement about day 42)"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof must be the first payout settled in the owner's bank",
+            "resolution": "Accepted. Proof is now the first Stripe payout settled (planned day 28, 14 days after the first payment); no fulfilment beyond the two test orders and no month-two tooling is bought before it; orders paid while proof is pending are fulfilled on day 29 under a 10-business-day delivery promise."
+          },
+          {
+            "finding": "Recompute the schedule with the gate moved",
+            "resolution": "Accepted. Receipts: 2 on day 14 settle day 28; 3 on day 21 settle day 30; 3 on day 32 settle day 36; 3 on day 38 settle day 42 - all 11 inside 45 days."
+          },
+          {
+            "finding": "Correct the pre-proof and buyer-funded statements",
+            "resolution": "Accepted. The strategy now states about $165 outlay before the first order and about $250 before proof, and no longer calls fulfilment buyer-funded in cash terms."
+          },
+          {
+            "finding": "State the sending volume needed",
+            "resolution": "Accepted. Instantly Growth allows 5,000 emails and 1,000 uploaded contacts a month; the plan needs about 1,650 contacts (2 orders per 300) over two months, and the mailboxes and domains it needs are now costed in r1."
+          },
+          {
+            "finding": "The stop rule should be derived from the moved settlement date",
+            "resolution": "Accepted. The stop rules now derive from proof on day 28-30 and the 2-business-day payout schedule ending at day 45."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_17f8a25bd37c427a8137",
+            "why": "Three $1,200 sales need $600 deposits each tied up and 21 days to cash; with price and close rate unestablished it gives less room to measure and still settle in 45 days."
+          },
+          {
+            "opportunityId": "cop_2ea9da9c9114439b850a",
+            "why": "Upwork's fixed-price review (up to 14 days) plus 5-day security hold puts cash about 25 days after work starts, and the new-profile win rate is unknown."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c1286faf4beb4256bcdc",
+            "deals": 11,
+            "price": 300,
+            "directCost": 50,
+            "capital": 400
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f48ee0697db5_6fa4da",
+        "digest": "f48ee0697db5e238543747f5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:29:07.200Z"
+      },
+      "review": {
+        "revisionId": "rev_f48ee0697db5_6fa4da",
+        "revisionDigest": "f48ee0697db5e238543747f5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0813aa638b16429cb4f4/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_466e4d05fa844bd4ab48/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right and the revision now matches the contract. Price ($300), close rate, the Fiverr fulfiller and first-payout timing are all unestablished (RECOMMENDATION only; verified research rejected vendor benchmarks as this buyer's price) and each is measured by the bounded test. Proof is now the contract's: first Stripe payout settled in the owner's bank (planned at the slow end, day 28), and no fulfilment beyond the two test orders and no month-two tooling is bought before it (later Fiverr orders day 29+, month-two tooling day 31). Recomputed: 2+3+3+3 = 11 orders x $300 = $3,300; Stripe $9.00 x 11 = $99; settled $3,201 >= $3,000, last settlement day 42 of 45. Total spend $105.20 tooling + $72.20 month two + $550 Fiverr + $99 fees = $826.40 <= $3,000 (matches Brain's trace). Pre-proof outlay $105.20 + $100 + $18 + $27 = $250.20, as stated. Owner hours 1 + 11 x 0.2 = 3.2 of ~6.4, at most 1 h in any week (week 1: 1 h; later weeks <= 0.6 h). Contacts: 11 orders at 2/300 = 1,650 contacts within Instantly Growth's 1,000/month over two months; ~6,600 emails within 5,000/month. Stop rules are derived and bound the loss to ~$105 if the first 300 contacts do not convert.",
+        "findings": [
+          "Settled cash $3,201 by day 42; spend $826.40 under the $3,000 cap; pre-proof $250.20.",
+          "Owner time 3.2 h of 6.4 h, <= 1 h/week.",
+          "Residual risk, correctly left to the test: buyers paid on days 21-28 wait for proof before their Fiverr order (day 29); 'delivered within 10 business days of payment' still holds (day 21 + 10 business days ~ day 35, delivery ~day 32).",
+          "Contacts emailed days 8-14 will not have received a full 4-step sequence by the day-14 stop check; the stop is therefore conservative, not optimistic.",
+          "Executors SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED and must be connected before r1/s1/c1 run."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:30:24.049Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:31:20.433Z"
+    },
+    "staleFinal": null
+  }
+}

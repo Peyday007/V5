@@ -1,0 +1,831 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_1ce89399c8c84f5387cf",
+      "words": "Collect $18,000 of settled cash within 60 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1800000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 60,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$18,000 of settled cash collected within 60 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "95622f339dc07e0370512e83"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_1ce89399c8c84f5387cf",
+        "contractDigest": "95622f339dc07e0370512e83",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening is one $6,000 audit for one transit authority, a third of the $18,000 target",
+          "opportunityIds": [],
+          "why": "The single opening is a one-off ADA bus-stop audit for one organisation (Tri-County Regional Transit Authority) at an evidenced $6,000 (award notice, 2026-11-10), fulfilled by Access Survey Partners at a written $2,400. Even if the authority agreed, one buyer buying once settles at most $6,000 inside 60 days, against an $18,000 target; one organisation is not a population of buyers, and its close rate is not established either."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the same audit to three buyers",
+            "why": "Rejected: only Tri-County is evidenced as a buyer at $6,000; no other transit authority, count of such authorities or their purchase cadence is on the record."
+          },
+          {
+            "title": "Conditional pitch to Tri-County alone",
+            "why": "Rejected as a plan for this goal: even a measured yes carries $6,000 gross ($3,600 after the $2,400 subcontract), so the test could not decide the $18,000 target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count other transit authorities with published ADA bus-stop audit solicitations and their award prices, or other openings, that could carry the remaining $12,000 within 60 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_payer"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per audit",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "counted buyers",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyers (one-off purchase)",
+            "sources": [
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum settled cash from held openings",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 240000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "agreements per offer",
+            "sources": [],
+            "needs": "a live offer to the authority's procurement office"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#price",
+            "dated": "2026-11-10",
+            "claim": "Tri-County Regional Transit Authority issued a $6,000 purchase order for an ADA bus-stop accessibility audit of 120 stops",
+            "population": "one organisation",
+            "matchesBuyer": true,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#payer",
+            "dated": null,
+            "claim": "The payer is Tri-County Regional Transit Authority (a single organisation)",
+            "population": "one organisation",
+            "matchesBuyer": true,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#fulfillment",
+            "dated": null,
+            "claim": "Access Survey Partners written quote, $2,400 for 120 stops",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "TARGET: the held openings carry at most one $6,000 purchase from one organisation (1 buyer x $6,000 = $6,000 gross), a third of the $18,000 target; no further buyers of this audit are evidenced.",
+          "resolution": "Either relax the target to $6,000 settled (pitch Tri-County, subcontract Access Survey Partners at $2,400, settles in 30 days), or have Brain research additional buyers (other transit authorities soliciting ADA stop audits, with published award prices) or other openings worth the remaining $12,000 within 60 days, then re-plan.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_93b6eccf36ed48b2b461",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME",
+          "CONVERSION"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $6,000 of settled cash (one Tri-County audit), or add openings that carry the other $12,000",
+            "basis": [
+              {
+                "opportunityId": "cop_93b6eccf36ed48b2b461",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_93b6eccf36ed48b2b461",
+                "field": "payer"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_93b6eccf36ed48b2b461",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain treats the one-off as needing its one buyer, but the $18,000 target needs three $6,000 deals and the record establishes exactly one buyer (Tri-County, card payer/price) buying once; no other buyer is counted, so volume for this goal is not established."
+          }
+        ],
+        "revisionId": "rev_ba3a160cbdd0_465bdc",
+        "digest": "ba3a160cbdd0951500fbf22c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ce60580da7294573a0b5/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:13.043Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_1ce89399c8c84f5387cf",
+      "contractDigest": "95622f339dc07e0370512e83",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the only opening is one $6,000 audit for one transit authority, a third of the $18,000 target",
+        "opportunityIds": [],
+        "why": "The single opening is a one-off ADA bus-stop audit for one organisation (Tri-County Regional Transit Authority) at an evidenced $6,000 (award notice, 2026-11-10), fulfilled by Access Survey Partners at a written $2,400. Even if the authority agreed, one buyer buying once settles at most $6,000 inside 60 days, against an $18,000 target; one organisation is not a population of buyers, and its close rate is not established either."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the same audit to three buyers",
+          "why": "Rejected: only Tri-County is evidenced as a buyer at $6,000; no other transit authority, count of such authorities or their purchase cadence is on the record."
+        },
+        {
+          "title": "Conditional pitch to Tri-County alone",
+          "why": "Rejected as a plan for this goal: even a measured yes carries $6,000 gross ($3,600 after the $2,400 subcontract), so the test could not decide the $18,000 target."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count other transit authorities with published ADA bus-stop audit solicitations and their award prices, or other openings, that could carry the remaining $12,000 within 60 days",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_payer"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per audit",
+          "status": "EVIDENCED",
+          "value": 600000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "counted buyers",
+          "status": "EVIDENCED",
+          "value": 1,
+          "unit": "buyers (one-off purchase)",
+          "sources": [
+            "s_payer"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum settled cash from held openings",
+          "status": "EVIDENCED",
+          "value": 600000,
+          "unit": "cents",
+          "sources": [
+            "s_price",
+            "s_payer"
+          ],
+          "needs": null
+        },
+        {
+          "name": "subcontract cost",
+          "status": "EVIDENCED",
+          "value": 240000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "close rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "agreements per offer",
+          "sources": [],
+          "needs": "a live offer to the authority's procurement office"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#price",
+          "dated": "2026-11-10",
+          "claim": "Tri-County Regional Transit Authority issued a $6,000 purchase order for an ADA bus-stop accessibility audit of 120 stops",
+          "population": "one organisation",
+          "matchesBuyer": true,
+          "opportunityId": "cop_93b6eccf36ed48b2b461"
+        },
+        {
+          "id": "s_payer",
+          "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#payer",
+          "dated": null,
+          "claim": "The payer is Tri-County Regional Transit Authority (a single organisation)",
+          "population": "one organisation",
+          "matchesBuyer": true,
+          "opportunityId": "cop_93b6eccf36ed48b2b461"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#fulfillment",
+          "dated": null,
+          "claim": "Access Survey Partners written quote, $2,400 for 120 stops",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_93b6eccf36ed48b2b461"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "TARGET: the held openings carry at most one $6,000 purchase from one organisation (1 buyer x $6,000 = $6,000 gross), a third of the $18,000 target; no further buyers of this audit are evidenced.",
+        "resolution": "Either relax the target to $6,000 settled (pitch Tri-County, subcontract Access Survey Partners at $2,400, settles in 30 days), or have Brain research additional buyers (other transit authorities soliciting ADA stop audits, with published award prices) or other openings worth the remaining $12,000 within 60 days, then re-plan.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_93b6eccf36ed48b2b461",
+          "missing": [
+            "CONVERSION",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME",
+        "CONVERSION"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to $6,000 of settled cash (one Tri-County audit), or add openings that carry the other $12,000",
+          "basis": [
+            {
+              "opportunityId": "cop_93b6eccf36ed48b2b461",
+              "field": "price"
+            },
+            {
+              "opportunityId": "cop_93b6eccf36ed48b2b461",
+              "field": "payer"
+            }
+          ]
+        }
+      ],
+      "disagreements": [
+        {
+          "opportunityId": "cop_93b6eccf36ed48b2b461",
+          "link": "MARKET_VOLUME",
+          "reason": "Brain treats the one-off as needing its one buyer, but the $18,000 target needs three $6,000 deals and the record establishes exactly one buyer (Tri-County, card payer/price) buying once; no other buyer is counted, so volume for this goal is not established."
+        }
+      ],
+      "revisionId": "rev_ba3a160cbdd0_465bdc",
+      "digest": "ba3a160cbdd0951500fbf22c",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_ce60580da7294573a0b5/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:27:13.043Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ba3a160cbdd0_465bdc",
+      "digest": "ba3a160cbdd0951500fbf22c",
+      "contractDigest": "95622f339dc07e0370512e83",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 18000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 6000). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8910× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3600× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"ADA bus-stop accessibility audit for Tri-County Regional Transit Autho\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_93b6eccf36ed48b2b461"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"ADA bus-stop accessibility audit for Tri-County Regional Transit Authority\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"ADA bus-stop accessibility audit for Tri-County Regional Transit Authority\"",
+            "owner": "PERSON",
+            "cost": 2400
+          },
+          {
+            "label": "Collect payment for \"ADA bus-stop accessibility audit for Tri-County Regional Transit Authority\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 18000 USD still needed — the openings held reach at most 6000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_93b6eccf36ed48b2b461",
+            "title": "ADA bus-stop accessibility audit for Tri-County Regional Transit Authority",
+            "missing": [
+              "CONVERSION"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 6000,
+            "potentialReach": 6000,
+            "card": {
+              "payer": "Tri-County Regional Transit Authority",
+              "reachableChannel": "The authority's procurement office (published email)",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:42.513Z",
+              "offerScope": "ADA bus-stop accessibility audit for Tri-County Regional Transit Authority",
+              "priceCents": 600000,
+              "currency": "USD",
+              "fulfillmentOwner": "Access Survey Partners (written quote, $2,400 for 120 stops)",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "public transit",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The authority's procurement office (published email)"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 6000 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Access Survey Partners (written quote, $2,400 for 120 stops) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 2400, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "30 days to usable cash against 60 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell ADA bus-stop accessibility audit for Tri-County Regional Transit Authority to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$2400",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Access Survey Partners (written quote, $2,400 for 120 stops) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Tri-County Regional Transit Authority",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Tri-County Regional Transit Authority issued a $6,000 purchase order for an ADA bus-stop accessibility audit of 120 stops (award notice, 2026-11-10).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "30 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_149563d4a8b44b67b9a9",
+          "cnd_9782bbf579ca400e9bd4"
+        ],
+        "scope": {
+          "targetCents": 1800000,
+          "daysLeft": 60,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:24:58.603Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ba3a160cbdd0_465bdc",
+        "revisionDigest": "ba3a160cbdd0951500fbf22c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ce60580da7294573a0b5/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_aae491e9b1ac4837a2a0/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct. The only opening is a one-off audit for one organisation (Tri-County Regional Transit Authority) at an evidenced $6,000 (its own purchase order, so a real price this buyer pays). Even at a 100% close the held openings settle at most $6,000 gross ($3,600 after the $2,400 Access Survey Partners subcontract) against an $18,000 target; Brain's own check agrees (at most 6000). One organisation is not a population, and no further buyers are on the record, so the decisive gap - buyer volume beyond this single buyer - is correctly named, with a concrete research step and the target-relaxation alternative.",
+        "findings": [
+          "Recomputed: 1 buyer x $6,000 = $6,000 max gross, 33% of $18,000; cost $2,400 < price, 30-day settlement fits 60 days - none of that rescues the shortfall.",
+          "Disagreement with Brain's MARKET_VOLUME basis is about goal coverage rather than the link for this one-off; it does not change the stance.",
+          "Worth checking when re-planning: the price fact is a purchase order issued 2026-11-10 while the buying signal is dated 2026-11-24 - if the PO was already awarded to another vendor, current demand for this specific audit may be gone.",
+          "CONVERSION is also unestablished (no close rate for this buyer); correctly listed as unknown, not assumed.",
+          "Owner hours (card 2h) are within an unstated owner-hours limit; no spend, inside the $0 exposure cap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:46.805Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ba3a160cbdd0_465bdc",
+      "digest": "ba3a160cbdd0951500fbf22c",
+      "contractDigest": "95622f339dc07e0370512e83",
+      "plan": {
+        "goalId": "wst_1ce89399c8c84f5387cf",
+        "contractDigest": "95622f339dc07e0370512e83",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening is one $6,000 audit for one transit authority, a third of the $18,000 target",
+          "opportunityIds": [],
+          "why": "The single opening is a one-off ADA bus-stop audit for one organisation (Tri-County Regional Transit Authority) at an evidenced $6,000 (award notice, 2026-11-10), fulfilled by Access Survey Partners at a written $2,400. Even if the authority agreed, one buyer buying once settles at most $6,000 inside 60 days, against an $18,000 target; one organisation is not a population of buyers, and its close rate is not established either."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the same audit to three buyers",
+            "why": "Rejected: only Tri-County is evidenced as a buyer at $6,000; no other transit authority, count of such authorities or their purchase cadence is on the record."
+          },
+          {
+            "title": "Conditional pitch to Tri-County alone",
+            "why": "Rejected as a plan for this goal: even a measured yes carries $6,000 gross ($3,600 after the $2,400 subcontract), so the test could not decide the $18,000 target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count other transit authorities with published ADA bus-stop audit solicitations and their award prices, or other openings, that could carry the remaining $12,000 within 60 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_payer"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per audit",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "counted buyers",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyers (one-off purchase)",
+            "sources": [
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum settled cash from held openings",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 240000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "agreements per offer",
+            "sources": [],
+            "needs": "a live offer to the authority's procurement office"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#price",
+            "dated": "2026-11-10",
+            "claim": "Tri-County Regional Transit Authority issued a $6,000 purchase order for an ADA bus-stop accessibility audit of 120 stops",
+            "population": "one organisation",
+            "matchesBuyer": true,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#payer",
+            "dated": null,
+            "claim": "The payer is Tri-County Regional Transit Authority (a single organisation)",
+            "population": "one organisation",
+            "matchesBuyer": true,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_93b6eccf36ed48b2b461#fulfillment",
+            "dated": null,
+            "claim": "Access Survey Partners written quote, $2,400 for 120 stops",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_93b6eccf36ed48b2b461"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "TARGET: the held openings carry at most one $6,000 purchase from one organisation (1 buyer x $6,000 = $6,000 gross), a third of the $18,000 target; no further buyers of this audit are evidenced.",
+          "resolution": "Either relax the target to $6,000 settled (pitch Tri-County, subcontract Access Survey Partners at $2,400, settles in 30 days), or have Brain research additional buyers (other transit authorities soliciting ADA stop audits, with published award prices) or other openings worth the remaining $12,000 within 60 days, then re-plan.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_93b6eccf36ed48b2b461",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME",
+          "CONVERSION"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $6,000 of settled cash (one Tri-County audit), or add openings that carry the other $12,000",
+            "basis": [
+              {
+                "opportunityId": "cop_93b6eccf36ed48b2b461",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_93b6eccf36ed48b2b461",
+                "field": "payer"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_93b6eccf36ed48b2b461",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain treats the one-off as needing its one buyer, but the $18,000 target needs three $6,000 deals and the record establishes exactly one buyer (Tri-County, card payer/price) buying once; no other buyer is counted, so volume for this goal is not established."
+          }
+        ],
+        "revisionId": "rev_ba3a160cbdd0_465bdc",
+        "digest": "ba3a160cbdd0951500fbf22c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ce60580da7294573a0b5/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:13.043Z"
+      },
+      "review": {
+        "revisionId": "rev_ba3a160cbdd0_465bdc",
+        "revisionDigest": "ba3a160cbdd0951500fbf22c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ce60580da7294573a0b5/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_aae491e9b1ac4837a2a0/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is correct. The only opening is a one-off audit for one organisation (Tri-County Regional Transit Authority) at an evidenced $6,000 (its own purchase order, so a real price this buyer pays). Even at a 100% close the held openings settle at most $6,000 gross ($3,600 after the $2,400 Access Survey Partners subcontract) against an $18,000 target; Brain's own check agrees (at most 6000). One organisation is not a population, and no further buyers are on the record, so the decisive gap - buyer volume beyond this single buyer - is correctly named, with a concrete research step and the target-relaxation alternative.",
+        "findings": [
+          "Recomputed: 1 buyer x $6,000 = $6,000 max gross, 33% of $18,000; cost $2,400 < price, 30-day settlement fits 60 days - none of that rescues the shortfall.",
+          "Disagreement with Brain's MARKET_VOLUME basis is about goal coverage rather than the link for this one-off; it does not change the stance.",
+          "Worth checking when re-planning: the price fact is a purchase order issued 2026-11-10 while the buying signal is dated 2026-11-24 - if the PO was already awarded to another vendor, current demand for this specific audit may be gone.",
+          "CONVERSION is also unestablished (no close rate for this buyer); correctly listed as unknown, not assumed.",
+          "Owner hours (card 2h) are within an unstated owner-hours limit; no spend, inside the $0 exposure cap."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:29:46.805Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $18,000 of settled cash within 60 days using no up-front capital.",
+        "terms": "09e3bc3d0e4bd1cc",
+        "openings": {
+          "cop_93b6eccf36ed48b2b461": "da6068388d16f13e"
+        }
+      },
+      "at": "2026-11-27T08:30:32.927Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "id": "mv-01-github-bounty-audit",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 1,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_562f81de82fc_dc4ec6",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_4ba888d57ebb4c14a979/reviewer-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "RESOLUTION_ABSENT"
+    ],
+    "gaps": [],
+    "detail": "no measurement or research of OFFER_AND_PRICE is named (names MARKET_VOLUME, REACHABLE_BUYER)"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

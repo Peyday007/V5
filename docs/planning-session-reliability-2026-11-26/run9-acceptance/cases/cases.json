@@ -1,0 +1,758 @@
+[
+  {
+    "id": "aj-01-climbing-gym-owner-hours",
+    "heldOut": true,
+    "description": "Owner time is capped at 2 hours a week over 28 days = 8 hours. The Brain-produced inspection-log workbook needs no owner labour: the regional association directory counts 140 gyms with a named manager and email, 9 of the first 60 managers contacted agreed (15%), $380 a deal at $6 cost, paid in 5 days. 140 × 15% ≈ 21 deals × $380 ≈ $7,980; $2,500 needs 7 deals (~47 contacts). The owner-led belay clinic takes 6 owner hours a deal: both signed clinics (12 h) would break the 8-hour cap, so a correct plan rests on the workbook and uses at most one clinic. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "indoor climbing gyms",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "gymLog",
+        "title": "Route-setting and auto-belay inspection log workbook for climbing gyms",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "indoor climbing gyms",
+        "payer": "Climbing gym operations managers",
+        "channel": "Manager emails published in the regional climbing-gym association member directory",
+        "price": 380,
+        "priceEvidence": "Three member gyms paid $380 each for the inspection-log workbook in October (paid invoices).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The regional climbing-gym association directory lists 140 member gyms, each with a named operations manager and a published email; every gym must keep auto-belay and route inspection logs year-round.",
+        "conversion": {
+          "paid": 9,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "ownerClinic",
+        "title": "Owner-led staff belay-certification clinic for climbing gyms",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "indoor climbing gyms",
+        "payer": "Climbing gym head setters and staff trainers",
+        "channel": "Signed clinic bookings by email",
+        "price": 600,
+        "priceEvidence": "Two gyms signed bookings at $600 per on-site clinic.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 6,
+        "performer": "OWNER",
+        "agreements": [
+          600,
+          600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 8,
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "aj-02-chiropractic-net-cash",
+    "heldOut": true,
+    "description": "A net (money-kept) objective: $3,000 kept after direct costs in 30 days, at most $500 tied up. The subcontracted coding audit is sound: $650 price (paid invoices), $300 written subcontractor quote, $350 kept a deal; the state board lists 220 clinics with a published office contact and 12 of 80 contacted agreed (15%) → ~33 deals, $11,550 kept. $3,000 net needs 9 audits ($5,850 gross), paid in 10 days. The refurbished decompression-table resale is signed and keeps $5,000, but ties up $9,500 against the $500 limit — it may not be used. The postcard mailings are sound but keep only $80 each ($400 for all five signed): counting their $4,500 gross toward a net target would be unsound. Executable on the audits.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "chiropractic clinics",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $3,000 of net cash after direct costs within 30 days with at most $500 of capital.",
+    "openings": [
+      {
+        "key": "codingAudit",
+        "title": "Documentation and coding audit by a certified professional coder for chiropractic clinics",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "chiropractic clinics",
+        "payer": "Chiropractic clinic office managers",
+        "channel": "Office-manager contacts from the state chiropractic board's licensee lookup",
+        "price": 650,
+        "priceEvidence": "Four clinics paid $650 per documentation audit in the last 60 days (paid invoices).",
+        "cost": 300,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Keystone Coding Services, CPC-credentialed coders (written quote: $300 per audit)",
+        "volume": "The state chiropractic board lists 220 licensed clinics with a published office contact; payer rules make clinics audit their documentation at least yearly.",
+        "conversion": {
+          "paid": 12,
+          "of": 80,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "decompressionTables",
+        "title": "Resale of refurbished spinal-decompression tables to chiropractic clinics",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "chiropractic clinics",
+        "payer": "Owner-chiropractors expanding treatment rooms",
+        "channel": "Signed purchase agreement",
+        "price": 14500,
+        "priceEvidence": "One clinic signed a purchase agreement at $14,500 for a refurbished decompression table.",
+        "cost": 9500,
+        "capital": 9500,
+        "daysToCash": 18,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "MedEquip Refurb (quoted $9,500, paid on order)",
+        "agreements": [
+          14500
+        ]
+      },
+      {
+        "key": "reactivationPostcards",
+        "title": "Patient-reactivation postcard mailings for chiropractic clinics",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "chiropractic clinics",
+        "payer": "Chiropractic clinic owners",
+        "channel": "Signed mailing orders",
+        "price": 900,
+        "priceEvidence": "Five clinics signed mailing orders at $900 each.",
+        "cost": 820,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Tri-County Mail House (quoted $820 per 2,000-piece mailing incl. postage)",
+        "agreements": [
+          900,
+          900,
+          900,
+          900,
+          900
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 500,
+      "mustNotUse": [
+        "decompressionTables"
+      ]
+    }
+  },
+  {
+    "id": "aj-03-upholstery-own-listing",
+    "heldOut": true,
+    "description": "Volume is the seller's own traffic: its listing drew 1,100 unique visitors in the last 30 days (~37 a day) and 44 paid $39 (4%). Sales made in the first 11 of 14 days settle (3-day payout) by day 14: ~403 visitors × 4% ≈ 16 sales × $39 ≈ $627 (≈ $595 after $2 cost) against $500. The brokered reupholstery job has a signed designer but nobody established to do the work; the foam-insert resale costs $48 against a $45 price. Only the estimator is sound. Executable, nothing tied up.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "furniture upholstery",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $500 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "yardageEstimator",
+        "title": "Fabric-yardage and foam-cut estimator spreadsheet for reupholstery projects",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "furniture upholstery",
+        "payer": "Independent upholsterers and DIY reupholstery hobbyists",
+        "channel": "The seller's own digital-download listing",
+        "price": 39,
+        "priceEvidence": "44 buyers paid $39 for the estimator on the listing in the last 30 days (marketplace order history).",
+        "cost": 2,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "This seller's own listing drew 1,100 unique visitors in the last 30 days (listing analytics), about 37 a day, at a steady rate.",
+        "conversion": {
+          "paid": 44,
+          "of": 1100,
+          "unit": "VISITORS"
+        }
+      },
+      {
+        "key": "designerJobs",
+        "title": "Brokered reupholstery of client furniture for interior designers",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "furniture upholstery",
+        "payer": "Residential interior designers",
+        "channel": "Signed work order by email",
+        "price": 1200,
+        "priceEvidence": "One designer signed a $1,200 work order for two reupholstered armchairs.",
+        "cost": 700,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "NOBODY",
+        "agreements": [
+          1200
+        ]
+      },
+      {
+        "key": "foamInserts",
+        "title": "Resale of high-density foam cushion inserts to upholstery shops",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "furniture upholstery",
+        "payer": "Upholstery shop owners",
+        "channel": "Signed order forms",
+        "price": 45,
+        "priceEvidence": "Twenty shops ordered cut-to-size foam inserts at $45 each.",
+        "cost": 48,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "FoamDirect Wholesale (drop-ship price list: $48 per insert delivered)",
+        "agreements": [
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45,
+          45
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "designerJobs",
+        "foamInserts"
+      ]
+    }
+  },
+  {
+    "id": "aj-04-objective-change-tutoring-to-bakeries",
+    "heldOut": true,
+    "description": "First reading: tutoring centers only, $2,000 in 30 days — the state's provider list counts 150 centers with a named director, 10 of 50 contacted agreed (20%) → 30 × $300 = $9,000; 7 deals suffice. Executable on the tracker. The owner then restates it: wholesale bakeries only, $2,200 in 30 days. Four bakeries signed $600 compliance reviews Brain produces, paid in 10 days: $2,400 ≥ $2,200. After the change the tutoring tracker is out of scope and the target is $2,200. Executable on the bakery reviews.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "wholesale bakeries",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,000 within 30 days in a single industry the owner names: tutoring centers.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $2,200 within 30 days in a single industry the owner names: wholesale bakeries."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "bakeryReview"
+      ]
+    },
+    "openings": [
+      {
+        "key": "tutoringTracker",
+        "title": "State-test practice score tracker workbook for tutoring centers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "tutoring centers",
+        "payer": "Tutoring center directors",
+        "channel": "Director emails in the state's registered supplemental-education provider list",
+        "price": 300,
+        "priceEvidence": "Five tutoring centers paid $300 each for the score tracker in November (paid invoices).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state's supplemental-education provider list counts 150 registered tutoring centers, each with a named director and email.",
+        "conversion": {
+          "paid": 10,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "bakeryReview",
+        "title": "Allergen-label and nutrition-panel compliance review for wholesale bakeries",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "wholesale bakeries",
+        "payer": "Wholesale bakery production managers",
+        "channel": "Signed review orders by email",
+        "price": 600,
+        "priceEvidence": "Four wholesale bakeries signed review orders at $600 each.",
+        "cost": 15,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          600,
+          600,
+          600,
+          600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "tutoringTracker"
+      ],
+      "targetAfterChange": 2200
+    }
+  },
+  {
+    "id": "aj-05-kennel-signed-short",
+    "heldOut": true,
+    "description": "Three boarding kennels signed $480 orders for a vaccination-record expiry tracker Brain sets up; each needs a $150 import-tool month paid before delivery (inside the $300 limit) and pays in 4 days. $1,440 against $1,200 in 10 days; $40 direct cost a deal. Executable.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "dog boarding kennels",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $1,200 of settled cash within 10 days with at most $300 of capital.",
+    "openings": [
+      {
+        "key": "kennelTracker",
+        "title": "Vaccination-record expiry tracker set up for dog boarding kennels",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "dog boarding kennels",
+        "payer": "Boarding kennel owners",
+        "channel": "Signed order forms returned by email",
+        "price": 480,
+        "priceEvidence": "Three kennels signed order forms at $480 each (2026-11-20).",
+        "cost": 40,
+        "capital": 150,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          480,
+          480,
+          480
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 300
+    }
+  },
+  {
+    "id": "aj-06-chimney-price-only-said",
+    "heldOut": true,
+    "description": "Brokered chimney inspections for listing agents: a certified sweep quoted $140, the association roster counts 900 agents, a measured rate exists — but the $225 price is only the owner's word; no source shows agents pay it. At $225, 14 inspections ($1,190 kept) would be needed; at no evidenced price, no plan. The decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "chimney sweeping",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "chimneyInspections",
+        "title": "Brokered Level 2 chimney inspections for residential listing agents",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "chimney sweeping",
+        "payer": "Residential listing agents",
+        "channel": "Agent emails from the county REALTOR association roster",
+        "price": 225,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says listing agents will pay $225 per pre-listing inspection.",
+        "cost": 140,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Hearthside Sweeps, CSIA-certified (quoted $140 per Level 2 inspection)",
+        "volume": "The county association roster lists 900 active listing agents; the MLS recorded 310 new listings in October.",
+        "conversion": {
+          "paid": 18,
+          "of": 240
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "chimneyInspections"
+      }
+    }
+  },
+  {
+    "id": "aj-07-audiology-price-contradicted",
+    "heldOut": true,
+    "description": "First reading: a clinic-supplier price list shows the claim tracker at $500; the licensing board lists 310 clinics and 12 of 100 contacted agreed (12%) → ~37 × $500 = $18,600 against $4,000 (8 deals). Executable. Then a new source lists the same tracker at $50. On a contested price nothing is established — and at $50 the whole measured market is ~$1,860, under the target — so the price must be settled first. Final: no plan; the price (and the economics on it) is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "audiology clinics",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CONTRADICTING_EVIDENCE",
+          "opening": "claimTracker",
+          "field": "price",
+          "value": 50
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "claimTracker",
+        "title": "Hearing-aid warranty and loss-and-damage claim tracker for audiology clinics",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "audiology clinics",
+        "payer": "Audiology clinic practice managers",
+        "channel": "Practice-manager emails from the state audiology licensing board's clinic list",
+        "price": 500,
+        "priceEvidence": "A hearing-clinic supplier's 2026 price list shows the claim tracker at $500 per clinic.",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state audiology licensing board lists 310 clinics with a named practice manager; each files manufacturer warranty and loss-and-damage claims monthly.",
+        "conversion": {
+          "paid": 12,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "claimTracker"
+      }
+    }
+  },
+  {
+    "id": "aj-08-assisted-living-grant-as-price",
+    "heldOut": true,
+    "description": "The $5,000 is the state Department of Aging's grant award to facilities that complete approved training — money the state pays the facility, not what an administrator pays for a curriculum workbook. Buyers, channel, a measured rate and Brain's fulfilment are evidenced; what a facility pays for the workbook is not. No plan; the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "assisted living facilities",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "dementiaCurriculum",
+        "title": "Dementia-care staff training curriculum workbook for assisted living facilities",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "assisted living facilities",
+        "payer": "Assisted living facility administrators",
+        "channel": "Administrator emails from the state's licensed assisted-living facility register",
+        "price": 5000,
+        "priceEvidence": "The state Department of Aging's Dementia Care Training Grant awards $5,000 to each licensed facility that completes an approved staff training program (program notice, 2026-10).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state register lists 410 licensed assisted living facilities, each with a named administrator.",
+        "conversion": {
+          "paid": 5,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "dementiaCurriculum"
+      },
+      "notAPurchasePrice": [
+        "dementiaCurriculum"
+      ]
+    }
+  },
+  {
+    "id": "aj-09-yearbook-one-district",
+    "heldOut": true,
+    "description": "One school district awarded one $6,000 purchase order for photo-roster reconciliation; nothing shows another buyer or a repeat purchase inside 45 days. The most this opening is shown to bring is $6,000 against a $20,000 target; modelling the district as a population of repeat buyers invents the rest. No plan; how many deals exist (market volume) is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "large",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "K-12 yearbook production",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $20,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "cedarValley",
+        "title": "Student photo-roster reconciliation for Cedar Valley Unified School District's yearbook office",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "K-12 yearbook production",
+        "payer": "Yearbook adviser, Cedar Valley Unified School District",
+        "channel": "The district's procurement portal",
+        "price": 6000,
+        "priceEvidence": "Cedar Valley Unified School District approved a $6,000 purchase order for yearbook photo-roster reconciliation (board minutes, 2026-11-12).",
+        "cost": 60,
+        "capital": 0,
+        "daysToCash": 30,
+        "hours": 2,
+        "performer": "BRAIN"
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "cedarValley"
+      },
+      "payerDealsMax": {
+        "cedarValley": 1
+      }
+    }
+  },
+  {
+    "id": "aj-10-copacker-net45-after-deadline",
+    "heldOut": true,
+    "description": "Three co-packers issued $1,500 purchase orders ($4,500 ≥ $4,000), Brain produces the packs at $25 — but the orders are on net-45 terms and the deadline is 21 days. No cash can settle in time. Infeasible on the deadline (the settlement link).",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "contract food manufacturing",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "fsmaPacks",
+        "title": "FSMA supplier-verification document packs for contract food co-packers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "contract food manufacturing",
+        "payer": "Quality-assurance managers at contract food co-packers",
+        "channel": "Signed purchase orders received by email",
+        "price": 1500,
+        "priceEvidence": "Three co-packers issued purchase orders at $1,500 each, on net-45 payment terms.",
+        "cost": 25,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          1500,
+          1500,
+          1500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "aj-11-violin-appraisal-owner-hours",
+    "heldOut": true,
+    "description": "Eight string-instrument shops signed $350 appraisal engagements ($2,800 ≥ $2,500), but the owner appraises each personally at 5 hours: $2,500 needs 8 appraisals = 40 owner hours against 3 h/week × 4 weeks = 12 allowed (2 appraisals, $700). No other fulfiller is established. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "string instrument retail",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $2,500 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "instrumentAppraisal",
+        "title": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "string instrument retail",
+        "payer": "Owners of violin and cello shops",
+        "channel": "Signed engagement letters",
+        "price": 350,
+        "priceEvidence": "Eight shops signed engagement letters at $350 per appraisal.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 5,
+        "performer": "OWNER",
+        "agreements": [
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "aj-12-sawmill-counted-market-out-of-reach",
+    "heldOut": true,
+    "description": "The market is counted: the public FSC certificate database lists exactly 85 certified sawmills in the region, each needing one $600 audit-prep workbook a year. Every one of them buying is $51,000, under the $150,000 target at any conversion and any capital. Infeasible on the target.",
+    "dimensions": {
+      "capital": "large",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "sawmills",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $150,000 of settled cash within 30 days with at most $10,000 of capital.",
+    "openings": [
+      {
+        "key": "fscWorkbook",
+        "title": "FSC chain-of-custody audit-preparation workbook for certified sawmills",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "sawmills",
+        "payer": "Sawmill certification and compliance managers",
+        "channel": "Certificate-holder contacts in the public FSC certificate database",
+        "price": 600,
+        "priceEvidence": "Seven mills paid $600 each for the workbook ahead of their 2026 audits (paid invoices).",
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The public FSC certificate database lists exactly 85 chain-of-custody certificate holders operating sawmills in the region; each is audited once a year and needs one workbook per audit.",
+        "conversion": {
+          "paid": 14,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ]
+      }
+    }
+  }
+]

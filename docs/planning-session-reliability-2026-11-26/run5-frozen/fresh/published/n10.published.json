@@ -1,0 +1,274 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_b95b9f4ac693_76434b",
+      "digest": "b95b9f4ac693778f8b658228",
+      "contractDigest": "881e7193d314ff35c862b152",
+      "plan": {
+        "goalId": "wst_b9cf5a5e866e47ee820c",
+        "contractDigest": "881e7193d314ff35c862b152",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Deliver the four agreed consumer confidence reports at $900 and confirm settlement timing",
+          "opportunityIds": [
+            "cop_eadae801a74848d8bd19"
+          ],
+          "why": "Four co-ops have accepted in writing at $900 each ($3,600 against the $3,000 target); Brain produces the report, $10 cost, $0 exposure. When the co-ops pay is not on the record, so the plan confirms each co-op's payment terms before delivering and stops if they put settlement past day 30."
+        },
+        "alternatives": [
+          {
+            "title": "Sell further reports to the 85 co-ops on the state system list",
+            "why": "Not needed for the target; adds reach only if some agreed co-ops pay after the window."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Confirm each of the 4 written acceptances at $900 and ask each co-op's payment terms (pay on delivery / net-15)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_agr",
+              "s_price"
+            ],
+            "priceCents": 90000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Draft the 4 consumer confidence reports from each co-op's sampling results",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 5,
+            "dependsOn": "o1",
+            "evidence": [
+              "s_deliv",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Invoice the 4 co-ops $900 each on delivery and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "d1",
+            "evidence": [
+              "q_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost of 4 reports ($10 each), paid out of the settled fees (card: $0 exposure, $0 peak funding)",
+            "stepId": "d1"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 360000,
+            "label": "4 x $900 agreed report fees",
+            "settlesDay": 20,
+            "stepId": "c1"
+          }
+        ],
+        "proofDay": 3,
+        "quantities": [
+          {
+            "name": "agreed price",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s_agr",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "agreed buyers",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "co-ops",
+            "sources": [
+              "s_agr"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per report",
+            "status": "EVIDENCED",
+            "value": 1000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days from invoice to settled cash",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "Each co-op's stated payment terms, then the first payment's settlement date"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agr",
+            "url": "https://brain.local/card/cop_eadae801a74848d8bd19#agreements",
+            "dated": "2026-11-20",
+            "claim": "Four written acceptances at $900 for the report",
+            "population": "The four co-ops that posted the drafting request",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_eadae801a74848d8bd19#price",
+            "dated": "2026-11-20",
+            "claim": "$900",
+            "population": "Rural water cooperative general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_deliv",
+            "url": "https://brain.local/card/cop_eadae801a74848d8bd19#delivery",
+            "dated": "2026-11-20",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_eadae801a74848d8bd19#directCosts",
+            "dated": "2026-11-20",
+            "claim": "$10 direct cost",
+            "population": "This offer",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": {
+          "proof": "By day 3, the co-ops whose agreements total at least $3,000 confirm in writing payment terms that settle within 25 days of a day-5 invoice (by day 30).",
+          "stop": [
+            "Payment terms put settlement of enough agreed fees to reach $3,000 after day 30",
+            "A co-op withdraws so the remaining agreements total under $3,000"
+          ],
+          "continue": [
+            "At least 4 co-ops (or $3,000 of agreements) confirm pay-on-delivery or net terms ending by day 30: deliver and invoice on day 5"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_eadae801a74848d8bd19",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_eadae801a74848d8bd19",
+            "deals": 4,
+            "price": 900,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b95b9f4ac693_76434b",
+        "digest": "b95b9f4ac693778f8b658228",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd479fc65fc14edfa464/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:31:56.722Z"
+      },
+      "review": {
+        "revisionId": "rev_b95b9f4ac693_76434b",
+        "revisionDigest": "b95b9f4ac693778f8b658228",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd479fc65fc14edfa464/rel8-author-b",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_fd4c4667e9094bbf9ab6/reviewer-theta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance. Four written acceptances at $900 are recorded on the card: 4 x $900 = $3,600 against $3,000, and no new sales are needed. Brain-produced fulfilment, $10 cost and $0 exposure are evidence. The one unknown is when the money settles, and the plan confirms each co-op's payment terms on day 1-3 before delivering. Stop rules: terms beyond day 30, or a withdrawal. One withdrawal leaves $2,700, under $3,000, which the stop rule correctly catches. Cost of $40 is paid from fees, with no capital needed.",
+        "findings": [
+          "The cash ledger puts settlement on day 20, but settlement timing is UNKNOWN. The ledger date is an illustration inside the proof bound (day 30), not an established figure",
+          "Execution readiness: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED, so the confirmation and invoicing steps need those capabilities connected first",
+          "There is no fallback if one co-op withdraws (the margin is only one deal). Selling to the 85 co-ops on the list is not an established path, because no close rate is recorded for them"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:28.875Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:45.306Z"
+    }
+  }
+}

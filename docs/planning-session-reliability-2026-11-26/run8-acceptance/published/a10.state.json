@@ -1,0 +1,1850 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_c2ace0646a42459fa61c",
+      "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "8ce6d6d5eb4e7e7a43d95abf"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_c2ace0646a42459fa61c",
+        "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: nobody has established what a site host pays for a rebate application package",
+          "opportunityIds": [],
+          "why": "The only opening's 'price' fact is the utility's $2,500-per-port make-ready rebate paid TO site hosts under the program tariff. That is a rebate/grant the host receives, not a purchase price a host pays for the application package, so the offer has no established price and no deal count or revenue can be computed. Buyers (260 hosts on the utility's pre-approved list), reach, demand, fulfilment and settlement are otherwise on record."
+        },
+        "alternatives": [
+          {
+            "title": "Charge $2,500 per package (the rebate amount)",
+            "why": "Rejected: the $2,500 is what the utility pays the host per port; no host has been shown paying anything for the package, let alone the whole rebate."
+          },
+          {
+            "title": "Take a percentage of the rebate as a success fee",
+            "why": "No buyer has agreed to any fee, and the rebate settles on the utility's schedule, which is not on record, so the fee could not be shown to settle within 30 days."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price site hosts pay for make-ready rebate application preparation: published fees of rebate-filing consultants and quoted prices to hosts on the pre-approved list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Offer the package at a stated fee to facilities contacts on the utility's pre-approved list and record which hosts accept that fee in writing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "r1",
+            "evidence": [
+              "s_reach",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Price a site host pays per package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "A fee a host has paid or agreed to in writing for the package"
+          },
+          {
+            "name": "Site hosts on the pre-approved list",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Conversion on this offer",
+            "status": "EVIDENCED",
+            "value": 0.14,
+            "unit": "agreements/contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Rebate paid by the utility to the host per port (not a price)",
+            "status": "EVIDENCED",
+            "value": 250000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#price",
+            "dated": "2026",
+            "claim": "The state utility's make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026) - a rebate to the host, not a price paid by the host",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 site hosts are on the utility's pre-approved list, each with a published facilities contact; each files one rebate application per installation",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Facilities contacts on the utility's public list of pre-approved site hosts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 150 contacts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: the card's only price is the utility's $2,500-per-port rebate paid to site hosts, which is a rebate, not a purchase price; no host has paid or agreed to a fee for the application package, so revenue per deal and the deals needed for $5,000 cannot be established.",
+          "resolution": "Brain researches what hosts pay for rebate-application preparation and offers the package at a stated fee to the 260 hosts' facilities contacts, recording written acceptances at that fee; with an evidenced fee F, the plan needs ceil(5000/(F-30)) deals against ~36 expected acceptances (260 x 21/150) and can be re-planned.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain says nobody has established how many buyers exist or how often they buy, but the card's buyerVolume fact is EVIDENCE: 260 site hosts on the utility's pre-approved list, each with a published facilities contact, each filing one rebate application per installation. The buyer count and purchase frequency are established; what is missing is the price, which is the OFFER_AND_PRICE gap."
+          }
+        ],
+        "revisionId": "rev_13f5ca59e8b7_d81583",
+        "digest": "13f5ca59e8b7bfab1b399185",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:32.719Z"
+      },
+      {
+        "goalId": "wst_c2ace0646a42459fa61c",
+        "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+        "parentRevisionId": "rev_13f5ca59e8b7_d81583",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Offer make-ready rebate application packages at $300 to the 260 pre-approved site hosts, conditional on 19 written acceptances at that fee by day 15",
+          "opportunityIds": [
+            "cop_865464092503486a8c9c"
+          ],
+          "why": "Every link but the price is on the card as EVIDENCE: 260 hosts with published facilities contacts, one application per installation, 21/150 measured acceptance on this offer, a Brain-produced spreadsheet at $30 cost, $0 exposure and 10 days to cash in a 30-day window. The card's $2,500 'price' is the utility's rebate paid to the host, not a fee, so the fee is UNKNOWN and only a live priced offer can measure it. At F=$300, $5,000 needs ceil(5000/270)=19 acceptances (~36 expected if 21/150 holds at that fee); the offer costs nothing, so it is the test."
+        },
+        "alternatives": [
+          {
+            "title": "Charge $2,500 per package (the rebate amount)",
+            "why": "Rejected: the $2,500 is what the utility pays the host per port, not a price any host has paid for the package."
+          },
+          {
+            "title": "Offer at $500 (11 acceptances needed)",
+            "why": "Fewer deals needed but a higher fee is less likely to be accepted; $300 keeps the needed count (19) well inside the ~36 expected and above the ~$169 break-even fee."
+          },
+          {
+            "title": "No plan until a consultant fee benchmark is researched",
+            "why": "A benchmark of what someone else charges cannot establish what these hosts pay; only acceptances at a stated fee can, at no cost."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the facilities contacts of the 260 site hosts on the utility's public pre-approved list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reach",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer a make-ready rebate application package at a stated fee of $300 per application",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Record written acceptances at $300 through day 15; proof = 19 acceptances",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Confirm each accepted order in writing at $300 with payment on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_conv"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Produce the 19 rebate application package spreadsheets ($30 each)",
+            "performer": "BRAIN",
+            "costCents": 57000,
+            "day": 16,
+            "dependsOn": "s4",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "COLLECT",
+            "label": "Invoice each host on delivery; cash usable 10 days later",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 16,
+            "dependsOn": "s5",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 570000,
+            "label": "19 packages x $300 invoiced on delivery",
+            "settlesDay": 26,
+            "stepId": "s6"
+          },
+          {
+            "day": 26,
+            "kind": "SPEND",
+            "amountCents": 57000,
+            "label": "Direct cost 19 x $30, paid from receipts",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "Fee a site host pays per package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "Written acceptances at the stated $300 fee"
+          },
+          {
+            "name": "Acceptances at $300 by day 15",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deals",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": "The live offer; 19 needed"
+          },
+          {
+            "name": "Site hosts on the pre-approved list",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Measured acceptance on this offer (fee not recorded)",
+            "status": "EVIDENCED",
+            "value": 0.14,
+            "unit": "agreements/contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Direct cost per package",
+            "status": "EVIDENCED",
+            "value": 3000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Deals needed at $300",
+            "status": "ESTIMATE",
+            "value": 19,
+            "unit": "deals",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#price",
+            "dated": "2026",
+            "claim": "The state utility's make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026) - a rebate to the host, not a price paid by the host",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 site hosts are on the utility's pre-approved list, each with a published facilities contact; each files one rebate application per installation",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Facilities contacts on the utility's public list of pre-approved site hosts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 150 contacts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$30 direct cost per package",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 19 written acceptances at the stated $300 fee from listed site hosts by day 15",
+          "stop": [
+            "Fewer than 10 acceptances at $300 by day 10 (on pace for under 19 by day 15): stop; the fee or the offer does not carry $5,000 in the window",
+            "By day 15 acceptances x ($300 - $30) cannot reach $5,000: stop and report the measured fee acceptance"
+          ],
+          "continue": [
+            "19 or more acceptances at $300 by day 15: deliver all packages from day 16, invoice on delivery, cash settles by day 26"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stance should be CONDITIONAL with proof/stop/continue on a priced offer; noPlan.resolution already describes that test.",
+            "resolution": "Accepted. Stance changed to CONDITIONAL with a priced offer at $300, proof (19 written acceptances by day 15), stop and continue rules; validation.decides = OFFER_AND_PRICE."
+          },
+          {
+            "finding": "Agree with the MARKET_VOLUME disagreement: the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation) establishes the count Brain says is missing.",
+            "resolution": "Kept: MARKET_VOLUME is established by the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation); disagreement with Brain retained."
+          },
+          {
+            "finding": "The 21/150 conversion has no price attached and no agreement rows are on the card; treat it as a contact-to-interest rate until acceptances at the stated fee are recorded.",
+            "resolution": "Accepted in the plan: the 21/150 figure is kept as context (Brain records it as acceptances on this offer, but no fee is attached), and the plan does not rely on it — acceptances at $300 are an UNKNOWN quantity measured by the test, and the proof counts only written acceptances at the stated fee."
+          },
+          {
+            "finding": "Break-even fee to reach $5,000 with all ~36 expected acceptances is about $169; the test should state F explicitly.",
+            "resolution": "Accepted. The test states F = $300 explicitly (above the ~$169 break-even); 19 acceptances at $300 net $5,130 after $30 costs."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "deals": 19,
+            "price": 300,
+            "directCost": 30,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain says nobody has established how many buyers exist or how often they buy, but the card's buyerVolume fact is EVIDENCE: 260 site hosts on the utility's pre-approved list, each with a published facilities contact, each filing one rebate application per installation. The buyer count and purchase frequency are established; what is missing is the price, which is the OFFER_AND_PRICE gap."
+          }
+        ],
+        "revisionId": "rev_bae8da095247_37f433",
+        "digest": "bae8da095247f44c7ea15e1f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:40:21.253Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_c2ace0646a42459fa61c",
+      "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+      "parentRevisionId": "rev_13f5ca59e8b7_d81583",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Offer make-ready rebate application packages at $300 to the 260 pre-approved site hosts, conditional on 19 written acceptances at that fee by day 15",
+        "opportunityIds": [
+          "cop_865464092503486a8c9c"
+        ],
+        "why": "Every link but the price is on the card as EVIDENCE: 260 hosts with published facilities contacts, one application per installation, 21/150 measured acceptance on this offer, a Brain-produced spreadsheet at $30 cost, $0 exposure and 10 days to cash in a 30-day window. The card's $2,500 'price' is the utility's rebate paid to the host, not a fee, so the fee is UNKNOWN and only a live priced offer can measure it. At F=$300, $5,000 needs ceil(5000/270)=19 acceptances (~36 expected if 21/150 holds at that fee); the offer costs nothing, so it is the test."
+      },
+      "alternatives": [
+        {
+          "title": "Charge $2,500 per package (the rebate amount)",
+          "why": "Rejected: the $2,500 is what the utility pays the host per port, not a price any host has paid for the package."
+        },
+        {
+          "title": "Offer at $500 (11 acceptances needed)",
+          "why": "Fewer deals needed but a higher fee is less likely to be accepted; $300 keeps the needed count (19) well inside the ~36 expected and above the ~$169 break-even fee."
+        },
+        {
+          "title": "No plan until a consultant fee benchmark is researched",
+          "why": "A benchmark of what someone else charges cannot establish what these hosts pay; only acceptances at a stated fee can, at no cost."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "REACH",
+          "label": "Email the facilities contacts of the 260 site hosts on the utility's public pre-approved list",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_reach",
+            "s_volume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "OFFER",
+          "label": "Offer a make-ready rebate application package at a stated fee of $300 per application",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "TEST",
+          "label": "Record written acceptances at $300 through day 15; proof = 19 acceptances",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 15,
+          "dependsOn": "s2",
+          "evidence": [
+            "s_conv"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "SELL",
+          "label": "Confirm each accepted order in writing at $300 with payment on delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 15,
+          "dependsOn": "s3",
+          "evidence": [
+            "s_conv"
+          ],
+          "priceCents": 30000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "DELIVER",
+          "label": "Produce the 19 rebate application package spreadsheets ($30 each)",
+          "performer": "BRAIN",
+          "costCents": 57000,
+          "day": 16,
+          "dependsOn": "s4",
+          "evidence": [
+            "s_delivery",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s6",
+          "kind": "COLLECT",
+          "label": "Invoice each host on delivery; cash usable 10 days later",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 16,
+          "dependsOn": "s5",
+          "evidence": [
+            "s_ttc"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 16,
+          "kind": "RECEIPT",
+          "amountCents": 570000,
+          "label": "19 packages x $300 invoiced on delivery",
+          "settlesDay": 26,
+          "stepId": "s6"
+        },
+        {
+          "day": 26,
+          "kind": "SPEND",
+          "amountCents": 57000,
+          "label": "Direct cost 19 x $30, paid from receipts",
+          "stepId": "s5"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "Fee a site host pays per package",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": "Written acceptances at the stated $300 fee"
+        },
+        {
+          "name": "Acceptances at $300 by day 15",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "deals",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": "The live offer; 19 needed"
+        },
+        {
+          "name": "Site hosts on the pre-approved list",
+          "status": "EVIDENCED",
+          "value": 260,
+          "unit": "buyers",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Measured acceptance on this offer (fee not recorded)",
+          "status": "EVIDENCED",
+          "value": 0.14,
+          "unit": "agreements/contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Direct cost per package",
+          "status": "EVIDENCED",
+          "value": 3000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Days to usable cash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "s_ttc"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Deals needed at $300",
+          "status": "ESTIMATE",
+          "value": 19,
+          "unit": "deals",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#price",
+          "dated": "2026",
+          "claim": "The state utility's make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026) - a rebate to the host, not a price paid by the host",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "260 site hosts are on the utility's pre-approved list, each with a published facilities contact; each files one rebate application per installation",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_reach",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Facilities contacts on the utility's public list of pre-approved site hosts",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "21 agreements from 150 contacts",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$30 direct cost per package",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_865464092503486a8c9c#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "10 days to first cash",
+          "population": "Workplace EV charging site hosts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_865464092503486a8c9c"
+        }
+      ],
+      "validation": {
+        "proof": "At least 19 written acceptances at the stated $300 fee from listed site hosts by day 15",
+        "stop": [
+          "Fewer than 10 acceptances at $300 by day 10 (on pace for under 19 by day 15): stop; the fee or the offer does not carry $5,000 in the window",
+          "By day 15 acceptances x ($300 - $30) cannot reach $5,000: stop and report the measured fee acceptance"
+        ],
+        "continue": [
+          "19 or more acceptances at $300 by day 15: deliver all packages from day 16, invoice on delivery, cash settles by day 26"
+        ],
+        "decides": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Stance should be CONDITIONAL with proof/stop/continue on a priced offer; noPlan.resolution already describes that test.",
+          "resolution": "Accepted. Stance changed to CONDITIONAL with a priced offer at $300, proof (19 written acceptances by day 15), stop and continue rules; validation.decides = OFFER_AND_PRICE."
+        },
+        {
+          "finding": "Agree with the MARKET_VOLUME disagreement: the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation) establishes the count Brain says is missing.",
+          "resolution": "Kept: MARKET_VOLUME is established by the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation); disagreement with Brain retained."
+        },
+        {
+          "finding": "The 21/150 conversion has no price attached and no agreement rows are on the card; treat it as a contact-to-interest rate until acceptances at the stated fee are recorded.",
+          "resolution": "Accepted in the plan: the 21/150 figure is kept as context (Brain records it as acceptances on this offer, but no fee is attached), and the plan does not rely on it — acceptances at $300 are an UNKNOWN quantity measured by the test, and the proof counts only written acceptances at the stated fee."
+        },
+        {
+          "finding": "Break-even fee to reach $5,000 with all ~36 expected acceptances is about $169; the test should state F explicitly.",
+          "resolution": "Accepted. The test states F = $300 explicitly (above the ~$169 break-even); 19 acceptances at $300 net $5,130 after $30 costs."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "price",
+            "brain:OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_865464092503486a8c9c",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_865464092503486a8c9c",
+          "deals": 19,
+          "price": 300,
+          "directCost": 30,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_865464092503486a8c9c",
+          "link": "MARKET_VOLUME",
+          "reason": "Brain says nobody has established how many buyers exist or how often they buy, but the card's buyerVolume fact is EVIDENCE: 260 site hosts on the utility's pre-approved list, each with a published facilities contact, each filing one rebate application per installation. The buyer count and purchase frequency are established; what is missing is the price, which is the OFFER_AND_PRICE gap."
+        }
+      ],
+      "revisionId": "rev_bae8da095247_37f433",
+      "digest": "bae8da095247f44c7ea15e1f",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:40:21.253Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_bae8da095247_37f433",
+      "digest": "bae8da095247f44c7ea15e1f",
+      "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 57000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 16,
+        "collectedCents": 570000,
+        "collectedInWindowCents": 570000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 513000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 93860× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Make-ready rebate application packages for workplace EV char\" needs [figure withheld] and keeps [figure withheld], 2470× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Workplace EV charging site hosts\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_865464092503486a8c9c"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Make-ready rebate application packages for workplace EV charging site hosts\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Make-ready rebate application packages for workplace EV charging site hosts\"",
+            "owner": "PERSON",
+            "cost": 30
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Workplace EV charging site hosts",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Workplace EV charging site hosts",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Collect payment for \"Make-ready rebate application packages for workplace EV charging site hosts\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 320.7373573352535
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "title": "Make-ready rebate application packages for workplace EV charging site hosts",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Workplace EV charging site hosts",
+              "reachableChannel": "Facilities contacts on the utility’s public list of pre-approved site hosts",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:59.397Z",
+              "offerScope": "Make-ready rebate application packages for workplace EV charging site hosts",
+              "priceCents": 250000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "EV charging site hosts",
+              "mechanism": "INFORMATION_ASYMMETRY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Facilities contacts on the utility’s public list of pre-approved site hosts"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 21 accepted of 150 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 30, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "260 site hosts are on the utility’s pre-approved list, each with a published facilities contact; each files one rebate application per installation.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Make-ready rebate application packages for workplace EV charging site hosts to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "21 agreements from 150 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$30",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Workplace EV charging site hosts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The state utility’s make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_958ab4a223934d32a13f"
+        ],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:17.117Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_13f5ca59e8b7_d81583",
+        "revisionDigest": "13f5ca59e8b7bfab1b399185",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_560e2c6c92064f238842/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The price reading is right: the $2,500/port is a utility rebate paid TO the host, not a purchase price, so no revenue figure can rest on it. But the stance is wrong. Every other link is on the card as EVIDENCE: 260 hosts on the pre-approved list with published facilities contacts (buyerVolume), 21/150 measured conversion, Brain-produced spreadsheet at $30 cost, $0 exposure, 10 days to cash in a 30-day window. The one unknown, what these hosts will pay for the package, is not decided by any evidence against the plan; it is an unknown only a live offer measures, and the offer costs nothing and fits the window. Missing evidence is not a constraint, so this is a CONDITIONAL plan, not NO_PLAN: offer the package at a stated fee F to the listed facilities contacts; proof = ceil(5000/(F-30)) written acceptances at F by about day 15 (e.g. F=$300 -> 19 acceptances, ~36 expected from 260 x 21/150; F=$500 -> 11); stop if acceptances at F by that day cannot reach the target; continue by delivering and invoicing each acceptance. validation.decides = OFFER_AND_PRICE. A consultant's published fee (step r1) would be a benchmark of what someone else charges, not what this buyer pays; it can set F but cannot establish the price.",
+        "findings": [
+          "Stance should be CONDITIONAL with proof/stop/continue on a priced offer; noPlan.resolution already describes that test.",
+          "Agree with the MARKET_VOLUME disagreement: the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation) establishes the count Brain says is missing.",
+          "The 21/150 conversion has no price attached and no agreement rows are on the card; treat it as a contact-to-interest rate until acceptances at the stated fee are recorded.",
+          "Break-even fee to reach $5,000 with all ~36 expected acceptances is about $169; the test should state F explicitly."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:38:53.095Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The card's price fact is the utility's $2,500-per-port rebate paid to the host, not a fee the host pays for the package; the link stays unestablished until a priced offer records acceptances."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_bae8da095247_37f433",
+        "revisionDigest": "bae8da095247f44c7ea15e1f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_560e2c6c92064f238842/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Stance now CONDITIONAL on the one unknown a live offer measures (the fee hosts pay); OFFER_AND_PRICE is the decided link and the $2,500 rebate is correctly not used as a price. Recomputed: 19 x $300 = $5,700 collected >= $5,000; costs 19 x $30 = $570; net $5,130. Acceptances by day 15, delivery day 16, cash usable day 26 <= 30. Cost paid from receipts, $0 exposure, matching the card's $0 exposure fact and the $0 cap. Proof/stop/continue are concrete and consistent: proof 19 written acceptances at $300 by day 15; stop at under 10 by day 10 or when acceptances x $270 cannot reach $5,000; continue delivers and invoices. 19 needed vs ~36 expected (260 x 21/150) only if the measured rate holds at $300, which the test itself measures. All other links rest on the card's EVIDENCE facts (260 listed hosts with contacts, Brain-produced spreadsheet, 10 days to cash). Prior findings answered.",
+        "findings": [
+          "If the target is read as gross collected cash, 17 acceptances at $300 ($5,100) suffice; 19 is the conservative net figure, which is fine.",
+          "Deliver and invoice on a rolling basis as acceptances arrive rather than all on day 16; it adds window slack.",
+          "SEND_A_MESSAGE is NOT_CONNECTED: outreach cannot start until sending is connected, so day 1 depends on that setup."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:42:12.716Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_bae8da095247_37f433",
+      "digest": "bae8da095247f44c7ea15e1f",
+      "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+      "plan": {
+        "goalId": "wst_c2ace0646a42459fa61c",
+        "contractDigest": "8ce6d6d5eb4e7e7a43d95abf",
+        "parentRevisionId": "rev_13f5ca59e8b7_d81583",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Offer make-ready rebate application packages at $300 to the 260 pre-approved site hosts, conditional on 19 written acceptances at that fee by day 15",
+          "opportunityIds": [
+            "cop_865464092503486a8c9c"
+          ],
+          "why": "Every link but the price is on the card as EVIDENCE: 260 hosts with published facilities contacts, one application per installation, 21/150 measured acceptance on this offer, a Brain-produced spreadsheet at $30 cost, $0 exposure and 10 days to cash in a 30-day window. The card's $2,500 'price' is the utility's rebate paid to the host, not a fee, so the fee is UNKNOWN and only a live priced offer can measure it. At F=$300, $5,000 needs ceil(5000/270)=19 acceptances (~36 expected if 21/150 holds at that fee); the offer costs nothing, so it is the test."
+        },
+        "alternatives": [
+          {
+            "title": "Charge $2,500 per package (the rebate amount)",
+            "why": "Rejected: the $2,500 is what the utility pays the host per port, not a price any host has paid for the package."
+          },
+          {
+            "title": "Offer at $500 (11 acceptances needed)",
+            "why": "Fewer deals needed but a higher fee is less likely to be accepted; $300 keeps the needed count (19) well inside the ~36 expected and above the ~$169 break-even fee."
+          },
+          {
+            "title": "No plan until a consultant fee benchmark is researched",
+            "why": "A benchmark of what someone else charges cannot establish what these hosts pay; only acceptances at a stated fee can, at no cost."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the facilities contacts of the 260 site hosts on the utility's public pre-approved list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reach",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer a make-ready rebate application package at a stated fee of $300 per application",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Record written acceptances at $300 through day 15; proof = 19 acceptances",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Confirm each accepted order in writing at $300 with payment on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_conv"
+            ],
+            "priceCents": 30000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Produce the 19 rebate application package spreadsheets ($30 each)",
+            "performer": "BRAIN",
+            "costCents": 57000,
+            "day": 16,
+            "dependsOn": "s4",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "COLLECT",
+            "label": "Invoice each host on delivery; cash usable 10 days later",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 16,
+            "dependsOn": "s5",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 570000,
+            "label": "19 packages x $300 invoiced on delivery",
+            "settlesDay": 26,
+            "stepId": "s6"
+          },
+          {
+            "day": 26,
+            "kind": "SPEND",
+            "amountCents": 57000,
+            "label": "Direct cost 19 x $30, paid from receipts",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "Fee a site host pays per package",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "Written acceptances at the stated $300 fee"
+          },
+          {
+            "name": "Acceptances at $300 by day 15",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deals",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": "The live offer; 19 needed"
+          },
+          {
+            "name": "Site hosts on the pre-approved list",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Measured acceptance on this offer (fee not recorded)",
+            "status": "EVIDENCED",
+            "value": 0.14,
+            "unit": "agreements/contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Direct cost per package",
+            "status": "EVIDENCED",
+            "value": 3000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Days to usable cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Deals needed at $300",
+            "status": "ESTIMATE",
+            "value": 19,
+            "unit": "deals",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#price",
+            "dated": "2026",
+            "claim": "The state utility's make-ready program pays site hosts a $2,500 rebate for each Level 2 charging port installed (program tariff, 2026) - a rebate to the host, not a price paid by the host",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 site hosts are on the utility's pre-approved list, each with a published facilities contact; each files one rebate application per installation",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Facilities contacts on the utility's public list of pre-approved site hosts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 150 contacts",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$30 direct cost per package",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_865464092503486a8c9c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days to first cash",
+            "population": "Workplace EV charging site hosts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_865464092503486a8c9c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 19 written acceptances at the stated $300 fee from listed site hosts by day 15",
+          "stop": [
+            "Fewer than 10 acceptances at $300 by day 10 (on pace for under 19 by day 15): stop; the fee or the offer does not carry $5,000 in the window",
+            "By day 15 acceptances x ($300 - $30) cannot reach $5,000: stop and report the measured fee acceptance"
+          ],
+          "continue": [
+            "19 or more acceptances at $300 by day 15: deliver all packages from day 16, invoice on delivery, cash settles by day 26"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stance should be CONDITIONAL with proof/stop/continue on a priced offer; noPlan.resolution already describes that test.",
+            "resolution": "Accepted. Stance changed to CONDITIONAL with a priced offer at $300, proof (19 written acceptances by day 15), stop and continue rules; validation.decides = OFFER_AND_PRICE."
+          },
+          {
+            "finding": "Agree with the MARKET_VOLUME disagreement: the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation) establishes the count Brain says is missing.",
+            "resolution": "Kept: MARKET_VOLUME is established by the card's EVIDENCE buyerVolume fact (260 hosts, one application per installation); disagreement with Brain retained."
+          },
+          {
+            "finding": "The 21/150 conversion has no price attached and no agreement rows are on the card; treat it as a contact-to-interest rate until acceptances at the stated fee are recorded.",
+            "resolution": "Accepted in the plan: the 21/150 figure is kept as context (Brain records it as acceptances on this offer, but no fee is attached), and the plan does not rely on it — acceptances at $300 are an UNKNOWN quantity measured by the test, and the proof counts only written acceptances at the stated fee."
+          },
+          {
+            "finding": "Break-even fee to reach $5,000 with all ~36 expected acceptances is about $169; the test should state F explicitly.",
+            "resolution": "Accepted. The test states F = $300 explicitly (above the ~$169 break-even); 19 acceptances at $300 net $5,130 after $30 costs."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "deals": 19,
+            "price": 300,
+            "directCost": 30,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_865464092503486a8c9c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain says nobody has established how many buyers exist or how often they buy, but the card's buyerVolume fact is EVIDENCE: 260 site hosts on the utility's pre-approved list, each with a published facilities contact, each filing one rebate application per installation. The buyer count and purchase frequency are established; what is missing is the price, which is the OFFER_AND_PRICE gap."
+          }
+        ],
+        "revisionId": "rev_bae8da095247_37f433",
+        "digest": "bae8da095247f44c7ea15e1f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:40:21.253Z"
+      },
+      "review": {
+        "revisionId": "rev_bae8da095247_37f433",
+        "revisionDigest": "bae8da095247f44c7ea15e1f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b45392acaf4c4e4c94f9/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_560e2c6c92064f238842/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Stance now CONDITIONAL on the one unknown a live offer measures (the fee hosts pay); OFFER_AND_PRICE is the decided link and the $2,500 rebate is correctly not used as a price. Recomputed: 19 x $300 = $5,700 collected >= $5,000; costs 19 x $30 = $570; net $5,130. Acceptances by day 15, delivery day 16, cash usable day 26 <= 30. Cost paid from receipts, $0 exposure, matching the card's $0 exposure fact and the $0 cap. Proof/stop/continue are concrete and consistent: proof 19 written acceptances at $300 by day 15; stop at under 10 by day 10 or when acceptances x $270 cannot reach $5,000; continue delivers and invoices. 19 needed vs ~36 expected (260 x 21/150) only if the measured rate holds at $300, which the test itself measures. All other links rest on the card's EVIDENCE facts (260 listed hosts with contacts, Brain-produced spreadsheet, 10 days to cash). Prior findings answered.",
+        "findings": [
+          "If the target is read as gross collected cash, 17 acceptances at $300 ($5,100) suffice; 19 is the conservative net figure, which is fine.",
+          "Deliver and invoice on a rolling basis as acceptances arrive rather than all on day 16; it adds window slack.",
+          "SEND_A_MESSAGE is NOT_CONNECTED: outreach cannot start until sending is connected, so day 1 depends on that setup."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:42:12.716Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "6068d42e192a9a6e",
+        "openings": {
+          "cop_865464092503486a8c9c": "ed6c6265381e8cb8"
+        }
+      },
+      "at": "2026-11-27T09:44:20.188Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,13 @@
+{
+ "goal_id": "wst_5a1a872a7df846ec8498",
+ "revision_id": "rev_4969e857abf0_d5969b",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-gamma",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "PASS",
+ "reasons": "EXECUTABLE is right and the figures are now honest. Every link of the one member is established on the card: three written acceptances at $1,600 from golf courses (inside the only industry the owner named), Brain-proved PRODUCE_SPREADSHEET fulfilment, $20 direct cost, and 10 days to cash. Recomputed: the $60 owner float is booked as FUNDING on day 1, the $60 of cost is spent on day 5, and $4,800 settles on day 15 of 30. Collected is $4,800 (customer cash only), refunds are $0, owner-funded is $60, maximum exposure is $60, minimum cash is $0, and net is $4,740, which clears the $4,000 target. The goal sets no capital limit (capitalCeilingCents null), so the float is inside every limit. Brain's check reports no problems.",
+ "findings": [
+  "Cosmetic: members[].capital is still 0, while the trace correctly shows $60 owner-funded and $60 exposure; the trace is what the owner reads.",
+  "Execution note: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED, so they must be connected before s1 and s3 run."
+ ]
+}

@@ -1,0 +1,687 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_50da867f83004658b77b",
+      "words": "Collect $2,000 of settled cash within 10 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 10,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$2,000 of buyer payments settled within 10 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "2b8ef698a9f57b3898483b68"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_50da867f83004658b77b",
+        "contractDigest": "2b8ef698a9f57b3898483b68",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: nothing establishes that interconnection-package payments settle inside 10 days",
+          "opportunityIds": [],
+          "why": "The only opening (interconnection permit packages, $400, Brain-produced spreadsheet, $20 direct cost, reachable by published email, 10% pre-order conversion, 150 installers) has no payment terms and no time-to-first-cash on its record. The objective counts only cash settled within 10 days; five sales ($2,000) are reachable on paper, but whether any of that money lands in the account before day 10 is unestablished, and that is the decisive link."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 5-6 packages at $400 with payment due on order",
+            "why": "Becomes executable once a published payment/payout path shows money usable within about 8 days of first contact."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Establish the path from first contact to settled cash for this offer: payment terms installers accept and the payout timing of the collection method",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "daysToSettledCash",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": "<= 8 days from first contact"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents/package",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "paid orders per visitor",
+            "sources": [
+              "s_conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 150,
+            "unit": "installers",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "No payment terms or time to first cash recorded on the card",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#price",
+            "dated": "2026-11-24",
+            "claim": "$400 per package",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "30 paid pre-orders from 300 unique visitors",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "150 licensed solar installers, 10 interconnection applications a month each",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: no payment terms or payout timing is recorded for the interconnection-package opening, so no sale can be counted as cash settled within the 10-day window.",
+          "resolution": "Answer research question cnd_c9f0d1fb222642ef8cac: record the published payment terms and payout schedule (e.g. card payment at order with the processor's stated payout delay) showing money usable within ~8 days of first contact; then sell 5-6 packages at $400 by published business email."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3cebba464dde46f18212",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_f59d3f30a32e_81ba6e",
+        "digest": "f59d3f30a32ee0df5bdb7931",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_10db1430df10401b897c/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:15.543Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_50da867f83004658b77b",
+      "contractDigest": "2b8ef698a9f57b3898483b68",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No executable plan: nothing establishes that interconnection-package payments settle inside 10 days",
+        "opportunityIds": [],
+        "why": "The only opening (interconnection permit packages, $400, Brain-produced spreadsheet, $20 direct cost, reachable by published email, 10% pre-order conversion, 150 installers) has no payment terms and no time-to-first-cash on its record. The objective counts only cash settled within 10 days; five sales ($2,000) are reachable on paper, but whether any of that money lands in the account before day 10 is unestablished, and that is the decisive link."
+      },
+      "alternatives": [
+        {
+          "title": "Sell 5-6 packages at $400 with payment due on order",
+          "why": "Becomes executable once a published payment/payout path shows money usable within about 8 days of first contact."
+        }
+      ],
+      "steps": [
+        {
+          "id": "research",
+          "kind": "RESEARCH",
+          "label": "Establish the path from first contact to settled cash for this offer: payment terms installers accept and the payout timing of the collection method",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "daysToSettledCash",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "days",
+          "sources": [
+            "s_timeToFirstCash"
+          ],
+          "needs": "<= 8 days from first contact"
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 40000,
+          "unit": "cents/package",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "paid orders per visitor",
+          "sources": [
+            "s_conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerPopulation",
+          "status": "EVIDENCED",
+          "value": 150,
+          "unit": "installers",
+          "sources": [
+            "s_buyerVolume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_timeToFirstCash",
+          "url": "https://brain.local/card/cop_3cebba464dde46f18212#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "No payment terms or time to first cash recorded on the card",
+          "population": "Residential solar installers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_3cebba464dde46f18212#price",
+          "dated": "2026-11-24",
+          "claim": "$400 per package",
+          "population": "Residential solar installers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conversionRates",
+          "url": "https://brain.local/card/cop_3cebba464dde46f18212#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "30 paid pre-orders from 300 unique visitors",
+          "population": "Residential solar installers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_buyerVolume",
+          "url": "https://brain.local/card/cop_3cebba464dde46f18212#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "150 licensed solar installers, 10 interconnection applications a month each",
+          "population": "Residential solar installers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_reachableChannel",
+          "url": "https://brain.local/card/cop_3cebba464dde46f18212#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Published business email addresses",
+          "population": "Residential solar installers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "SETTLES_IN_TIME: no payment terms or payout timing is recorded for the interconnection-package opening, so no sale can be counted as cash settled within the 10-day window.",
+        "resolution": "Answer research question cnd_c9f0d1fb222642ef8cac: record the published payment terms and payout schedule (e.g. card payment at order with the processor's stated payout delay) showing money usable within ~8 days of first contact; then sell 5-6 packages at $400 by published business email."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_3cebba464dde46f18212",
+          "missing": [
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "revisionId": "rev_f59d3f30a32e_81ba6e",
+      "digest": "f59d3f30a32ee0df5bdb7931",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_10db1430df10401b897c/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:19:15.543Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f59d3f30a32e_81ba6e",
+      "digest": "f59d3f30a32ee0df5bdb7931",
+      "contractDigest": "2b8ef698a9f57b3898483b68",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Interconnection permit packages for residential solar instal\", and what it is missing first is cash that settles before the deadline.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_3cebba464dde46f18212"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Interconnection permit packages for residential solar installers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Interconnection permit packages for residential solar installers\"",
+            "owner": "PERSON",
+            "cost": 20
+          },
+          {
+            "label": "Collect payment for \"Interconnection permit packages for residential solar installers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Establish when money for \"Interconnection permit packages for residential solar installers\" would actually settle (payment terms and payout timing).",
+        "openings": [
+          {
+            "opportunityId": "cop_3cebba464dde46f18212",
+            "title": "Interconnection permit packages for residential solar installers",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 2000,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Residential solar installers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:15.668Z",
+              "offerScope": "Interconnection permit packages for residential solar installers",
+              "priceCents": 40000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "residential solar installation",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "150 solar installers hold state contractor licences; each files 10 interconnection applications a month.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Interconnection permit packages for residential solar installers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "30 paid pre-orders from 300 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Residential solar installers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$400",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_c9f0d1fb222642ef8cac"
+        ],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 10,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:16:16.711Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_f59d3f30a32e_81ba6e",
+        "revisionDigest": "f59d3f30a32ee0df5bdb7931",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_10db1430df10401b897c/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1245371722d74a0e8639/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the card records no timeToFirstCash/payment terms (Brain marks SETTLES_IN_TIME missing) and the objective counts only cash settled within 10 days, so settlement is the decisive unknown; correctly framed as missing evidence, not a constraint; 5 x $400 = $2,000 arithmetic is correct; resolution is the parked research question.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:15.047Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f59d3f30a32e_81ba6e",
+      "digest": "f59d3f30a32ee0df5bdb7931",
+      "contractDigest": "2b8ef698a9f57b3898483b68",
+      "plan": {
+        "goalId": "wst_50da867f83004658b77b",
+        "contractDigest": "2b8ef698a9f57b3898483b68",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: nothing establishes that interconnection-package payments settle inside 10 days",
+          "opportunityIds": [],
+          "why": "The only opening (interconnection permit packages, $400, Brain-produced spreadsheet, $20 direct cost, reachable by published email, 10% pre-order conversion, 150 installers) has no payment terms and no time-to-first-cash on its record. The objective counts only cash settled within 10 days; five sales ($2,000) are reachable on paper, but whether any of that money lands in the account before day 10 is unestablished, and that is the decisive link."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 5-6 packages at $400 with payment due on order",
+            "why": "Becomes executable once a published payment/payout path shows money usable within about 8 days of first contact."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Establish the path from first contact to settled cash for this offer: payment terms installers accept and the payout timing of the collection method",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "daysToSettledCash",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": "<= 8 days from first contact"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents/package",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "paid orders per visitor",
+            "sources": [
+              "s_conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 150,
+            "unit": "installers",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "No payment terms or time to first cash recorded on the card",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#price",
+            "dated": "2026-11-24",
+            "claim": "$400 per package",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "30 paid pre-orders from 300 unique visitors",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "150 licensed solar installers, 10 interconnection applications a month each",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_3cebba464dde46f18212#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Residential solar installers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "SETTLES_IN_TIME: no payment terms or payout timing is recorded for the interconnection-package opening, so no sale can be counted as cash settled within the 10-day window.",
+          "resolution": "Answer research question cnd_c9f0d1fb222642ef8cac: record the published payment terms and payout schedule (e.g. card payment at order with the processor's stated payout delay) showing money usable within ~8 days of first contact; then sell 5-6 packages at $400 by published business email."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3cebba464dde46f18212",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "revisionId": "rev_f59d3f30a32e_81ba6e",
+        "digest": "f59d3f30a32ee0df5bdb7931",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_10db1430df10401b897c/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:15.543Z"
+      },
+      "review": {
+        "revisionId": "rev_f59d3f30a32e_81ba6e",
+        "revisionDigest": "f59d3f30a32ee0df5bdb7931",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_10db1430df10401b897c/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1245371722d74a0e8639/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the card records no timeToFirstCash/payment terms (Brain marks SETTLES_IN_TIME missing) and the objective counts only cash settled within 10 days, so settlement is the decisive unknown; correctly framed as missing evidence, not a constraint; 5 x $400 = $2,000 arithmetic is correct; resolution is the parked research question.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:15.047Z"
+      },
+      "at": "2026-11-27T00:23:46.581Z"
+    },
+    "staleFinal": null
+  }
+}

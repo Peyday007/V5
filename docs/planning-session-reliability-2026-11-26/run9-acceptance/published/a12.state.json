@@ -1,0 +1,681 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_5eadb3e176a54e6e8a7d",
+      "words": "Collect $150,000 of settled cash within 30 days with at most $10,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 15000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": 1000000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "bedd648777f6e72b2b598fb7"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_5eadb3e176a54e6e8a7d",
+        "contractDigest": "bedd648777f6e72b2b598fb7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan for $150,000: the whole counted market is worth at most $51,000",
+          "opportunityIds": [],
+          "why": "The FSC database counts exactly 85 sawmill certificate holders, each buying one $600 workbook per annual audit: every one agreeing inside 30 days brings at most 85 x $600 = $51,000, a third of the $150,000 target (and the measured 14/60 close rate implies far less)."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the workbook to the 85 counted mills",
+            "why": "At the measured 23% close rate about 20 deals = ~$12,000; even a full sweep is capped at $51,000."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue in window",
+            "status": "EVIDENCED",
+            "value": 51000,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.233,
+            "unit": "share",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Exactly 85 FSC CoC certificate holders operating sawmills in the region, each audited once a year needing one workbook",
+            "population": "FSC-certified sawmills in the region",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#price",
+            "dated": "2026-11-24",
+            "claim": "Seven mills paid $600 each for the workbook (paid invoices)",
+            "population": "FSC-certified sawmills",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "14 agreements from 60 contacts",
+            "population": "FSC-certified sawmills contacted",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Market volume: the counted market (85 mills x one $600 workbook a year) caps revenue at $51,000, below the $150,000 target.",
+          "resolution": "Lower the target to at most about $51,000 (realistically ~$12,000 at the measured close rate), or research further buyer populations (other regions' FSC holders, other certification schemes) and re-plan with them.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_966d2cd20510489c9eba",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to at most $51,000 (85 counted buyers x $600)",
+            "basis": [
+              {
+                "opportunityId": "cop_966d2cd20510489c9eba",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_966d2cd20510489c9eba",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_7cea570b6a4b_9bf424",
+        "digest": "7cea570b6a4bdc40a8556dfe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5de561550aed4a2b895d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:25.732Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_5eadb3e176a54e6e8a7d",
+      "contractDigest": "bedd648777f6e72b2b598fb7",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan for $150,000: the whole counted market is worth at most $51,000",
+        "opportunityIds": [],
+        "why": "The FSC database counts exactly 85 sawmill certificate holders, each buying one $600 workbook per annual audit: every one agreeing inside 30 days brings at most 85 x $600 = $51,000, a third of the $150,000 target (and the measured 14/60 close rate implies far less)."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the workbook to the 85 counted mills",
+          "why": "At the measured 23% close rate about 20 deals = ~$12,000; even a full sweep is capped at $51,000."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 85,
+          "unit": "buyers",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per workbook",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "USD",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum revenue in window",
+          "status": "EVIDENCED",
+          "value": 51000,
+          "unit": "USD",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "close rate",
+          "status": "EVIDENCED",
+          "value": 0.233,
+          "unit": "share",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_966d2cd20510489c9eba#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "Exactly 85 FSC CoC certificate holders operating sawmills in the region, each audited once a year needing one workbook",
+          "population": "FSC-certified sawmills in the region",
+          "matchesBuyer": true,
+          "opportunityId": "cop_966d2cd20510489c9eba"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_966d2cd20510489c9eba#price",
+          "dated": "2026-11-24",
+          "claim": "Seven mills paid $600 each for the workbook (paid invoices)",
+          "population": "FSC-certified sawmills",
+          "matchesBuyer": true,
+          "opportunityId": "cop_966d2cd20510489c9eba"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_966d2cd20510489c9eba#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "14 agreements from 60 contacts",
+          "population": "FSC-certified sawmills contacted",
+          "matchesBuyer": true,
+          "opportunityId": "cop_966d2cd20510489c9eba"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Market volume: the counted market (85 mills x one $600 workbook a year) caps revenue at $51,000, below the $150,000 target.",
+        "resolution": "Lower the target to at most about $51,000 (realistically ~$12,000 at the measured close rate), or research further buyer populations (other regions' FSC holders, other certification schemes) and re-plan with them.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_966d2cd20510489c9eba",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to at most $51,000 (85 counted buyers x $600)",
+          "basis": [
+            {
+              "opportunityId": "cop_966d2cd20510489c9eba",
+              "field": "buyerVolume"
+            },
+            {
+              "opportunityId": "cop_966d2cd20510489c9eba",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_7cea570b6a4b_9bf424",
+      "digest": "7cea570b6a4bdc40a8556dfe",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_5de561550aed4a2b895d/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:57:25.732Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_7cea570b6a4b_9bf424",
+      "digest": "7cea570b6a4bdc40a8556dfe",
+      "contractDigest": "bedd648777f6e72b2b598fb7",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 1000000,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $51,000, so they cannot reach the $150,000 still needed. To make it supportable, target: lower the target to about $51,000, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_966d2cd20510489c9eba"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_966d2cd20510489c9eba",
+            "title": "FSC chain-of-custody audit-preparation workbook for certified sawmills",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 51000,
+            "potentialReach": 120000,
+            "card": {
+              "payer": "Sawmill certification and compliance managers",
+              "reachableChannel": "Certificate-holder contacts in the public FSC certificate database",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:58.279Z",
+              "offerScope": "FSC chain-of-custody audit-preparation workbook for certified sawmills",
+              "priceCents": 60000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "sawmills",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Certificate-holder contacts in the public FSC certificate database"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 600 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 14 accepted of 60 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "86 deal(s) needed but only 85 in the window (85 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 10, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The public FSC certificate database lists exactly 85 chain-of-custody certificate holders operating sawmills in the region; each is audited once a year and needs one workbook per audit.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell FSC chain-of-custody audit-preparation workbook for certified sawmills to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "14 agreements from 60 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$10",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Sawmill certification and compliance managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Seven mills paid $600 each for the workbook ahead of their 2026 audits (paid invoices).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 15000000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:57.629Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7cea570b6a4b_9bf424",
+        "revisionDigest": "7cea570b6a4bdc40a8556dfe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5de561550aed4a2b895d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d5100f4954f14edfb434/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a TARGET constraint is correct. Every other link is established on the card's own records: price $600 from seven paid invoices, conversion measured on this offer (14/60), Brain-proved spreadsheet delivery at $10 cost, $0 tied up within the $10,000 cap, 5 days to cash within 30. The binding fact is the evidenced buyerVolume: exactly 85 regional FSC CoC sawmill holders, each buying one workbook per annual audit, so even all 85 agreeing inside 30 days yields 85 x $600 = $51,000 < $150,000. That is a constraint the evidence itself imposes (all evidence in hand still cannot fit the target), cited to the buyerVolume and price fields, and the decisive link MARKET_VOLUME matches Brain's check.",
+        "findings": [
+          "Arithmetic: 85 x 600 = 51,000 (34% of 150,000); 14/60 = 0.233; 85 x 0.233 = 19.8 -> ~20 deals x $600 = ~$11,900, matching the stated ~$12,000.",
+          "The ceiling is if anything generous: seven mills already paid for their 2026 audits, so with one purchase per mill per year the unsold pool in this window is at most 78 (~$46,800).",
+          "Nothing unknown is treated as known; the ledger is empty, consistent with no steps; the resolution (lower target or research other regions/schemes) is the right pair of levers."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:59:08.919Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_7cea570b6a4b_9bf424",
+      "digest": "7cea570b6a4bdc40a8556dfe",
+      "contractDigest": "bedd648777f6e72b2b598fb7",
+      "plan": {
+        "goalId": "wst_5eadb3e176a54e6e8a7d",
+        "contractDigest": "bedd648777f6e72b2b598fb7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan for $150,000: the whole counted market is worth at most $51,000",
+          "opportunityIds": [],
+          "why": "The FSC database counts exactly 85 sawmill certificate holders, each buying one $600 workbook per annual audit: every one agreeing inside 30 days brings at most 85 x $600 = $51,000, a third of the $150,000 target (and the measured 14/60 close rate implies far less)."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the workbook to the 85 counted mills",
+            "why": "At the measured 23% close rate about 20 deals = ~$12,000; even a full sweep is capped at $51,000."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue in window",
+            "status": "EVIDENCED",
+            "value": 51000,
+            "unit": "USD",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.233,
+            "unit": "share",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Exactly 85 FSC CoC certificate holders operating sawmills in the region, each audited once a year needing one workbook",
+            "population": "FSC-certified sawmills in the region",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#price",
+            "dated": "2026-11-24",
+            "claim": "Seven mills paid $600 each for the workbook (paid invoices)",
+            "population": "FSC-certified sawmills",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_966d2cd20510489c9eba#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "14 agreements from 60 contacts",
+            "population": "FSC-certified sawmills contacted",
+            "matchesBuyer": true,
+            "opportunityId": "cop_966d2cd20510489c9eba"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Market volume: the counted market (85 mills x one $600 workbook a year) caps revenue at $51,000, below the $150,000 target.",
+          "resolution": "Lower the target to at most about $51,000 (realistically ~$12,000 at the measured close rate), or research further buyer populations (other regions' FSC holders, other certification schemes) and re-plan with them.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_966d2cd20510489c9eba",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to at most $51,000 (85 counted buyers x $600)",
+            "basis": [
+              {
+                "opportunityId": "cop_966d2cd20510489c9eba",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_966d2cd20510489c9eba",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_7cea570b6a4b_9bf424",
+        "digest": "7cea570b6a4bdc40a8556dfe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5de561550aed4a2b895d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:25.732Z"
+      },
+      "review": {
+        "revisionId": "rev_7cea570b6a4b_9bf424",
+        "revisionDigest": "7cea570b6a4bdc40a8556dfe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_5de561550aed4a2b895d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d5100f4954f14edfb434/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a TARGET constraint is correct. Every other link is established on the card's own records: price $600 from seven paid invoices, conversion measured on this offer (14/60), Brain-proved spreadsheet delivery at $10 cost, $0 tied up within the $10,000 cap, 5 days to cash within 30. The binding fact is the evidenced buyerVolume: exactly 85 regional FSC CoC sawmill holders, each buying one workbook per annual audit, so even all 85 agreeing inside 30 days yields 85 x $600 = $51,000 < $150,000. That is a constraint the evidence itself imposes (all evidence in hand still cannot fit the target), cited to the buyerVolume and price fields, and the decisive link MARKET_VOLUME matches Brain's check.",
+        "findings": [
+          "Arithmetic: 85 x 600 = 51,000 (34% of 150,000); 14/60 = 0.233; 85 x 0.233 = 19.8 -> ~20 deals x $600 = ~$11,900, matching the stated ~$12,000.",
+          "The ceiling is if anything generous: seven mills already paid for their 2026 audits, so with one purchase per mill per year the unsold pool in this window is at most 78 (~$46,800).",
+          "Nothing unknown is treated as known; the ledger is empty, consistent with no steps; the resolution (lower target or research other regions/schemes) is the right pair of levers."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:59:08.919Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $150,000 of settled cash within 30 days with at most $10,000 of capital.",
+        "terms": "ca7838f83a0a97c3",
+        "openings": {
+          "cop_966d2cd20510489c9eba": "70ff7992c7a512a2"
+        }
+      },
+      "at": "2026-11-27T11:00:37.931Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

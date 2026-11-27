@@ -630,3 +630,172 @@ next(r for r in REPAIRS if r['id']=='W2j').update(state='DEPLOYED_VERIFIED', evi
 setq('C14','R','PASS',"fm1126b on baa7192 (RC20 live): judged ideas launch — first in the window, 12 missions RUNNING within minutes of release (launching probe).",'RC20')
 PROGRESS.append(dict(at='2026-11-26 11:35Z', measure='RC20 verified on production: fm1126b research launches (12 missions RUNNING). Plans still unpriced; first research results expected over the next hours at about 20 fragments/h Brain-wide.', usable='0/30 (research in progress)', note='launching probe on baa7192'))
 REPAIRS.append(dict(id='W2k', rc='RC17', what="The owner profile holds only skills and assets the owner's own words support (ownerProfileOf with the words; groundedInWords), so a skill or asset the model invents never reaches the route ask, the critic or discovery.", owner='goals/routeProposal.ts', depends='', state='BRANCH_PENDING_DEPLOY', evidence="tests/planningFailureMapWave2 'C02-F: the owner profile holds only what the owner said' fails without the grounding, passes with it; test:impacted 200 passed"))
+
+# ---- Current Opus + Brain workflow coverage (2026-11-27) ----
+# The capabilities above (C01-C75) describe Brain's own autonomous planner. The
+# owner's workflow is now: an objective given in the Claude app, Opus driving
+# Brain through the brain_planning_* tools (server/mcp/planningTools.ts over
+# server/services/planning/sessionPlanning.ts), checked by
+# server/domain/sessionPlanning.ts checkRevision, reviewed and verified by a
+# second identity dealt through Brain's work queue. Each row says which owner
+# does the work, what it reads and produces, what evidence holds, and what
+# remains. Status: PASS (verified), PARTIAL (verified with a named gap), FAIL
+# (a known defect), BLOCKED (needs the owner's action), LEGACY (superseded path).
+_J = 'docs/planning-session-reliability-2026-11-26'
+WORKFLOW = [
+ dict(id='W01', name='Objective to goal and contract', status='PASS',
+   behavior='The owner\'s words become a goal with a contract (target, window, capital, owner hours, scope) that every later check reads; an unstated term stays unstated.',
+   component='sessionPlanning.establishContract / currentContract; tool brain_planning_contract', inputs='objective text from the Claude-app session', output='GoalContract row', consumer='checkRevision constraints; runBrain; grader',
+   evidence=f'{_J}/journeys j1/j2 state (contracts established through the isolated MCP host); tests/sessionPlanningPath.test.ts', remaining='—'),
+ dict(id='W02', name='Discovery from a raw objective', status='PARTIAL',
+   behavior='With no supplied candidates, the session proposes routes, Brain admits them as openings with a stated mechanism, and refuses inadmissible ones with the values it accepts.',
+   component='sessionPlanning.admitRoutes; goals/routeProposal.ts (mechanism refusal lists CASH_MECHANISMS)', inputs='routes the author proposes from the objective and Brain context', output='opportunities rows linked to the goal', consumer='runBrain planner; planningContext',
+   evidence=f'{_J}/journeys/j2-admit-mechanism-retry.json (refusal fixed, retry admitted); J2 published NO_PLAN with a $150 experiment', remaining='No bench rubric grades raw-objective discovery yet; final acceptance includes discovery cases graded on the published plan by the §2 rule (a generic refusal or no openings fails).',
+   legacy='goals/routeProposal open-model route ask and russell scout (Brain-autonomous discovery, C03-C10) are not on this path'),
+ dict(id='W03', name='Decisive research questions', status='PASS',
+   behavior='Brain names the question whose answer changes the plan, per opening and link.',
+   component='sessionPlanning.openQuestions; goals pathResearch', inputs='planner links not ok', output='research needs with link and decision', consumer='author research; brain_planning_research',
+   evidence=f'{_J}/journeys j2-summary.json (questions opened and answered)', remaining='—'),
+ dict(id='W04', name='Research execution by the session', status='PASS',
+   behavior='The author researches with its own tools and records each answer with sources; no answer without a source.',
+   component='sessionPlanning.answerResearch; tool brain_planning_research', inputs='web sources the session reads', output='evidence facts attached to the need', consumer='verification (W05); planner rerun',
+   evidence='J1, J2 journeys; tests/sessionPlanningPath.test.ts', remaining='—', legacy='research/packetRunner fragments (Brain fleet research) remain for autonomous goals, not this path'),
+ dict(id='W05', name='Independent evidence verification', status='PASS',
+   behavior='Every answer is verified by a principal other than its author, dealt as a PLAN_VERIFY work item; completion requires the recorded verdict.',
+   component='sessionPlanning.requestVerification / leasedVerificationFor / verificationRecordedBy; mcp/tools.ts brain_complete_work guard', inputs='answer + sources', output='verification verdict', consumer='planner facts; checkRevision',
+   evidence='J2: 2 verifications by the fleet via the queue; tests/sessionPlanningPath.test.ts', remaining='—'),
+ dict(id='W06', name='Geography of evidence', status='PASS',
+   behavior='UNSTATED geography does not reject a claim when the question needs no market; a required market keeps its restriction.',
+   component='research gate geography rule', inputs='claim scope, question scope', output='claim admitted or refused', consumer='facts the planner reads',
+   evidence='commit 635bbed narrow gate geography rule; matched unrestricted/market-specific controls in tests/evidenceLanes.test.ts and tests/cashPipelineRepair.test.ts', remaining='—'),
+ dict(id='W07', name='Quantitative checks and cash ledger', status='PASS',
+   behavior='The plan\'s arithmetic is recomputed: costs under prices, capital including owner float (FUNDING), net targets after direct costs, settlement inside the window.',
+   component='domain/sessionPlanning.checkRevision (cash ledger, ECONOMICS, SETTLES_IN_TIME)', inputs='revision strategy, cash ledger, contract', output='check codes', consumer='author revision; publication gate',
+   evidence='tests/sessionPlanningChecks.test.ts (48 checks/path tests)', remaining='—'),
+ dict(id='W08', name="Brain planner's link judgement", status='PASS',
+   behavior='Each link of an opening (buyer, demand, offer and price, conversion, MARKET_VOLUME, fulfiller, economics, settlement) is judged from the evidence.',
+   component='goals/plan.ts; goals/goalScenario.ts; tool brain_planning_run_brain', inputs='opening card, facts, contract', output='Brain run summary (considered, excluded, verdict, nextTest)', consumer='author; checkRevision BrainFacts',
+   evidence=f'{_J}/mv-04-determination.md; repaired 2026-11-27 in cash/volume.ts readVolume (a category total spread across N sellers is one listing\'s average share): tests/volumeRead.test.ts controls (no sellers named, 4 sellers, orders from 40 stores) and tests/investmentCommitteeWorld.test.ts mv-04 planner regression (MARKET_VOLUME not ok across 40 sellers; ok across 4)', remaining='—'),
+ dict(id='W09', name='Strategy comparison', status='PARTIAL',
+   behavior='Alternatives are compared on the same evidence; excluded openings stay visible with their card, facts and agreements, and can be disputed with a stated reason.',
+   component='sessionPlanning.consideredOpenings / openingRecord; checkRevision EXCLUSION_DISPUTE_UNSTATED', inputs='Brain run (considered + excluded)', output='strategy with disagreements', consumer='reviewer; publication',
+   evidence='tests/sessionPlanningChecks.test.ts exclusion dispute (2 tests)', remaining='No check that the chosen strategy dominates a considered alternative; comparison is the author\'s reasoning, examined by the reviewer.'),
+ dict(id='W10', name='Fulfilment and capabilities', status='PASS',
+   behavior='Every member names who fulfils it; owner-performed work counts owner hours; Brain- or provider-performed work does not.',
+   component='goals/goalScenario.ts foundOwnerHours / fulfiller; checkRevision FULFILMENT', inputs='opening card', output='labour hours', consumer='W11',
+   evidence='tests/sessionPlanningChecks.test.ts', remaining='—'),
+ dict(id='W11', name='Owner constraints; unknown availability', status='PASS',
+   behavior='Capital, deadline, scope and hours bind; owner hours the goal does not state stay unknown — the plan is at most CONDITIONAL and Brain asks the owner — never zero, never unlimited.',
+   component='checkRevision UNKNOWN_IN_EXECUTABLE / OWNER_HOURS_OVER; goals/plan.ts askHours', inputs='contract hoursCeiling, plan labour', output='check codes; nextTest by PERSON', consumer='author; owner',
+   evidence='tests/sessionPlanningChecks.test.ts unknown owner availability (3 tests)', remaining='—'),
+ dict(id='W12', name='Commercial payer versus a program', status='PASS',
+   behavior='A buyer registered with, enrolled in or funded by a program is the buyer; only a program or funder that is itself the payer is excluded as not a sale.',
+   component='domain/paymentNature.ts payerHead / arrangementExclusion', inputs='opening payer text', output='exclusion or none', consumer='planner exclusions (W09)',
+   evidence='tests/commercialHoldout.test.ts 64/64 incl. fx-15 and controls', remaining='—'),
+ dict(id='W13', name='Constraint versus missing evidence', status='PASS',
+   behavior='Missing demand evidence cannot establish an arithmetic ceiling; a constraint cites EVIDENCE facts.',
+   component='checkRevision CONSTRAINT_FROM_MISSING_EVIDENCE; CONSTRAINT_INPUTS', inputs='constraints with basis', output='check codes', consumer='author',
+   evidence=f'{_J}/run5-frozen regression; tests/sessionPlanningChecks.test.ts', remaining='—'),
+ dict(id='W14', name='Independent review', status='PASS',
+   behavior='A clean revision is dealt to a second identity as PLAN_REVIEW; the reviewer\'s conditions each cite evidence or a missing prerequisite; the author answers every condition against the records.',
+   component='sessionPlanning.requestReview / recordReview / conditionProblems; checkRevision REVIEW_CONDITION_UNANSWERED; brainOnly workItemPurposeAdmits (§118 owner-directed)', inputs='revision digest', output='review verdict + conditions', consumer='author revision; finalize',
+   evidence='J1 reviewed by the fleet via the queue (21.5 min); J2 2 reviews; tests/sessionPlanningPath.test.ts, tests/brainOnlyMode.test.ts', remaining='—'),
+ dict(id='W15', name='Revision loop', status='PASS',
+   behavior='Checks and review conditions return to the author, who revises until clean or concludes no plan with the decisive blocker.',
+   component='sessionPlanning.submitRevision / revisions', inputs='check codes, review conditions', output='new revision', consumer='review; finalize',
+   evidence=f'{_J}/run5-frozen; journeys', remaining='—'),
+ dict(id='W16', name='Publication', status='PASS',
+   behavior='Only a reviewed, clean revision is finalized; outcome EXECUTABLE, CONDITIONAL, NO_PLAN with an experiment.',
+   component='sessionPlanning.finalizePlan; tool brain_planning_finalize', inputs='revision + PASS review', output='published plan', consumer='owner; grader',
+   evidence='J1 EXECUTABLE rev_04068c407b1e_13c8a5; J2 NO_PLAN rev_d3e0d4b02959_317031', remaining='—'),
+ dict(id='W17', name='Persistence and resume', status='PASS',
+   behavior='All state is rows; a new session resumes from planningState without the transcript.',
+   component='sessionPlanning.planningState; tool brain_planning_state', inputs='goal id', output='state', consumer='resumed author session',
+   evidence='journeys j1/j2-state.json read back from the database', remaining='—'),
+ dict(id='W18', name='Recovery from operational failure', status='PASS',
+   behavior='A reviewer or verifier that dies loses its lease and the item is dealt again; a tool error names the failed operation and the retry succeeds.',
+   component='repos/workQueue.ts lease expiry; mcp error mapping', inputs='lease state', output='redelivered item', consumer='another fleet member',
+   evidence='J2 mechanism refusal → retry; tests/sessionPlanningPath.test.ts "a reviewer that dies loses its review" (no second owner while live; lapsed lease grants nothing; redealt to another member)', remaining='—'),
+ dict(id='W19', name='Permissions', status='BLOCKED',
+   behavior='The owner\'s app connector holds operator rights on the planning project; reviewers need only project:read + queue:complete and a lease.',
+   component='scripts/admin.ts access grant-planning; planningTools authorize', inputs='owner admin action', output='membership scopes', consumer='app connector',
+   evidence='production connector worker-05 holds operator:act on no project (app-readiness.md)', remaining='MISSING_AUTHORITY: owner runs grant-planning after release.'),
+ dict(id='W20', name='Claude-app access', status='BLOCKED',
+   behavior='The owner\'s Claude app lists and calls the brain_planning_* tools on production.',
+   component='server/mcp planning tools on the production MCP endpoint', inputs='deployed build', output='tools in the app', consumer='owner',
+   evidence='production serves no brain_planning_* tools (app-readiness.md); isolated host proves the tools end to end', remaining='MISSING_AUTHORITY: merge and Deploy authorization.'),
+ dict(id='W21', name='Automatic coordination', status='PARTIAL',
+   behavior='Review and verification are dealt to the fleet by the queue with no manual shuttling; the author resumes when they finish.',
+   component='workQueue PLAN_REVIEW/PLAN_VERIFY; brainOnly §118 admission; goal ownership via PATCH /api/goals/<goal>/terms', inputs='queued items', output='verdicts', consumer='author',
+   evidence='J1/J2 fleet reviews and verifications via the queue', remaining='Author polls brain_planning_state (no push); production routines must recognize the new work types (unverified until release); connector-created goals need an owner for §118 admission.'),
+ dict(id='W22', name='Acceptance grading', status='PASS',
+   behavior='Published plans of unfamiliar objectives are graded per COMPLETION-SPEC §4 with denominators, Wilson intervals and critical counts; hidden cases are authored by another agent.',
+   component='scripts/planningReliabilitySession.ts', inputs='published plans + rubrics', output='verdict/usable/e2e counts', consumer='completion claim',
+   evidence=f'{_J}/run5-frozen (11/14, 0 critical)', remaining='Final acceptance on the frozen build carrying the W08/W11/W12/W18 repairs.'),
+]
+
+# ---- Run 6 findings (frozen 48e1ca5; docs/planning-session-reliability-2026-11-26/run6-acceptance) ----
+_R6 = f'{_J}/run6-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W02':
+        _w.update(status='PARTIAL', evidence=_w['evidence'] + f'; run 6 discovery 0/4 (no public provenance, no decisive link): {_R6}', remaining='Repaired in cfebfd5: a session-discovered opening must be cited to a public page (DISCOVERY_UNSOURCED). Fresh acceptance: run 7.')
+    if _w['id'] == 'W13':
+        _w.update(evidence=_w['evidence'] + f'; run 6 ac-15: a TARGET limit read from the openings on file, repaired in cfebfd5 (counted market: buyerVolume EVIDENCE)', remaining='Fresh acceptance: run 7.', status='PARTIAL')
+    if _w['id'] == 'W15':
+        _w.update(evidence=_w['evidence'] + '; run 6: four mid-run changes went unseen after publication', status='PARTIAL', remaining='Repaired in cfebfd5: planningState reports staleFinal with staleBecause when the basis of a published plan changes. Fresh acceptance: run 7.')
+    if _w['id'] == 'W09':
+        _w.update(remaining=_w['remaining'] + ' Run 6: a conditional plan had no decisive link; validation.decides required (cfebfd5).')
+    if _w['id'] == 'W22':
+        _w.update(evidence=f'{_R6}: 18/24 = 0.75 (Wilson 0.55-0.88), 0 critical, on 48e1ca5', remaining='Run 7 on cfebfd5 with fresh hidden cases (14 bench + 4 discovery).', status='PARTIAL')
+    if _w['id'] == 'W18':
+        _w.update(evidence=_w['evidence'] + '; run 6: 6 hosts OOM-killed mid-run, restarted on their databases with state intact')
+
+# ---- Run 7 (frozen cfebfd5; run7-acceptance) ----
+_R7 = f'{_J}/run7-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W15':
+        _w.update(status='PASS', evidence=_w['evidence'] + f'; run 7: three mid-run changes re-planned unprompted via staleBecause ({_R7})', remaining='—')
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 7 on cfebfd5: 14/18 = 0.78 (Wilson 0.55-0.91), 0 critical ({_R7})', remaining='Run 8 on the build carrying the run 7 repairs (TARGET counted market always; provenance for every weighed discovered opening).')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 7 discovery 1/4: alternatives left uncited; provenance now required for every weighed discovered opening. Fresh acceptance: run 8.')
+    if _w['id'] == 'W13':
+        _w.update(remaining='Run 7 ag-11: counted-market rule now applies to every TARGET limit. Fresh acceptance: run 8.')
+
+# ---- Run 8 (frozen a664ccd; run8-acceptance) ----
+_R8 = f'{_J}/run8-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 8 on a664ccd: 15/18 = 0.83 (Wilson 0.61-0.94), 0 critical ({_R8})', remaining='Run 9 on the build carrying the run 8 repairs (job-title payers, excluded openings admitted, integrity findings scoped to used openings).')
+    if _w['id'] == 'W12':
+        _w.update(status='PASS', evidence=_w['evidence'] + '; run 8 ah-06: "program directors" read as a program, repaired (role words after a program noun name a person)', remaining='—')
+    if _w['id'] == 'W09':
+        _w.update(remaining=_w['remaining'] + ' Run 8: an excluded opening was not admitted, so a disputed exclusion could not be built on; excluded openings are now admitted.')
+    if _w['id'] == 'W07':
+        _w.update(evidence=_w['evidence'] + '; run 8 ai-02: an integrity finding on an unused opening refused every revision, now scoped to the openings the plan uses')
+    if _w['id'] == 'W18':
+        _w.update(evidence=_w['evidence'] + '; run 8: an orphaned host child held its port (EADDRINUSE); the harness watchdog now probes the port')
+    if _w['id'] == 'W13':
+        _w.update(status='PASS', evidence=_w['evidence'] + '; run 8: ah-11 (one authority) MARKET_VOLUME and ah-14 (counted market) TARGET both correct', remaining='—')
+    if _w['id'] == 'W02':
+        _w.update(evidence=_w['evidence'] + '; run 8: ai-01 and ai-03 pass with 3-4 cited discovered openings each', remaining='Run 8 discovery 2/4 (one Brain integrity defect, one harness failure). Fresh acceptance: run 9.')
+
+# ---- Run 9 (frozen dc5b81e; run9-acceptance) ----
+_R9 = f'{_J}/run9-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 9 on dc5b81e: 14/16 = 0.875 (Wilson 0.64-0.97), 1 critical; bench 12/12 ({_R9})', remaining='Run 10 on the build excluding owner hourly wages as openings; standard needs >= 0.90 with zero critical.')
+    if _w['id'] == 'W12':
+        _w.update(evidence=_w['evidence'] + '; run 9 ak-01 (critical): an hourly wage for the owner was admitted as an opening, now excluded', status='PARTIAL', remaining='Fresh acceptance on the wage repair: run 10.')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 9 discovery 2/4 (1 critical: a wage admitted; 1 proof rule arithmetically insufficient). Fresh acceptance: run 10.')
+
+# ---- Run 10 (frozen a5412ec; run10-acceptance) ----
+_R10 = f'{_J}/run10-acceptance'
+for _w in WORKFLOW:
+    if _w['id'] == 'W22':
+        _w.update(evidence=_w['evidence'] + f'; run 10 on a5412ec: 14/16 = 0.875 (Wilson 0.64-0.97), 0 critical; bench 11/12, discovery 3/4 ({_R10})', remaining='Standard (>= 0.90, zero critical) not met: al-08 (trainer capacity read as one session a week; evidence wording supports both readings) and am-03 (per-opening arithmetic incomplete; owner-only fulfilment not a decisive link).')
+    if _w['id'] == 'W12':
+        _w.update(evidence=_w['evidence'] + '; run 10: no wage or other critical route admitted', status='PASS', remaining='None from run 10.')
+    if _w['id'] == 'W02':
+        _w.update(remaining='Run 10 discovery 3/4, 0 critical; am-03 failed on incomplete per-opening arithmetic and an untested owner-fulfilment constraint.')

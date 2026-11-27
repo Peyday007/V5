@@ -1,0 +1,25 @@
+{
+  "id": "ho-15-out-of-reach-target",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_047f863f6da2_250eb8",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names relax TARGET, TARGET broken",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

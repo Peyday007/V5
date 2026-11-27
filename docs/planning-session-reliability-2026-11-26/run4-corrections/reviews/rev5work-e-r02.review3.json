@@ -1,0 +1,10 @@
+{
+ "goal_id": "wst_a95ea58663d34e189e2d",
+ "revision_id": "rev_9c67432fef35_dafeca",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "PASS",
+ "reasons": "CONDITIONAL is right. MARKET_VOLUME rests on category-wide sales split across 40 sellers, not on this listing's own record, so its share is a genuine unknown that only a live listing measures. The thresholds now match the schedule. Proof is 17 sales in days 2-10 (1.89 a day); the remaining 22 sales in days 11-22 need 1.83 a day, so the pace is consistent. The day-15 check of 28 cumulative leaves 11 sales in 7 days (1.57 a day), which is achievable. Stop below 8, an 8-16 band rechecked on day 15, and continue at 17 or more cover every result. The ledger checks: 17 x $29 + 22 x $29 = $1,131 gross, less $117 in fees = $1,014 net, last payout settling on day 25 inside 30 days. Exposure is $0, Brain's check reports no problems, the 60/1,500 pre-orders are correctly treated as a conversion measurement rather than orders in hand, and Brain produces the spreadsheet as the recorded fulfiller.",
+ "findings": []
+}

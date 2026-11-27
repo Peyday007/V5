@@ -1,0 +1,16 @@
+{
+ "goal_id": "wst_5a1a872a7df846ec8498",
+ "revision_id": "rev_fcea79ecabdc_aefaa2",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-gamma",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "CONDITIONAL is the wrong stance. The evidence already supports execution. Every chain link of the one member is established on the card: three written acceptances at $1,600 from golf courses (conversion is measured, not unknown), Brain-proved PRODUCE_SPREADSHEET fulfilment, $20 direct cost, and 10 days to cash. $4,800 covers the $4,000 target and settles about day 15 of 30. My earlier finding was that the $60 interim outlay had no stated funding. It was not that the outlay is forbidden: the goal sets no capital, spend or exposure ceiling (all null), so a declared $60 working float is inside every limit. Instead the revision invents an unknown, whether the courses will prepay. No card fact supports invoicing on acceptance. The card's 10-day time to cash is applied from the invoice date instead of from delivery, and the plan asks buyers who agreed on the recorded terms to change them. Its stop rule would then abandon a fully evidenced $4,800 plan over $60. The CAPITAL constraint it names is not a limit the goal states. The right revision is EXECUTABLE: deliver on about day 5, declare the $60 owner float (returned from the settled $4,800), and settle on about day 15.",
+ "findings": [
+  "Stance should be EXECUTABLE, not CONDITIONAL: conversion, price, fulfilment, cost and settlement are all evidenced on the card. The only unknown, prepayment, was created by the plan itself, and no live test is needed to start.",
+  "The claim that the goal 'does not allow' an interim shortfall is wrong. The goal has no capital, spend or exposure ceiling, so a declared $60 float fits; the CAPITAL constraint listed is not a goal limit.",
+  "Ledger timing is not evidenced: receipts settle on day 11 from an invoice on day 1, but the card records 10 days to cash with no prepayment terms. Prepay-before-production is asserted, not sourced.",
+  "The stop rule ('no course prepays by day 12, then stop') would drop a viable signed $4,800 plan; the fallback should be the $60 float, not stopping.",
+  "Fix: deliver first, declare a $60 owner working float in the ledger so Brain's cash-shortfall check passes, collect $4,800 by about day 15, stance EXECUTABLE."
+ ]
+}

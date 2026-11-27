@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "E-2 business plan intake",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["attorney", "investor", "business", "investment", "hiring", "timeline", "consent"],
+  "properties": {
+    "attorney": {
+      "type": "object", "required": ["name", "firm", "email", "bar_state"],
+      "properties": {
+        "name": {"type": "string"}, "firm": {"type": "string"}, "email": {"type": "string", "format": "email"},
+        "bar_state": {"type": "string", "minLength": 2, "maxLength": 2},
+        "template_upload": {"type": "string", "description": "optional file id"}
+      }
+    },
+    "investor": {
+      "type": "object", "required": ["name", "treaty_nationality", "ownership_pct", "role"],
+      "properties": {
+        "name": {"type": "string"}, "treaty_nationality": {"type": "string", "description": "validated against the State Department E-2 treaty list"},
+        "ownership_pct": {"type": "number", "minimum": 0, "maximum": 100},
+        "role": {"type": "string"}, "cv_upload": {"type": "string"}
+      }
+    },
+    "business": {
+      "type": "object", "required": ["legal_name", "state", "city", "description", "type"],
+      "properties": {
+        "legal_name": {"type": "string"}, "entity": {"type": "string"}, "state": {"type": "string"}, "city": {"type": "string"},
+        "naics": {"type": "string"}, "description": {"type": "string"},
+        "type": {"enum": ["new", "purchase", "franchise", "expansion"]}, "lease_status": {"type": "string"},
+        "products_prices": {"type": "string"}, "letters_of_intent": {"type": "string"}
+      }
+    },
+    "investment": {
+      "type": "object", "required": ["total_committed", "spent_to_date", "uses", "source_of_funds_summary"],
+      "properties": {
+        "total_committed": {"type": "number", "minimum": 0}, "spent_to_date": {"type": "number", "minimum": 0},
+        "uses": {"type": "array", "items": {"type": "object", "required": ["item", "amount"], "properties": {"item": {"type": "string"}, "amount": {"type": "number"}}}},
+        "source_of_funds_summary": {"type": "string"}
+      }
+    },
+    "hiring": {
+      "type": "array", "minItems": 1,
+      "items": {"type": "object", "required": ["title", "pay", "start_month"],
+                "properties": {"title": {"type": "string"}, "pay": {"type": "string"}, "start_month": {"type": "integer", "minimum": 1, "maximum": 60}}}
+    },
+    "estimates": {"type": "string", "description": "investor's own volume, rent, margin estimates (optional)"},
+    "timeline": {
+      "type": "object", "required": ["filing_or_interview_date", "venue"],
+      "properties": {"filing_or_interview_date": {"type": "string", "format": "date"}, "venue": {"enum": ["consulate", "USCIS"]}}
+    },
+    "consent": {
+      "type": "object", "required": ["ai_processing", "reviewer_nda", "no_guarantee_ack"],
+      "properties": {"ai_processing": {"const": true}, "reviewer_nda": {"const": true}, "no_guarantee_ack": {"const": true}}
+    }
+  }
+}

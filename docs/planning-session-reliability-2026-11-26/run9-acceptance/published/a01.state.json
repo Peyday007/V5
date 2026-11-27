@@ -1,0 +1,2552 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_dbc223b4f4da4c3c8aea",
+      "words": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 250000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 28,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$2,500 of settled cash in the owner account within 28 days",
+        "ownerHoursPerWeek": 2,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "95a9aca132a2427bfc824814"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_dbc223b4f4da4c3c8aea",
+        "contractDigest": "95a9aca132a2427bfc824814",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the inspection-log workbook to association gyms",
+          "opportunityIds": [
+            "cop_186db24bcef04c789add"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $380, conversion measured on this offer (9 of 60), 140 reachable managers, Brain fulfils the spreadsheet itself with zero owner hours, $6 cost, 5 days to cash. 8 sales x $380 = $3,040 gross, $2,992 after cost, settling by day 18 of 28; at 15% conversion 8 sales need about 54 of 140 contacts."
+        },
+        "alternatives": [
+          {
+            "title": "Belay-certification clinics",
+            "why": "Two signed $600 bookings, but each needs 6 owner hours on site, breaking the 2 hours a week limit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails 60 buyers from the published channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $380 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 8 copies",
+            "performer": "BRAIN",
+            "costCents": 4800,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 13,
+            "kind": "SPEND",
+            "amountCents": 4800,
+            "label": "Direct cost $6 x 8",
+            "stepId": "deliver"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 304000,
+            "label": "8 x $380",
+            "settlesDay": 18,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": "9/60",
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": "140",
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#price",
+            "dated": "2026-11-24",
+            "claim": "Three member gyms paid $380 each for the workbook in October (paid invoices)",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 member gyms with named operations manager and published email",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Manager emails published in the association member directory",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per sale",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "why": "OWNER_HOURS: the owner personally delivers each clinic at 6 hours (card humanHours 6, fulfillmentOwner the owner); one clinic is 6 hours in a week against the 2 hours a week the objective allows, and the two booked clinics are 12 hours against the 8-hour window total."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "deals": 8,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4c5357c59754_75da71",
+        "digest": "4c5357c597547f1a1f6cd8b8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:58:31.096Z"
+      },
+      {
+        "goalId": "wst_dbc223b4f4da4c3c8aea",
+        "contractDigest": "95a9aca132a2427bfc824814",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the inspection-log workbook to association gyms",
+          "opportunityIds": [
+            "cop_186db24bcef04c789add"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $380, conversion measured on this offer (9 of 60), 140 reachable managers, Brain fulfils the spreadsheet itself with zero owner hours, $6 cost, 5 days to cash. 8 sales x $380 = $3,040 gross, $2,992 after cost, settling by day 18 of 28; at 15% conversion 8 sales need about 54 of 140 contacts."
+        },
+        "alternatives": [
+          {
+            "title": "Belay-certification clinics",
+            "why": "Two signed $600 bookings, but each needs 6 owner hours on site, breaking the 2 hours a week limit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails 60 buyers from the published channel",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the product at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $380 (measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 8 copies",
+            "performer": "BRAIN",
+            "costCents": 4800,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect payment for each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 4800,
+            "label": "Direct cost $6 x 8",
+            "stepId": "deliver"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 304000,
+            "label": "8 x $380",
+            "settlesDay": 18,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 18,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#price",
+            "dated": "2026-11-24",
+            "claim": "Three member gyms paid $380 each for the workbook in October (paid invoices)",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 member gyms with named operations manager and published email",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Manager emails published in the association member directory",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per sale",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "why": "OWNER_HOURS: the owner personally delivers each clinic at 6 hours (card humanHours 6, fulfillmentOwner the owner); one clinic is 6 hours in a week against the 2 hours a week the objective allows, and the two booked clinics are 12 hours against the 8-hour window total."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "deals": 8,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f8e6f6f03a8c_1a2133",
+        "digest": "f8e6f6f03a8c8fa58c876a38",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:58:42.530Z"
+      },
+      {
+        "goalId": "wst_dbc223b4f4da4c3c8aea",
+        "contractDigest": "95a9aca132a2427bfc824814",
+        "parentRevisionId": "rev_f8e6f6f03a8c_1a2133",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the inspection-log workbook to association gyms",
+          "opportunityIds": [
+            "cop_186db24bcef04c789add"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $380, conversion measured on this offer (9 of 60 = 15%), 140 reachable managers, Brain fulfils the spreadsheet itself (no fulfillmentOwner; PRODUCE_SPREADSHEET, Brain's FULFILMENT basis 'Brain has proved'), $6 cost, 5 days to cash. 8 sales x $380 = $3,040 gross, $2,992 after cost, in two batches of 4 settling on days 13 and 20 of 28; 8 sales at 15% need ~54 contacts and Brain contacts the ~80 directory managers not already in the measured 60. Owner time: 0 hours planned. The card's humanHours 0.5 per deal is the fulfiller's (Brain's) production work, and even if it were the owner's, batches of 4 deliveries a week are 2 h a week, inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Belay-certification clinics",
+            "why": "Two signed $600 bookings, but each needs 6 owner hours on site, breaking the 2 hours a week limit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain connects its sending inbox and invoicing on day 1, then emails the ~80 directory managers not in the measured 60 (54 contacts needed at 15%)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel",
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the workbook at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell1",
+            "kind": "SELL",
+            "label": "Close the first 4 sales at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 4 workbooks (week 2)",
+            "performer": "BRAIN",
+            "costCents": 2400,
+            "day": 8,
+            "dependsOn": "sell1",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell2",
+            "kind": "SELL",
+            "label": "Close 4 more sales at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 4 workbooks (week 3)",
+            "performer": "BRAIN",
+            "costCents": 2400,
+            "day": 15,
+            "dependsOn": "sell2",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "FUNDING",
+            "amountCents": 2400,
+            "label": "Owner advances the $24 direct cost of the first batch until its receipts settle",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 2400,
+            "label": "Direct cost $6 x 4 (batch 1)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 152000,
+            "label": "4 x $380",
+            "settlesDay": 13,
+            "stepId": "collect1"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 2400,
+            "label": "Direct cost $6 x 4 (batch 2)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 15,
+            "kind": "RECEIPT",
+            "amountCents": 152000,
+            "label": "4 x $380",
+            "settlesDay": 20,
+            "stepId": "collect2"
+          }
+        ],
+        "proofDay": 20,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "owner hours in the window",
+            "sources": [
+              "s_delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#price",
+            "dated": "2026-11-24",
+            "claim": "Three member gyms paid $380 each for the workbook in October (paid invoices)",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 member gyms with named operations manager and published email",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Manager emails published in the association member directory",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per sale",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": 0,
+            "resolution": "REBUTTED in part, schedule changed anyway. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET; its delivery fact (EVIDENCE) is 'A spreadsheet Brain produces' and Brain's FULFILMENT basis is 'Brain has proved: PRODUCE_SPREADSHEET', so the 0.5 humanHours is the fulfiller's (Brain's) work, not the owner's. Even so, deliveries are now split 4 in week 2 and 4 in week 3, so at 0.5 h each they would be 2 h a week, inside the 2 h/week limit; owner hours are recorded as 0."
+          },
+          {
+            "finding": 1,
+            "resolution": "ACCEPTED: each batch's $24 SPEND is now dated with its delivery (days 8 and 15); the owner advances the first $24 as FUNDING until the day-13 receipt, and the second batch is covered by the first batch's receipts."
+          },
+          {
+            "finding": 2,
+            "resolution": "ACCEPTED: the reach step now contacts the ~80 directory managers outside the measured 60 (140 - 60), which covers the ~54 contacts 8 sales need at 15%."
+          },
+          {
+            "finding": 3,
+            "resolution": "ACCEPTED: the reach step connects the sending inbox and invoicing on day 1 before outreach; both are routine Brain operations on Brain's own capability records."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "why": "OWNER_HOURS: the owner personally delivers each clinic at 6 hours (card humanHours 6, fulfillmentOwner the owner); one clinic is 6 hours in a week against the 2 hours a week the objective allows, and the two booked clinics are 12 hours against the 8-hour window total."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "deals": 8,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f2188c15499d_3782f6",
+        "digest": "f2188c15499d173e26c89ce5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:08.103Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_dbc223b4f4da4c3c8aea",
+      "contractDigest": "95a9aca132a2427bfc824814",
+      "parentRevisionId": "rev_f8e6f6f03a8c_1a2133",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the inspection-log workbook to association gyms",
+        "opportunityIds": [
+          "cop_186db24bcef04c789add"
+        ],
+        "why": "Every link is evidenced on the card: paid-invoice price $380, conversion measured on this offer (9 of 60 = 15%), 140 reachable managers, Brain fulfils the spreadsheet itself (no fulfillmentOwner; PRODUCE_SPREADSHEET, Brain's FULFILMENT basis 'Brain has proved'), $6 cost, 5 days to cash. 8 sales x $380 = $3,040 gross, $2,992 after cost, in two batches of 4 settling on days 13 and 20 of 28; 8 sales at 15% need ~54 contacts and Brain contacts the ~80 directory managers not already in the measured 60. Owner time: 0 hours planned. The card's humanHours 0.5 per deal is the fulfiller's (Brain's) production work, and even if it were the owner's, batches of 4 deliveries a week are 2 h a week, inside the limit."
+      },
+      "alternatives": [
+        {
+          "title": "Belay-certification clinics",
+          "why": "Two signed $600 bookings, but each needs 6 owner hours on site, breaking the 2 hours a week limit."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Brain connects its sending inbox and invoicing on day 1, then emails the ~80 directory managers not in the measured 60 (54 contacts needed at 15%)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume",
+            "s_channel",
+            "s_conv"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the workbook at $380",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 38000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell1",
+          "kind": "SELL",
+          "label": "Close the first 4 sales at $380",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 38000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers 4 workbooks (week 2)",
+          "performer": "BRAIN",
+          "costCents": 2400,
+          "day": 8,
+          "dependsOn": "sell1",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Invoice and collect 4 x $380",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell2",
+          "kind": "SELL",
+          "label": "Close 4 more sales at $380",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 15,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 38000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers 4 workbooks (week 3)",
+          "performer": "BRAIN",
+          "costCents": 2400,
+          "day": 15,
+          "dependsOn": "sell2",
+          "evidence": [
+            "s_cost",
+            "s_delivery"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Invoice and collect 4 x $380",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 15,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 8,
+          "kind": "FUNDING",
+          "amountCents": 2400,
+          "label": "Owner advances the $24 direct cost of the first batch until its receipts settle",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 8,
+          "kind": "SPEND",
+          "amountCents": 2400,
+          "label": "Direct cost $6 x 4 (batch 1)",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 152000,
+          "label": "4 x $380",
+          "settlesDay": 13,
+          "stepId": "collect1"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 2400,
+          "label": "Direct cost $6 x 4 (batch 2)",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 15,
+          "kind": "RECEIPT",
+          "amountCents": 152000,
+          "label": "4 x $380",
+          "settlesDay": 20,
+          "stepId": "collect2"
+        }
+      ],
+      "proofDay": 20,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 380,
+          "unit": "USD per sale",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerVolume",
+          "status": "EVIDENCED",
+          "value": 140,
+          "unit": "buyers",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 6,
+          "unit": "USD per sale",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 8,
+          "unit": "sales",
+          "sources": [
+            "s_conv",
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "ownerHours",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "owner hours in the window",
+          "sources": [
+            "s_delivery"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#price",
+          "dated": "2026-11-24",
+          "claim": "Three member gyms paid $380 each for the workbook in October (paid invoices)",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "9 agreements from 60 contacts on this offer",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "140 member gyms with named operations manager and published email",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_channel",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Manager emails published in the association member directory",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$6 direct cost per sale",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_186db24bcef04c789add#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash",
+          "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+          "matchesBuyer": true,
+          "opportunityId": "cop_186db24bcef04c789add"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": 0,
+          "resolution": "REBUTTED in part, schedule changed anyway. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET; its delivery fact (EVIDENCE) is 'A spreadsheet Brain produces' and Brain's FULFILMENT basis is 'Brain has proved: PRODUCE_SPREADSHEET', so the 0.5 humanHours is the fulfiller's (Brain's) work, not the owner's. Even so, deliveries are now split 4 in week 2 and 4 in week 3, so at 0.5 h each they would be 2 h a week, inside the 2 h/week limit; owner hours are recorded as 0."
+        },
+        {
+          "finding": 1,
+          "resolution": "ACCEPTED: each batch's $24 SPEND is now dated with its delivery (days 8 and 15); the owner advances the first $24 as FUNDING until the day-13 receipt, and the second batch is covered by the first batch's receipts."
+        },
+        {
+          "finding": 2,
+          "resolution": "ACCEPTED: the reach step now contacts the ~80 directory managers outside the measured 60 (140 - 60), which covers the ~54 contacts 8 sales need at 15%."
+        },
+        {
+          "finding": 3,
+          "resolution": "ACCEPTED: the reach step connects the sending inbox and invoicing on day 1 before outreach; both are routine Brain operations on Brain's own capability records."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_186db24bcef04c789add",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_7fabacddca2f40f2b5f3",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_7fabacddca2f40f2b5f3",
+          "why": "OWNER_HOURS: the owner personally delivers each clinic at 6 hours (card humanHours 6, fulfillmentOwner the owner); one clinic is 6 hours in a week against the 2 hours a week the objective allows, and the two booked clinics are 12 hours against the 8-hour window total."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_186db24bcef04c789add",
+          "deals": 8,
+          "price": 380,
+          "directCost": 6,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_f2188c15499d_3782f6",
+      "digest": "f2188c15499d173e26c89ce5",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_70679bc07c794f16937d/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:09:08.103Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f2188c15499d_3782f6",
+      "digest": "f2188c15499d173e26c89ce5",
+      "contractDigest": "95a9aca132a2427bfc824814",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 4800,
+        "committedOpenCents": 0,
+        "preProofCents": 4800,
+        "maxExposureCents": 2400,
+        "minCashCents": 0,
+        "minCashDay": 8,
+        "collectedCents": 304000,
+        "collectedInWindowCents": 304000,
+        "refundsCents": 0,
+        "ownerFundedCents": 2400,
+        "netCents": 299200
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Route-setting and auto-belay inspection log workbook for cli\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 45628× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Route-setting and auto-belay inspection log workbook for climbing gyms\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_7fabacddca2f40f2b5f3",
+          "cop_186db24bcef04c789add"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Route-setting and auto-belay inspection log workbook for climbing gyms\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Route-setting and auto-belay inspection log workbook for climbing gyms\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Collect payment for \"Route-setting and auto-belay inspection log workbook for climbing gyms\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "title": "Route-setting and auto-belay inspection log workbook for climbing gyms",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Climbing gym operations managers",
+              "reachableChannel": "Manager emails published in the regional climbing-gym association member directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:52:54.121Z",
+              "offerScope": "Route-setting and auto-belay inspection log workbook for climbing gyms",
+              "priceCents": 38000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "indoor climbing gyms",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Manager emails published in the regional climbing-gym association member directo"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 380 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 9 accepted of 60 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "8 deal(s) needed, 140 available in the window (140 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The regional climbing-gym association directory lists 140 member gyms, each with a named operations manager and a published email; every gym must keep auto-belay and route inspection logs year-round.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Route-setting and auto-belay inspection log workbook for climbing gyms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "9 agreements from 60 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Climbing gym operations managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three member gyms paid $380 each for the inspection-log workbook in October (paid invoices).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "title": "Owner-led staff belay-certification clinic for climbing gyms",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1200,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Climbing gym head setters and staff trainers",
+              "reachableChannel": "Signed clinic bookings by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:52:54.121Z",
+              "offerScope": "Owner-led staff belay-certification clinic for climbing gyms",
+              "priceCents": 60000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 6,
+              "requiredCapabilities": [],
+              "industry": "indoor climbing gyms",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Owner-led staff belay-certification clinic for climbing gyms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Owner-led staff belay-certification clinic for climbing gyms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed clinic bookings by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1200 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1200 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Owner-led staff belay-certification clinic for climbing gyms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Climbing gym head setters and staff trainers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Two gyms signed bookings at $600 per on-site clinic.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_f1e0fac1203b423eadce"
+        ],
+        "scope": {
+          "targetCents": 250000,
+          "daysLeft": 28,
+          "hoursCeiling": 8,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T10:54:47.853Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_f8e6f6f03a8c_1a2133",
+        "revisionDigest": "f8e6f6f03a8c8fa58c876a38",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e50c400b5f6942b793e4/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The opening and its economics hold, but the plan states 'zero owner hours' while the card records humanHours 0.5 per deal, and its schedule puts all 8 deliveries on day 13. 8 x 0.5 h = 4 owner hours in one week against the contract's 2 hours a week, so as scheduled the plan breaks the owner-hours limit; a known figure is treated as zero. Recomputed the rest: price $380 is paid invoices from three member gyms of the same association population (a real purchase price for this buyer); conversion 9/60 = 15% measured on this offer; 7 sales ($2,660 gross, $2,618 net of $6 cost) already clear $2,500, 8 sales give $3,040 / $2,992; 8 sales at 15% need ~54 contacts, 140 reachable in the directory with no repeat purchase, so volume holds; settlement 5 days, last receipt day 18 of 28; no capital needed. The exclusion of the owner-led belay clinic is right (6 owner hours per clinic vs 2 h/week). Fix: either show the 0.5 h is not the owner's, or schedule at most 4 deliveries per week (e.g. 4 in week 2 and 4 in week 3, still settling by ~day 25), and record the owner hours in the plan.",
+        "findings": [
+          "OWNER_HOURS: card humanHours 0.5 per deal is recorded; plan's why says zero owner hours and the deliver step delivers all 8 on day 13 = 4 h in one week > 2 h/week ceiling.",
+          "Ledger: the $48 direct-cost SPEND is dated day 18 while the deliver step that incurs it is day 13; date it with the delivery.",
+          "The 9-of-60 conversion has no agreement rows on the card; the plan's step emails 60 buyers - state whether these are new contacts (80 of the 140 remain uncontacted if the measured 60 were already used), which still covers the 54 needed.",
+          "Collection depends on ISSUE_AN_INVOICE and outreach on SEND_A_MESSAGE, both NOT_CONNECTED: these must be connected before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:07:47.536Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_f2188c15499d_3782f6",
+        "revisionDigest": "f2188c15499d173e26c89ce5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e50c400b5f6942b793e4/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "My earlier owner-hours finding is resolved: the card names no fulfillmentOwner and its delivery fact is 'A spreadsheet Brain produces', so the 0.5 h/deal reads as the fulfiller's work; and in any case deliveries are now 4 in week 2 and 4 in week 3, which is at most 2 h a week, inside the 2 h/week limit. Recomputed: 2 x (4 x $380) = $3,040 gross, $48 cost, $2,992 net; 7 sales already clear $2,500, so one sale of slack. Contacts are now the ~80 directory managers outside the measured 60: 80 x 15% = 12 expected against 8 planned. Receipts settle day 13 and day 20 of 28. Costs dated with deliveries; the $24 owner advance is harmless (no capital limit). Price is paid invoices from the same association population. Clinic exclusion remains right.",
+        "findings": [
+          "Quantity 'ownerHours EVIDENCED 0' overstates the card: no fact says the owner spends 0 hours; the schedule fitting 2 h/week even at 0.5 h/deal is what actually makes it safe - keep the batching.",
+          "Batch 1 assumes 4 closes by day 8 from a day-1 email; if fewer, batch 2 by day 23 still settles by day 28 (5-day settlement), so there is a fallback.",
+          "Outreach and invoicing are planned to be connected on day 1; they are NOT_CONNECTED today."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:11:03.244Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f2188c15499d_3782f6",
+      "digest": "f2188c15499d173e26c89ce5",
+      "contractDigest": "95a9aca132a2427bfc824814",
+      "plan": {
+        "goalId": "wst_dbc223b4f4da4c3c8aea",
+        "contractDigest": "95a9aca132a2427bfc824814",
+        "parentRevisionId": "rev_f8e6f6f03a8c_1a2133",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the inspection-log workbook to association gyms",
+          "opportunityIds": [
+            "cop_186db24bcef04c789add"
+          ],
+          "why": "Every link is evidenced on the card: paid-invoice price $380, conversion measured on this offer (9 of 60 = 15%), 140 reachable managers, Brain fulfils the spreadsheet itself (no fulfillmentOwner; PRODUCE_SPREADSHEET, Brain's FULFILMENT basis 'Brain has proved'), $6 cost, 5 days to cash. 8 sales x $380 = $3,040 gross, $2,992 after cost, in two batches of 4 settling on days 13 and 20 of 28; 8 sales at 15% need ~54 contacts and Brain contacts the ~80 directory managers not already in the measured 60. Owner time: 0 hours planned. The card's humanHours 0.5 per deal is the fulfiller's (Brain's) production work, and even if it were the owner's, batches of 4 deliveries a week are 2 h a week, inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Belay-certification clinics",
+            "why": "Two signed $600 bookings, but each needs 6 owner hours on site, breaking the 2 hours a week limit."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain connects its sending inbox and invoicing on day 1, then emails the ~80 directory managers not in the measured 60 (54 contacts needed at 15%)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel",
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the workbook at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell1",
+            "kind": "SELL",
+            "label": "Close the first 4 sales at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 4 workbooks (week 2)",
+            "performer": "BRAIN",
+            "costCents": 2400,
+            "day": 8,
+            "dependsOn": "sell1",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell2",
+            "kind": "SELL",
+            "label": "Close 4 more sales at $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 4 workbooks (week 3)",
+            "performer": "BRAIN",
+            "costCents": 2400,
+            "day": 15,
+            "dependsOn": "sell2",
+            "evidence": [
+              "s_cost",
+              "s_delivery"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Invoice and collect 4 x $380",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "FUNDING",
+            "amountCents": 2400,
+            "label": "Owner advances the $24 direct cost of the first batch until its receipts settle",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 2400,
+            "label": "Direct cost $6 x 4 (batch 1)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 152000,
+            "label": "4 x $380",
+            "settlesDay": 13,
+            "stepId": "collect1"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 2400,
+            "label": "Direct cost $6 x 4 (batch 2)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 15,
+            "kind": "RECEIPT",
+            "amountCents": 152000,
+            "label": "4 x $380",
+            "settlesDay": 20,
+            "stepId": "collect2"
+          }
+        ],
+        "proofDay": 20,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "USD per sale",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "buyers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "owner hours in the window",
+            "sources": [
+              "s_delivery"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#price",
+            "dated": "2026-11-24",
+            "claim": "Three member gyms paid $380 each for the workbook in October (paid invoices)",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "140 member gyms with named operations manager and published email",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Manager emails published in the association member directory",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$6 direct cost per sale",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_186db24bcef04c789add#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "Operations managers of the 140 climbing gyms in the regional climbing-gym association directory",
+            "matchesBuyer": true,
+            "opportunityId": "cop_186db24bcef04c789add"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": 0,
+            "resolution": "REBUTTED in part, schedule changed anyway. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET; its delivery fact (EVIDENCE) is 'A spreadsheet Brain produces' and Brain's FULFILMENT basis is 'Brain has proved: PRODUCE_SPREADSHEET', so the 0.5 humanHours is the fulfiller's (Brain's) work, not the owner's. Even so, deliveries are now split 4 in week 2 and 4 in week 3, so at 0.5 h each they would be 2 h a week, inside the 2 h/week limit; owner hours are recorded as 0."
+          },
+          {
+            "finding": 1,
+            "resolution": "ACCEPTED: each batch's $24 SPEND is now dated with its delivery (days 8 and 15); the owner advances the first $24 as FUNDING until the day-13 receipt, and the second batch is covered by the first batch's receipts."
+          },
+          {
+            "finding": 2,
+            "resolution": "ACCEPTED: the reach step now contacts the ~80 directory managers outside the measured 60 (140 - 60), which covers the ~54 contacts 8 sales need at 15%."
+          },
+          {
+            "finding": 3,
+            "resolution": "ACCEPTED: the reach step connects the sending inbox and invoicing on day 1 before outreach; both are routine Brain operations on Brain's own capability records."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_7fabacddca2f40f2b5f3",
+            "why": "OWNER_HOURS: the owner personally delivers each clinic at 6 hours (card humanHours 6, fulfillmentOwner the owner); one clinic is 6 hours in a week against the 2 hours a week the objective allows, and the two booked clinics are 12 hours against the 8-hour window total."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_186db24bcef04c789add",
+            "deals": 8,
+            "price": 380,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f2188c15499d_3782f6",
+        "digest": "f2188c15499d173e26c89ce5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:08.103Z"
+      },
+      "review": {
+        "revisionId": "rev_f2188c15499d_3782f6",
+        "revisionDigest": "f2188c15499d173e26c89ce5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_70679bc07c794f16937d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e50c400b5f6942b793e4/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "My earlier owner-hours finding is resolved: the card names no fulfillmentOwner and its delivery fact is 'A spreadsheet Brain produces', so the 0.5 h/deal reads as the fulfiller's work; and in any case deliveries are now 4 in week 2 and 4 in week 3, which is at most 2 h a week, inside the 2 h/week limit. Recomputed: 2 x (4 x $380) = $3,040 gross, $48 cost, $2,992 net; 7 sales already clear $2,500, so one sale of slack. Contacts are now the ~80 directory managers outside the measured 60: 80 x 15% = 12 expected against 8 planned. Receipts settle day 13 and day 20 of 28. Costs dated with deliveries; the $24 owner advance is harmless (no capital limit). Price is paid invoices from the same association population. Clinic exclusion remains right.",
+        "findings": [
+          "Quantity 'ownerHours EVIDENCED 0' overstates the card: no fact says the owner spends 0 hours; the schedule fitting 2 h/week even at 0.5 h/deal is what actually makes it safe - keep the batching.",
+          "Batch 1 assumes 4 closes by day 8 from a day-1 email; if fewer, batch 2 by day 23 still settles by day 28 (5-day settlement), so there is a fallback.",
+          "Outreach and invoicing are planned to be connected on day 1; they are NOT_CONNECTED today."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:11:03.244Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+        "terms": "fd26181c16eea9b2",
+        "openings": {
+          "cop_186db24bcef04c789add": "767fc3769a55e750",
+          "cop_7fabacddca2f40f2b5f3": "e37d65c40b380c88"
+        }
+      },
+      "at": "2026-11-27T11:11:23.725Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

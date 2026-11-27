@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_a95ea58663d34e189e2d",
+ "revision_id": "rev_300ca2535dcf_c88e6f",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "The author's MARKET_VOLUME disagreement is supported: the 192 sales a month are split across 40 sellers, and Brain's reading treats all of them as available to one new listing. CONDITIONAL with a live pace test is the right stance, and the arithmetic holds (39 x $29 = $1,131; less $117 in fees leaves $1,014; the last payout settles on day 29). But the validation is not a complete decision rule. Proof and continue need 12 or more sales by day 10 and stop needs fewer than 5, so a result of 5 to 11 sales has no instruction. At 5-11 sales by day 10 the listing cannot reach 39 by day 27 at that pace, and the plan does not say what to do.",
+ "findings": [
+  "Validation gap: 5-11 sales by day 10 falls between stop (<5) and continue (>=12) and has no rule. Either make the stop threshold <12, or define what a partial pace means: a revised target, or adding openings.",
+  "Tight window: 27 sales need to land by day 26 so that they settle by day 29. There is no slack in the plan if payouts slip.",
+  "The plan does not say how the 60 paid pre-orders already on this offer's page relate to the listing's sales: whether they are in hand, whether they count toward the 39, and when they settle."
+ ]
+}

@@ -1,0 +1,1841 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_f875d11fc55f467097d9",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital, in a single industry the owner names: youth sports leagues.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "proofCondition": "$3,000 of settled cash collected by day 30",
+        "currency": "USD",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [
+          "any industry other than youth sports leagues"
+        ],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "b7024dcea9c3de40fb8aba00"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_f875d11fc55f467097d9",
+        "contractDigest": "c10c7b77a77659bc52211b1d",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the tee-sheet utilisation and no-show audit to public golf course managers by email",
+          "opportunityIds": [
+            "cop_c07ab1297b9b4ef69408"
+          ],
+          "why": "Every link is evidenced on the card: 15 course managers paid $400 each from 100 contacts (15% measured on this offer's own sales, payment records 2026-11-03 to 11-21), 180 public courses in the state golf association directory reviewing tee-sheets before winter rate-setting, Brain produces the spreadsheet audit itself at $5 direct cost, nothing tied up, cash usable 5 days after sale. 8 audits reach $3,000; we plan 9 from about 100 contacts (expected 15), well inside 180 buyers."
+        },
+        "alternatives": [
+          {
+            "title": "Youth soccer league reconciliation workbook ($180, 21 paid of 140 contacts, 420 leagues)",
+            "why": "Also fully evidenced and would reach the target with 17 sales; kept as the fallback if golf conversion runs below the measured rate, since it needs twice the deals."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 100 public golf course general managers through the state golf association course directory manager emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "f69408-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the tee-sheet utilisation and no-show audit at $400",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "f69408-price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 9 paid orders at $400 (measured conversion 0.15)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "f69408-conversionRates",
+              "f69408-price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 9 copies of the spreadsheet deliverable ($5 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 4500,
+            "day": 9,
+            "dependsOn": "collect",
+            "evidence": [
+              "f69408-delivery",
+              "f69408-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 9 payments of $400, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "f69408-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 4500,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 360000,
+            "label": "9 x $400",
+            "settlesDay": 9,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "orders per contact",
+            "sources": [
+              "f69408-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "USD per deal",
+            "sources": [
+              "f69408-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "buyers",
+            "sources": [
+              "f69408-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "deals",
+            "sources": [
+              "f69408-conversionRates",
+              "f69408-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD per deal",
+            "sources": [
+              "f69408-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "f69408-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "f69408-buyerVolume",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "180 public golf courses are listed in the state golf association directory; each reviews its tee-sheet before setting next season's rates in winter.",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-captureMechanism",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Tee-sheet utilisation and no-show audit for public golf courses to each buyer.",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-conversionRates",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "15 agreements from 100 contacts",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-delivery",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-directCosts",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-exposure",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-payer",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#payer",
+            "dated": "2026-11-24",
+            "claim": "Public golf course general managers",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-price",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#price",
+            "dated": "2026-11-24",
+            "claim": "15 course managers paid $400 each for the audit (payment records, 2026-11-03 to 2026-11-21).",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "f69408-timeToFirstCash",
+            "url": "https://brain.local/card/cop_c07ab1297b9b4ef69408#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Public golf course general managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-buyerVolume",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-captureMechanism",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues to each buyer.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-conversionRates",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 140 contacts",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-delivery",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-directCosts",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-exposure",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-payer",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#payer",
+            "dated": "2026-11-24",
+            "claim": "Youth league treasurers",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-price",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#price",
+            "dated": "2026-11-24",
+            "claim": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-timeToFirstCash",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_c07ab1297b9b4ef69408",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_c07ab1297b9b4ef69408",
+            "deals": 9,
+            "price": 400,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_512eb5174ab8_56846d",
+        "digest": "512eb5174ab8fd7bb7847edb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:20:25.283Z"
+      },
+      {
+        "goalId": "wst_f875d11fc55f467097d9",
+        "contractDigest": "b7024dcea9c3de40fb8aba00",
+        "parentRevisionId": "rev_512eb5174ab8_56846d",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the registration-fee and scholarship reconciliation workbook to youth soccer league treasurers by email",
+          "opportunityIds": [
+            "cop_cc1650e7a743445fa3b6"
+          ],
+          "why": "The owner now limits the goal to youth sports leagues, so the golf audit is out. The soccer workbook has every link evidenced on its own card: 21 treasurers paid $180 from 140 contacts (15% measured on this offer's own sales, payment records 2026-11-05 to 11-24), 420 member leagues in the state youth soccer association directory closing fall books in December, Brain produces the spreadsheet at $4 direct cost paid from receipts, nothing tied up, cash usable 5 days after sale. 17 sales reach $3,060; we plan 18 ($3,240) from about 140 contacts (expected 21), well inside 420 leagues."
+        },
+        "alternatives": [
+          {
+            "title": "Tee-sheet audit for public golf courses",
+            "why": "Excluded by the owner's terms: public golf courses are outside the one industry named (youth sports leagues)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 140 youth soccer league treasurers through the state youth soccer association league directory treasurer emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "5fa3b6-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the registration-fee and scholarship reconciliation workbook at $180",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "5fa3b6-price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 18 paid orders at $180 (measured conversion 0.15)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "5fa3b6-conversionRates",
+              "5fa3b6-price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 18 copies of the spreadsheet deliverable ($4 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 9,
+            "dependsOn": "collect",
+            "evidence": [
+              "5fa3b6-delivery",
+              "5fa3b6-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 18 payments of $180, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "5fa3b6-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 324000,
+            "label": "18 x $180",
+            "settlesDay": 9,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "orders per contact",
+            "sources": [
+              "5fa3b6-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "USD per deal",
+            "sources": [
+              "5fa3b6-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 420,
+            "unit": "buyers",
+            "sources": [
+              "5fa3b6-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 18,
+            "unit": "deals",
+            "sources": [
+              "5fa3b6-conversionRates",
+              "5fa3b6-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "5fa3b6-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "5fa3b6-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "5fa3b6-buyerVolume",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-captureMechanism",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues to each buyer.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-conversionRates",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 140 contacts",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-delivery",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-directCosts",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-exposure",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-payer",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#payer",
+            "dated": "2026-11-24",
+            "claim": "Youth league treasurers",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-price",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#price",
+            "dated": "2026-11-24",
+            "claim": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-timeToFirstCash",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c07ab1297b9b4ef69408",
+            "why": "Outside the single industry the owner names (youth sports leagues); its industry is public golf courses."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "deals": 18,
+            "price": 180,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f9a83c3da3ca_c72d86",
+        "digest": "f9a83c3da3cae00f53eaff11",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:41:09.533Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_f875d11fc55f467097d9",
+      "contractDigest": "b7024dcea9c3de40fb8aba00",
+      "parentRevisionId": "rev_512eb5174ab8_56846d",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the registration-fee and scholarship reconciliation workbook to youth soccer league treasurers by email",
+        "opportunityIds": [
+          "cop_cc1650e7a743445fa3b6"
+        ],
+        "why": "The owner now limits the goal to youth sports leagues, so the golf audit is out. The soccer workbook has every link evidenced on its own card: 21 treasurers paid $180 from 140 contacts (15% measured on this offer's own sales, payment records 2026-11-05 to 11-24), 420 member leagues in the state youth soccer association directory closing fall books in December, Brain produces the spreadsheet at $4 direct cost paid from receipts, nothing tied up, cash usable 5 days after sale. 17 sales reach $3,060; we plan 18 ($3,240) from about 140 contacts (expected 21), well inside 420 leagues."
+      },
+      "alternatives": [
+        {
+          "title": "Tee-sheet audit for public golf courses",
+          "why": "Excluded by the owner's terms: public golf courses are outside the one industry named (youth sports leagues)."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email 140 youth soccer league treasurers through the state youth soccer association league directory treasurer emails",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "5fa3b6-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the registration-fee and scholarship reconciliation workbook at $180",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "5fa3b6-price"
+          ],
+          "priceCents": 18000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close 18 paid orders at $180 (measured conversion 0.15)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "offer",
+          "evidence": [
+            "5fa3b6-conversionRates",
+            "5fa3b6-price"
+          ],
+          "priceCents": 18000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce and deliver 18 copies of the spreadsheet deliverable ($4 direct cost each)",
+          "performer": "BRAIN",
+          "costCents": 7200,
+          "day": 9,
+          "dependsOn": "collect",
+          "evidence": [
+            "5fa3b6-delivery",
+            "5fa3b6-directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect 18 payments of $180, invoiced on order and paid before delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "sell",
+          "evidence": [
+            "5fa3b6-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 9,
+          "kind": "SPEND",
+          "amountCents": 7200,
+          "label": "direct delivery cost",
+          "stepId": "deliver"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 324000,
+          "label": "18 x $180",
+          "settlesDay": 9,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "orders per contact",
+          "sources": [
+            "5fa3b6-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 180,
+          "unit": "USD per deal",
+          "sources": [
+            "5fa3b6-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 420,
+          "unit": "buyers",
+          "sources": [
+            "5fa3b6-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals planned",
+          "status": "EVIDENCED",
+          "value": 18,
+          "unit": "deals",
+          "sources": [
+            "5fa3b6-conversionRates",
+            "5fa3b6-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "USD per deal",
+          "sources": [
+            "5fa3b6-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to settled cash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "5fa3b6-timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "5fa3b6-buyerVolume",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-captureMechanism",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#captureMechanism",
+          "dated": "2026-11-24",
+          "claim": "Sell Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues to each buyer.",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-conversionRates",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "21 agreements from 140 contacts",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-delivery",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces.",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-directCosts",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$4",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-exposure",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-payer",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#payer",
+          "dated": "2026-11-24",
+          "claim": "Youth league treasurers",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-price",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#price",
+          "dated": "2026-11-24",
+          "claim": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "5fa3b6-timeToFirstCash",
+          "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days",
+          "population": "Youth league treasurers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_cc1650e7a743445fa3b6",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_c07ab1297b9b4ef69408",
+          "why": "Outside the single industry the owner names (youth sports leagues); its industry is public golf courses."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_cc1650e7a743445fa3b6",
+          "deals": 18,
+          "price": 180,
+          "directCost": 4,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_f9a83c3da3ca_c72d86",
+      "digest": "f9a83c3da3cae00f53eaff11",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:41:09.533Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f9a83c3da3ca_c72d86",
+      "digest": "f9a83c3da3cae00f53eaff11",
+      "contractDigest": "b7024dcea9c3de40fb8aba00",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 7200,
+        "committedOpenCents": 0,
+        "preProofCents": 7200,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 4,
+        "collectedCents": 324000,
+        "collectedInWindowCents": 324000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 316800
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Registration-fee and scholarship reconciliation workbook for\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Registration-fee and scholarship reconciliation workbook for\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 23056× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Registration-fee and scholarship reconciliation workbook for volunteer\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_cc1650e7a743445fa3b6"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Registration-fee and scholarship reconciliation workbook for volunteer-run youth\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Registration-fee and scholarship reconciliation workbook for volunteer-run youth\"",
+            "owner": "PERSON",
+            "cost": 4
+          },
+          {
+            "label": "Collect payment for \"Registration-fee and scholarship reconciliation workbook for volunteer-run youth\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "title": "Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Youth league treasurers",
+              "reachableChannel": "Treasurer emails published in the state youth soccer association league directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:10.879Z",
+              "offerScope": "Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues",
+              "priceCents": 18000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "youth sports leagues",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Treasurer emails published in the state youth soccer association league director"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 180 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 21 accepted of 140 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "18 deal(s) needed, 420 available in the window (420 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 4, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "21 agreements from 140 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Youth league treasurers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c07ab1297b9b4ef69408",
+            "title": "Tee-sheet utilisation and no-show audit for public golf courses",
+            "reason": "left out by the goal's own terms: outside the one industry this goal names (youth sports leagues): it is public golf courses",
+            "card": {
+              "payer": "Public golf course general managers",
+              "reachableChannel": "Manager emails published in the state golf association course directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:10.879Z",
+              "offerScope": "Tee-sheet utilisation and no-show audit for public golf courses",
+              "priceCents": 40000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "public golf courses",
+              "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "180 public golf courses are listed in the state golf association directory; each reviews its tee-sheet before setting next season's rates in winter.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Tee-sheet utilisation and no-show audit for public golf courses to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "15 agreements from 100 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Public golf course general managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "15 course managers paid $400 each for the audit (payment records, 2026-11-03 to 2026-11-21).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": "youth sports leagues",
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:40:28.507Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_512eb5174ab8_56846d",
+        "revisionDigest": "512eb5174ab8fd7bb7847edb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_98ca8b7058b243b3b93e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Every link of the golf audit is evidenced on this offer's own record: $400 is what these buyers paid (15 payment records 2026-11-03..11-21), conversion 15/100 = 15% on this offer's own sales, 180 public courses in the association directory, Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), $5 cost, $0 tied up, cash usable in 5 days. Arithmetic recomputed: 8 audits reach $3,000 ($3,200); plan 9 x $400 = $3,600 gross, 9 x $5 = $45 cost, spent day 9 after receipts settle day 9, so no owner capital (exposure cap $0 holds). Proof day 15 inside 30. Stance EXECUTABLE is right and the youth-soccer workbook (21/140 = 15% at $180, 420 leagues) is a correctly evidenced fallback.",
+        "findings": [
+          "Reach pool: the first outreach already contacted 100 of the 180 directory courses (15 bought a one-time audit; MARKET_VOLUME counts one purchase each). Only ~80 uncontacted courses remain, not 100. At 15% that is ~12 expected orders vs 9 needed (needs 11.3% conversion; roughly 85% chance on a binomial at the measured rate). The target still holds in expectation, but the step should email the ~80 uncontacted courses, and the margin is thinner than 'expected 15' suggests.",
+          "Hedge: running the youth-soccer workbook in parallel (280 uncontacted leagues x 15% = ~42 expected at $180) costs nothing extra and would cover a golf shortfall within the window; recommend starting it if golf orders are below ~6 by day 7 rather than holding it as a pure fallback.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup, not an evidential unknown)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:29.301Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_f9a83c3da3ca_c72d86",
+        "revisionDigest": "f9a83c3da3cae00f53eaff11",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_98ca8b7058b243b3b93e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Contract v2 limits the goal to youth sports leagues; the golf audit is correctly excluded by the owner's terms (industry: public golf courses) and the soccer workbook is the only opening inside them. Every link is evidenced on the workbook's own record: $180 is what these treasurers paid (21 payment records 2026-11-05..11-24), 21/140 = 15% conversion on this offer's own sales, 420 leagues in the association directory closing fall books in December, Brain produces the spreadsheet, $4 cost, $0 tied up, cash in 5 days. Arithmetic recomputed: 17 sales reach $3,000 ($3,060); plan 18 x $180 = $3,240, cost 18 x $4 = $72 spent day 9 after receipts settle day 9 (no capital, exposure cap $0 holds); proof day 15 inside 30. 18 from 140 contacts needs 12.9% vs measured 15% (expected 21).",
+        "findings": [
+          "Margin: at 140 contacts the binomial chance of >= 17 sales at 15% is only about 80% (mean 21, sd ~4.2). The first outreach used 140 of the 420 leagues, leaving ~280 uncontacted; emailing all of them costs nothing and gives ~42 expected sales, making the target near-certain. Recommend reaching the full uncontacted pool (and excluding the 21 prior buyers, a one-time purchase) rather than stopping at 140.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:42:36.572Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f9a83c3da3ca_c72d86",
+      "digest": "f9a83c3da3cae00f53eaff11",
+      "contractDigest": "b7024dcea9c3de40fb8aba00",
+      "plan": {
+        "goalId": "wst_f875d11fc55f467097d9",
+        "contractDigest": "b7024dcea9c3de40fb8aba00",
+        "parentRevisionId": "rev_512eb5174ab8_56846d",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the registration-fee and scholarship reconciliation workbook to youth soccer league treasurers by email",
+          "opportunityIds": [
+            "cop_cc1650e7a743445fa3b6"
+          ],
+          "why": "The owner now limits the goal to youth sports leagues, so the golf audit is out. The soccer workbook has every link evidenced on its own card: 21 treasurers paid $180 from 140 contacts (15% measured on this offer's own sales, payment records 2026-11-05 to 11-24), 420 member leagues in the state youth soccer association directory closing fall books in December, Brain produces the spreadsheet at $4 direct cost paid from receipts, nothing tied up, cash usable 5 days after sale. 17 sales reach $3,060; we plan 18 ($3,240) from about 140 contacts (expected 21), well inside 420 leagues."
+        },
+        "alternatives": [
+          {
+            "title": "Tee-sheet audit for public golf courses",
+            "why": "Excluded by the owner's terms: public golf courses are outside the one industry named (youth sports leagues)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 140 youth soccer league treasurers through the state youth soccer association league directory treasurer emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "5fa3b6-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the registration-fee and scholarship reconciliation workbook at $180",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "5fa3b6-price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 18 paid orders at $180 (measured conversion 0.15)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "5fa3b6-conversionRates",
+              "5fa3b6-price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 18 copies of the spreadsheet deliverable ($4 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 9,
+            "dependsOn": "collect",
+            "evidence": [
+              "5fa3b6-delivery",
+              "5fa3b6-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 18 payments of $180, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "5fa3b6-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 324000,
+            "label": "18 x $180",
+            "settlesDay": 9,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "orders per contact",
+            "sources": [
+              "5fa3b6-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "USD per deal",
+            "sources": [
+              "5fa3b6-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 420,
+            "unit": "buyers",
+            "sources": [
+              "5fa3b6-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 18,
+            "unit": "deals",
+            "sources": [
+              "5fa3b6-conversionRates",
+              "5fa3b6-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "5fa3b6-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "5fa3b6-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "5fa3b6-buyerVolume",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-captureMechanism",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues to each buyer.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-conversionRates",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "21 agreements from 140 contacts",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-delivery",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-directCosts",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-exposure",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-payer",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#payer",
+            "dated": "2026-11-24",
+            "claim": "Youth league treasurers",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-price",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#price",
+            "dated": "2026-11-24",
+            "claim": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "5fa3b6-timeToFirstCash",
+            "url": "https://brain.local/card/cop_cc1650e7a743445fa3b6#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Youth league treasurers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c07ab1297b9b4ef69408",
+            "why": "Outside the single industry the owner names (youth sports leagues); its industry is public golf courses."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_cc1650e7a743445fa3b6",
+            "deals": 18,
+            "price": 180,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f9a83c3da3ca_c72d86",
+        "digest": "f9a83c3da3cae00f53eaff11",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:41:09.533Z"
+      },
+      "review": {
+        "revisionId": "rev_f9a83c3da3ca_c72d86",
+        "revisionDigest": "f9a83c3da3cae00f53eaff11",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f6ee51f1f0e44ebd9f68/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_98ca8b7058b243b3b93e/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Contract v2 limits the goal to youth sports leagues; the golf audit is correctly excluded by the owner's terms (industry: public golf courses) and the soccer workbook is the only opening inside them. Every link is evidenced on the workbook's own record: $180 is what these treasurers paid (21 payment records 2026-11-05..11-24), 21/140 = 15% conversion on this offer's own sales, 420 leagues in the association directory closing fall books in December, Brain produces the spreadsheet, $4 cost, $0 tied up, cash in 5 days. Arithmetic recomputed: 17 sales reach $3,000 ($3,060); plan 18 x $180 = $3,240, cost 18 x $4 = $72 spent day 9 after receipts settle day 9 (no capital, exposure cap $0 holds); proof day 15 inside 30. 18 from 140 contacts needs 12.9% vs measured 15% (expected 21).",
+        "findings": [
+          "Margin: at 140 contacts the binomial chance of >= 17 sales at 15% is only about 80% (mean 21, sd ~4.2). The first outreach used 140 of the 420 leagues, leaving ~280 uncontacted; emailing all of them costs nothing and gives ~42 expected sales, making the target near-certain. Recommend reaching the full uncontacted pool (and excluding the 21 prior buyers, a one-time purchase) rather than stopping at 140.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:42:36.572Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:43:44.217Z"
+    },
+    "staleFinal": null
+  }
+}

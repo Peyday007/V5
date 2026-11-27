@@ -1,0 +1,788 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_24a6823b868d43128f84",
+      "words": "Collect $5,000 of settled cash within 30 days with at most $2,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": 200000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 200000,
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": [],
+        "targetCents": 500000,
+        "proofCondition": "$5,000 of settled cash collected within 30 days, never more than $2,000 of capital committed"
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "a842a22db9f5787d88c8974c"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_24a6823b868d43128f84",
+        "contractDigest": "a842a22db9f5787d88c8974c",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the one opening needs $34,000 of capital against a $2,000 ceiling",
+          "opportunityIds": [],
+          "why": "The only opening (brokered overhaul exchange unit, one written acceptance at $40,000, supplier AeroSpares Exchange quoted at $34,000) would clear $6,000 margin, but the unit must be bought for $34,000 before the buyer pays (peak funding $34,000). The objective allows at most $2,000 of capital, so the deal cannot be done inside the limit; no supplier credit or buyer deposit terms are recorded."
+        },
+        "alternatives": [
+          {
+            "title": "Broker the unit with supplier pay-after-collection or a buyer deposit",
+            "why": "Would remove the capital need, but no payment terms from AeroSpares or the MRO shop are recorded; it is unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask AeroSpares Exchange for drop-ship/net terms (pay after the MRO shop pays) or ask the MRO shop for a deposit covering the $34,000 unit cost",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_cap",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 4000000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "peak capital needed",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cap"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier or buyer payment terms that avoid up-front purchase",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "terms",
+            "sources": [],
+            "needs": "written terms from AeroSpares Exchange or the buyer"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_355464cf790646148063#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $40,000 per exchange unit",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_355464cf790646148063#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $34,000 per unit (AeroSpares Exchange quote)",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cap",
+            "url": "https://brain.local/card/cop_355464cf790646148063#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Peak funding needed is $34,000",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: the deal requires buying the exchange unit for $34,000 before the $40,000 is collected, 17x the $2,000 capital ceiling, and no supplier credit or buyer deposit is recorded.",
+          "resolution": "Obtain written terms that let the unit ship before payment (AeroSpares net terms after the buyer pays, or a buyer deposit of at least $32,000), or raise the capital ceiling to $34,000."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "why": "Requires $34,000 of up-front capital against a $2,000 ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $34,000 of capital for the 20-day cycle, or secure supplier/buyer terms that cut the capital need below $2,000."
+          }
+        ],
+        "revisionId": "rev_b055a989beb9_6f218b",
+        "digest": "b055a989beb93bbf75f50bbc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_abdda2ba9a984cc79221/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:15.273Z"
+      },
+      {
+        "goalId": "wst_24a6823b868d43128f84",
+        "contractDigest": "a842a22db9f5787d88c8974c",
+        "parentRevisionId": "rev_b055a989beb9_6f218b",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the one opening needs $34,000 of capital against a $2,000 ceiling",
+          "opportunityIds": [],
+          "why": "The only opening (brokered overhaul exchange unit, one written acceptance at $40,000, supplier AeroSpares Exchange quoted at $34,000) would clear $6,000 margin, but the unit must be bought for $34,000 before the buyer pays (peak funding $34,000). The objective allows at most $2,000 of capital, so the deal cannot be done inside the limit; no supplier credit or buyer deposit terms are recorded."
+        },
+        "alternatives": [
+          {
+            "title": "Broker the unit with supplier pay-after-collection or a buyer deposit",
+            "why": "Would remove the capital need, but no payment terms from AeroSpares or the MRO shop are recorded; it is unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask AeroSpares Exchange for drop-ship/net terms (pay after the MRO shop pays) or ask the MRO shop for a deposit covering the $34,000 unit cost",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_cap",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 4000000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "peak capital needed",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cap"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier or buyer payment terms that avoid up-front purchase",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "terms",
+            "sources": [],
+            "needs": "written terms from AeroSpares Exchange or the buyer"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_355464cf790646148063#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $40,000 per exchange unit",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_355464cf790646148063#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $34,000 per unit (AeroSpares Exchange quote)",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cap",
+            "url": "https://brain.local/card/cop_355464cf790646148063#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Peak funding needed is $34,000",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: the deal requires buying the exchange unit for $34,000 before the $40,000 is collected, 17x the $2,000 capital ceiling, and no supplier credit or buyer deposit is recorded.",
+          "resolution": "Obtain written terms that let the unit ship before payment (AeroSpares net terms after the buyer pays, or a buyer deposit of at least $32,000), or raise the capital ceiling to $34,000."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "why": "Requires $34,000 of up-front capital against a $2,000 ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $34,000 of capital for the 20-day cycle, or secure supplier/buyer terms that cut the capital need below $2,000."
+          }
+        ],
+        "revisionId": "rev_4bd97cc85883_3ce44e",
+        "digest": "4bd97cc858834537f6ece37d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_abdda2ba9a984cc79221/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:23.045Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_24a6823b868d43128f84",
+      "contractDigest": "a842a22db9f5787d88c8974c",
+      "parentRevisionId": "rev_b055a989beb9_6f218b",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the one opening needs $34,000 of capital against a $2,000 ceiling",
+        "opportunityIds": [],
+        "why": "The only opening (brokered overhaul exchange unit, one written acceptance at $40,000, supplier AeroSpares Exchange quoted at $34,000) would clear $6,000 margin, but the unit must be bought for $34,000 before the buyer pays (peak funding $34,000). The objective allows at most $2,000 of capital, so the deal cannot be done inside the limit; no supplier credit or buyer deposit terms are recorded."
+      },
+      "alternatives": [
+        {
+          "title": "Broker the unit with supplier pay-after-collection or a buyer deposit",
+          "why": "Would remove the capital need, but no payment terms from AeroSpares or the MRO shop are recorded; it is unestablished."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Ask AeroSpares Exchange for drop-ship/net terms (pay after the MRO shop pays) or ask the MRO shop for a deposit covering the $34,000 unit cost",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_cap",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per unit",
+          "status": "EVIDENCED",
+          "value": 4000000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier cost per unit",
+          "status": "EVIDENCED",
+          "value": 3400000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "peak capital needed",
+          "status": "EVIDENCED",
+          "value": 3400000,
+          "unit": "cents",
+          "sources": [
+            "s_cap"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier or buyer payment terms that avoid up-front purchase",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "terms",
+          "sources": [],
+          "needs": "written terms from AeroSpares Exchange or the buyer"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_355464cf790646148063#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Price is $40,000 per exchange unit",
+          "population": "Regional MRO shops",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_355464cf790646148063#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost is $34,000 per unit (AeroSpares Exchange quote)",
+          "population": "Regional MRO shops",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cap",
+          "url": "https://brain.local/card/cop_355464cf790646148063#peakFundingCents",
+          "dated": "2026-11-24",
+          "claim": "Peak funding needed is $34,000",
+          "population": "Regional MRO shops",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Capital: the deal requires buying the exchange unit for $34,000 before the $40,000 is collected, 17x the $2,000 capital ceiling, and no supplier credit or buyer deposit is recorded.",
+        "resolution": "Obtain written terms that let the unit ship before payment (AeroSpares net terms after the buyer pays, or a buyer deposit of at least $32,000), or raise the capital ceiling to $34,000."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_355464cf790646148063",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_355464cf790646148063",
+          "why": "Requires $34,000 of up-front capital against a $2,000 ceiling."
+        }
+      ],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "CAPITAL",
+          "suggestion": "Allow at least $34,000 of capital for the 20-day cycle, or secure supplier/buyer terms that cut the capital need below $2,000."
+        }
+      ],
+      "revisionId": "rev_4bd97cc85883_3ce44e",
+      "digest": "4bd97cc858834537f6ece37d",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_abdda2ba9a984cc79221/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:16:23.045Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_4bd97cc85883_3ce44e",
+      "digest": "4bd97cc858834537f6ece37d",
+      "contractDigest": "a842a22db9f5787d88c8974c",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 200000,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $34,000, what the lots that reach the target need at once; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_355464cf790646148063"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "title": "Brokered overhaul exchange units for regional aircraft maintenance shops",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 5000,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Regional MRO shops",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:13.691Z",
+              "offerScope": "Brokered overhaul exchange units for regional aircraft maintenance shops",
+              "priceCents": 4000000,
+              "currency": "USD",
+              "fulfillmentOwner": "AeroSpares Exchange (quoted)",
+              "peakFundingCents": 3400000,
+              "humanHours": 6,
+              "requiredCapabilities": [],
+              "industry": "aviation maintenance",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 4000000,
+                "currency": "USD",
+                "deliverable": "Brokered overhaul exchange units for regional aircraft maintenance shops",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered overhaul exchange units for regional aircraft maintenance shops to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$34000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$34000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "AeroSpares Exchange (quoted) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Regional MRO shops",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$40000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "20 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:15:16.308Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_4bd97cc85883_3ce44e",
+        "revisionDigest": "4bd97cc858834537f6ece37d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_abdda2ba9a984cc79221/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_fb7325aa0e464b328e01/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with CAPITAL constraint is correct: the single opening (one written $40,000 acceptance, AeroSpares quoted $34,000) needs $34,000 out before the buyer pays, 17x the $2,000 ceiling; no supplier credit or deposit terms are evidenced. Deposit >= $32,000 or ceiling >= $34,000 resolution is arithmetically right; margin $6,000 would otherwise exceed the $5,000 target.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.214Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_4bd97cc85883_3ce44e",
+      "digest": "4bd97cc858834537f6ece37d",
+      "contractDigest": "a842a22db9f5787d88c8974c",
+      "plan": {
+        "goalId": "wst_24a6823b868d43128f84",
+        "contractDigest": "a842a22db9f5787d88c8974c",
+        "parentRevisionId": "rev_b055a989beb9_6f218b",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the one opening needs $34,000 of capital against a $2,000 ceiling",
+          "opportunityIds": [],
+          "why": "The only opening (brokered overhaul exchange unit, one written acceptance at $40,000, supplier AeroSpares Exchange quoted at $34,000) would clear $6,000 margin, but the unit must be bought for $34,000 before the buyer pays (peak funding $34,000). The objective allows at most $2,000 of capital, so the deal cannot be done inside the limit; no supplier credit or buyer deposit terms are recorded."
+        },
+        "alternatives": [
+          {
+            "title": "Broker the unit with supplier pay-after-collection or a buyer deposit",
+            "why": "Would remove the capital need, but no payment terms from AeroSpares or the MRO shop are recorded; it is unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask AeroSpares Exchange for drop-ship/net terms (pay after the MRO shop pays) or ask the MRO shop for a deposit covering the $34,000 unit cost",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_cap",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 4000000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "peak capital needed",
+            "status": "EVIDENCED",
+            "value": 3400000,
+            "unit": "cents",
+            "sources": [
+              "s_cap"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier or buyer payment terms that avoid up-front purchase",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "terms",
+            "sources": [],
+            "needs": "written terms from AeroSpares Exchange or the buyer"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_355464cf790646148063#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $40,000 per exchange unit",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_355464cf790646148063#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $34,000 per unit (AeroSpares Exchange quote)",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cap",
+            "url": "https://brain.local/card/cop_355464cf790646148063#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Peak funding needed is $34,000",
+            "population": "Regional MRO shops",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: the deal requires buying the exchange unit for $34,000 before the $40,000 is collected, 17x the $2,000 capital ceiling, and no supplier credit or buyer deposit is recorded.",
+          "resolution": "Obtain written terms that let the unit ship before payment (AeroSpares net terms after the buyer pays, or a buyer deposit of at least $32,000), or raise the capital ceiling to $34,000."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_355464cf790646148063",
+            "why": "Requires $34,000 of up-front capital against a $2,000 ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $34,000 of capital for the 20-day cycle, or secure supplier/buyer terms that cut the capital need below $2,000."
+          }
+        ],
+        "revisionId": "rev_4bd97cc85883_3ce44e",
+        "digest": "4bd97cc858834537f6ece37d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_abdda2ba9a984cc79221/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:16:23.045Z"
+      },
+      "review": {
+        "revisionId": "rev_4bd97cc85883_3ce44e",
+        "revisionDigest": "4bd97cc858834537f6ece37d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_abdda2ba9a984cc79221/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_fb7325aa0e464b328e01/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with CAPITAL constraint is correct: the single opening (one written $40,000 acceptance, AeroSpares quoted $34,000) needs $34,000 out before the buyer pays, 17x the $2,000 ceiling; no supplier credit or deposit terms are evidenced. Deposit >= $32,000 or ceiling >= $34,000 resolution is arithmetically right; margin $6,000 would otherwise exceed the $5,000 target.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.214Z"
+      },
+      "at": "2026-11-27T00:23:53.387Z"
+    },
+    "staleFinal": null
+  }
+}

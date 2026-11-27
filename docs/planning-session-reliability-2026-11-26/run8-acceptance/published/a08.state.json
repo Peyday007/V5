@@ -1,0 +1,783 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_a353f3ae754a446394d6",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$4,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "b6d46b7b12645441c38fe1a5"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_a353f3ae754a446394d6",
+        "contractDigest": "b6d46b7b12645441c38fe1a5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan until the NFPA 25 workbook's price is settled: the record says both $750 and $75",
+          "opportunityIds": [],
+          "why": "The only opening's card carries priceCents 75000 ($750) while its EVIDENCE price fact says $75. The two contradict each other by 10x, so no price is established. At $750, 6 sales (about 40 contacts at the measured 18/120 rate, from 180 reachable firms) would reach $4,000; at $75 the whole reachable market yields about 27 sales, about $2,000, short of the target. Which one is true decides whether any plan exists."
+        },
+        "alternatives": [
+          {
+            "title": "Offer at $750 as a live test",
+            "why": "Not chosen as the plan: the measured conversion (18 of 120) was on this offer at an unstated price; if those buyers agreed at $75 the conversion says nothing about $750, so both the price and the volume link remain open until the price is resolved."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Resolve which price the 18 agreements were made at ($750 or $75) from the agreements' source records",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "one consistent, sourced price: card priceCents 75000 vs price fact $75"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "firms",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#price",
+            "dated": "2026-11-24",
+            "claim": "Price fact: $75",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 75000 ($750)",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "180 licensed fire sprinkler inspection firms with business emails on the fire marshal roster",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 120 contacts",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted: the card's priceCents is $750 but its EVIDENCE price fact is $75. At $750 the target needs 6 of 180 reachable firms; at $75 even all ~27 expected buyers bring about $2,000. No price is established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is.",
+          "resolution": "Brain checks the 18 recorded agreements (18 of 120 contacts) for the price they were made at and corrects the card; if they were at $750, re-plan as an executable 6-sale plan; if at $75, the target is out of reach of this market and Brain searches for other openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_bd09e6231bd4_8c8906",
+        "digest": "bd09e6231bd47e6a9ab433da",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1f3e5095cf0643e59c7f/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:41:19.858Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_a353f3ae754a446394d6",
+      "contractDigest": "b6d46b7b12645441c38fe1a5",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan until the NFPA 25 workbook's price is settled: the record says both $750 and $75",
+        "opportunityIds": [],
+        "why": "The only opening's card carries priceCents 75000 ($750) while its EVIDENCE price fact says $75. The two contradict each other by 10x, so no price is established. At $750, 6 sales (about 40 contacts at the measured 18/120 rate, from 180 reachable firms) would reach $4,000; at $75 the whole reachable market yields about 27 sales, about $2,000, short of the target. Which one is true decides whether any plan exists."
+      },
+      "alternatives": [
+        {
+          "title": "Offer at $750 as a live test",
+          "why": "Not chosen as the plan: the measured conversion (18 of 120) was on this offer at an unstated price; if those buyers agreed at $75 the conversion says nothing about $750, so both the price and the volume link remain open until the price is resolved."
+        }
+      ],
+      "steps": [
+        {
+          "id": "research",
+          "kind": "RESEARCH",
+          "label": "Resolve which price the 18 agreements were made at ($750 or $75) from the agreements' source records",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per workbook",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": "one consistent, sourced price: card priceCents 75000 vs price fact $75"
+        },
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 180,
+          "unit": "firms",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "agreements per contact",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#price",
+          "dated": "2026-11-24",
+          "claim": "Price fact: $75",
+          "population": "fire sprinkler inspection firms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Card priceCents 75000 ($750)",
+          "population": "fire sprinkler inspection firms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "180 licensed fire sprinkler inspection firms with business emails on the fire marshal roster",
+          "population": "fire sprinkler inspection firms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "18 agreements from 120 contacts",
+          "population": "fire sprinkler inspection firms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "The price is contradicted: the card's priceCents is $750 but its EVIDENCE price fact is $75. At $750 the target needs 6 of 180 reachable firms; at $75 even all ~27 expected buyers bring about $2,000. No price is established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is.",
+        "resolution": "Brain checks the 18 recorded agreements (18 of 120 contacts) for the price they were made at and corrects the card; if they were at $750, re-plan as an executable 6-sale plan; if at $75, the target is out of reach of this market and Brain searches for other openings.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_ace15bf0e3684b9e8ef9",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_bd09e6231bd4_8c8906",
+      "digest": "bd09e6231bd47e6a9ab433da",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_1f3e5095cf0643e59c7f/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:41:19.858Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_bd09e6231bd4_8c8906",
+      "digest": "bd09e6231bd47e6a9ab433da",
+      "contractDigest": "b6d46b7b12645441c38fe1a5",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 38668× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"NFPA 25 inspection report and deficiency-tracking workbook f\" needs [figure withheld] and keeps [figure withheld], 407× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Fire sprinkler inspection firm owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_ace15bf0e3684b9e8ef9"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler in\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler in\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Fire sprinkler inspection firm owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Fire sprinkler inspection firm owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 11.985550809480127
+          },
+          {
+            "label": "Collect payment for \"NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler in\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9",
+            "title": "NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler inspection firms",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Fire sprinkler inspection firm owners",
+              "reachableChannel": "Business emails on the state fire marshal’s fire-protection contractor roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:48.636Z",
+              "offerScope": "NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler inspection firms",
+              "priceCents": 75000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "fire sprinkler inspection",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Business emails on the state fire marshal’s fire-protection contractor roster"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 18 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "55 deal(s) needed at the measured rate means asking 514 prospects, but the market holds only 180 (180 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 19.2"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "180 fire sprinkler inspection firms hold state fire-protection contractor licences and are listed with business emails on the fire marshal’s roster.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell NFPA 25 inspection report and deficiency-tracking workbook for fire sprinkler inspection firms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "18 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Fire sprinkler inspection firm owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$75",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_a94e28df6cf34910a574"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:34:55.656Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_bd09e6231bd4_8c8906",
+        "revisionDigest": "bd09e6231bd47e6a9ab433da",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1f3e5095cf0643e59c7f/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e6419e5f0dc342f1824c/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE as the decisive link is correct. The card's priceCents is 75000 ($750) while its EVIDENCE price fact is $75: the record contradicts itself 10x, so no purchase price is established and the plan correctly refuses to pick one. The price decides the outcome: at $75 the target needs 54 sales (4,000 / 75 = 53.3) but the 180-firm roster at the recorded 15% yields ~27, i.e. ~$2,025 at most, so the target is out of reach; at $750 six sales ($4,500) suffice. Brain's MARKET_VOLUME failure (reads $75) agrees with the $75 branch. Nothing unknown is treated as known: price is UNKNOWN, no cash is booked, the research step is zero-cost.",
+        "findings": [
+          "Population double-count: conversion is 18 agreements from 120 contacts, and the roster holds 180 firms, so only ~60 firms are uncontacted. At $75 the remaining market is ~60 x 15% = 9 sales (~$675), even further short than the $2,000 stated; at $750 the 60 uncontacted firms give ~9 sales ($6,750), still enough. The re-plan must count only uncontacted firms, plus whatever the 18 existing agreements actually paid.",
+          "Resolution path: the card's agreements list is empty, so 'checking the 18 recorded agreements' may find no record to read. If the source records cannot settle the price, the fallback should be a zero-cost live offer at $750 to the uncontacted firms (a CONDITIONAL plan with proof/stop/continue deciding OFFER_AND_PRICE), not an open-ended wait.",
+          "If the 18 agreements were at $750 and are unpaid, they are themselves $13,500 of potential receipts and must be recorded as agreements on the card before re-planning."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:42:03.802Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_bd09e6231bd4_8c8906",
+      "digest": "bd09e6231bd47e6a9ab433da",
+      "contractDigest": "b6d46b7b12645441c38fe1a5",
+      "plan": {
+        "goalId": "wst_a353f3ae754a446394d6",
+        "contractDigest": "b6d46b7b12645441c38fe1a5",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan until the NFPA 25 workbook's price is settled: the record says both $750 and $75",
+          "opportunityIds": [],
+          "why": "The only opening's card carries priceCents 75000 ($750) while its EVIDENCE price fact says $75. The two contradict each other by 10x, so no price is established. At $750, 6 sales (about 40 contacts at the measured 18/120 rate, from 180 reachable firms) would reach $4,000; at $75 the whole reachable market yields about 27 sales, about $2,000, short of the target. Which one is true decides whether any plan exists."
+        },
+        "alternatives": [
+          {
+            "title": "Offer at $750 as a live test",
+            "why": "Not chosen as the plan: the measured conversion (18 of 120) was on this offer at an unstated price; if those buyers agreed at $75 the conversion says nothing about $750, so both the price and the volume link remain open until the price is resolved."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Resolve which price the 18 agreements were made at ($750 or $75) from the agreements' source records",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "one consistent, sourced price: card priceCents 75000 vs price fact $75"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 180,
+            "unit": "firms",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#price",
+            "dated": "2026-11-24",
+            "claim": "Price fact: $75",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Card priceCents 75000 ($750)",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "180 licensed fire sprinkler inspection firms with business emails on the fire marshal roster",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ace15bf0e3684b9e8ef9#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 120 contacts",
+            "population": "fire sprinkler inspection firms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted: the card's priceCents is $750 but its EVIDENCE price fact is $75. At $750 the target needs 6 of 180 reachable firms; at $75 even all ~27 expected buyers bring about $2,000. No price is established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is.",
+          "resolution": "Brain checks the 18 recorded agreements (18 of 120 contacts) for the price they were made at and corrects the card; if they were at $750, re-plan as an executable 6-sale plan; if at $75, the target is out of reach of this market and Brain searches for other openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ace15bf0e3684b9e8ef9",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_bd09e6231bd4_8c8906",
+        "digest": "bd09e6231bd47e6a9ab433da",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1f3e5095cf0643e59c7f/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:41:19.858Z"
+      },
+      "review": {
+        "revisionId": "rev_bd09e6231bd4_8c8906",
+        "revisionDigest": "bd09e6231bd47e6a9ab433da",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1f3e5095cf0643e59c7f/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_e6419e5f0dc342f1824c/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE as the decisive link is correct. The card's priceCents is 75000 ($750) while its EVIDENCE price fact is $75: the record contradicts itself 10x, so no purchase price is established and the plan correctly refuses to pick one. The price decides the outcome: at $75 the target needs 54 sales (4,000 / 75 = 53.3) but the 180-firm roster at the recorded 15% yields ~27, i.e. ~$2,025 at most, so the target is out of reach; at $750 six sales ($4,500) suffice. Brain's MARKET_VOLUME failure (reads $75) agrees with the $75 branch. Nothing unknown is treated as known: price is UNKNOWN, no cash is booked, the research step is zero-cost.",
+        "findings": [
+          "Population double-count: conversion is 18 agreements from 120 contacts, and the roster holds 180 firms, so only ~60 firms are uncontacted. At $75 the remaining market is ~60 x 15% = 9 sales (~$675), even further short than the $2,000 stated; at $750 the 60 uncontacted firms give ~9 sales ($6,750), still enough. The re-plan must count only uncontacted firms, plus whatever the 18 existing agreements actually paid.",
+          "Resolution path: the card's agreements list is empty, so 'checking the 18 recorded agreements' may find no record to read. If the source records cannot settle the price, the fallback should be a zero-cost live offer at $750 to the uncontacted firms (a CONDITIONAL plan with proof/stop/continue deciding OFFER_AND_PRICE), not an open-ended wait.",
+          "If the 18 agreements were at $750 and are unpaid, they are themselves $13,500 of potential receipts and must be recorded as agreements on the card before re-planning."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:42:03.802Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "b06f1d839258b239",
+        "openings": {
+          "cop_ace15bf0e3684b9e8ef9": "729a352c831215d0"
+        }
+      },
+      "at": "2026-11-27T09:44:41.225Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

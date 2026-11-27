@@ -1,0 +1,35 @@
+{
+  "id": "al-02-pt-denial-tracker",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_9a2f65fafa47_0669d2",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_fd3a479c2eeb4151b2ef/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [ptDenials] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

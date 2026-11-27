@@ -1,0 +1,17 @@
+{
+ "goal_id": "wst_e23ff3775ca64d6d8634",
+ "revision_id": "rev_929ee40da91e_ec5991",
+ "verdict": "REVISE",
+ "reasons": "The NO_PLAN rests on 'the goal gives the owner no hours', but the contract records ownerHoursPerWeek null and ownerPhysicalWork UNSTATED: the owner set no hours limit, not a zero limit. An unstated term is not a ceiling, and the revision itself concedes this is 'a gap to settle rather than an arithmetic limit', which by the brief cannot ground a NO_PLAN. On the card every link is established: six WRITTEN_ACCEPTANCE agreements at $600 ($3,600 vs $3,000 target, five needed), $40 direct cost, $0 exposure, 7-day settlement in a 30-day window, and the recorded fulfiller is the owner. The PERSON kind of the fulfilment fact is the appropriate attestation for what the owner can do; it is not a price taken on someone's word. Brain's FULFILMENT link is ok, and the disagreement does not point to any record that contradicts it. The plan should be restated as an executable (or, at most, conditional on the owner confirming on-site work) schedule with steps and a cash ledger.",
+ "findings": [
+  "Decisive gap misreads an unstated owner-hours term (null / UNSTATED) as zero hours; there is no OWNER_HOURS limit in the contract to exceed.",
+  "The revision admits the gap is not an arithmetic limit, so NO_PLAN names no decisive gap the evidence decides.",
+  "The disagreement with Brain's FULFILMENT link cites no record contradicting the owner as fulfiller; 18 owner hours for six jobs fits a goal with no hours ceiling.",
+  "A restated plan must show timing of the $40 per-job direct cost against the $0 exposure cap (pay it from receipts or show it is not incurred before settlement), and the 6-signed / 5-needed buffer in the cash ledger.",
+  "If owner willingness to do physical on-site work is genuinely unknown, that is a question to ask the owner, not a no-plan."
+ ],
+ "conditions": [],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-iota",
+ "reviewer_model": "claude-opus-5-5"
+}

@@ -1,0 +1,3449 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d8eecadda0104b6eb7e5",
+      "words": "I want $5,000 of settled cash within 30 days from residential moving companies only — selling something to moving companies, not becoming one. I can put in up to $500 and give it up to 2 hours a week of my time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 50000,
+        "proofCondition": "USD 5,000 settled from residential moving companies within 30 days",
+        "ownerHoursPerWeek": 2.1,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [
+          "operating as a moving company",
+          "buyers other than residential moving companies"
+        ],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 3,
+      "digest": "02386240b6d5a06bbeab4995"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d8eecadda0104b6eb7e5",
+        "contractDigest": "17eac1abbd07c515dedec04d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: no product sold to residential movers has an established price, buyer demand or fulfiller",
+          "opportunityIds": [],
+          "why": "Three routes were discovered (movers website rebuild resold from a white-label developer, exclusive local-move leads, monthly Google Business Profile/review management). Verified research found no price that residential moving companies are shown paying (vendor list prices were rejected as out of scope), no buying signal, no close rate and no fulfiller who has agreed to terms. Brain's run reaches at most $0 of the $5,000 at prices buyers are shown to pay. A $5,000 plan cannot be called executable or conditional until a price and a fulfiller exist; a bounded test inside the $500 and 9-hour limits can establish both."
+        },
+        "alternatives": [
+          {
+            "title": "Exclusive moving leads per lead",
+            "why": "Lead prices quoted by lead sellers ($15-$75) are sellers' claims, and paid-search cost per lead is unmeasured; 125+ leads within $500 of ad spend is not established."
+          },
+          {
+            "title": "Monthly GBP/review management",
+            "why": "Needs ~17 first-month subscriptions; no price or close rate established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains written fixed quotes and delivery times from 3 white-label web developers for a movers site with quote form",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t0",
+            "kind": "OTHER",
+            "label": "Buy one sending domain and one month of a cold-email tool with two inboxes",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Brain emails 300 residential movers (FMCSA household-goods register and map listings) offering the website rebuild at $1,500 with a 50% deposit, and records replies, written acceptances and deposits",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "t0",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "OTHER",
+            "label": "Owner takes up to 4 short calls with interested movers",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "t1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "domain + cold-email tool, one month",
+            "stepId": "t0"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price residential movers pay for a site rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "written acceptance or deposit from movers in test t1"
+          },
+          {
+            "name": "close rate of cold offer to movers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of contacted movers",
+            "sources": [],
+            "needs": "test t1"
+          },
+          {
+            "name": "white-label developer cost per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "step r1"
+          },
+          {
+            "name": "test spend",
+            "status": "ESTIMATE",
+            "value": 120,
+            "unit": "USD",
+            "sources": [],
+            "needs": "vendor checkout"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No price that residential moving companies are shown paying, no buying signal and no fulfiller on terms exist for any route, so no plan reaches any of the $5,000.",
+          "resolution": "Costed experiment, $120 and ~2 owner hours, days 1-12: written quotes from 3 white-label developers (r1); 300 offer emails to residential movers at $1,500 with 50% deposit (t1); owner calls (t2). Proof: a developer quote <= $600 with <= 10-day delivery AND >= 2 movers pay a $750 deposit by day 12. Stop: no developer quote <= $600, or 0 deposits from 300 contacts by day 12 (4 sales then cannot settle by day 30). Continue: plan 4 sites as a CONDITIONAL plan on the measured close rate, with deposits paying the developer.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "CURRENT_DEMAND",
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3444a2a07f38472789ac",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "CURRENT_DEMAND",
+          "FULFILMENT",
+          "CONVERSION",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_bc5006a6bb10_a936f1",
+        "digest": "bc5006a6bb108798dbbb64a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:10.504Z"
+      },
+      {
+        "goalId": "wst_d8eecadda0104b6eb7e5",
+        "contractDigest": "17eac1abbd07c515dedec04d",
+        "parentRevisionId": "rev_bc5006a6bb10_a936f1",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Movers website rebuild with quote form at $1,500, 50% deposit, white-label developer paid from settled deposits",
+          "opportunityIds": [
+            "cop_49fe38afa1cb4d829957"
+          ],
+          "why": "A one-off product residential movers can buy without becoming a mover; 4 sales x $1,500 = $6,000 settled by day 28, with the only owner money at risk the $120 test tooling. Price, demand, close rate, developer terms and payout time are unknown and are measured by the test before any developer is paid."
+        },
+        "alternatives": [
+          {
+            "title": "Exclusive moving leads per lead",
+            "why": "Lead prices are sellers' claims and ad cost per lead is unmeasured; needs 125+ leads funded inside $500."
+          },
+          {
+            "title": "Monthly GBP/review management at $300",
+            "why": "Needs ~17 first-month subscriptions in 30 days; kept as a down-sell in the same emails."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains written fixed quotes from 3 white-label web developers for a movers site with quote form: <= $600, <= 7-day delivery, started on a settled deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing the payout time of the invoice/payment route into the owner's account (target <= 2 days)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t0",
+            "kind": "OTHER",
+            "label": "Buy one sending domain and one month of a cold-email tool with two inboxes (checkout price confirmed before purchase; stop if > $150)",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 300 residential moving companies (local movers from Google Maps 'movers' listings in 10 metros, plus FMCSA-registered household-goods carriers whose sites advertise local residential moves) offering a website rebuild with quote form for $1,500, 50% deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "t0",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Owner takes up to 4 short calls with interested movers (week 1-2)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Movers 3-4 sign and pay the $750 deposit by day 16; owner approves each scope (0.5 h each)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "dA",
+            "kind": "DELIVER",
+            "label": "Developer builds mover A's site from the settled deposit (start day 10, delivered day 17); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kA",
+            "kind": "COLLECT",
+            "label": "Mover A pays the $750 balance on delivery (day 18), settles day 20",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "dA",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dB",
+            "kind": "DELIVER",
+            "label": "Developer builds mover B's site from the settled deposit (start day 12, delivered day 19); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kB",
+            "kind": "COLLECT",
+            "label": "Mover B pays the $750 balance on delivery (day 20), settles day 22",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "dB",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dC",
+            "kind": "DELIVER",
+            "label": "Developer builds mover C's site from the settled deposit (start day 16, delivered day 23); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 16,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kC",
+            "kind": "COLLECT",
+            "label": "Mover C pays the $750 balance on delivery (day 24), settles day 26",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 24,
+            "dependsOn": "dC",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dD",
+            "kind": "DELIVER",
+            "label": "Developer builds mover D's site from the settled deposit (start day 18, delivered day 25); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 18,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kD",
+            "kind": "COLLECT",
+            "label": "Mover D pays the $750 balance on delivery (day 26), settles day 28",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 26,
+            "dependsOn": "dD",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "domain + cold-email tool",
+            "stepId": "t0"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A deposit",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover A, paid from settled deposit",
+            "stepId": "dA"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A balance",
+            "settlesDay": 20,
+            "stepId": "kA"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B deposit",
+            "settlesDay": 12,
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover B, paid from settled deposit",
+            "stepId": "dB"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B balance",
+            "settlesDay": 22,
+            "stepId": "kB"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C deposit",
+            "settlesDay": 16,
+            "stepId": "s3"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover C, paid from settled deposit",
+            "stepId": "dC"
+          },
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C balance",
+            "settlesDay": 26,
+            "stepId": "kC"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D deposit",
+            "settlesDay": 18,
+            "stepId": "s3"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover D, paid from settled deposit",
+            "stepId": "dD"
+          },
+          {
+            "day": 26,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D balance",
+            "settlesDay": 28,
+            "stepId": "kD"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price residential movers pay for a site rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "deposits in s2/s3"
+          },
+          {
+            "name": "close rate of cold offer to movers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deposits per email",
+            "sources": [],
+            "needs": "s1/s2: 2 deposits of 300 by day 12"
+          },
+          {
+            "name": "white-label developer cost per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 quote <= $600"
+          },
+          {
+            "name": "payout time of payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 <= 2 days"
+          },
+          {
+            "name": "test tooling spend",
+            "status": "ESTIMATE",
+            "value": 120,
+            "unit": "USD",
+            "sources": [],
+            "needs": "checkout"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 12: a written developer quote <= $600 with <= 7-day delivery (r1), payout <= 2 days confirmed (r2), Brain's sending connected by day 3, and >= 2 movers have paid the $750 deposit.",
+          "stop": [
+            "Brain's outbound sending not connected by day 3",
+            "no developer quote <= $600 with <= 7-day delivery",
+            "payout time > 2 days",
+            "tooling checkout > $150",
+            "fewer than 2 deposits by day 12",
+            "no further sale can close after day 16 (balance would settle after day 30)"
+          ],
+          "continue": [
+            "2 deposits by day 12 and terms confirmed: build those sites from settled deposits and keep selling to 4 deposits by day 16"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL (the same experiment as its first phase), or name an evidenced constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL; the $120 test (r1, r2, t0, s1, s2) is its first phase with proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: the card's timeToFirstCash is 14 days; with proof on day 12 and the 4th sale needing to settle by day 30, every sale must close by about day 16 and every site be delivered (<= 10 days per the proof's developer bound) by about day 26 so the $750 balance settles in the window. State the latest sale day and check it.",
+            "resolution": "Accepted: latest sale day is 16. Each deposit settles 2 days after payment (proof requires payout <= 2 days, r2), the developer starts then and delivers in <= 7 days, the balance is paid the next day and settles 2 days later: sale on day 16 -> balance settles day 28 <= 30. The card's 14-day timeToFirstCash is my own recommendation and is replaced by r2's measurement."
+          },
+          {
+            "finding": "Proof needs >= 2 deposits but stop fires only at 0; 1 deposit by day 12 is undefined.",
+            "resolution": "Accepted: stop now fires at fewer than 2 deposits by day 12, and continue requires 2; there is no undefined band. If only 2 more do not follow by day 16 the plan stops at the sales made (each sale is profitable on its own)."
+          },
+          {
+            "finding": "Owner hours: the 4 calls (2 h) fit, but closing 2 more sales after proof plus approvals at 0.5 h/sale (card) must be counted against the remaining ~6.6 h.",
+            "resolution": "Accepted: owner hours counted: 2 h of calls (s2, days 7-12) + 2 h for closing calls and 4 scope approvals at 0.5 h (s3, days 13-16) = 4 h of the 9 h allowed, at most 2 h in any week."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; t0's $120 tooling purchase is not evidenced (status ESTIMATE, 'vendor checkout').",
+            "resolution": "Accepted: sending is not connected; validation stops if Brain's outbound sending is not connected by day 3. The $120 tool cost stays an ESTIMATE and t0 stops if checkout exceeds $150 (still far below the $500 cap)."
+          },
+          {
+            "finding": "The FMCSA household-goods register is interstate carriers; verified research rejected it as a count of independent local residential movers, so the 300-contact list source should be stated.",
+            "resolution": "Accepted: the list is now stated as local movers from Google Maps 'movers' listings in 10 metros plus FMCSA-registered household-goods carriers whose sites advertise local residential moves; the FMCSA count is not used as a buyer count."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3444a2a07f38472789ac",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "deals": 4,
+            "price": 1500,
+            "directCost": 600,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c96a3a353de0_94a42b",
+        "digest": "c96a3a353de0b2e5334cc7f4",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:30:56.960Z"
+      },
+      {
+        "goalId": "wst_d8eecadda0104b6eb7e5",
+        "contractDigest": "02386240b6d5a06bbeab4995",
+        "parentRevisionId": "rev_bc5006a6bb10_a936f1",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Movers website rebuild with quote form at $1,500, 50% deposit, white-label developer paid from settled deposits",
+          "opportunityIds": [
+            "cop_49fe38afa1cb4d829957"
+          ],
+          "why": "A one-off product residential movers can buy without becoming a mover; 4 sales x $1,500 = $6,000 settled by day 28, with the only owner money at risk the $120 test tooling. Price, demand, close rate, developer terms and payout time are unknown and are measured by the test before any developer is paid."
+        },
+        "alternatives": [
+          {
+            "title": "Exclusive moving leads per lead",
+            "why": "Lead prices are sellers' claims and ad cost per lead is unmeasured; needs 125+ leads funded inside $500."
+          },
+          {
+            "title": "Monthly GBP/review management at $300",
+            "why": "Needs ~17 first-month subscriptions in 30 days; kept as a down-sell in the same emails."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains written fixed quotes from 3 white-label web developers for a movers site with quote form: <= $600, <= 7-day delivery, started on a settled deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing the payout time of the invoice/payment route into the owner's account (target <= 2 days)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t0",
+            "kind": "OTHER",
+            "label": "Buy one sending domain and one month of a cold-email tool with two inboxes (checkout price confirmed before purchase; stop if > $150)",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "test tooling spend"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 300 residential moving companies (local movers from Google Maps 'movers' listings in 10 metros, plus FMCSA-registered household-goods carriers whose sites advertise local residential moves) offering a website rebuild with quote form for $1,500, 50% deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "t0",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Owner takes up to 4 short calls with interested movers (week 1-2)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Movers 3-4 sign and pay the $750 deposit by day 16; owner approves each scope (0.5 h each)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "dA",
+            "kind": "DELIVER",
+            "label": "Developer builds mover A's site from the settled deposit (start day 10, delivered day 17); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kA",
+            "kind": "COLLECT",
+            "label": "Mover A pays the $750 balance on delivery (day 18), settles day 20",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "dA",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dB",
+            "kind": "DELIVER",
+            "label": "Developer builds mover B's site from the settled deposit (start day 12, delivered day 19); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kB",
+            "kind": "COLLECT",
+            "label": "Mover B pays the $750 balance on delivery (day 20), settles day 22",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "dB",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dC",
+            "kind": "DELIVER",
+            "label": "Developer builds mover C's site from the settled deposit (start day 16, delivered day 23); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 16,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kC",
+            "kind": "COLLECT",
+            "label": "Mover C pays the $750 balance on delivery (day 24), settles day 26",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 24,
+            "dependsOn": "dC",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dD",
+            "kind": "DELIVER",
+            "label": "Developer builds mover D's site from the settled deposit (start day 18, delivered day 25); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 18,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kD",
+            "kind": "COLLECT",
+            "label": "Mover D pays the $750 balance on delivery (day 26), settles day 28",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 26,
+            "dependsOn": "dD",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "domain + cold-email tool",
+            "stepId": "t0"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A deposit",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover A, paid from settled deposit",
+            "stepId": "dA"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A balance",
+            "settlesDay": 20,
+            "stepId": "kA"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B deposit",
+            "settlesDay": 12,
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover B, paid from settled deposit",
+            "stepId": "dB"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B balance",
+            "settlesDay": 22,
+            "stepId": "kB"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C deposit",
+            "settlesDay": 16,
+            "stepId": "s3"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover C, paid from settled deposit",
+            "stepId": "dC"
+          },
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C balance",
+            "settlesDay": 26,
+            "stepId": "kC"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D deposit",
+            "settlesDay": 18,
+            "stepId": "s3"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover D, paid from settled deposit",
+            "stepId": "dD"
+          },
+          {
+            "day": 26,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D balance",
+            "settlesDay": 28,
+            "stepId": "kD"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price residential movers pay for a site rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "deposits in s2/s3"
+          },
+          {
+            "name": "close rate of cold offer to movers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deposits per email",
+            "sources": [],
+            "needs": "s1/s2: 2 deposits of 300 by day 12"
+          },
+          {
+            "name": "white-label developer cost per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 quote <= $600"
+          },
+          {
+            "name": "payout time of payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 <= 2 days"
+          },
+          {
+            "name": "test tooling spend",
+            "status": "ESTIMATE",
+            "value": 120,
+            "unit": "USD",
+            "sources": [],
+            "needs": "checkout"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 12: a written developer quote <= $600 with <= 7-day delivery (r1), payout <= 2 days confirmed (r2), Brain's sending connected by day 3, and >= 2 movers have paid the $750 deposit.",
+          "stop": [
+            "Brain's outbound sending not connected by day 3",
+            "no developer quote <= $600 with <= 7-day delivery",
+            "payout time > 2 days",
+            "tooling checkout > $150",
+            "fewer than 2 deposits by day 12",
+            "no further sale can close after day 16 (balance would settle after day 30)"
+          ],
+          "continue": [
+            "2 deposits by day 12 and terms confirmed: build those sites from settled deposits and keep selling to 4 deposits by day 16"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL (the same experiment as its first phase), or name an evidenced constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL; the $120 test (r1, r2, t0, s1, s2) is its first phase with proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: the card's timeToFirstCash is 14 days; with proof on day 12 and the 4th sale needing to settle by day 30, every sale must close by about day 16 and every site be delivered (<= 10 days per the proof's developer bound) by about day 26 so the $750 balance settles in the window. State the latest sale day and check it.",
+            "resolution": "Accepted: latest sale day is 16. Each deposit settles 2 days after payment (proof requires payout <= 2 days, r2), the developer starts then and delivers in <= 7 days, the balance is paid the next day and settles 2 days later: sale on day 16 -> balance settles day 28 <= 30. The card's 14-day timeToFirstCash is my own recommendation and is replaced by r2's measurement."
+          },
+          {
+            "finding": "Proof needs >= 2 deposits but stop fires only at 0; 1 deposit by day 12 is undefined.",
+            "resolution": "Accepted: stop now fires at fewer than 2 deposits by day 12, and continue requires 2; there is no undefined band. If only 2 more do not follow by day 16 the plan stops at the sales made (each sale is profitable on its own)."
+          },
+          {
+            "finding": "Owner hours: the 4 calls (2 h) fit, but closing 2 more sales after proof plus approvals at 0.5 h/sale (card) must be counted against the remaining ~6.6 h.",
+            "resolution": "Accepted: owner hours counted: 2 h of calls (s2, days 7-12) + 2 h for closing calls and 4 scope approvals at 0.5 h (s3, days 13-16) = 4 h of the 9 h allowed, at most 2 h in any week."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; t0's $120 tooling purchase is not evidenced (status ESTIMATE, 'vendor checkout').",
+            "resolution": "Accepted: sending is not connected; validation stops if Brain's outbound sending is not connected by day 3. The $120 tool cost stays an ESTIMATE and t0 stops if checkout exceeds $150 (still far below the $500 cap)."
+          },
+          {
+            "finding": "The FMCSA household-goods register is interstate carriers; verified research rejected it as a count of independent local residential movers, so the 300-contact list source should be stated.",
+            "resolution": "Accepted: the list is now stated as local movers from Google Maps 'movers' listings in 10 metros plus FMCSA-registered household-goods carriers whose sites advertise local residential moves; the FMCSA count is not used as a buyer count."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "finding": "Contract note",
+            "resolution": "The contract's $500 limit is now recorded as an exposure cap (money the owner puts in), matching 'I can put in up to $500'; developer payments are funded from buyers' settled deposits, never from the owner. Owner money at risk peaks at $120."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3444a2a07f38472789ac",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "deals": 4,
+            "price": 1500,
+            "directCost": 600,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4d18446ee62f_a8ca3e",
+        "digest": "4d18446ee62fcf12f293f825",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:18.008Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d8eecadda0104b6eb7e5",
+      "contractDigest": "02386240b6d5a06bbeab4995",
+      "parentRevisionId": "rev_bc5006a6bb10_a936f1",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Movers website rebuild with quote form at $1,500, 50% deposit, white-label developer paid from settled deposits",
+        "opportunityIds": [
+          "cop_49fe38afa1cb4d829957"
+        ],
+        "why": "A one-off product residential movers can buy without becoming a mover; 4 sales x $1,500 = $6,000 settled by day 28, with the only owner money at risk the $120 test tooling. Price, demand, close rate, developer terms and payout time are unknown and are measured by the test before any developer is paid."
+      },
+      "alternatives": [
+        {
+          "title": "Exclusive moving leads per lead",
+          "why": "Lead prices are sellers' claims and ad cost per lead is unmeasured; needs 125+ leads funded inside $500."
+        },
+        {
+          "title": "Monthly GBP/review management at $300",
+          "why": "Needs ~17 first-month subscriptions in 30 days; kept as a down-sell in the same emails."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Brain obtains written fixed quotes from 3 white-label web developers for a movers site with quote form: <= $600, <= 7-day delivery, started on a settled deposit",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "FULFILMENT",
+            "ECONOMICS"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "r2",
+          "kind": "RESEARCH",
+          "label": "Brain confirms in writing the payout time of the invoice/payment route into the owner's account (target <= 2 days)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "t0",
+          "kind": "OTHER",
+          "label": "Buy one sending domain and one month of a cold-email tool with two inboxes (checkout price confirmed before purchase; stop if > $150)",
+          "performer": "BRAIN",
+          "costCents": 12000,
+          "day": 2,
+          "dependsOn": null,
+          "evidence": [
+            "test tooling spend"
+          ],
+          "executor": {
+            "operation": "PLAN_DECISION",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [],
+            "routine": false
+          }
+        },
+        {
+          "id": "s1",
+          "kind": "OFFER",
+          "label": "Brain emails 300 residential moving companies (local movers from Google Maps 'movers' listings in 10 metros, plus FMCSA-registered household-goods carriers whose sites advertise local residential moves) offering a website rebuild with quote form for $1,500, 50% deposit",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "t0",
+          "evidence": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE"
+          ],
+          "priceCents": 150000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "SELL",
+          "label": "Owner takes up to 4 short calls with interested movers (week 1-2)",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "s1",
+          "evidence": [
+            "CONVERSION"
+          ],
+          "ownerHours": 2,
+          "priceCents": 150000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "SELL",
+          "label": "Movers 3-4 sign and pay the $750 deposit by day 16; owner approves each scope (0.5 h each)",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "s2",
+          "evidence": [
+            "CONVERSION"
+          ],
+          "ownerHours": 2,
+          "priceCents": 150000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "dA",
+          "kind": "DELIVER",
+          "label": "Developer builds mover A's site from the settled deposit (start day 10, delivered day 17); paid $600",
+          "performer": "white-label web developer (Fiverr/Upwork)",
+          "costCents": 60000,
+          "day": 10,
+          "dependsOn": "s2",
+          "evidence": [
+            "FULFILMENT"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "white-label web developer (Fiverr/Upwork)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "kA",
+          "kind": "COLLECT",
+          "label": "Mover A pays the $750 balance on delivery (day 18), settles day 20",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 18,
+          "dependsOn": "dA",
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "dB",
+          "kind": "DELIVER",
+          "label": "Developer builds mover B's site from the settled deposit (start day 12, delivered day 19); paid $600",
+          "performer": "white-label web developer (Fiverr/Upwork)",
+          "costCents": 60000,
+          "day": 12,
+          "dependsOn": "s2",
+          "evidence": [
+            "FULFILMENT"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "white-label web developer (Fiverr/Upwork)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "kB",
+          "kind": "COLLECT",
+          "label": "Mover B pays the $750 balance on delivery (day 20), settles day 22",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 20,
+          "dependsOn": "dB",
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "dC",
+          "kind": "DELIVER",
+          "label": "Developer builds mover C's site from the settled deposit (start day 16, delivered day 23); paid $600",
+          "performer": "white-label web developer (Fiverr/Upwork)",
+          "costCents": 60000,
+          "day": 16,
+          "dependsOn": "s3",
+          "evidence": [
+            "FULFILMENT"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "white-label web developer (Fiverr/Upwork)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "kC",
+          "kind": "COLLECT",
+          "label": "Mover C pays the $750 balance on delivery (day 24), settles day 26",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 24,
+          "dependsOn": "dC",
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "dD",
+          "kind": "DELIVER",
+          "label": "Developer builds mover D's site from the settled deposit (start day 18, delivered day 25); paid $600",
+          "performer": "white-label web developer (Fiverr/Upwork)",
+          "costCents": 60000,
+          "day": 18,
+          "dependsOn": "s3",
+          "evidence": [
+            "FULFILMENT"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "white-label web developer (Fiverr/Upwork)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "kD",
+          "kind": "COLLECT",
+          "label": "Mover D pays the $750 balance on delivery (day 26), settles day 28",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 26,
+          "dependsOn": "dD",
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 2,
+          "kind": "SPEND",
+          "amountCents": 12000,
+          "label": "domain + cold-email tool",
+          "stepId": "t0"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover A deposit",
+          "settlesDay": 10,
+          "stepId": "s2"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 60000,
+          "label": "developer for mover A, paid from settled deposit",
+          "stepId": "dA"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover A balance",
+          "settlesDay": 20,
+          "stepId": "kA"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover B deposit",
+          "settlesDay": 12,
+          "stepId": "s2"
+        },
+        {
+          "day": 12,
+          "kind": "SPEND",
+          "amountCents": 60000,
+          "label": "developer for mover B, paid from settled deposit",
+          "stepId": "dB"
+        },
+        {
+          "day": 20,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover B balance",
+          "settlesDay": 22,
+          "stepId": "kB"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover C deposit",
+          "settlesDay": 16,
+          "stepId": "s3"
+        },
+        {
+          "day": 16,
+          "kind": "SPEND",
+          "amountCents": 60000,
+          "label": "developer for mover C, paid from settled deposit",
+          "stepId": "dC"
+        },
+        {
+          "day": 24,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover C balance",
+          "settlesDay": 26,
+          "stepId": "kC"
+        },
+        {
+          "day": 16,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover D deposit",
+          "settlesDay": 18,
+          "stepId": "s3"
+        },
+        {
+          "day": 18,
+          "kind": "SPEND",
+          "amountCents": 60000,
+          "label": "developer for mover D, paid from settled deposit",
+          "stepId": "dD"
+        },
+        {
+          "day": 26,
+          "kind": "RECEIPT",
+          "amountCents": 75000,
+          "label": "mover D balance",
+          "settlesDay": 28,
+          "stepId": "kD"
+        }
+      ],
+      "proofDay": 12,
+      "quantities": [
+        {
+          "name": "price residential movers pay for a site rebuild",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per site",
+          "sources": [],
+          "needs": "deposits in s2/s3"
+        },
+        {
+          "name": "close rate of cold offer to movers",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "deposits per email",
+          "sources": [],
+          "needs": "s1/s2: 2 deposits of 300 by day 12"
+        },
+        {
+          "name": "white-label developer cost per site",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "r1 quote <= $600"
+        },
+        {
+          "name": "payout time of payment route",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "days",
+          "sources": [],
+          "needs": "r2 <= 2 days"
+        },
+        {
+          "name": "test tooling spend",
+          "status": "ESTIMATE",
+          "value": 120,
+          "unit": "USD",
+          "sources": [],
+          "needs": "checkout"
+        }
+      ],
+      "sources": [],
+      "validation": {
+        "proof": "By day 12: a written developer quote <= $600 with <= 7-day delivery (r1), payout <= 2 days confirmed (r2), Brain's sending connected by day 3, and >= 2 movers have paid the $750 deposit.",
+        "stop": [
+          "Brain's outbound sending not connected by day 3",
+          "no developer quote <= $600 with <= 7-day delivery",
+          "payout time > 2 days",
+          "tooling checkout > $150",
+          "fewer than 2 deposits by day 12",
+          "no further sale can close after day 16 (balance would settle after day 30)"
+        ],
+        "continue": [
+          "2 deposits by day 12 and terms confirmed: build those sites from settled deposits and keep selling to 4 deposits by day 16"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Re-state as CONDITIONAL (the same experiment as its first phase), or name an evidenced constraint.",
+          "resolution": "Accepted: restated as CONDITIONAL; the $120 test (r1, r2, t0, s1, s2) is its first phase with proof/stop/continue."
+        },
+        {
+          "finding": "Timeline: the card's timeToFirstCash is 14 days; with proof on day 12 and the 4th sale needing to settle by day 30, every sale must close by about day 16 and every site be delivered (<= 10 days per the proof's developer bound) by about day 26 so the $750 balance settles in the window. State the latest sale day and check it.",
+          "resolution": "Accepted: latest sale day is 16. Each deposit settles 2 days after payment (proof requires payout <= 2 days, r2), the developer starts then and delivers in <= 7 days, the balance is paid the next day and settles 2 days later: sale on day 16 -> balance settles day 28 <= 30. The card's 14-day timeToFirstCash is my own recommendation and is replaced by r2's measurement."
+        },
+        {
+          "finding": "Proof needs >= 2 deposits but stop fires only at 0; 1 deposit by day 12 is undefined.",
+          "resolution": "Accepted: stop now fires at fewer than 2 deposits by day 12, and continue requires 2; there is no undefined band. If only 2 more do not follow by day 16 the plan stops at the sales made (each sale is profitable on its own)."
+        },
+        {
+          "finding": "Owner hours: the 4 calls (2 h) fit, but closing 2 more sales after proof plus approvals at 0.5 h/sale (card) must be counted against the remaining ~6.6 h.",
+          "resolution": "Accepted: owner hours counted: 2 h of calls (s2, days 7-12) + 2 h for closing calls and 4 scope approvals at 0.5 h (s3, days 13-16) = 4 h of the 9 h allowed, at most 2 h in any week."
+        },
+        {
+          "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; t0's $120 tooling purchase is not evidenced (status ESTIMATE, 'vendor checkout').",
+          "resolution": "Accepted: sending is not connected; validation stops if Brain's outbound sending is not connected by day 3. The $120 tool cost stays an ESTIMATE and t0 stops if checkout exceeds $150 (still far below the $500 cap)."
+        },
+        {
+          "finding": "The FMCSA household-goods register is interstate carriers; verified research rejected it as a count of independent local residential movers, so the 300-contact list source should be stated.",
+          "resolution": "Accepted: the list is now stated as local movers from Google Maps 'movers' listings in 10 metros plus FMCSA-registered household-goods carriers whose sites advertise local residential moves; the FMCSA count is not used as a buyer count."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "revenueRange",
+            "price",
+            "brain:OFFER_AND_PRICE"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "directCosts",
+            "brain:FULFILMENT"
+          ]
+        },
+        {
+          "condition": 2,
+          "decision": "ACCEPTED",
+          "records": [
+            "timeToFirstCash",
+            "brain:SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "finding": "Contract note",
+          "resolution": "The contract's $500 limit is now recorded as an exposure cap (money the owner puts in), matching 'I can put in up to $500'; developer payments are funded from buyers' settled deposits, never from the owner. Owner money at risk peaks at $120."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_49fe38afa1cb4d829957",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_3444a2a07f38472789ac",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_49fe38afa1cb4d829957",
+          "deals": 4,
+          "price": 1500,
+          "directCost": 600,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_4d18446ee62f_a8ca3e",
+      "digest": "4d18446ee62fcf12f293f825",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_36f6a419720444368890/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:31:18.008Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_4d18446ee62f_a8ca3e",
+      "digest": "4d18446ee62fcf12f293f825",
+      "contractDigest": "02386240b6d5a06bbeab4995",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 252000,
+        "committedOpenCents": 0,
+        "preProofCents": 132000,
+        "maxExposureCents": 12000,
+        "minCashCents": 38000,
+        "minCashDay": 2,
+        "collectedCents": 600000,
+        "collectedInWindowCents": 600000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 348000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_49fe38afa1cb4d829957",
+          "cop_3444a2a07f38472789ac",
+          "cop_eee5ee83e9ac4b5cbfc5"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "title": "Moving-company website rebuild with quote form, resold to local residential movers",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "independent local residential moving companies with outdated sites",
+              "reachableChannel": "cold email to movers listed in FMCSA household-goods carrier census and Google Maps",
+              "offerScope": "fixed-scope movers website with instant-quote/booking request form",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "white-label web developer (Fiverr/Upwork)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "residential moving",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email to movers listed in FMCSA household-goods carrier census and Google M"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 500, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email to movers listed in FMCSA household-goods carrier census and Google Maps",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell fixed-scope movers website with instant-quote/booking request form to independent local residential moving companies with outdated sites, reached through cold email to movers listed in FMCSA household-goods carrier census and Google Maps, at $1,500; white-label web developer (Fiverr/Upwork) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "white-label web developer (Fiverr/Upwork).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "fixed-scope movers website with instant-quote/booking request form",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "independent local residential moving companies with outdated sites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://colorwhistle.com/website-cost-features/movers-website-cost-usa/; https://framer.com/templates/cardfly?via=framax; moving company website redesign; FMCSA household goods carriers count",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_3444a2a07f38472789ac",
+            "title": "Google Business Profile and review-response management for movers, monthly",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 300,
+            "card": {
+              "payer": "local residential movers with few or unanswered Google reviews",
+              "reachableChannel": "cold email to movers whose listings show unanswered reviews",
+              "offerScope": "monthly GBP posts, review replies and review-request texts",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "local-SEO freelancer",
+              "peakFundingCents": 0,
+              "humanHours": 0.25,
+              "requiredCapabilities": [],
+              "industry": "residential moving",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email to movers whose listings show unanswered reviews"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 100, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email to movers whose listings show unanswered reviews",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell monthly GBP posts, review replies and review-request texts to local residential movers with few or unanswered Google reviews, reached through cold email to movers whose listings show unanswered reviews, at $300; local-SEO freelancer delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$100",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "local-SEO freelancer.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.25 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "monthly GBP posts, review replies and review-request texts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "local residential movers with few or unanswered Google reviews",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "google business profile management price per month; moving company reviews importance; number of local moving companies US",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+            "title": "Exclusive local moving leads sold per lead to residential movers",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 40,
+            "card": {
+              "payer": "local residential movers buying leads",
+              "reachableChannel": "cold email / phone to movers already buying shared leads",
+              "offerScope": "exclusive local-move leads from a Brain-built quote landing page and paid search",
+              "priceCents": 4000,
+              "currency": "USD",
+              "fulfillmentOwner": "Google Ads traffic to a quote landing page",
+              "peakFundingCents": 40000,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "residential moving",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email / phone to movers already buying shared leads"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 40 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 25, tied up 400"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email / phone to movers already buying shared leads",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell exclusive local-move leads from a Brain-built quote landing page and paid search to local residential movers buying leads, reached through cold email / phone to movers already buying shared leads, at $40; Google Ads traffic to a quote landing page delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$25",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Google Ads traffic to a quote landing page.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "exclusive local-move leads from a Brain-built quote landing page and paid search",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "local residential movers buying leads",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$40",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$40",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.smartmoving.com/blog/buy-moving-leads; https://netpeak.us/blog/how-to-calculate-the-cost-of-a-moving-lead-this-year-2026/; movers buy leads; cost per lead google ads movers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": 9,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T07:24:07.193Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_bc5006a6bb10_a936f1",
+        "revisionDigest": "bc5006a6bb108798dbbb64a6",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_a1649353a8f44178b821/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The decisive gap named is missing evidence (no buyer-paid price, no buying signal, no fulfiller on terms), not a constraint: nothing recorded shows that $5,000 from residential movers cannot fit $500, ~8.6 owner hours (2 h/week x 30 days) and 30 days even if those facts were established. The revision already contains a startable, bounded live test with proof, stop and continue rules ($120 spend <= $500; 2 owner hours) — which is a CONDITIONAL plan resting on unknowns only that test measures. Labelling it NO_PLAN misreports it. Recomputed: 4 sales x $1,500 = $6,000 >= $5,000 (3 would be $4,500); deposits of $750 cover a developer quote <= $600, so the $500 capital limit holds if the developer is paid from deposits.",
+        "findings": [
+          "Re-state as CONDITIONAL (the same experiment as its first phase), or name an evidenced constraint.",
+          "Timeline: the card's timeToFirstCash is 14 days; with proof on day 12 and the 4th sale needing to settle by day 30, every sale must close by about day 16 and every site be delivered (<= 10 days per the proof's developer bound) by about day 26 so the $750 balance settles in the window. State the latest sale day and check it.",
+          "Proof needs >= 2 deposits but stop fires only at 0; 1 deposit by day 12 is undefined.",
+          "Owner hours: the 4 calls (2 h) fit, but closing 2 more sales after proof plus approvals at 0.5 h/sale (card) must be counted against the remaining ~6.6 h.",
+          "SEND_A_MESSAGE is NOT_CONNECTED for t1; t0's $120 tooling purchase is not evidenced (status ESTIMATE, 'vendor checkout').",
+          "The FMCSA household-goods register is interstate carriers; verified research rejected it as a count of independent local residential movers, so the 300-contact list source should be stated."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:28:42.787Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "link": "OFFER_AND_PRICE",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "revenueRange",
+            "why": "$1,500 is a RECOMMENDATION; verified research rejected vendor list prices as not what residential movers pay."
+          },
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "link": "FULFILMENT",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "fulfillment",
+            "why": "The white-label developer is a RECOMMENDATION; no developer has quoted or agreed to terms."
+          },
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "14 days to first cash is a RECOMMENDATION and decides the latest sale day that still settles by day 30."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_4d18446ee62f_a8ca3e",
+        "revisionDigest": "4d18446ee62fcf12f293f825",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_a1649353a8f44178b821/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance and the revision fixes what the earlier review raised. Price ($1,500), close rate, developer terms and payout time are all unknown (card facts RECOMMENDATION; verified research rejected vendor list prices and interstate/all-mover counts) and each is gated by a bounded test with proof (>= 2 deposits by day 12 plus written developer quote <= $600 / <= 7 days and payout <= 2 days) and a matching stop (< 2 deposits), so there is no undefined band. Recomputed against contract v3: 4 x $1,500 = $6,000 settled by day 28 (3 would be $4,500 < $5,000); each $600 developer payment comes from a settled $750 deposit, so peak owner exposure is the $120 tooling, inside the $500 exposure cap; last sale day 16 -> delivery day 25 -> balance settles day 28 <= 30. Buyers are residential movers only (Maps 'movers' listings plus FMCSA carriers advertising local residential moves), and the product is sold to movers, so both exclusions hold. One balance default still leaves $5,250 >= $5,000.",
+        "findings": [
+          "Settled $6,000 by day 28; exposure $120 <= $500; developer cost 4 x $600 = $2,400 paid from deposits.",
+          "Owner hours total 4 h (calls 2 h + 4 scope approvals x 0.5 h) of ~8.6 h; the per-week cap needs a schedule: calls in week 1, approvals A/B/C (1.5 h) in week 2 and D (0.5 h) in week 3 fits, but calls spilling into week 2 alongside three approvals would exceed it. State the weekly allocation.",
+          "If the payment route is a card invoice, fees (~2.9% on 8 payments of $750, ~$178) are missing from the ledger; settled cash would be ~$5,822, still above target. r2 should record the fee.",
+          "Contract v3 records ownerHoursPerWeek 2.1 while the owner's words say 'up to 2 hours a week'; the plan stays within 2 if scheduled as above, but the term should be corrected to 2.",
+          "The deposit receipts are tagged to step s2 (calls) rather than s3 (sign and pay); cosmetic."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:02.699Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_4d18446ee62f_a8ca3e",
+      "digest": "4d18446ee62fcf12f293f825",
+      "contractDigest": "02386240b6d5a06bbeab4995",
+      "plan": {
+        "goalId": "wst_d8eecadda0104b6eb7e5",
+        "contractDigest": "02386240b6d5a06bbeab4995",
+        "parentRevisionId": "rev_bc5006a6bb10_a936f1",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Movers website rebuild with quote form at $1,500, 50% deposit, white-label developer paid from settled deposits",
+          "opportunityIds": [
+            "cop_49fe38afa1cb4d829957"
+          ],
+          "why": "A one-off product residential movers can buy without becoming a mover; 4 sales x $1,500 = $6,000 settled by day 28, with the only owner money at risk the $120 test tooling. Price, demand, close rate, developer terms and payout time are unknown and are measured by the test before any developer is paid."
+        },
+        "alternatives": [
+          {
+            "title": "Exclusive moving leads per lead",
+            "why": "Lead prices are sellers' claims and ad cost per lead is unmeasured; needs 125+ leads funded inside $500."
+          },
+          {
+            "title": "Monthly GBP/review management at $300",
+            "why": "Needs ~17 first-month subscriptions in 30 days; kept as a down-sell in the same emails."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains written fixed quotes from 3 white-label web developers for a movers site with quote form: <= $600, <= 7-day delivery, started on a settled deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing the payout time of the invoice/payment route into the owner's account (target <= 2 days)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t0",
+            "kind": "OTHER",
+            "label": "Buy one sending domain and one month of a cold-email tool with two inboxes (checkout price confirmed before purchase; stop if > $150)",
+            "performer": "BRAIN",
+            "costCents": 12000,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "test tooling spend"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 300 residential moving companies (local movers from Google Maps 'movers' listings in 10 metros, plus FMCSA-registered household-goods carriers whose sites advertise local residential moves) offering a website rebuild with quote form for $1,500, 50% deposit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "t0",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Owner takes up to 4 short calls with interested movers (week 1-2)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Movers 3-4 sign and pay the $750 deposit by day 16; owner approves each scope (0.5 h each)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "ownerHours": 2,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "dA",
+            "kind": "DELIVER",
+            "label": "Developer builds mover A's site from the settled deposit (start day 10, delivered day 17); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 10,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kA",
+            "kind": "COLLECT",
+            "label": "Mover A pays the $750 balance on delivery (day 18), settles day 20",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "dA",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dB",
+            "kind": "DELIVER",
+            "label": "Developer builds mover B's site from the settled deposit (start day 12, delivered day 19); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kB",
+            "kind": "COLLECT",
+            "label": "Mover B pays the $750 balance on delivery (day 20), settles day 22",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "dB",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dC",
+            "kind": "DELIVER",
+            "label": "Developer builds mover C's site from the settled deposit (start day 16, delivered day 23); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 16,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kC",
+            "kind": "COLLECT",
+            "label": "Mover C pays the $750 balance on delivery (day 24), settles day 26",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 24,
+            "dependsOn": "dC",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "dD",
+            "kind": "DELIVER",
+            "label": "Developer builds mover D's site from the settled deposit (start day 18, delivered day 25); paid $600",
+            "performer": "white-label web developer (Fiverr/Upwork)",
+            "costCents": 60000,
+            "day": 18,
+            "dependsOn": "s3",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "white-label web developer (Fiverr/Upwork)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "kD",
+            "kind": "COLLECT",
+            "label": "Mover D pays the $750 balance on delivery (day 26), settles day 28",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 26,
+            "dependsOn": "dD",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 12000,
+            "label": "domain + cold-email tool",
+            "stepId": "t0"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A deposit",
+            "settlesDay": 10,
+            "stepId": "s2"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover A, paid from settled deposit",
+            "stepId": "dA"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover A balance",
+            "settlesDay": 20,
+            "stepId": "kA"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B deposit",
+            "settlesDay": 12,
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover B, paid from settled deposit",
+            "stepId": "dB"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover B balance",
+            "settlesDay": 22,
+            "stepId": "kB"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C deposit",
+            "settlesDay": 16,
+            "stepId": "s3"
+          },
+          {
+            "day": 16,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover C, paid from settled deposit",
+            "stepId": "dC"
+          },
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover C balance",
+            "settlesDay": 26,
+            "stepId": "kC"
+          },
+          {
+            "day": 16,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D deposit",
+            "settlesDay": 18,
+            "stepId": "s3"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 60000,
+            "label": "developer for mover D, paid from settled deposit",
+            "stepId": "dD"
+          },
+          {
+            "day": 26,
+            "kind": "RECEIPT",
+            "amountCents": 75000,
+            "label": "mover D balance",
+            "settlesDay": 28,
+            "stepId": "kD"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price residential movers pay for a site rebuild",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "deposits in s2/s3"
+          },
+          {
+            "name": "close rate of cold offer to movers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deposits per email",
+            "sources": [],
+            "needs": "s1/s2: 2 deposits of 300 by day 12"
+          },
+          {
+            "name": "white-label developer cost per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 quote <= $600"
+          },
+          {
+            "name": "payout time of payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 <= 2 days"
+          },
+          {
+            "name": "test tooling spend",
+            "status": "ESTIMATE",
+            "value": 120,
+            "unit": "USD",
+            "sources": [],
+            "needs": "checkout"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 12: a written developer quote <= $600 with <= 7-day delivery (r1), payout <= 2 days confirmed (r2), Brain's sending connected by day 3, and >= 2 movers have paid the $750 deposit.",
+          "stop": [
+            "Brain's outbound sending not connected by day 3",
+            "no developer quote <= $600 with <= 7-day delivery",
+            "payout time > 2 days",
+            "tooling checkout > $150",
+            "fewer than 2 deposits by day 12",
+            "no further sale can close after day 16 (balance would settle after day 30)"
+          ],
+          "continue": [
+            "2 deposits by day 12 and terms confirmed: build those sites from settled deposits and keep selling to 4 deposits by day 16"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL (the same experiment as its first phase), or name an evidenced constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL; the $120 test (r1, r2, t0, s1, s2) is its first phase with proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: the card's timeToFirstCash is 14 days; with proof on day 12 and the 4th sale needing to settle by day 30, every sale must close by about day 16 and every site be delivered (<= 10 days per the proof's developer bound) by about day 26 so the $750 balance settles in the window. State the latest sale day and check it.",
+            "resolution": "Accepted: latest sale day is 16. Each deposit settles 2 days after payment (proof requires payout <= 2 days, r2), the developer starts then and delivers in <= 7 days, the balance is paid the next day and settles 2 days later: sale on day 16 -> balance settles day 28 <= 30. The card's 14-day timeToFirstCash is my own recommendation and is replaced by r2's measurement."
+          },
+          {
+            "finding": "Proof needs >= 2 deposits but stop fires only at 0; 1 deposit by day 12 is undefined.",
+            "resolution": "Accepted: stop now fires at fewer than 2 deposits by day 12, and continue requires 2; there is no undefined band. If only 2 more do not follow by day 16 the plan stops at the sales made (each sale is profitable on its own)."
+          },
+          {
+            "finding": "Owner hours: the 4 calls (2 h) fit, but closing 2 more sales after proof plus approvals at 0.5 h/sale (card) must be counted against the remaining ~6.6 h.",
+            "resolution": "Accepted: owner hours counted: 2 h of calls (s2, days 7-12) + 2 h for closing calls and 4 scope approvals at 0.5 h (s3, days 13-16) = 4 h of the 9 h allowed, at most 2 h in any week."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; t0's $120 tooling purchase is not evidenced (status ESTIMATE, 'vendor checkout').",
+            "resolution": "Accepted: sending is not connected; validation stops if Brain's outbound sending is not connected by day 3. The $120 tool cost stays an ESTIMATE and t0 stops if checkout exceeds $150 (still far below the $500 cap)."
+          },
+          {
+            "finding": "The FMCSA household-goods register is interstate carriers; verified research rejected it as a count of independent local residential movers, so the 300-contact list source should be stated.",
+            "resolution": "Accepted: the list is now stated as local movers from Google Maps 'movers' listings in 10 metros plus FMCSA-registered household-goods carriers whose sites advertise local residential moves; the FMCSA count is not used as a buyer count."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "finding": "Contract note",
+            "resolution": "The contract's $500 limit is now recorded as an exposure cap (money the owner puts in), matching 'I can put in up to $500'; developer payments are funded from buyers' settled deposits, never from the owner. Owner money at risk peaks at $120."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_3444a2a07f38472789ac",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_eee5ee83e9ac4b5cbfc5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_49fe38afa1cb4d829957",
+            "deals": 4,
+            "price": 1500,
+            "directCost": 600,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4d18446ee62f_a8ca3e",
+        "digest": "4d18446ee62fcf12f293f825",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:18.008Z"
+      },
+      "review": {
+        "revisionId": "rev_4d18446ee62f_a8ca3e",
+        "revisionDigest": "4d18446ee62fcf12f293f825",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_36f6a419720444368890/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_a1649353a8f44178b821/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance and the revision fixes what the earlier review raised. Price ($1,500), close rate, developer terms and payout time are all unknown (card facts RECOMMENDATION; verified research rejected vendor list prices and interstate/all-mover counts) and each is gated by a bounded test with proof (>= 2 deposits by day 12 plus written developer quote <= $600 / <= 7 days and payout <= 2 days) and a matching stop (< 2 deposits), so there is no undefined band. Recomputed against contract v3: 4 x $1,500 = $6,000 settled by day 28 (3 would be $4,500 < $5,000); each $600 developer payment comes from a settled $750 deposit, so peak owner exposure is the $120 tooling, inside the $500 exposure cap; last sale day 16 -> delivery day 25 -> balance settles day 28 <= 30. Buyers are residential movers only (Maps 'movers' listings plus FMCSA carriers advertising local residential moves), and the product is sold to movers, so both exclusions hold. One balance default still leaves $5,250 >= $5,000.",
+        "findings": [
+          "Settled $6,000 by day 28; exposure $120 <= $500; developer cost 4 x $600 = $2,400 paid from deposits.",
+          "Owner hours total 4 h (calls 2 h + 4 scope approvals x 0.5 h) of ~8.6 h; the per-week cap needs a schedule: calls in week 1, approvals A/B/C (1.5 h) in week 2 and D (0.5 h) in week 3 fits, but calls spilling into week 2 alongside three approvals would exceed it. State the weekly allocation.",
+          "If the payment route is a card invoice, fees (~2.9% on 8 payments of $750, ~$178) are missing from the ledger; settled cash would be ~$5,822, still above target. r2 should record the fee.",
+          "Contract v3 records ownerHoursPerWeek 2.1 while the owner's words say 'up to 2 hours a week'; the plan stays within 2 if scheduled as above, but the term should be corrected to 2.",
+          "The deposit receipts are tagged to step s2 (calls) rather than s3 (sign and pay); cosmetic."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:02.699Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:34:14.323Z"
+    },
+    "staleFinal": null
+  }
+}

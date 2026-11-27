@@ -1,0 +1,637 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_096ceff918f04379a7ad",
+      "words": "Collect $8,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": [],
+        "targetCents": 800000,
+        "proofCondition": "$8,000 of settled cash collected within 30 days with no up-front capital"
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "7faf2dd08dcb65d9f0e80763"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_096ceff918f04379a7ad",
+        "contractDigest": "7faf2dd08dcb65d9f0e80763",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening costs more to fulfil than it pays",
+          "opportunityIds": [],
+          "why": "The only opening (brokered game-text localisation, 5 written acceptances at $2,000 = $10,000) is fulfilled by Polyglot Freelance Collective at a quoted $2,300 per job. Every deal loses $300, so selling more only deepens the loss; no deal count produces $8,000 of net settled cash."
+        },
+        "alternatives": [
+          {
+            "title": "Renegotiate the subcontract or the price",
+            "why": "At $2,000 per job the fulfiller cost would need to fall below ~$400 to keep $8,000 from 5 deals ($1,600 margin each); no such quote exists."
+          },
+          {
+            "title": "Fulfil the localisation without the collective",
+            "why": "The card names the collective as fulfiller and lists no capability Brain holds for it; unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Obtain a fulfiller quote for game-text localisation at or below $400 per job, or a buyer price that clears the $2,300 cost by $1,600 per job",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_cost",
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per job",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per job",
+            "status": "EVIDENCED",
+            "value": 230000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "margin per job",
+            "status": "EVIDENCED",
+            "value": -30000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_81b81dac4df845218bd3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $2,000 per localisation job",
+            "population": "Indie game studios",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_81b81dac4df845218bd3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $2,300 per job (Polyglot Freelance Collective quote)",
+            "population": "Indie game studios",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Economics: the quoted fulfilment cost ($2,300) exceeds the agreed price ($2,000), so each of the 5 agreed jobs loses $300 and no volume reaches $8,000.",
+          "resolution": "Find a localisation fulfiller quoting at most ~$400 per job (so 5 jobs net $8,000), or re-price the offer so price minus fulfilment cost is at least $1,600 per job across the agreed buyers."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_81b81dac4df845218bd3",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_81b81dac4df845218bd3",
+            "why": "Fulfilment cost $2,300 exceeds price $2,000; every deal loses money."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "revisionId": "rev_a2a17d28c979_0c5a2c",
+        "digest": "a2a17d28c9796e68384d23b7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_885353f3cf5445699a14/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:05.810Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_096ceff918f04379a7ad",
+      "contractDigest": "7faf2dd08dcb65d9f0e80763",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the only opening costs more to fulfil than it pays",
+        "opportunityIds": [],
+        "why": "The only opening (brokered game-text localisation, 5 written acceptances at $2,000 = $10,000) is fulfilled by Polyglot Freelance Collective at a quoted $2,300 per job. Every deal loses $300, so selling more only deepens the loss; no deal count produces $8,000 of net settled cash."
+      },
+      "alternatives": [
+        {
+          "title": "Renegotiate the subcontract or the price",
+          "why": "At $2,000 per job the fulfiller cost would need to fall below ~$400 to keep $8,000 from 5 deals ($1,600 margin each); no such quote exists."
+        },
+        {
+          "title": "Fulfil the localisation without the collective",
+          "why": "The card names the collective as fulfiller and lists no capability Brain holds for it; unestablished."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Obtain a fulfiller quote for game-text localisation at or below $400 per job, or a buyer price that clears the $2,300 cost by $1,600 per job",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_cost",
+            "s_price"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per job",
+          "status": "EVIDENCED",
+          "value": 200000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "fulfiller cost per job",
+          "status": "EVIDENCED",
+          "value": 230000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "margin per job",
+          "status": "EVIDENCED",
+          "value": -30000,
+          "unit": "cents",
+          "sources": [
+            "s_price",
+            "s_cost"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_81b81dac4df845218bd3#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Price is $2,000 per localisation job",
+          "population": "Indie game studios",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_81b81dac4df845218bd3#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost is $2,300 per job (Polyglot Freelance Collective quote)",
+          "population": "Indie game studios",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Economics: the quoted fulfilment cost ($2,300) exceeds the agreed price ($2,000), so each of the 5 agreed jobs loses $300 and no volume reaches $8,000.",
+        "resolution": "Find a localisation fulfiller quoting at most ~$400 per job (so 5 jobs net $8,000), or re-price the offer so price minus fulfilment cost is at least $1,600 per job across the agreed buyers."
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_81b81dac4df845218bd3",
+          "missing": [
+            "ECONOMICS"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_81b81dac4df845218bd3",
+          "why": "Fulfilment cost $2,300 exceeds price $2,000; every deal loses money."
+        }
+      ],
+      "members": [],
+      "resolves": [
+        "ECONOMICS"
+      ],
+      "constraints": [],
+      "revisionId": "rev_a2a17d28c979_0c5a2c",
+      "digest": "a2a17d28c9796e68384d23b7",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_885353f3cf5445699a14/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:18:05.810Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_a2a17d28c979_0c5a2c",
+      "digest": "a2a17d28c9796e68384d23b7",
+      "contractDigest": "7faf2dd08dcb65d9f0e80763",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: \"Brokered game-text localisation for indie studios\" costs at least what it pays. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2447× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Indie game studios — Brokered game-text localis\" needs [figure withheld] and keeps [figure withheld], 944× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 35–60 (swept by the plan's simulation: an assumption, not established), after the 30 days left, so it brings no cash inside the goal's window.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_81b81dac4df845218bd3"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": "Discover, construct and research openings that can reach the 8000 USD still needed — the openings held reach at most 10000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_81b81dac4df845218bd3",
+            "title": "Brokered game-text localisation for indie studios",
+            "missing": [
+              "ECONOMICS"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 8000,
+            "potentialReach": 8000,
+            "card": {
+              "payer": "Indie game studios",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:13.670Z",
+              "offerScope": "Brokered game-text localisation for indie studios",
+              "priceCents": 200000,
+              "currency": "USD",
+              "fulfillmentOwner": "Polyglot Freelance Collective (quoted)",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "indie game studios",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Brokered game-text localisation for indie studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Brokered game-text localisation for indie studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Brokered game-text localisation for indie studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Brokered game-text localisation for indie studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 200000,
+                "currency": "USD",
+                "deliverable": "Brokered game-text localisation for indie studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Brokered game-text localisation for indie studios to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$2300",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Polyglot Freelance Collective (quoted) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Indie game studios",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$2000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_b0bfd3be6d464dff958f"
+        ],
+        "scope": {
+          "targetCents": 800000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:17:23.810Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_a2a17d28c979_0c5a2c",
+        "revisionDigest": "a2a17d28c9796e68384d23b7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_885353f3cf5445699a14/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8084a42577014b99adbd/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN on ECONOMICS is correct: price $2,000 vs Polyglot quote $2,300 loses $300 per job, so the 5 agreed jobs net -$1,500 and the loss would itself need capital the goal forbids. Resolution arithmetic ($8,000/5 = $1,600 margin, cost <= $400) is right.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.956Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_a2a17d28c979_0c5a2c",
+      "digest": "a2a17d28c9796e68384d23b7",
+      "contractDigest": "7faf2dd08dcb65d9f0e80763",
+      "plan": {
+        "goalId": "wst_096ceff918f04379a7ad",
+        "contractDigest": "7faf2dd08dcb65d9f0e80763",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the only opening costs more to fulfil than it pays",
+          "opportunityIds": [],
+          "why": "The only opening (brokered game-text localisation, 5 written acceptances at $2,000 = $10,000) is fulfilled by Polyglot Freelance Collective at a quoted $2,300 per job. Every deal loses $300, so selling more only deepens the loss; no deal count produces $8,000 of net settled cash."
+        },
+        "alternatives": [
+          {
+            "title": "Renegotiate the subcontract or the price",
+            "why": "At $2,000 per job the fulfiller cost would need to fall below ~$400 to keep $8,000 from 5 deals ($1,600 margin each); no such quote exists."
+          },
+          {
+            "title": "Fulfil the localisation without the collective",
+            "why": "The card names the collective as fulfiller and lists no capability Brain holds for it; unestablished."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Obtain a fulfiller quote for game-text localisation at or below $400 per job, or a buyer price that clears the $2,300 cost by $1,600 per job",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_cost",
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per job",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per job",
+            "status": "EVIDENCED",
+            "value": 230000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "margin per job",
+            "status": "EVIDENCED",
+            "value": -30000,
+            "unit": "cents",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_81b81dac4df845218bd3#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $2,000 per localisation job",
+            "population": "Indie game studios",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_81b81dac4df845218bd3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $2,300 per job (Polyglot Freelance Collective quote)",
+            "population": "Indie game studios",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Economics: the quoted fulfilment cost ($2,300) exceeds the agreed price ($2,000), so each of the 5 agreed jobs loses $300 and no volume reaches $8,000.",
+          "resolution": "Find a localisation fulfiller quoting at most ~$400 per job (so 5 jobs net $8,000), or re-price the offer so price minus fulfilment cost is at least $1,600 per job across the agreed buyers."
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_81b81dac4df845218bd3",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_81b81dac4df845218bd3",
+            "why": "Fulfilment cost $2,300 exceeds price $2,000; every deal loses money."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "revisionId": "rev_a2a17d28c979_0c5a2c",
+        "digest": "a2a17d28c9796e68384d23b7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_885353f3cf5445699a14/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:18:05.810Z"
+      },
+      "review": {
+        "revisionId": "rev_a2a17d28c979_0c5a2c",
+        "revisionDigest": "a2a17d28c9796e68384d23b7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_885353f3cf5445699a14/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8084a42577014b99adbd/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN on ECONOMICS is correct: price $2,000 vs Polyglot quote $2,300 loses $300 per job, so the 5 agreed jobs net -$1,500 and the loss would itself need capital the goal forbids. Resolution arithmetic ($8,000/5 = $1,600 margin, cost <= $400) is right.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:23:18.956Z"
+      },
+      "at": "2026-11-27T00:23:54.319Z"
+    },
+    "staleFinal": null
+  }
+}

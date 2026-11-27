@@ -1,0 +1,714 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_a165d15742aa4f6b8a40",
+      "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "260830ebe57c1cf5116ed93b"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_a165d15742aa4f6b8a40",
+        "contractDigest": "260830ebe57c1cf5116ed93b",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan until a binding technician is engaged for the four signed DIN-inspection orders",
+          "opportunityIds": [],
+          "why": "Four ski rental shops signed work orders at $1,200 each ($4,800 >= $4,000 target), but the card names no fulfillmentOwner and lists no required capability Brain can perform; a DIN release-value inspection is hands-on bench work by a certified binding technician, so nobody is established to deliver it."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the four signed orders with Brain as fulfiller",
+            "why": "Rejected: Brain cannot physically test and certify ski bindings; requiredCapabilities is empty and no provider is named."
+          },
+          {
+            "title": "Owner performs inspections",
+            "why": "Rejected: nothing on the card says the owner is a certified binding technician or will do the work."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a certified ski binding technician (indemnified shop or independent tech) who will inspect and certify four rental fleets within 10 days for at most $600 per fleet, payable after the shop pays (no up-front capital), and get a written quote",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per fleet inspection",
+            "status": "EVIDENCED",
+            "value": 120000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per inspection",
+            "status": "EVIDENCED",
+            "value": 60000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": "who is paid this cost and when"
+          },
+          {
+            "name": "fulfiller for the inspections",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "provider",
+            "sources": [],
+            "needs": "a named, certified technician with a written quote and availability"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#price",
+            "dated": "2026-11-21",
+            "claim": "Four ski rental shops signed work orders at $1,200 per fleet inspection",
+            "population": "Ski rental shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#directCosts",
+            "dated": "2026-11-21",
+            "claim": "Direct costs $600 per inspection",
+            "population": "Ski rental shop owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "FULFILMENT: the card names no fulfillmentOwner and no capability Brain holds; DIN binding inspection and certification needs a certified technician on site, and none is identified, quoted or available.",
+          "resolution": "Brain researches and secures a written quote from a certified binding technician to inspect the four fleets within 10 days at no more than $600 per fleet, paid from the shops' payments (no up-front capital); once recorded, the four signed orders ($4,800) carry the $4,000 target.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a7a0598ae22c4e4a9112",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_17cee3dc199a_1cc72f",
+        "digest": "17cee3dc199a71c7cab15152",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd874fe93d6c4d2f937e/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.027Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_a165d15742aa4f6b8a40",
+      "contractDigest": "260830ebe57c1cf5116ed93b",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan until a binding technician is engaged for the four signed DIN-inspection orders",
+        "opportunityIds": [],
+        "why": "Four ski rental shops signed work orders at $1,200 each ($4,800 >= $4,000 target), but the card names no fulfillmentOwner and lists no required capability Brain can perform; a DIN release-value inspection is hands-on bench work by a certified binding technician, so nobody is established to deliver it."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the four signed orders with Brain as fulfiller",
+          "why": "Rejected: Brain cannot physically test and certify ski bindings; requiredCapabilities is empty and no provider is named."
+        },
+        {
+          "title": "Owner performs inspections",
+          "why": "Rejected: nothing on the card says the owner is a certified binding technician or will do the work."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Find a certified ski binding technician (indemnified shop or independent tech) who will inspect and certify four rental fleets within 10 days for at most $600 per fleet, payable after the shop pays (no up-front capital), and get a written quote",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "signed work orders",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "orders",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per fleet inspection",
+          "status": "EVIDENCED",
+          "value": 120000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per inspection",
+          "status": "EVIDENCED",
+          "value": 60000,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": "who is paid this cost and when"
+        },
+        {
+          "name": "fulfiller for the inspections",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "provider",
+          "sources": [],
+          "needs": "a named, certified technician with a written quote and availability"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#price",
+          "dated": "2026-11-21",
+          "claim": "Four ski rental shops signed work orders at $1,200 per fleet inspection",
+          "population": "Ski rental shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#directCosts",
+          "dated": "2026-11-21",
+          "claim": "Direct costs $600 per inspection",
+          "population": "Ski rental shop owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "FULFILMENT: the card names no fulfillmentOwner and no capability Brain holds; DIN binding inspection and certification needs a certified technician on site, and none is identified, quoted or available.",
+        "resolution": "Brain researches and secures a written quote from a certified binding technician to inspect the four fleets within 10 days at no more than $600 per fleet, paid from the shops' payments (no up-front capital); once recorded, the four signed orders ($4,800) carry the $4,000 target.",
+        "decisiveLinks": [
+          "FULFILMENT"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_a7a0598ae22c4e4a9112",
+          "missing": [
+            "FULFILMENT"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "FULFILMENT"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_17cee3dc199a_1cc72f",
+      "digest": "17cee3dc199a71c7cab15152",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_dd874fe93d6c4d2f937e/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:17:45.027Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_17cee3dc199a_1cc72f",
+      "digest": "17cee3dc199a71c7cab15152",
+      "contractDigest": "260830ebe57c1cf5116ed93b",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Pre-season binding release-value (DIN) inspection and certif\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2400× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Ski rental shop owners — Pre-season binding rel\" needs [figure withheld] and keeps [figure withheld], 144× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Pre-season binding release-value (DIN) inspection and certification fo\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_a7a0598ae22c4e4a9112"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Pre-season binding release-value (DIN) inspection and certification for ski rent\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Pre-season binding release-value (DIN) inspection and certification for ski rent\"",
+            "owner": "PERSON",
+            "cost": 600
+          },
+          {
+            "label": "Collect payment for \"Pre-season binding release-value (DIN) inspection and certification for ski rent\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Establish who would do the work for \"Pre-season binding release-value (DIN) inspection and certification for ski rent\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+        "openings": [
+          {
+            "opportunityId": "cop_a7a0598ae22c4e4a9112",
+            "title": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+            "missing": [
+              "FULFILMENT"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Ski rental shop owners",
+              "reachableChannel": "The shops that signed work orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:36.591Z",
+              "offerScope": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+              "priceCents": 120000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [],
+              "industry": "ski rental shops",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The shops that signed work orders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 4800 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 4800 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 600, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Pre-season binding release-value (DIN) inspection and certification for ski rental fleets to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Ski rental shop owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four ski rental shops signed work orders at $1,200 per fleet inspection (signed orders, 2026-11-21).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_8b1bc6cf2c9444a0890b"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:23.353Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_17cee3dc199a_1cc72f",
+        "revisionDigest": "17cee3dc199a71c7cab15152",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd874fe93d6c4d2f937e/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_456917898d6346f3830d/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance: every link of the only opening is established on the card (4 written acceptances at $1,200 = $4,800 >= $4,000; direct cost $600; exposure $0; 10 days to first cash inside 30) except FULFILMENT, which Brain's own link marks unestablished ('nobody has established who would do the work'). The mechanism is SUBCONTRACTED_FULFILMENT with no subcontractor, fulfillmentOwner or capability recorded, so no plan can name a delivery performer. The decisive gap is stated as a gap (missing evidence), not as a constraint, and constraints[] is empty — correct, because nothing shows the limit cannot be met once a technician is engaged. Arithmetic rechecked: 4 x $1,200 = $4,800 gross received; 4 x $600 = $2,400 cost; net $2,400. Gross received in window exceeds the $4,000 SETTLED_CASH target (proof condition is cash received), and the ledger carries no spend, consistent with $0 capital.",
+        "findings": [
+          "Net vs gross: if the technician is paid $600 per fleet from the shops' payments, the owner keeps $2,400, not $4,000. The resolution's 'the four signed orders carry the $4,000 target' holds only on the received-cash reading of SETTLED_CASH; the next revision should state this explicitly.",
+          "No-up-front-capital depends on the technician accepting payment after the shop pays; that is part of what the quote must establish, and the resolution correctly requires it.",
+          "Step r1 is labelled RESEARCH with CHEAP_MODEL_READS, but 'secure a written quote' is outreach and agreement, not reading; finding candidates is Brain's, the binding quote is a commitment that must be recorded as a supplier agreement.",
+          "Delivery timing: inspections must complete and the shops must pay inside 30 days; the 10-day timeToFirstCash fact presumes a technician who is available now (pre-season), which the quote must confirm.",
+          "Unestablished link (already the plan's decisive gap): FULFILMENT — Mechanism is SUBCONTRACTED_FULFILMENT but the card holds no named certified binding technician, quote or availability; requiredCapabilities is empty and Brain cannot bench-test bindings."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:25:34.433Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_17cee3dc199a_1cc72f",
+      "digest": "17cee3dc199a71c7cab15152",
+      "contractDigest": "260830ebe57c1cf5116ed93b",
+      "plan": {
+        "goalId": "wst_a165d15742aa4f6b8a40",
+        "contractDigest": "260830ebe57c1cf5116ed93b",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan until a binding technician is engaged for the four signed DIN-inspection orders",
+          "opportunityIds": [],
+          "why": "Four ski rental shops signed work orders at $1,200 each ($4,800 >= $4,000 target), but the card names no fulfillmentOwner and lists no required capability Brain can perform; a DIN release-value inspection is hands-on bench work by a certified binding technician, so nobody is established to deliver it."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the four signed orders with Brain as fulfiller",
+            "why": "Rejected: Brain cannot physically test and certify ski bindings; requiredCapabilities is empty and no provider is named."
+          },
+          {
+            "title": "Owner performs inspections",
+            "why": "Rejected: nothing on the card says the owner is a certified binding technician or will do the work."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a certified ski binding technician (indemnified shop or independent tech) who will inspect and certify four rental fleets within 10 days for at most $600 per fleet, payable after the shop pays (no up-front capital), and get a written quote",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per fleet inspection",
+            "status": "EVIDENCED",
+            "value": 120000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per inspection",
+            "status": "EVIDENCED",
+            "value": 60000,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": "who is paid this cost and when"
+          },
+          {
+            "name": "fulfiller for the inspections",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "provider",
+            "sources": [],
+            "needs": "a named, certified technician with a written quote and availability"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#price",
+            "dated": "2026-11-21",
+            "claim": "Four ski rental shops signed work orders at $1,200 per fleet inspection",
+            "population": "Ski rental shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_a7a0598ae22c4e4a9112#directCosts",
+            "dated": "2026-11-21",
+            "claim": "Direct costs $600 per inspection",
+            "population": "Ski rental shop owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "FULFILMENT: the card names no fulfillmentOwner and no capability Brain holds; DIN binding inspection and certification needs a certified technician on site, and none is identified, quoted or available.",
+          "resolution": "Brain researches and secures a written quote from a certified binding technician to inspect the four fleets within 10 days at no more than $600 per fleet, paid from the shops' payments (no up-front capital); once recorded, the four signed orders ($4,800) carry the $4,000 target.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a7a0598ae22c4e4a9112",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_17cee3dc199a_1cc72f",
+        "digest": "17cee3dc199a71c7cab15152",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd874fe93d6c4d2f937e/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.027Z"
+      },
+      "review": {
+        "revisionId": "rev_17cee3dc199a_1cc72f",
+        "revisionDigest": "17cee3dc199a71c7cab15152",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dd874fe93d6c4d2f937e/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_456917898d6346f3830d/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance: every link of the only opening is established on the card (4 written acceptances at $1,200 = $4,800 >= $4,000; direct cost $600; exposure $0; 10 days to first cash inside 30) except FULFILMENT, which Brain's own link marks unestablished ('nobody has established who would do the work'). The mechanism is SUBCONTRACTED_FULFILMENT with no subcontractor, fulfillmentOwner or capability recorded, so no plan can name a delivery performer. The decisive gap is stated as a gap (missing evidence), not as a constraint, and constraints[] is empty — correct, because nothing shows the limit cannot be met once a technician is engaged. Arithmetic rechecked: 4 x $1,200 = $4,800 gross received; 4 x $600 = $2,400 cost; net $2,400. Gross received in window exceeds the $4,000 SETTLED_CASH target (proof condition is cash received), and the ledger carries no spend, consistent with $0 capital.",
+        "findings": [
+          "Net vs gross: if the technician is paid $600 per fleet from the shops' payments, the owner keeps $2,400, not $4,000. The resolution's 'the four signed orders carry the $4,000 target' holds only on the received-cash reading of SETTLED_CASH; the next revision should state this explicitly.",
+          "No-up-front-capital depends on the technician accepting payment after the shop pays; that is part of what the quote must establish, and the resolution correctly requires it.",
+          "Step r1 is labelled RESEARCH with CHEAP_MODEL_READS, but 'secure a written quote' is outreach and agreement, not reading; finding candidates is Brain's, the binding quote is a commitment that must be recorded as a supplier agreement.",
+          "Delivery timing: inspections must complete and the shops must pay inside 30 days; the 10-day timeToFirstCash fact presumes a technician who is available now (pre-season), which the quote must confirm.",
+          "Unestablished link (already the plan's decisive gap): FULFILMENT — Mechanism is SUBCONTRACTED_FULFILMENT but the card holds no named certified binding technician, quote or availability; requiredCapabilities is empty and Brain cannot bench-test bindings."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:25:34.433Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:26:52.340Z"
+    },
+    "staleFinal": null
+  }
+}

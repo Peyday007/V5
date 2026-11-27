@@ -1,0 +1,19 @@
+{"contractDigest":"59eba11b08b3b99df143abed","parentRevisionId":null,"stance":"NO_PLAN",
+"strategy":{"title":"No plan: the hive-contract price is only something a person said","opportunityIds":[],"why":"The only opening (brokered almond-pollination hive contracts) has buyers, a channel, volume (400 growers rent every February), a quoted fulfiller (Valley Apiaries at $110) and measured conversion, but its $150 price is recorded only as a PERSON statement, not evidence. Without an established price the margin over the $110 cost and the reach toward $2,000 are not established."},
+"alternatives":[{"title":"Sell at $150 anyway as a test","why":"Would rest on an unsourced price with only $40 margin per contract; the price must first be evidenced by what growers are published as paying."}],
+"steps":[{"id":"research","kind":"RESEARCH","label":"Find published almond-pollination hive rental prices paid by growers (figure or range, source and date) and confirm the per-contract price versus Valley Apiaries' $110 cost","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["s1","s2"]}],
+"cash":[],"proofDay":null,
+"quantities":[
+{"name":"price","status":"UNKNOWN","value":null,"unit":"USD/contract","sources":["s1"],"needs":"A published, dated price almond growers actually pay for this hive contract"},
+{"name":"directCost","status":"EVIDENCED","value":110,"unit":"USD/contract","sources":["s2"]},
+{"name":"buyerVolume","status":"EVIDENCED","value":400,"unit":"growers (rent every February)","sources":["s3"]}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_76d00e985c1140b9b2e2#price","dated":"2026-11-26","claim":"Price $150 (PERSON: somebody said it)","population":"Almond growers","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_76d00e985c1140b9b2e2#directCosts","dated":"2026-11-26","claim":"Direct costs $110; Valley Apiaries quoted","population":"Almond growers","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_76d00e985c1140b9b2e2#buyerVolume","dated":"2026-11-26","claim":"400 almond growers in the valley rent hives every February","population":"Almond growers in the valley","matchesBuyer":true}],
+"validation":null,
+"noPlan":{"decisiveGap":"OFFER_AND_PRICE: the $150 price is only a person's statement, so no evidenced price establishes the offer, its margin over the $110 fulfilment cost, or reach toward $2,000.","resolution":"Answer the open revenueRange question: record what almond growers are published as paying for pollination hive contracts (with source and date), or obtain written price acceptances from growers, then re-plan."},
+"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_76d00e985c1140b9b2e2","missing":["OFFER_AND_PRICE"]}],
+"excluded":[{"opportunityId":"cop_76d00e985c1140b9b2e2","why":"Price not evidenced (PERSON only)."}],
+"members":[],"resolves":["OFFER_AND_PRICE"],"constraints":[]}

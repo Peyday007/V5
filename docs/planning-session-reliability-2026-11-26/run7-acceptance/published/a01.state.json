@@ -1,0 +1,1259 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_2ea9f33207e74371a98c",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of buyer payments settled and usable within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "45d26ad722a036ed6d6c1ebd"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_2ea9f33207e74371a98c",
+        "contractDigest": "45d26ad722a036ed6d6c1ebd",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the NFPA 70E arc-flash re-verification workbook to uncontacted roster firms by email",
+          "opportunityIds": [
+            "cop_10d75bed5e27488794a6"
+          ],
+          "why": "Price ($400) and conversion (18 paid of 150 contacted, 12%) are measured on this exact offer's own sales via payment processor records; 750 roster firms remain uncontacted; Brain produces the spreadsheet; $8 direct cost is paid out of receipts; cash settles 5 days after sale. 9 sales x $400 = $3,600 >= $3,000 within 30 days with $0 up-front."
+        },
+        "alternatives": [
+          {
+            "title": "Stop at 8 sales ($3,200)",
+            "why": "Meets target with less margin; 9 planned to absorb one refund or late payer."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the offer to the 150 next uncontacted firms on the state electrical licensing board roster (750 remain uncontacted)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the per-site arc-flash label inventory and 5-year re-verification workbook at $400 with the checkout link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close 9 sales at $400 through the checkout link (measured 12% conversion -> ~18 expected from 150 contacts)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Brain builds each buyer's workbook from their job list (9 x $8 direct cost, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 4,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Collect $400 per sale through the payment processor; usable 5 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 360000,
+            "label": "9 checkout payments at $400",
+            "settlesDay": 8,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost $8 x 9 workbooks, paid from settled receipts",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents per workbook",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "uncontacted buyers",
+            "status": "EVIDENCED",
+            "value": 750,
+            "unit": "firms",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 800,
+            "unit": "cents per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#price",
+            "dated": "2026-11",
+            "claim": "18 electrical contractors paid $400 each through the checkout link (payment processor records, 2026-11)",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#conversionRates",
+            "dated": "2026-11",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#buyerVolume",
+            "dated": "2026-11",
+            "claim": "900 licensed firms with published email; 150 contacted, 750 not; each needs one workbook",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#payer",
+            "dated": "2026-11",
+            "claim": "Payer is licensed electrical contracting firms, reached by direct email to roster addresses",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#delivery",
+            "dated": "2026-11",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#directCosts",
+            "dated": "2026-11",
+            "claim": "$8 direct cost per deal",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "5 days to first cash",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_10d75bed5e27488794a6",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_10d75bed5e27488794a6",
+            "deals": 9,
+            "price": 400,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_6a364e98687f_a8fd75",
+        "digest": "6a364e98687fe87999fa6866",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a73964db10d94629a9cf/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:06.566Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_2ea9f33207e74371a98c",
+      "contractDigest": "45d26ad722a036ed6d6c1ebd",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the NFPA 70E arc-flash re-verification workbook to uncontacted roster firms by email",
+        "opportunityIds": [
+          "cop_10d75bed5e27488794a6"
+        ],
+        "why": "Price ($400) and conversion (18 paid of 150 contacted, 12%) are measured on this exact offer's own sales via payment processor records; 750 roster firms remain uncontacted; Brain produces the spreadsheet; $8 direct cost is paid out of receipts; cash settles 5 days after sale. 9 sales x $400 = $3,600 >= $3,000 within 30 days with $0 up-front."
+      },
+      "alternatives": [
+        {
+          "title": "Stop at 8 sales ($3,200)",
+          "why": "Meets target with less margin; 9 planned to absorb one refund or late payer."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "REACH",
+          "label": "Email the offer to the 150 next uncontacted firms on the state electrical licensing board roster (750 remain uncontacted)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume",
+            "s_channel"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "OFFER",
+          "label": "Offer the per-site arc-flash label inventory and 5-year re-verification workbook at $400 with the checkout link",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 40000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "SELL",
+          "label": "Close 9 sales at $400 through the checkout link (measured 12% conversion -> ~18 expected from 150 contacts)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "s2",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 40000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "DELIVER",
+          "label": "Brain builds each buyer's workbook from their job list (9 x $8 direct cost, paid from receipts)",
+          "performer": "BRAIN",
+          "costCents": 7200,
+          "day": 4,
+          "dependsOn": "s3",
+          "evidence": [
+            "s_delivery",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "COLLECT",
+          "label": "Collect $400 per sale through the payment processor; usable 5 days after sale",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "s3",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 3,
+          "kind": "RECEIPT",
+          "amountCents": 360000,
+          "label": "9 checkout payments at $400",
+          "settlesDay": 8,
+          "stepId": "s5"
+        },
+        {
+          "day": 8,
+          "kind": "SPEND",
+          "amountCents": 7200,
+          "label": "Direct cost $8 x 9 workbooks, paid from settled receipts",
+          "stepId": "s4"
+        }
+      ],
+      "proofDay": 8,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 40000,
+          "unit": "cents per workbook",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "paid per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "uncontacted buyers",
+          "status": "EVIDENCED",
+          "value": 750,
+          "unit": "firms",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 800,
+          "unit": "cents per deal",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to cash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#price",
+          "dated": "2026-11",
+          "claim": "18 electrical contractors paid $400 each through the checkout link (payment processor records, 2026-11)",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#conversionRates",
+          "dated": "2026-11",
+          "claim": "18 agreements from 150 contacts",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#buyerVolume",
+          "dated": "2026-11",
+          "claim": "900 licensed firms with published email; 150 contacted, 750 not; each needs one workbook",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_channel",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#payer",
+          "dated": "2026-11",
+          "claim": "Payer is licensed electrical contracting firms, reached by direct email to roster addresses",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#delivery",
+          "dated": "2026-11",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#directCosts",
+          "dated": "2026-11",
+          "claim": "$8 direct cost per deal",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_10d75bed5e27488794a6#timeToFirstCash",
+          "dated": "2026-11",
+          "claim": "5 days to first cash",
+          "population": "Licensed electrical contracting firms on the state licensing roster",
+          "matchesBuyer": true,
+          "opportunityId": "cop_10d75bed5e27488794a6"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_10d75bed5e27488794a6",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_10d75bed5e27488794a6",
+          "deals": 9,
+          "price": 400,
+          "directCost": 8,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_6a364e98687f_a8fd75",
+      "digest": "6a364e98687fe87999fa6866",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_a73964db10d94629a9cf/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:27:06.566Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_6a364e98687f_a8fd75",
+      "digest": "6a364e98687fe87999fa6866",
+      "contractDigest": "45d26ad722a036ed6d6c1ebd",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 7200,
+        "committedOpenCents": 0,
+        "preProofCents": 7200,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 3,
+        "collectedCents": 360000,
+        "collectedInWindowCents": 360000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 352800
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: NFPA 70E arc-flash label re-verification tracking workbook f\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"NFPA 70E arc-flash label re-verification tracking workbook f\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 40768× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"NFPA 70E arc-flash label re-verification tracking workbook for electri\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_10d75bed5e27488794a6"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"NFPA 70E arc-flash label re-verification tracking workbook for electrical contra\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"NFPA 70E arc-flash label re-verification tracking workbook for electrical contra\"",
+            "owner": "PERSON",
+            "cost": 8
+          },
+          {
+            "label": "Collect payment for \"NFPA 70E arc-flash label re-verification tracking workbook for electrical contra\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_10d75bed5e27488794a6",
+            "title": "NFPA 70E arc-flash label re-verification tracking workbook for electrical contractors",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Licensed electrical contracting firms",
+              "reachableChannel": "Direct email to the business addresses published on the state electrical licensing board roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-21T08:21:43.672Z",
+              "offerScope": "A per-site arc-flash label inventory and 5-year re-verification schedule workbook built from the contractor's job list",
+              "priceCents": 40000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "electrical contracting",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Direct email to the business addresses published on the state electrical licensi"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-21"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 400 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "9 deal(s) needed, 900 available in the window (900 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 8, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state electrical licensing board roster lists 900 licensed contracting firms with a published business email (counted 2026-11-20); 150 have been contacted, 750 have not. Each firm needs one workbook.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell A per-site arc-flash label inventory and 5-year re-verification schedule workbook built from the contractor's job list to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "18 agreements from 150 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$8",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed electrical contracting firms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "18 electrical contractors paid $400 each for the workbook through the checkout link in the offer email (payment processor records, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:23:51.919Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_6a364e98687f_a8fd75",
+        "revisionDigest": "6a364e98687fe87999fa6866",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a73964db10d94629a9cf/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_734c6d43562e4283ab49/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Every chain link of the single member is established by this offer's own EVIDENCE facts: price $400 is what 18 roster firms actually paid through the checkout (payment processor records), conversion 18/150 = 12% measured on the same offer and roster, 750 uncontacted firms remain each needing one workbook, delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved), direct cost $8 < $400, cash usable 5 days after sale. Arithmetic recomputed: 9 x $400 = $3,600 >= $3,000; direct cost 9 x $8 = $72 paid from settled receipts on day 8, so up-front capital is $0 (cap 0 respected); net $3,528. 150 contacts x 12% = 18 expected sales, 2x the 9 needed, with 600 further uncontacted firms as reserve. Sale day 3 + 5 days = settled day 8, well inside 30. No owner-hours limit in the contract; card states 1 human hour. Stance EXECUTABLE is right: no link rests on an estimate or a person's word, and the whole target fits every limit.",
+        "findings": [
+          "Operational, not evidential: the plan's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED; the sending inbox and checkout must be connected before step s1 runs. The prior 18 sales went through the same checkout link, so this is setup, not an unestablished link.",
+          "Brain's own step summary lists the Deliver step owner as PERSON while the card's delivery fact says Brain produces the spreadsheet; the plan follows the card fact (performer BRAIN), which is correct.",
+          "Brain's commercial verdict (NEEDS_EVIDENCE / 90% calibration) is a separate acceptance question; it does not contradict any link of this plan."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:30:46.547Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_6a364e98687f_a8fd75",
+      "digest": "6a364e98687fe87999fa6866",
+      "contractDigest": "45d26ad722a036ed6d6c1ebd",
+      "plan": {
+        "goalId": "wst_2ea9f33207e74371a98c",
+        "contractDigest": "45d26ad722a036ed6d6c1ebd",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the NFPA 70E arc-flash re-verification workbook to uncontacted roster firms by email",
+          "opportunityIds": [
+            "cop_10d75bed5e27488794a6"
+          ],
+          "why": "Price ($400) and conversion (18 paid of 150 contacted, 12%) are measured on this exact offer's own sales via payment processor records; 750 roster firms remain uncontacted; Brain produces the spreadsheet; $8 direct cost is paid out of receipts; cash settles 5 days after sale. 9 sales x $400 = $3,600 >= $3,000 within 30 days with $0 up-front."
+        },
+        "alternatives": [
+          {
+            "title": "Stop at 8 sales ($3,200)",
+            "why": "Meets target with less margin; 9 planned to absorb one refund or late payer."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the offer to the 150 next uncontacted firms on the state electrical licensing board roster (750 remain uncontacted)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the per-site arc-flash label inventory and 5-year re-verification workbook at $400 with the checkout link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close 9 sales at $400 through the checkout link (measured 12% conversion -> ~18 expected from 150 contacts)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 40000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Brain builds each buyer's workbook from their job list (9 x $8 direct cost, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 4,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Collect $400 per sale through the payment processor; usable 5 days after sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 360000,
+            "label": "9 checkout payments at $400",
+            "settlesDay": 8,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "Direct cost $8 x 9 workbooks, paid from settled receipts",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 40000,
+            "unit": "cents per workbook",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "uncontacted buyers",
+            "status": "EVIDENCED",
+            "value": 750,
+            "unit": "firms",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 800,
+            "unit": "cents per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#price",
+            "dated": "2026-11",
+            "claim": "18 electrical contractors paid $400 each through the checkout link (payment processor records, 2026-11)",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#conversionRates",
+            "dated": "2026-11",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#buyerVolume",
+            "dated": "2026-11",
+            "claim": "900 licensed firms with published email; 150 contacted, 750 not; each needs one workbook",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#payer",
+            "dated": "2026-11",
+            "claim": "Payer is licensed electrical contracting firms, reached by direct email to roster addresses",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#delivery",
+            "dated": "2026-11",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#directCosts",
+            "dated": "2026-11",
+            "claim": "$8 direct cost per deal",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_10d75bed5e27488794a6#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "5 days to first cash",
+            "population": "Licensed electrical contracting firms on the state licensing roster",
+            "matchesBuyer": true,
+            "opportunityId": "cop_10d75bed5e27488794a6"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_10d75bed5e27488794a6",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_10d75bed5e27488794a6",
+            "deals": 9,
+            "price": 400,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_6a364e98687f_a8fd75",
+        "digest": "6a364e98687fe87999fa6866",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a73964db10d94629a9cf/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:06.566Z"
+      },
+      "review": {
+        "revisionId": "rev_6a364e98687f_a8fd75",
+        "revisionDigest": "6a364e98687fe87999fa6866",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a73964db10d94629a9cf/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_734c6d43562e4283ab49/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Every chain link of the single member is established by this offer's own EVIDENCE facts: price $400 is what 18 roster firms actually paid through the checkout (payment processor records), conversion 18/150 = 12% measured on the same offer and roster, 750 uncontacted firms remain each needing one workbook, delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved), direct cost $8 < $400, cash usable 5 days after sale. Arithmetic recomputed: 9 x $400 = $3,600 >= $3,000; direct cost 9 x $8 = $72 paid from settled receipts on day 8, so up-front capital is $0 (cap 0 respected); net $3,528. 150 contacts x 12% = 18 expected sales, 2x the 9 needed, with 600 further uncontacted firms as reserve. Sale day 3 + 5 days = settled day 8, well inside 30. No owner-hours limit in the contract; card states 1 human hour. Stance EXECUTABLE is right: no link rests on an estimate or a person's word, and the whole target fits every limit.",
+        "findings": [
+          "Operational, not evidential: the plan's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED; the sending inbox and checkout must be connected before step s1 runs. The prior 18 sales went through the same checkout link, so this is setup, not an unestablished link.",
+          "Brain's own step summary lists the Deliver step owner as PERSON while the card's delivery fact says Brain produces the spreadsheet; the plan follows the card fact (performer BRAIN), which is correct.",
+          "Brain's commercial verdict (NEEDS_EVIDENCE / 90% calibration) is a separate acceptance question; it does not contradict any link of this plan."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:30:46.547Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "30dc89726327948f",
+        "openings": {
+          "cop_10d75bed5e27488794a6": "48b98f5341048c33"
+        }
+      },
+      "at": "2026-11-27T08:33:50.158Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

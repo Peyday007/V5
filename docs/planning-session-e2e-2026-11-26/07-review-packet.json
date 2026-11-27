@@ -1,0 +1,388 @@
+{
+ "contract": {
+  "goalId": "wst_41630d3c657640bc828f",
+  "words": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement; no required physical work by the owner.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "owner message 2026-11-26T08:52:26Z (with the 2026-11-26T16:06Z correction)",
+   "at": "2026-11-26T08:52:26.946Z"
+  },
+  "terms": {
+   "targetCents": 1000000,
+   "currency": "USD",
+   "metric": "COLLECTED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": 200000,
+   "preProofSpendCapCents": 30000,
+   "exposureCapCents": 200000,
+   "proofCondition": "A customer-validation condition the plan states explicitly before spending past the pre-proof allowance: actual payment, a paid pilot or a meaningful deposit at workable economics (owner 2026-11-26). Not merely a first payment.",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "FORBIDDEN",
+   "exclusions": [
+    "the owner's existing offers, prospects, audiences and business assets as defaults (owner 2026-11-26T16:06Z)"
+   ],
+   "evidenceExclusions": [
+    "the owner's Instantly campaign history as evidence of demand, response, close rate or revenue ceiling (owner 2026-11-26T16:06Z)"
+   ]
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "26b673f3e3109d5f95622c67"
+ },
+ "revision": {
+  "goalId": "wst_41630d3c657640bc828f",
+  "contractDigest": "26b673f3e3109d5f95622c67",
+  "parentRevisionId": "rev_fd28c953a9c6_6ce2dc",
+  "stance": "CONDITIONAL",
+  "strategy": {
+   "title": "E-2 business plans sold through immigration attorneys, first case paid after attorney approval",
+   "opportunityIds": [
+    "cop_6dbb5a72734642998d34"
+   ],
+   "why": "Only route inside the caps with a published price band, a required document and AI-producible fulfilment"
+  },
+  "alternatives": [
+   {
+    "title": "SBA loan business plans via lenders",
+    "why": "price unsourced, direct cost unknown, weaker urgency"
+   },
+   {
+    "title": "Co-op postcard (earlier plan)",
+    "why": "vendor drop ~$2,309 breaks the $2,000 total cap"
+   },
+   {
+    "title": "Upwork proposals",
+    "why": "owner rejected freelance work 2026-10-20 (\u00a776)"
+   }
+  ],
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "RESEARCH",
+    "label": "Build the firm list from Maps data",
+    "performer": "BRAIN",
+    "costCents": 3000,
+    "day": 0,
+    "dependsOn": null,
+    "evidence": [
+     "src_outscraper"
+    ]
+   },
+   {
+    "id": "s2",
+    "kind": "REACH",
+    "label": "Email 800 firms",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": "s1",
+    "evidence": [
+     "q_price"
+    ]
+   },
+   {
+    "id": "s3",
+    "kind": "SELL",
+    "label": "Intake and invoice",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 3,
+    "dependsOn": "s2",
+    "evidence": [
+     "q_price"
+    ]
+   },
+   {
+    "id": "s4",
+    "kind": "DELIVER",
+    "label": "Draft on the API (two proof orders); reviewer checks before delivery",
+    "performer": "Contracted E-2 plan reviewer (not engaged)",
+    "costCents": 3000,
+    "day": 8,
+    "dependsOn": "s3",
+    "evidence": [
+     "q_review"
+    ]
+   },
+   {
+    "id": "s4b",
+    "kind": "ORDER",
+    "label": "Pay the reviewer per plan on completion (fee includes up to 2 re-checks within 30 days)",
+    "performer": "BRAIN",
+    "costCents": 19000,
+    "day": 9,
+    "dependsOn": "s4",
+    "evidence": [
+     "q_review"
+    ]
+   },
+   {
+    "id": "s5",
+    "kind": "COLLECT",
+    "label": "Clients pay on attorney approval (Stripe ACH)",
+    "performer": "BRAIN",
+    "costCents": 1000,
+    "day": 13,
+    "dependsOn": "s4",
+    "evidence": [
+     "q_price"
+    ]
+   }
+  ],
+  "cash": [
+   {
+    "day": 0,
+    "kind": "SPEND",
+    "amountCents": 1200,
+    "label": "domain"
+   },
+   {
+    "day": 0,
+    "kind": "SPEND",
+    "amountCents": 3000,
+    "label": "firm data"
+   },
+   {
+    "day": 0,
+    "kind": "SPEND",
+    "amountCents": 1500,
+    "label": "sample plan API run"
+   },
+   {
+    "day": 4,
+    "kind": "COMMIT",
+    "amountCents": 11000,
+    "label": "order 1 fulfilment committed at intake (API + review)"
+   },
+   {
+    "day": 5,
+    "kind": "COMMIT",
+    "amountCents": 11000,
+    "label": "order 2 fulfilment committed at intake"
+   },
+   {
+    "day": 8,
+    "kind": "RELEASE",
+    "amountCents": 11000,
+    "label": "order 1 commitment spent"
+   },
+   {
+    "day": 8,
+    "kind": "SPEND",
+    "amountCents": 11000,
+    "label": "order 1 fulfilment"
+   },
+   {
+    "day": 9,
+    "kind": "RELEASE",
+    "amountCents": 11000,
+    "label": "order 2 commitment spent"
+   },
+   {
+    "day": 9,
+    "kind": "SPEND",
+    "amountCents": 11000,
+    "label": "order 2 fulfilment"
+   },
+   {
+    "day": 13,
+    "kind": "RECEIPT",
+    "amountCents": 125000,
+    "label": "order 1 paid",
+    "settlesDay": 27
+   },
+   {
+    "day": 13,
+    "kind": "FEE",
+    "amountCents": 500,
+    "label": "ACH fee order 1"
+   },
+   {
+    "day": 14,
+    "kind": "RECEIPT",
+    "amountCents": 125000,
+    "label": "order 2 paid",
+    "settlesDay": 28
+   },
+   {
+    "day": 14,
+    "kind": "FEE",
+    "amountCents": 500,
+    "label": "ACH fee order 2"
+   },
+   {
+    "day": 8,
+    "kind": "COMMIT",
+    "amountCents": 600,
+    "label": "order 1 revision allowance: 2 API re-runs at $3 (re-checks included in the reviewer fee)"
+   },
+   {
+    "day": 9,
+    "kind": "COMMIT",
+    "amountCents": 600,
+    "label": "order 2 revision allowance: 2 API re-runs at $3"
+   }
+  ],
+  "proofDay": 14,
+  "quantities": [
+   {
+    "name": "price per plan",
+    "status": "ESTIMATE",
+    "value": 1250,
+    "unit": "USD",
+    "sources": [
+     "src_avvale",
+     "src_mikel"
+    ],
+    "needs": null
+   },
+   {
+    "name": "reviewer fee per plan",
+    "status": "ESTIMATE",
+    "value": 95,
+    "unit": "USD",
+    "sources": [
+     "src_upwork_rates"
+    ],
+    "needs": "a provider's written quote at <= $95 with up to 2 re-checks included (prepared, not sent)"
+   },
+   {
+    "name": "attorney referral demand per firm contacted",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "paid orders per firm",
+    "sources": [],
+    "needs": "the live test: 800 firms contacted Dec 1-4, paid orders counted by day 14"
+   },
+   {
+    "name": "historical investor adjudications FY2014-17 (context, not a current ceiling)",
+    "status": "ESTIMATE",
+    "value": 6000,
+    "unit": "applications a year",
+    "sources": [
+     "src_gao"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_avvale",
+    "url": "https://avvale.co.uk/pages/e2-visa-business-plan",
+    "dated": "2026-09-04",
+    "claim": "E-2 plans $1,900-$3,200",
+    "population": "E-2 plan buyers",
+    "matchesBuyer": true
+   },
+   {
+    "id": "src_mikel",
+    "url": "https://swan-reed-g9fp.squarespace.com/us/e2-visa-business-plan",
+    "dated": "2026-11-26",
+    "claim": "E-2 plans from $1,200, 7 business days",
+    "population": "E-2 plan buyers",
+    "matchesBuyer": true
+   },
+   {
+    "id": "src_upwork_rates",
+    "url": "https://www.upwork.com/hire/business-plan-writers/cost/",
+    "dated": "2026-11-26",
+    "claim": "business-plan writers $25-$75/hr; intermediate $79/hr",
+    "population": "freelance business-plan writers",
+    "matchesBuyer": true
+   },
+   {
+    "id": "src_outscraper",
+    "url": "https://scrap.io/outscraper-pricing",
+    "dated": "2026-11-26",
+    "claim": "$3 per 1,000 Maps records",
+    "population": "data vendors",
+    "matchesBuyer": true
+   },
+   {
+    "id": "src_gao",
+    "url": "https://www.gao.gov/assets/gao-19-547.pdf",
+    "dated": "2019-08-01",
+    "claim": "investor E-2 adjudications 5,294-6,755 a year FY2014-17",
+    "population": "E-2 visa applicants (consular adjudications)",
+    "matchesBuyer": false
+   }
+  ],
+  "validation": {
+   "proof": ">= 2 paid orders >= $1,250 from 2 distinct payers by day 14, plan 1 approved by its attorney",
+   "stop": [
+    "0 paid and < 3 sample requests from >= 1,000 firms by day 14"
+   ],
+   "continue": [
+    ">= 2 paid by day 14"
+   ]
+  },
+  "noPlan": null,
+  "reach": {
+   "value": 0.17,
+   "calibrated": false,
+   "presentedAs": "COVERAGE"
+  },
+  "answers": [
+   {
+    "finding": "CHAIN_STEP_MISSING",
+    "resolution": "added ORDER step s4b paying the reviewer per plan"
+   },
+   {
+    "finding": "PRE_PROOF_SPEND_OVER",
+    "resolution": "the reviewer fee must include up to 2 re-checks; only API re-runs stay committed; pre-proof total now 299"
+   },
+   {
+    "finding": "EVIDENCE_TRANSFER",
+    "resolution": "referral demand is UNKNOWN and is measured by the live test; GAO kept as historical context only"
+   },
+   {
+    "finding": "REACH_UNCALIBRATED",
+    "resolution": "reach shown as coverage of stated ranges, not a probability"
+   }
+  ],
+  "revisionId": "rev_e248bf499037_076a3b",
+  "digest": "e248bf499037758f7c985f43",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "session_01QF5Tk9QnzLAkLpzqLeVF6b",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-26T22:05:41.636Z"
+ },
+ "checks": {
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 28700,
+   "committedOpenCents": 1200,
+   "preProofCents": 29400,
+   "maxExposureCents": 28700,
+   "minCashCents": 171300,
+   "minCashDay": 14,
+   "collectedCents": 250000,
+   "collectedInWindowCents": 250000,
+   "refundsCents": 0,
+   "netCents": 221300
+  }
+ },
+ "brainPlanner": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_6dbb5a72734642998d34",
+   "cop_4dfe020162ef4aa89f41"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed \u2014 the openings held reach at most 0 USD \u2014 and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "at": "2026-11-26T22:03:13.738Z"
+ }
+}

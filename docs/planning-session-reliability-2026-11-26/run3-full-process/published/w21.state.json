@@ -1,0 +1,2521 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_66fec6e639554ffe9b01",
+      "words": "Collect $1,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 100000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Target settled cash received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "16115b0ea71eac59594aa080"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_66fec6e639554ffe9b01",
+        "contractDigest": "16115b0ea71eac59594aa080",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List an allergen-labelled meal-plan workbook at $29 on the digital-download marketplace and sell 39 copies in 30 days",
+          "opportunityIds": [
+            "cop_89ded5a0a0844f359fb9"
+          ],
+          "why": "Price ($29 listing prices, 2026-11), buyer volume (2,300 comparable sales in 12 months across 40 sellers), channel (marketplace listing and search), Brain-produced spreadsheet delivery, $3 direct cost and 3-day time to first cash are all evidenced. 39 sales gross $1,131 and net $1,014 after $117 of direct costs, paid from receipts, so no up-front capital is used. What is not established is how many sales a new listing wins: the 2,300/yr market is ~190/month across 40 sellers (~5 per seller), so 39 in 30 days needs a new listing to take ~20% of a month's category sales. That rate is measured by a live listing test before scaling effort."
+        },
+        "alternatives": [
+          {
+            "title": "Lower price to win more of the category volume",
+            "why": "Lower price needs more sales from the same ~190/month category volume; no evidence that price drives share."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Produce the allergen-labelled weekly meal-plan workbook and publish the listing at $29",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s3"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Measure sales won by the new listing over the first 10 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "o1",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1x",
+            "kind": "SELL",
+            "label": "Sell copies through the marketplace listing and search",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Deliver the Brain-produced spreadsheet to each of 39 buyers ($3 direct cost each, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 11700,
+            "day": 3,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect marketplace payouts for 39 sales",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 28,
+            "dependsOn": "d1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 29000,
+            "label": "10 sales settled",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "direct cost for 10 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 40600,
+            "label": "14 sales settled",
+            "settlesDay": 14,
+            "stepId": "c1"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 4200,
+            "label": "direct cost for 14 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 28,
+            "kind": "RECEIPT",
+            "amountCents": 43500,
+            "label": "15 sales settled",
+            "settlesDay": 28,
+            "stepId": "c1"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 4500,
+            "label": "direct cost for 15 deliveries",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2900,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "category sales volume",
+            "status": "EVIDENCED",
+            "value": 2300,
+            "unit": "sales per 12 months across 40 sellers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales won by a new listing in 30 days",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales",
+            "sources": [],
+            "needs": "live listing test: at least 39 needed; category averages ~5 per seller per month"
+          },
+          {
+            "name": "marketplace fee per sale",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "the marketplace's published seller fee; net margin of $26/sale leaves ~$114 headroom"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#price",
+            "dated": "2026-11",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#buyerVolume",
+            "dated": null,
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#delivery",
+            "dated": null,
+            "claim": "A spreadsheet Brain produces.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#conversionRates",
+            "dated": null,
+            "claim": "60 paid pre-orders from 1,500 unique visitors.",
+            "population": "unstated",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#directCosts",
+            "dated": null,
+            "claim": "Direct cost $3 per deal.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#timeToFirstCash",
+            "dated": null,
+            "claim": "Time to first cash 3 days.",
+            "population": "n/a",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10 the listing has at least 13 settled sales (pace for 39 in 30 days).",
+          "stop": [
+            "Fewer than 5 settled sales by day 10: the listing cannot take the share needed; stop and re-plan.",
+            "Marketplace fees push net per sale below the $1,000 target at 39 sales and no price/volume fix exists."
+          ],
+          "continue": [
+            "13 or more settled sales by day 10: continue selling to 39.",
+            "5-12 sales by day 10: continue only with a listing change and re-measure by day 17."
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "deals": 39,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_880f7846c1cf_ba2592",
+        "digest": "880f7846c1cf472aac601e55",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:20:08.464Z"
+      },
+      {
+        "goalId": "wst_66fec6e639554ffe9b01",
+        "contractDigest": "16115b0ea71eac59594aa080",
+        "parentRevisionId": "rev_880f7846c1cf_ba2592",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List an allergen-labelled meal-plan workbook at $29 on the digital-download marketplace and sell 50 copies in 30 days, sized on net payout",
+          "opportunityIds": [
+            "cop_89ded5a0a0844f359fb9"
+          ],
+          "why": "Price ($29 listing prices, 2026-11), category volume (2,300 comparable sales in 12 months across 40 sellers), channel (listing and search), Brain-produced spreadsheet delivery, $3 direct cost and 3-day time to first cash are evidenced. The marketplace seller fee is not on the record, so the plan is sized on payout net of an assumed fee ceiling of 20%: 50 sales pay out $1,160 and net $1,010 after $150 of direct costs, all paid from receipts (no up-front capital). The fee is read from the marketplace's published seller terms on day 0, before any sale; above 20% the plan stops. The new listing's sales rate is the live unknown: 50 sales in 30 days is about 26% of the ~190/month category and roughly 10 times the ~5/month average seller. No second opening exists on the record to diversify, so the plan carries no hidden assumption — the day-10 test stops it early if the pace is not met."
+        },
+        "alternatives": [
+          {
+            "title": "Run at 39 sales gross",
+            "why": "Rejected: gross $29 is not settled cash; any fee above ~11.6% drops 39 sales below $1,000, and net of costs it had only $14 headroom."
+          },
+          {
+            "title": "Add a second opening for buffer",
+            "why": "No second opening exists in this world's record; Brain should keep constructing openings in parallel."
+          },
+          {
+            "title": "Lower price to win share",
+            "why": "No evidence price drives share; lower price needs even more sales."
+          }
+        ],
+        "steps": [
+          {
+            "id": "f1",
+            "kind": "RESEARCH",
+            "label": "Read the marketplace's published seller fee (listing, transaction and payment-processing fees) before listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Publish the workbook listing at $29 from the owner's marketplace seller account",
+            "performer": "OWNER",
+            "ownerHours": 1,
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "f1",
+            "evidence": [
+              "s1",
+              "s3"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "p1",
+            "kind": "OTHER",
+            "label": "Produce the allergen-labelled weekly meal-plan workbook file for the listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1x",
+            "kind": "SELL",
+            "label": "Buyers purchase through the marketplace listing, search and checkout",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Count settled sales of the new listing at day 10 against the 17-sale pace",
+            "performer": "OWNER",
+            "ownerHours": 0.25,
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Deliver the Brain-produced spreadsheet to each of 50 buyers ($3 direct cost each, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 3,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the first 10 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "d1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the next 18 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c3",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the last 22 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 25,
+            "dependsOn": "c2",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 23200,
+            "label": "10 sales, payout net of 20% fee ceiling",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "direct cost for 10 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 41760,
+            "label": "18 sales, payout net of 20% fee ceiling",
+            "settlesDay": 14,
+            "stepId": "c2"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 5400,
+            "label": "direct cost for 18 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 25,
+            "kind": "RECEIPT",
+            "amountCents": 51040,
+            "label": "22 sales, payout net of 20% fee ceiling",
+            "settlesDay": 25,
+            "stepId": "c3"
+          },
+          {
+            "day": 25,
+            "kind": "SPEND",
+            "amountCents": 6600,
+            "label": "direct cost for 22 deliveries",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2900,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "category sales volume",
+            "status": "EVIDENCED",
+            "value": 2300,
+            "unit": "sales per 12 months across 40 sellers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales won by a new listing in 30 days",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales",
+            "sources": [],
+            "needs": "live listing test: 50 needed (~26% of ~190/month category, ~10x the average seller)"
+          },
+          {
+            "name": "marketplace seller fee",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of price",
+            "sources": [],
+            "needs": "the marketplace's published seller terms, read on day 0; plan sized on a 20% ceiling"
+          },
+          {
+            "name": "fee ceiling used for sizing",
+            "status": "ASSUMED",
+            "value": 20,
+            "unit": "percent",
+            "sources": [],
+            "needs": "replaced by the published fee on day 0"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#price",
+            "dated": "2026-11",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#buyerVolume",
+            "dated": null,
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#delivery",
+            "dated": null,
+            "claim": "A spreadsheet Brain produces.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#conversionRates",
+            "dated": null,
+            "claim": "60 paid pre-orders from 1,500 unique visitors.",
+            "population": "unstated",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#directCosts",
+            "dated": null,
+            "claim": "Direct cost $3 per deal.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#timeToFirstCash",
+            "dated": null,
+            "claim": "Time to first cash 3 days.",
+            "population": "n/a",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "Published seller fee is at or below 20%, and by day 10 the listing has at least 17 settled sales (pace for 50 in 30 days).",
+          "stop": [
+            "Published seller fee above 20%: 50 sales no longer clear $1,000 net; stop and re-size or re-plan before listing.",
+            "Fewer than 7 settled sales by day 10: the listing cannot take the share needed; stop."
+          ],
+          "continue": [
+            "Fee at or below 20% and 17+ settled sales by day 10: continue selling to 50.",
+            "7-16 sales by day 10: continue only with a listing change and re-measure by day 17 against 28 cumulative sales."
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Marketplace seller fee is UNKNOWN yet the ledger books gross $29/sale as settled cash.",
+            "resolution": "Accepted. Receipts are now booked as payout net of an assumed 20% fee ceiling ($23.20/sale); a day-0 BRAIN step reads the published fee before listing; a fee above 20% is a stop condition. Deal count raised to 50 so settled payout ($1,160) and net after costs ($1,010) both clear $1,000 at the ceiling. The fee is not researched as a claim here because the marketplace is not named on the card and no source can be cited without inventing one."
+          },
+          {
+            "finding": "The stated '~$114 headroom' is wrong.",
+            "resolution": "Accepted: it was $131 gross / $14 net at 39 sales. The claim is removed; at 50 sales the headroom is $160 payout / $10 net after costs at a 20% fee, more at a lower published fee."
+          },
+          {
+            "finding": "Required pace is ~8x the average seller with no buffer.",
+            "resolution": "Accepted in part. Buffer added on fee and margin (50 units). No second opening exists on this world's record, so the pace risk (now ~10x the average seller) is stated plainly as the CONDITIONAL unknown and bounded by a day-10 stop (under 7 sales) and a day-17 re-measure; the plan is not presented as established."
+          },
+          {
+            "finding": "Executors use SEND_A_MESSAGE for a marketplace listing; collect step dated day 28 while receipts settle days 4/14/28.",
+            "resolution": "Accepted. Listing is published by the OWNER from a seller account and the test is an owner reading of the sales count; selling and payout are performed by the marketplace; collection is split into three COLLECT steps dated on their receipts' settle days (4, 14, 25)."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "deals": 50,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_c66efaf4b8f8_de654d",
+        "digest": "c66efaf4b8f8e892b9785a44",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:26.011Z"
+      },
+      {
+        "goalId": "wst_66fec6e639554ffe9b01",
+        "contractDigest": "16115b0ea71eac59594aa080",
+        "parentRevisionId": "rev_880f7846c1cf_ba2592",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List an allergen-labelled meal-plan workbook at $29 on the digital-download marketplace and sell 50 copies in 30 days, sized on net payout",
+          "opportunityIds": [
+            "cop_89ded5a0a0844f359fb9"
+          ],
+          "why": "Price ($29 listing prices, 2026-11), category volume (2,300 comparable sales in 12 months across 40 sellers), channel (listing and search), Brain-produced spreadsheet delivery, $3 direct cost and 3-day time to first cash are evidenced. The marketplace seller fee is not on the record, so the plan is sized on payout net of an assumed fee ceiling of 20%: 50 sales pay out $1,160 and net $1,010 after $150 of direct costs, all paid from receipts (no up-front capital). The fee is read from the marketplace's published seller terms on day 0, before any sale; above 20% the plan stops. The new listing's sales rate is the live unknown: 50 sales in 30 days is about 26% of the ~190/month category and roughly 10 times the ~5/month average seller. No second opening exists on the record to diversify, so the plan carries no hidden assumption — the day-10 test stops it early if the pace is not met."
+        },
+        "alternatives": [
+          {
+            "title": "Run at 39 sales gross",
+            "why": "Rejected: gross $29 is not settled cash; any fee above ~11.6% drops 39 sales below $1,000, and net of costs it had only $14 headroom."
+          },
+          {
+            "title": "Add a second opening for buffer",
+            "why": "No second opening exists in this world's record; Brain should keep constructing openings in parallel."
+          },
+          {
+            "title": "Lower price to win share",
+            "why": "No evidence price drives share; lower price needs even more sales."
+          }
+        ],
+        "steps": [
+          {
+            "id": "f1",
+            "kind": "RESEARCH",
+            "label": "Read the marketplace's published seller fee (listing, transaction and payment-processing fees) before listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Publish the workbook listing at $29 on the marketplace",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "f1",
+            "evidence": [
+              "s1",
+              "s3"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "p1",
+            "kind": "OTHER",
+            "label": "Produce the allergen-labelled weekly meal-plan workbook file for the listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1x",
+            "kind": "SELL",
+            "label": "Buyers purchase through the marketplace listing, search and checkout",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Read the listing's settled sales count at day 10 against the 17-sale pace",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Deliver the Brain-produced spreadsheet to each of 50 buyers ($3 direct cost each, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 3,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the first 10 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "d1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the next 18 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c3",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the last 22 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 25,
+            "dependsOn": "c2",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 23200,
+            "label": "10 sales, payout net of 20% fee ceiling",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "direct cost for 10 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 41760,
+            "label": "18 sales, payout net of 20% fee ceiling",
+            "settlesDay": 14,
+            "stepId": "c2"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 5400,
+            "label": "direct cost for 18 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 25,
+            "kind": "RECEIPT",
+            "amountCents": 51040,
+            "label": "22 sales, payout net of 20% fee ceiling",
+            "settlesDay": 25,
+            "stepId": "c3"
+          },
+          {
+            "day": 25,
+            "kind": "SPEND",
+            "amountCents": 6600,
+            "label": "direct cost for 22 deliveries",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2900,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "category sales volume",
+            "status": "EVIDENCED",
+            "value": 2300,
+            "unit": "sales per 12 months across 40 sellers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales won by a new listing in 30 days",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales",
+            "sources": [],
+            "needs": "live listing test: 50 needed (~26% of ~190/month category, ~10x the average seller)"
+          },
+          {
+            "name": "marketplace seller fee",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of price",
+            "sources": [],
+            "needs": "the marketplace's published seller terms, read on day 0; plan sized on a 20% ceiling"
+          },
+          {
+            "name": "fee ceiling used for sizing",
+            "status": "ASSUMED",
+            "value": 20,
+            "unit": "percent",
+            "sources": [],
+            "needs": "replaced by the published fee on day 0"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#price",
+            "dated": "2026-11",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#buyerVolume",
+            "dated": null,
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#delivery",
+            "dated": null,
+            "claim": "A spreadsheet Brain produces.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#conversionRates",
+            "dated": null,
+            "claim": "60 paid pre-orders from 1,500 unique visitors.",
+            "population": "unstated",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#directCosts",
+            "dated": null,
+            "claim": "Direct cost $3 per deal.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#timeToFirstCash",
+            "dated": null,
+            "claim": "Time to first cash 3 days.",
+            "population": "n/a",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "Published seller fee is at or below 20%, and by day 10 the listing has at least 17 settled sales (pace for 50 in 30 days).",
+          "stop": [
+            "Published seller fee above 20%: 50 sales no longer clear $1,000 net; stop and re-size or re-plan before listing.",
+            "Fewer than 7 settled sales by day 10: the listing cannot take the share needed; stop."
+          ],
+          "continue": [
+            "Fee at or below 20% and 17+ settled sales by day 10: continue selling to 50.",
+            "7-16 sales by day 10: continue only with a listing change and re-measure by day 17 against 28 cumulative sales."
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Marketplace seller fee is UNKNOWN yet the ledger books gross $29/sale as settled cash.",
+            "resolution": "Accepted. Receipts are now booked as payout net of an assumed 20% fee ceiling ($23.20/sale); a day-0 BRAIN step reads the published fee before listing; a fee above 20% is a stop condition. Deal count raised to 50 so settled payout ($1,160) and net after costs ($1,010) both clear $1,000 at the ceiling. The fee is not researched as a claim here because the marketplace is not named on the card and no source can be cited without inventing one."
+          },
+          {
+            "finding": "The stated '~$114 headroom' is wrong.",
+            "resolution": "Accepted: it was $131 gross / $14 net at 39 sales. The claim is removed; at 50 sales the headroom is $160 payout / $10 net after costs at a 20% fee, more at a lower published fee."
+          },
+          {
+            "finding": "Required pace is ~8x the average seller with no buffer.",
+            "resolution": "Accepted in part. Buffer added on fee and margin (50 units). No second opening exists on this world's record, so the pace risk (now ~10x the average seller) is stated plainly as the CONDITIONAL unknown and bounded by a day-10 stop (under 7 sales) and a day-17 re-measure; the plan is not presented as established."
+          },
+          {
+            "finding": "Executors use SEND_A_MESSAGE for a marketplace listing; collect step dated day 28 while receipts settle days 4/14/28.",
+            "resolution": "Accepted. Collection is split into three COLLECT steps dated on their receipts' settle days (4, 14, 25), performed by the marketplace payout. The goal allows no owner hours, so publishing the listing and reading the day-10 sales count stay with BRAIN; the executor and capability record is attached by Brain itself, and its NOT_CONNECTED state for the listing and payout is a real precondition the day-0/1 steps must clear (a connected marketplace seller account), not hidden by relabelling."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "deals": 50,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_51ae43f0500b_59dacb",
+        "digest": "51ae43f0500b87254acc9dd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:35.632Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_66fec6e639554ffe9b01",
+      "contractDigest": "16115b0ea71eac59594aa080",
+      "parentRevisionId": "rev_880f7846c1cf_ba2592",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "List an allergen-labelled meal-plan workbook at $29 on the digital-download marketplace and sell 50 copies in 30 days, sized on net payout",
+        "opportunityIds": [
+          "cop_89ded5a0a0844f359fb9"
+        ],
+        "why": "Price ($29 listing prices, 2026-11), category volume (2,300 comparable sales in 12 months across 40 sellers), channel (listing and search), Brain-produced spreadsheet delivery, $3 direct cost and 3-day time to first cash are evidenced. The marketplace seller fee is not on the record, so the plan is sized on payout net of an assumed fee ceiling of 20%: 50 sales pay out $1,160 and net $1,010 after $150 of direct costs, all paid from receipts (no up-front capital). The fee is read from the marketplace's published seller terms on day 0, before any sale; above 20% the plan stops. The new listing's sales rate is the live unknown: 50 sales in 30 days is about 26% of the ~190/month category and roughly 10 times the ~5/month average seller. No second opening exists on the record to diversify, so the plan carries no hidden assumption — the day-10 test stops it early if the pace is not met."
+      },
+      "alternatives": [
+        {
+          "title": "Run at 39 sales gross",
+          "why": "Rejected: gross $29 is not settled cash; any fee above ~11.6% drops 39 sales below $1,000, and net of costs it had only $14 headroom."
+        },
+        {
+          "title": "Add a second opening for buffer",
+          "why": "No second opening exists in this world's record; Brain should keep constructing openings in parallel."
+        },
+        {
+          "title": "Lower price to win share",
+          "why": "No evidence price drives share; lower price needs even more sales."
+        }
+      ],
+      "steps": [
+        {
+          "id": "f1",
+          "kind": "RESEARCH",
+          "label": "Read the marketplace's published seller fee (listing, transaction and payment-processing fees) before listing",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "o1",
+          "kind": "OFFER",
+          "label": "Publish the workbook listing at $29 on the marketplace",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "f1",
+          "evidence": [
+            "s1",
+            "s3"
+          ],
+          "priceCents": 2900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "p1",
+          "kind": "OTHER",
+          "label": "Produce the allergen-labelled weekly meal-plan workbook file for the listing",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s3"
+          ],
+          "executor": {
+            "operation": "PLAN_DECISION",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [],
+            "routine": false
+          }
+        },
+        {
+          "id": "s1x",
+          "kind": "SELL",
+          "label": "Buyers purchase through the marketplace listing, search and checkout",
+          "performer": "Digital-download marketplace",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "o1",
+          "evidence": [
+            "s2",
+            "s4"
+          ],
+          "priceCents": 2900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": "Digital-download marketplace",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Read the listing's settled sales count at day 10 against the 17-sale pace",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "s1x",
+          "evidence": [
+            "s2",
+            "s4"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Deliver the Brain-produced spreadsheet to each of 50 buyers ($3 direct cost each, paid from receipts)",
+          "performer": "BRAIN",
+          "costCents": 15000,
+          "day": 3,
+          "dependsOn": "s1x",
+          "evidence": [
+            "s3",
+            "s5"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Marketplace payout for the first 10 sales (net of fee)",
+          "performer": "Digital-download marketplace",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "d1",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": "Digital-download marketplace",
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c2",
+          "kind": "COLLECT",
+          "label": "Marketplace payout for the next 18 sales (net of fee)",
+          "performer": "Digital-download marketplace",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "c1",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": "Digital-download marketplace",
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c3",
+          "kind": "COLLECT",
+          "label": "Marketplace payout for the last 22 sales (net of fee)",
+          "performer": "Digital-download marketplace",
+          "costCents": 0,
+          "day": 25,
+          "dependsOn": "c2",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": "Digital-download marketplace",
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 23200,
+          "label": "10 sales, payout net of 20% fee ceiling",
+          "settlesDay": 4,
+          "stepId": "c1"
+        },
+        {
+          "day": 4,
+          "kind": "SPEND",
+          "amountCents": 3000,
+          "label": "direct cost for 10 deliveries",
+          "stepId": "d1"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 41760,
+          "label": "18 sales, payout net of 20% fee ceiling",
+          "settlesDay": 14,
+          "stepId": "c2"
+        },
+        {
+          "day": 14,
+          "kind": "SPEND",
+          "amountCents": 5400,
+          "label": "direct cost for 18 deliveries",
+          "stepId": "d1"
+        },
+        {
+          "day": 25,
+          "kind": "RECEIPT",
+          "amountCents": 51040,
+          "label": "22 sales, payout net of 20% fee ceiling",
+          "settlesDay": 25,
+          "stepId": "c3"
+        },
+        {
+          "day": 25,
+          "kind": "SPEND",
+          "amountCents": 6600,
+          "label": "direct cost for 22 deliveries",
+          "stepId": "d1"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 2900,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "category sales volume",
+          "status": "EVIDENCED",
+          "value": 2300,
+          "unit": "sales per 12 months across 40 sellers",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per deal",
+          "status": "EVIDENCED",
+          "value": 300,
+          "unit": "cents",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "s6"
+          ],
+          "needs": null
+        },
+        {
+          "name": "sales won by a new listing in 30 days",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "sales",
+          "sources": [],
+          "needs": "live listing test: 50 needed (~26% of ~190/month category, ~10x the average seller)"
+        },
+        {
+          "name": "marketplace seller fee",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "share of price",
+          "sources": [],
+          "needs": "the marketplace's published seller terms, read on day 0; plan sized on a 20% ceiling"
+        },
+        {
+          "name": "fee ceiling used for sizing",
+          "status": "ASSUMED",
+          "value": 20,
+          "unit": "percent",
+          "sources": [],
+          "needs": "replaced by the published fee on day 0"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#price",
+          "dated": "2026-11",
+          "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace.",
+          "population": "marketplace shoppers planning allergen-free meals",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#buyerVolume",
+          "dated": null,
+          "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers.",
+          "population": "marketplace shoppers planning allergen-free meals",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#delivery",
+          "dated": null,
+          "claim": "A spreadsheet Brain produces.",
+          "population": "n/a",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#conversionRates",
+          "dated": null,
+          "claim": "60 paid pre-orders from 1,500 unique visitors.",
+          "population": "unstated",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#directCosts",
+          "dated": null,
+          "claim": "Direct cost $3 per deal.",
+          "population": "n/a",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#timeToFirstCash",
+          "dated": null,
+          "claim": "Time to first cash 3 days.",
+          "population": "n/a",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": {
+        "proof": "Published seller fee is at or below 20%, and by day 10 the listing has at least 17 settled sales (pace for 50 in 30 days).",
+        "stop": [
+          "Published seller fee above 20%: 50 sales no longer clear $1,000 net; stop and re-size or re-plan before listing.",
+          "Fewer than 7 settled sales by day 10: the listing cannot take the share needed; stop."
+        ],
+        "continue": [
+          "Fee at or below 20% and 17+ settled sales by day 10: continue selling to 50.",
+          "7-16 sales by day 10: continue only with a listing change and re-measure by day 17 against 28 cumulative sales."
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Marketplace seller fee is UNKNOWN yet the ledger books gross $29/sale as settled cash.",
+          "resolution": "Accepted. Receipts are now booked as payout net of an assumed 20% fee ceiling ($23.20/sale); a day-0 BRAIN step reads the published fee before listing; a fee above 20% is a stop condition. Deal count raised to 50 so settled payout ($1,160) and net after costs ($1,010) both clear $1,000 at the ceiling. The fee is not researched as a claim here because the marketplace is not named on the card and no source can be cited without inventing one."
+        },
+        {
+          "finding": "The stated '~$114 headroom' is wrong.",
+          "resolution": "Accepted: it was $131 gross / $14 net at 39 sales. The claim is removed; at 50 sales the headroom is $160 payout / $10 net after costs at a 20% fee, more at a lower published fee."
+        },
+        {
+          "finding": "Required pace is ~8x the average seller with no buffer.",
+          "resolution": "Accepted in part. Buffer added on fee and margin (50 units). No second opening exists on this world's record, so the pace risk (now ~10x the average seller) is stated plainly as the CONDITIONAL unknown and bounded by a day-10 stop (under 7 sales) and a day-17 re-measure; the plan is not presented as established."
+        },
+        {
+          "finding": "Executors use SEND_A_MESSAGE for a marketplace listing; collect step dated day 28 while receipts settle days 4/14/28.",
+          "resolution": "Accepted. Collection is split into three COLLECT steps dated on their receipts' settle days (4, 14, 25), performed by the marketplace payout. The goal allows no owner hours, so publishing the listing and reading the day-10 sales count stay with BRAIN; the executor and capability record is attached by Brain itself, and its NOT_CONNECTED state for the listing and payout is a real precondition the day-0/1 steps must clear (a connected marketplace seller account), not hidden by relabelling."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_89ded5a0a0844f359fb9",
+          "missing": [
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_89ded5a0a0844f359fb9",
+          "deals": 50,
+          "price": 29,
+          "directCost": 3,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "revisionId": "rev_51ae43f0500b_59dacb",
+      "digest": "51ae43f0500b87254acc9dd8",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fc69ba3056f844f999c2/author-4",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:24:35.632Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_51ae43f0500b_59dacb",
+      "digest": "51ae43f0500b87254acc9dd8",
+      "contractDigest": "16115b0ea71eac59594aa080",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 15000,
+        "committedOpenCents": 0,
+        "preProofCents": 3000,
+        "maxExposureCents": 0,
+        "minCashCents": 20200,
+        "minCashDay": 4,
+        "collectedCents": 116000,
+        "collectedInWindowCents": 116000,
+        "refundsCents": 0,
+        "netCents": 101000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Allergen-labelled weekly meal-plan workbook sold on a digita\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Allergen-labelled weekly meal-plan workbook sold on a digita\" (assumption-only coverage: it reaches the target in 47.2% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 936× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Allergen-labelled weekly meal-plan workbook sold on a digital-download\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_89ded5a0a0844f359fb9"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Allergen-labelled weekly meal-plan workbook sold on a digital-download marketpla\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Allergen-labelled weekly meal-plan workbook sold on a digital-download marketpla\"",
+            "owner": "PERSON",
+            "cost": 3
+          },
+          {
+            "label": "Collect payment for \"Allergen-labelled weekly meal-plan workbook sold on a digital-download marketpla\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "title": "Allergen-labelled weekly meal-plan workbook sold on a digital-download marketplace",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 1000,
+            "potentialReach": 1000,
+            "card": {
+              "payer": "Marketplace shoppers planning allergen-free meals",
+              "reachableChannel": "The marketplace listing and its search",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:16.027Z",
+              "offerScope": "Allergen-labelled weekly meal-plan workbook sold on a digital-download marketplace",
+              "priceCents": 2900,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "home meal planning",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The marketplace shows 2,300 sales of comparable meal-plan workbooks in the last 12 months across 40 sellers; buyers return each season.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Allergen-labelled weekly meal-plan workbook sold on a digital-download marketplace to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "60 paid pre-orders from 1500 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$3",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Marketplace shoppers planning allergen-free meals",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace (listing prices, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 100000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:19:18.830Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_880f7846c1cf_ba2592",
+        "revisionDigest": "880f7846c1cf472aac601e55",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d6c7e4c93a864cd794b1/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "CONDITIONAL shape is plausible (price, volume, channel, delivery, cost and 3-day settlement evidenced; new-listing sales rate measured by a 10-day live test), but the plan carries a second unknown that research, not a live test, decides and the margin is thin enough that it decides the outcome.",
+        "findings": [
+          "Marketplace seller fee is UNKNOWN yet the ledger books gross $29/sale as settled cash; a payout is net of the fee, and at 39 sales a fee above ~11.6% ($131/$1,131) drops settled cash below $1,000. The fee is a published fact - research it and size the deal count on net payout.",
+          "The stated '~$114 headroom' is wrong: gross $1,131 - $1,000 = $131; net of direct costs $1,014 - $1,000 = $14.",
+          "Required pace (39 in 30 days, ~20% of the ~190/month category) is ~8x the evidenced average seller (~5/month); with no buffer above 39 the plan should add units/margin or a second opening rather than run at the threshold.",
+          "Minor: OFFER/SELL/TEST executors use SEND_A_MESSAGE for a marketplace listing; collect step dated day 28 while receipts settle days 4/14/28."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:42.143Z"
+      },
+      {
+        "revisionId": "rev_51ae43f0500b_59dacb",
+        "revisionDigest": "51ae43f0500b87254acc9dd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d6c7e4c93a864cd794b1/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now right: price, category volume, channel, Brain delivery, $3 cost and 3-day settlement are evidenced; receipts are booked net of a 20% fee ceiling with a day-0 read of the published fee and a stop above 20%; recomputed 50 x $23.20 = $1,160 settled (232+417.60+510.40), $150 costs, net $1,010, $0 capital, all inside 30 days; the new-listing sales rate is the one live unknown with proof (17 by day 10), stop (<7) and continue/re-measure (28 by day 17). Earlier findings answered.",
+        "findings": [
+          "Minor: the required pace (50 in 30 days, ~26% of category, ~10x the average seller) is a long shot; the day-10 stop bounds it at no capital cost.",
+          "Minor: net-after-cost headroom is only $10 at the 20% ceiling; a fee near 20% leaves no room for refunds.",
+          "Minor: listing and payout need a connected marketplace seller account (executors NOT_CONNECTED) before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:25:57.212Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_51ae43f0500b_59dacb",
+      "digest": "51ae43f0500b87254acc9dd8",
+      "contractDigest": "16115b0ea71eac59594aa080",
+      "plan": {
+        "goalId": "wst_66fec6e639554ffe9b01",
+        "contractDigest": "16115b0ea71eac59594aa080",
+        "parentRevisionId": "rev_880f7846c1cf_ba2592",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List an allergen-labelled meal-plan workbook at $29 on the digital-download marketplace and sell 50 copies in 30 days, sized on net payout",
+          "opportunityIds": [
+            "cop_89ded5a0a0844f359fb9"
+          ],
+          "why": "Price ($29 listing prices, 2026-11), category volume (2,300 comparable sales in 12 months across 40 sellers), channel (listing and search), Brain-produced spreadsheet delivery, $3 direct cost and 3-day time to first cash are evidenced. The marketplace seller fee is not on the record, so the plan is sized on payout net of an assumed fee ceiling of 20%: 50 sales pay out $1,160 and net $1,010 after $150 of direct costs, all paid from receipts (no up-front capital). The fee is read from the marketplace's published seller terms on day 0, before any sale; above 20% the plan stops. The new listing's sales rate is the live unknown: 50 sales in 30 days is about 26% of the ~190/month category and roughly 10 times the ~5/month average seller. No second opening exists on the record to diversify, so the plan carries no hidden assumption — the day-10 test stops it early if the pace is not met."
+        },
+        "alternatives": [
+          {
+            "title": "Run at 39 sales gross",
+            "why": "Rejected: gross $29 is not settled cash; any fee above ~11.6% drops 39 sales below $1,000, and net of costs it had only $14 headroom."
+          },
+          {
+            "title": "Add a second opening for buffer",
+            "why": "No second opening exists in this world's record; Brain should keep constructing openings in parallel."
+          },
+          {
+            "title": "Lower price to win share",
+            "why": "No evidence price drives share; lower price needs even more sales."
+          }
+        ],
+        "steps": [
+          {
+            "id": "f1",
+            "kind": "RESEARCH",
+            "label": "Read the marketplace's published seller fee (listing, transaction and payment-processing fees) before listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Publish the workbook listing at $29 on the marketplace",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "f1",
+            "evidence": [
+              "s1",
+              "s3"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "p1",
+            "kind": "OTHER",
+            "label": "Produce the allergen-labelled weekly meal-plan workbook file for the listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s3"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1x",
+            "kind": "SELL",
+            "label": "Buyers purchase through the marketplace listing, search and checkout",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "o1",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Read the listing's settled sales count at day 10 against the 17-sale pace",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s2",
+              "s4"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Deliver the Brain-produced spreadsheet to each of 50 buyers ($3 direct cost each, paid from receipts)",
+            "performer": "BRAIN",
+            "costCents": 15000,
+            "day": 3,
+            "dependsOn": "s1x",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the first 10 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "d1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the next 18 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "c1",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c3",
+            "kind": "COLLECT",
+            "label": "Marketplace payout for the last 22 sales (net of fee)",
+            "performer": "Digital-download marketplace",
+            "costCents": 0,
+            "day": 25,
+            "dependsOn": "c2",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Digital-download marketplace",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 23200,
+            "label": "10 sales, payout net of 20% fee ceiling",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 3000,
+            "label": "direct cost for 10 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 41760,
+            "label": "18 sales, payout net of 20% fee ceiling",
+            "settlesDay": 14,
+            "stepId": "c2"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 5400,
+            "label": "direct cost for 18 deliveries",
+            "stepId": "d1"
+          },
+          {
+            "day": 25,
+            "kind": "RECEIPT",
+            "amountCents": 51040,
+            "label": "22 sales, payout net of 20% fee ceiling",
+            "settlesDay": 25,
+            "stepId": "c3"
+          },
+          {
+            "day": 25,
+            "kind": "SPEND",
+            "amountCents": 6600,
+            "label": "direct cost for 22 deliveries",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2900,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "category sales volume",
+            "status": "EVIDENCED",
+            "value": 2300,
+            "unit": "sales per 12 months across 40 sellers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales won by a new listing in 30 days",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales",
+            "sources": [],
+            "needs": "live listing test: 50 needed (~26% of ~190/month category, ~10x the average seller)"
+          },
+          {
+            "name": "marketplace seller fee",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of price",
+            "sources": [],
+            "needs": "the marketplace's published seller terms, read on day 0; plan sized on a 20% ceiling"
+          },
+          {
+            "name": "fee ceiling used for sizing",
+            "status": "ASSUMED",
+            "value": 20,
+            "unit": "percent",
+            "sources": [],
+            "needs": "replaced by the published fee on day 0"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#price",
+            "dated": "2026-11",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#buyerVolume",
+            "dated": null,
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers.",
+            "population": "marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#delivery",
+            "dated": null,
+            "claim": "A spreadsheet Brain produces.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#conversionRates",
+            "dated": null,
+            "claim": "60 paid pre-orders from 1,500 unique visitors.",
+            "population": "unstated",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#directCosts",
+            "dated": null,
+            "claim": "Direct cost $3 per deal.",
+            "population": "n/a",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_89ded5a0a0844f359fb9#timeToFirstCash",
+            "dated": null,
+            "claim": "Time to first cash 3 days.",
+            "population": "n/a",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "Published seller fee is at or below 20%, and by day 10 the listing has at least 17 settled sales (pace for 50 in 30 days).",
+          "stop": [
+            "Published seller fee above 20%: 50 sales no longer clear $1,000 net; stop and re-size or re-plan before listing.",
+            "Fewer than 7 settled sales by day 10: the listing cannot take the share needed; stop."
+          ],
+          "continue": [
+            "Fee at or below 20% and 17+ settled sales by day 10: continue selling to 50.",
+            "7-16 sales by day 10: continue only with a listing change and re-measure by day 17 against 28 cumulative sales."
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Marketplace seller fee is UNKNOWN yet the ledger books gross $29/sale as settled cash.",
+            "resolution": "Accepted. Receipts are now booked as payout net of an assumed 20% fee ceiling ($23.20/sale); a day-0 BRAIN step reads the published fee before listing; a fee above 20% is a stop condition. Deal count raised to 50 so settled payout ($1,160) and net after costs ($1,010) both clear $1,000 at the ceiling. The fee is not researched as a claim here because the marketplace is not named on the card and no source can be cited without inventing one."
+          },
+          {
+            "finding": "The stated '~$114 headroom' is wrong.",
+            "resolution": "Accepted: it was $131 gross / $14 net at 39 sales. The claim is removed; at 50 sales the headroom is $160 payout / $10 net after costs at a 20% fee, more at a lower published fee."
+          },
+          {
+            "finding": "Required pace is ~8x the average seller with no buffer.",
+            "resolution": "Accepted in part. Buffer added on fee and margin (50 units). No second opening exists on this world's record, so the pace risk (now ~10x the average seller) is stated plainly as the CONDITIONAL unknown and bounded by a day-10 stop (under 7 sales) and a day-17 re-measure; the plan is not presented as established."
+          },
+          {
+            "finding": "Executors use SEND_A_MESSAGE for a marketplace listing; collect step dated day 28 while receipts settle days 4/14/28.",
+            "resolution": "Accepted. Collection is split into three COLLECT steps dated on their receipts' settle days (4, 14, 25), performed by the marketplace payout. The goal allows no owner hours, so publishing the listing and reading the day-10 sales count stay with BRAIN; the executor and capability record is attached by Brain itself, and its NOT_CONNECTED state for the listing and payout is a real precondition the day-0/1 steps must clear (a connected marketplace seller account), not hidden by relabelling."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_89ded5a0a0844f359fb9",
+            "deals": 50,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_51ae43f0500b_59dacb",
+        "digest": "51ae43f0500b87254acc9dd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:35.632Z"
+      },
+      "review": {
+        "revisionId": "rev_51ae43f0500b_59dacb",
+        "revisionDigest": "51ae43f0500b87254acc9dd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fc69ba3056f844f999c2/author-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d6c7e4c93a864cd794b1/reviewer-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now right: price, category volume, channel, Brain delivery, $3 cost and 3-day settlement are evidenced; receipts are booked net of a 20% fee ceiling with a day-0 read of the published fee and a stop above 20%; recomputed 50 x $23.20 = $1,160 settled (232+417.60+510.40), $150 costs, net $1,010, $0 capital, all inside 30 days; the new-listing sales rate is the one live unknown with proof (17 by day 10), stop (<7) and continue/re-measure (28 by day 17). Earlier findings answered.",
+        "findings": [
+          "Minor: the required pace (50 in 30 days, ~26% of category, ~10x the average seller) is a long shot; the day-10 stop bounds it at no capital cost.",
+          "Minor: net-after-cost headroom is only $10 at the 20% ceiling; a fee near 20% leaves no room for refunds.",
+          "Minor: listing and payout need a connected marketplace seller account (executors NOT_CONNECTED) before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:25:57.212Z"
+      },
+      "at": "2026-11-27T00:27:03.592Z"
+    },
+    "staleFinal": null
+  }
+}

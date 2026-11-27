@@ -1,0 +1,35 @@
+{
+  "id": "fx-14-tree-surveys",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 1,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_36d705580d80_4c21c3",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_efb30862b2624415a8ca/reviewer-gamma",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names relax OWNER_HOURS, OWNER_HOURS broken, FULFILMENT",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

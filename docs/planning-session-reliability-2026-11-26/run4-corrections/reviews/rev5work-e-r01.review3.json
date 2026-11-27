@@ -1,0 +1,10 @@
+{
+ "goal_id": "wst_bc34faf63cc64de587b9",
+ "revision_id": "rev_a872efa2e0aa_59dcb0",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "PASS",
+ "reasons": "EXECUTABLE at 18 deals is supported by the card. Reach: published business emails to the 35 county pharmacy owners, linking to the offer page. Demand: a current signal dated 2026-11-24. Price: an evidenced $180 for this buyer. Conversion: Brain's basis is this offer's own inbound page (22/200, 11%), the same page the email links to, so it is the offer's own record, not a transfer. Volume: 20 deliveries a week per pharmacy, about 85 each in the window, and the need recurs. 18 deliveries need about 5 from each of about 4 buyers, or about 9 each if only 2 buy; both are a small share of evidenced volume. Fulfilment: MedCourier LLC, quoted at $95 with $0 exposure, performs the delivery as the card's recorded fulfiller. Settlement: 7 days. The ledger checks: 18 x $180 = $3,240 collected on day 10, settled on day 17, inside 30 days, meeting the SETTLED_CASH (collected) target. MedCourier's $1,710 is paid on day 17 from settled receipts. Exposure is $0, Brain's check reports no problems, and nothing unknown is treated as known. The SEND_A_MESSAGE and ISSUE_AN_INVOICE connectors must be connected before day 1; that is readiness, not a chain gap.",
+ "findings": []
+}

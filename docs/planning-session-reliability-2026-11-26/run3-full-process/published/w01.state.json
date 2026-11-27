@@ -1,0 +1,1288 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_6fca43d89599424e826e",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of buyer payments settled in the owner's account within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "7cf5d7b7d1c3e6b7f54c9d7c"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_6fca43d89599424e826e",
+        "contractDigest": "7cf5d7b7d1c3e6b7f54c9d7c",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the controlled-substance log reconciliation workbook to veterinary clinic managers by email",
+          "opportunityIds": [
+            "cop_4b58e078123c424abae4"
+          ],
+          "why": "Every link is sourced on the card: payer (clinic managers), channel (published business emails), a dated buying signal (2026-11-24), $450 price, Brain-produced spreadsheet delivery at $5 direct cost, $0 exposure, 4 days to first cash, 1,200 licensed clinics with a quarterly reconciliation duty, and a measured 12% pre-order conversion (36/300). Seven sales at $450 = $3,150 gross, $3,115 after direct costs, inside 30 days with no up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "No alternative opening",
+            "why": "Brain's run holds only this one opening; there is nothing to combine or substitute."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email clinic managers at published business addresses (about 60-100 clinics) with the workbook offer",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_channel",
+              "s_volume",
+              "s_signal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the reconciliation workbook at $450",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 7 sales at $450 (12% measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver the reconciliation workbook spreadsheet to each of 7 buyers",
+            "performer": "BRAIN",
+            "costCents": 3500,
+            "day": 6,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $450 from each of 7 buyers",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 315000,
+            "label": "7 x $450 workbook payments",
+            "settlesDay": 8,
+            "stepId": "collect"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 3500,
+            "label": "7 x $5 direct delivery cost, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 45000,
+            "unit": "cents/deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "deals",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": "7 x $450 = $3,150 >= $3,000"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid orders per reached buyer",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents/deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 licensed veterinary clinics, each reconciles its controlled-substance log quarterly",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_signal",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5 per deal",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_4b58e078123c424abae4",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_4b58e078123c424abae4",
+            "deals": 7,
+            "price": 450,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_fb8a5efacff4_e69314",
+        "digest": "fb8a5efacff4fad0f8369d8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_98eec80865f8435bb66f/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:15.915Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_6fca43d89599424e826e",
+      "contractDigest": "7cf5d7b7d1c3e6b7f54c9d7c",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the controlled-substance log reconciliation workbook to veterinary clinic managers by email",
+        "opportunityIds": [
+          "cop_4b58e078123c424abae4"
+        ],
+        "why": "Every link is sourced on the card: payer (clinic managers), channel (published business emails), a dated buying signal (2026-11-24), $450 price, Brain-produced spreadsheet delivery at $5 direct cost, $0 exposure, 4 days to first cash, 1,200 licensed clinics with a quarterly reconciliation duty, and a measured 12% pre-order conversion (36/300). Seven sales at $450 = $3,150 gross, $3,115 after direct costs, inside 30 days with no up-front capital."
+      },
+      "alternatives": [
+        {
+          "title": "No alternative opening",
+          "why": "Brain's run holds only this one opening; there is nothing to combine or substitute."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email clinic managers at published business addresses (about 60-100 clinics) with the workbook offer",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_channel",
+            "s_volume",
+            "s_signal"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the reconciliation workbook at $450",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 45000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close 7 sales at $450 (12% measured conversion)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conv",
+            "s_price"
+          ],
+          "priceCents": 45000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce and deliver the reconciliation workbook spreadsheet to each of 7 buyers",
+          "performer": "BRAIN",
+          "costCents": 3500,
+          "day": 6,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_delivery",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect $450 from each of 7 buyers",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s_ttc"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 315000,
+          "label": "7 x $450 workbook payments",
+          "settlesDay": 8,
+          "stepId": "collect"
+        },
+        {
+          "day": 8,
+          "kind": "SPEND",
+          "amountCents": 3500,
+          "label": "7 x $5 direct delivery cost, paid from receipts",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 8,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 45000,
+          "unit": "cents/deal",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 7,
+          "unit": "deals",
+          "sources": [
+            "s_conv",
+            "s_volume"
+          ],
+          "needs": "7 x $450 = $3,150 >= $3,000"
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "paid orders per reached buyer",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 500,
+          "unit": "cents/deal",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "exposure",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "s_exposure"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "s_ttc"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyerPopulation",
+          "status": "EVIDENCED",
+          "value": 1200,
+          "unit": "clinics",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#price",
+          "dated": "2026-11-24",
+          "claim": "Price $450",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "36 paid pre-orders from 300 unique visitors",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "1,200 licensed veterinary clinics, each reconciles its controlled-substance log quarterly",
+          "population": "Veterinary clinics",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_channel",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Published business email addresses",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_signal",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyingSignal",
+          "dated": "2026-11-24",
+          "claim": "Posted asking for this work",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $5 per deal",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_exposure",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#exposure",
+          "dated": "2026-11-24",
+          "claim": "Exposure $0",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_4b58e078123c424abae4#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "4 days to first cash",
+          "population": "Veterinary clinic managers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_4b58e078123c424abae4",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_4b58e078123c424abae4",
+          "deals": 7,
+          "price": 450,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_fb8a5efacff4_e69314",
+      "digest": "fb8a5efacff4fad0f8369d8e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_98eec80865f8435bb66f/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:15:15.915Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_fb8a5efacff4_e69314",
+      "digest": "fb8a5efacff4fad0f8369d8e",
+      "contractDigest": "7cf5d7b7d1c3e6b7f54c9d7c",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 3500,
+        "committedOpenCents": 0,
+        "preProofCents": 3500,
+        "maxExposureCents": 0,
+        "minCashCents": 311500,
+        "minCashDay": 8,
+        "collectedCents": 315000,
+        "collectedInWindowCents": 315000,
+        "refundsCents": 0,
+        "netCents": 311500
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Controlled-substance log reconciliation workbook for veterin\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Controlled-substance log reconciliation workbook for veterin\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 48060× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Controlled-substance log reconciliation workbook for veterinary clinic\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_4b58e078123c424abae4"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Controlled-substance log reconciliation workbook for veterinary clinics\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Controlled-substance log reconciliation workbook for veterinary clinics\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"Controlled-substance log reconciliation workbook for veterinary clinics\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_4b58e078123c424abae4",
+            "title": "Controlled-substance log reconciliation workbook for veterinary clinics",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Veterinary clinic managers",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:12.984Z",
+              "offerScope": "Controlled-substance log reconciliation workbook for veterinary clinics",
+              "priceCents": 45000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "veterinary clinics",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "1,200 veterinary clinics are licensed by the state board; each must reconcile its controlled-substance log quarterly.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Controlled-substance log reconciliation workbook for veterinary clinics to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "36 paid pre-orders from 300 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Veterinary clinic managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$450",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:14:00.621Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_fb8a5efacff4_e69314",
+        "revisionDigest": "fb8a5efacff4fad0f8369d8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_98eec80865f8435bb66f/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_509caa5612374f0ca467/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: every link is EVIDENCE on the card (payer, published-email channel, dated signal, $450 price for this buyer, Brain-produced spreadsheet, $5 cost, $0 exposure, 4 days to cash, 1,200 clinics). 7 x $450 = $3,150 >= $3,000; $35 cost paid from receipts; settles day 8 of 30; no capital. Arithmetic and ledger match the steps. Caveat only: the 12% rate was measured on page visitors, so the ~60-100 email sends should be sized generously; 1,200 clinics leave ample headroom.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.075Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_fb8a5efacff4_e69314",
+      "digest": "fb8a5efacff4fad0f8369d8e",
+      "contractDigest": "7cf5d7b7d1c3e6b7f54c9d7c",
+      "plan": {
+        "goalId": "wst_6fca43d89599424e826e",
+        "contractDigest": "7cf5d7b7d1c3e6b7f54c9d7c",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the controlled-substance log reconciliation workbook to veterinary clinic managers by email",
+          "opportunityIds": [
+            "cop_4b58e078123c424abae4"
+          ],
+          "why": "Every link is sourced on the card: payer (clinic managers), channel (published business emails), a dated buying signal (2026-11-24), $450 price, Brain-produced spreadsheet delivery at $5 direct cost, $0 exposure, 4 days to first cash, 1,200 licensed clinics with a quarterly reconciliation duty, and a measured 12% pre-order conversion (36/300). Seven sales at $450 = $3,150 gross, $3,115 after direct costs, inside 30 days with no up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "No alternative opening",
+            "why": "Brain's run holds only this one opening; there is nothing to combine or substitute."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email clinic managers at published business addresses (about 60-100 clinics) with the workbook offer",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_channel",
+              "s_volume",
+              "s_signal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the reconciliation workbook at $450",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 7 sales at $450 (12% measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conv",
+              "s_price"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver the reconciliation workbook spreadsheet to each of 7 buyers",
+            "performer": "BRAIN",
+            "costCents": 3500,
+            "day": 6,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $450 from each of 7 buyers",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 315000,
+            "label": "7 x $450 workbook payments",
+            "settlesDay": 8,
+            "stepId": "collect"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 3500,
+            "label": "7 x $5 direct delivery cost, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 45000,
+            "unit": "cents/deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "deals",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": "7 x $450 = $3,150 >= $3,000"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid orders per reached buyer",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents/deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "clinics",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#price",
+            "dated": "2026-11-24",
+            "claim": "Price $450",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "36 paid pre-orders from 300 unique visitors",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "1,200 licensed veterinary clinics, each reconciles its controlled-substance log quarterly",
+            "population": "Veterinary clinics",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_signal",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5 per deal",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_4b58e078123c424abae4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "Veterinary clinic managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_4b58e078123c424abae4",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_4b58e078123c424abae4",
+            "deals": 7,
+            "price": 450,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_fb8a5efacff4_e69314",
+        "digest": "fb8a5efacff4fad0f8369d8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_98eec80865f8435bb66f/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:15:15.915Z"
+      },
+      "review": {
+        "revisionId": "rev_fb8a5efacff4_e69314",
+        "revisionDigest": "fb8a5efacff4fad0f8369d8e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_98eec80865f8435bb66f/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_509caa5612374f0ca467/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right: every link is EVIDENCE on the card (payer, published-email channel, dated signal, $450 price for this buyer, Brain-produced spreadsheet, $5 cost, $0 exposure, 4 days to cash, 1,200 clinics). 7 x $450 = $3,150 >= $3,000; $35 cost paid from receipts; settles day 8 of 30; no capital. Arithmetic and ledger match the steps. Caveat only: the 12% rate was measured on page visitors, so the ~60-100 email sends should be sized generously; 1,200 clinics leave ample headroom.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:22:14.075Z"
+      },
+      "at": "2026-11-27T00:23:45.522Z"
+    },
+    "staleFinal": null
+  }
+}

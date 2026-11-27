@@ -1,0 +1,1073 @@
+{
+ "contract": {
+  "goalId": "wst_5afa59fe6dad459394bb",
+  "words": "Collect $1,500 of settled cash within 21 days with no more than 4 hours a week of owner time.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 150000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 21,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": null,
+   "proofCondition": "$1,500 of settled cash received in the owner's account within 21 days",
+   "ownerHoursPerWeek": 4,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "dad2f9b8100c0e07bebd0857"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_5afa59fe6dad459394bb",
+   "contractDigest": "dad2f9b8100c0e07bebd0857",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening needs far more owner hours than 4 a week allows",
+    "opportunityIds": [],
+    "why": "Same-week service of process is fulfilled by the owner personally at 3 hours per serve. Reaching $1,500 settled needs 19 serves at $95 less $12 direct cost ($1,577 net), i.e. 57 owner hours; the goal allows 4 hours a week x 3 weeks = 12 hours, enough for 4 serves ($332 net). The 20 recorded agreements would need 60 owner hours. No other fulfiller is named on the card."
+   },
+   "alternatives": [
+    {
+     "title": "Serve only what 12 owner hours allow",
+     "why": "4 serves x $83 net = $332, far below $1,500."
+    },
+    {
+     "title": "Subcontract the serves to another process server",
+     "why": "No subcontractor, its price or availability is on the record; the card names the owner as the fulfiller."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the weekly hours limit can rise to about 19 hours a week, or identify a licensed process server who would take the serves below $83 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "hoursPerServe",
+      "src_fulfil"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 95,
+     "unit": "USD per serve",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "hoursPerServe",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "owner hours per serve",
+     "sources": [
+      "src_fulfil"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "USD per serve",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "ownerHoursAvailable",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "hours in the 21-day window (4/week)",
+     "sources": [],
+     "needs": null
+    },
+    {
+     "name": "servesNeeded",
+     "status": "ESTIMATE",
+     "value": 19,
+     "unit": "serves to net $1,500 (1500/83)",
+     "sources": [
+      "src_price",
+      "src_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#price",
+     "dated": "2026-10",
+     "claim": "County's three largest process-serving firms list $95 for standard 7-day service; 20 firms agreed at $95",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_fulfil",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#fulfillment",
+     "dated": "2026-11",
+     "claim": "The owner does the work personally (3 hours per serve)",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $12 per serve",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: every serve is fulfilled by the owner personally at 3 hours, so the $1,500 target needs about 57 owner hours against the 12 hours (4/week x 3 weeks) the goal allows; no other fulfiller is established.",
+    "resolution": "Raise the owner-time limit to about 19 hours a week (57 hours over the 21 days) to serve 19 of the 20 agreed firms, or find a process server who will take the serves for less than $83 each so the owner only sells and collects.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "why": "Its fulfiller is the owner at 3 hours per serve; the 19 serves the target needs take 57 owner hours, beyond the 12 the goal allows."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Allow about 19 owner hours a week (57 hours across the 21 days) for 19 serves at $95 ($1,577 net), or keep 4 hours a week and accept about $332.",
+     "basis": [
+      {
+       "opportunityId": "cop_2c630ec307bf4c3499e6",
+       "field": "humanHours"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_e30e12895e89_89a239",
+   "digest": "e30e12895e896335de337e0f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_618d65e9a3a94101b8e5/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:15:05.150Z"
+  },
+  {
+   "goalId": "wst_5afa59fe6dad459394bb",
+   "contractDigest": "dad2f9b8100c0e07bebd0857",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening needs far more owner hours than 4 a week allows",
+    "opportunityIds": [],
+    "why": "Same-week service of process is fulfilled by the owner personally at 3 hours per serve. Reaching $1,500 settled needs 19 serves at $95 less $12 direct cost ($1,577 net), i.e. 57 owner hours; the goal allows 4 hours a week x 3 weeks = 12 hours, enough for 4 serves ($332 net). The 20 recorded agreements would need 60 owner hours. No other fulfiller is named on the card."
+   },
+   "alternatives": [
+    {
+     "title": "Serve only what 12 owner hours allow",
+     "why": "4 serves x $83 net = $332, far below $1,500."
+    },
+    {
+     "title": "Subcontract the serves to another process server",
+     "why": "No subcontractor, its price or availability is on the record; the card names the owner as the fulfiller."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the weekly hours limit can rise to about 19 hours a week, or identify a licensed process server who would take the serves below $83 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "hoursPerServe",
+      "src_fulfil"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 95,
+     "unit": "USD per serve",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "hoursPerServe",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "owner hours per serve",
+     "sources": [
+      "src_fulfil"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "USD per serve",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "servesNeeded",
+     "status": "ESTIMATE",
+     "value": 19,
+     "unit": "serves to net $1,500 (1500/83)",
+     "sources": [
+      "src_price",
+      "src_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#price",
+     "dated": "2026-10",
+     "claim": "County's three largest process-serving firms list $95 for standard 7-day service; 20 firms agreed at $95",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_fulfil",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#fulfillment",
+     "dated": "2026-11",
+     "claim": "The owner does the work personally (3 hours per serve)",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $12 per serve",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: every serve is fulfilled by the owner personally at 3 hours, so the $1,500 target needs about 57 owner hours against the 12 hours (4/week x 3 weeks) the goal allows; no other fulfiller is established.",
+    "resolution": "Raise the owner-time limit to about 19 hours a week (57 hours over the 21 days) to serve 19 of the 20 agreed firms, or find a process server who will take the serves for less than $83 each so the owner only sells and collects.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "why": "Its fulfiller is the owner at 3 hours per serve; the 19 serves the target needs take 57 owner hours, beyond the 12 the goal allows."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Allow about 19 owner hours a week (57 hours across the 21 days) for 19 serves at $95 ($1,577 net), or keep 4 hours a week and accept about $332.",
+     "basis": [
+      {
+       "opportunityId": "cop_2c630ec307bf4c3499e6",
+       "field": "humanHours"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_0f525efe4cac_e7a403",
+   "digest": "0f525efe4cac97d5728dbb2b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_618d65e9a3a94101b8e5/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:15:11.581Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_5afa59fe6dad459394bb",
+  "contractDigest": "dad2f9b8100c0e07bebd0857",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan: the only opening needs far more owner hours than 4 a week allows",
+   "opportunityIds": [],
+   "why": "Same-week service of process is fulfilled by the owner personally at 3 hours per serve. Reaching $1,500 settled needs 19 serves at $95 less $12 direct cost ($1,577 net), i.e. 57 owner hours; the goal allows 4 hours a week x 3 weeks = 12 hours, enough for 4 serves ($332 net). The 20 recorded agreements would need 60 owner hours. No other fulfiller is named on the card."
+  },
+  "alternatives": [
+   {
+    "title": "Serve only what 12 owner hours allow",
+    "why": "4 serves x $83 net = $332, far below $1,500."
+   },
+   {
+    "title": "Subcontract the serves to another process server",
+    "why": "No subcontractor, its price or availability is on the record; the card names the owner as the fulfiller."
+   }
+  ],
+  "steps": [
+   {
+    "id": "s1",
+    "kind": "RESEARCH",
+    "label": "Ask the owner whether the weekly hours limit can rise to about 19 hours a week, or identify a licensed process server who would take the serves below $83 each",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "hoursPerServe",
+     "src_fulfil"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 95,
+    "unit": "USD per serve",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "hoursPerServe",
+    "status": "EVIDENCED",
+    "value": 3,
+    "unit": "owner hours per serve",
+    "sources": [
+     "src_fulfil"
+    ],
+    "needs": null
+   },
+   {
+    "name": "directCost",
+    "status": "EVIDENCED",
+    "value": 12,
+    "unit": "USD per serve",
+    "sources": [
+     "src_cost"
+    ],
+    "needs": null
+   },
+   {
+    "name": "servesNeeded",
+    "status": "ESTIMATE",
+    "value": 19,
+    "unit": "serves to net $1,500 (1500/83)",
+    "sources": [
+     "src_price",
+     "src_cost"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_price",
+    "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#price",
+    "dated": "2026-10",
+    "claim": "County's three largest process-serving firms list $95 for standard 7-day service; 20 firms agreed at $95",
+    "population": "paralegals and office managers at small litigation firms",
+    "matchesBuyer": true,
+    "opportunityId": "cop_2c630ec307bf4c3499e6"
+   },
+   {
+    "id": "src_fulfil",
+    "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#fulfillment",
+    "dated": "2026-11",
+    "claim": "The owner does the work personally (3 hours per serve)",
+    "population": "paralegals and office managers at small litigation firms",
+    "matchesBuyer": true,
+    "opportunityId": "cop_2c630ec307bf4c3499e6"
+   },
+   {
+    "id": "src_cost",
+    "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#directCosts",
+    "dated": "2026-11",
+    "claim": "Direct cost $12 per serve",
+    "population": "paralegals and office managers at small litigation firms",
+    "matchesBuyer": true,
+    "opportunityId": "cop_2c630ec307bf4c3499e6"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "Owner hours: every serve is fulfilled by the owner personally at 3 hours, so the $1,500 target needs about 57 owner hours against the 12 hours (4/week x 3 weeks) the goal allows; no other fulfiller is established.",
+   "resolution": "Raise the owner-time limit to about 19 hours a week (57 hours over the 21 days) to serve 19 of the 20 agreed firms, or find a process server who will take the serves for less than $83 each so the owner only sells and collects.",
+   "decisiveLinks": []
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_2c630ec307bf4c3499e6",
+    "missing": []
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_2c630ec307bf4c3499e6",
+    "why": "Its fulfiller is the owner at 3 hours per serve; the 19 serves the target needs take 57 owner hours, beyond the 12 the goal allows."
+   }
+  ],
+  "members": [],
+  "resolves": [],
+  "constraints": [
+   {
+    "constraint": "OWNER_HOURS",
+    "suggestion": "Allow about 19 owner hours a week (57 hours across the 21 days) for 19 serves at $95 ($1,577 net), or keep 4 hours a week and accept about $332.",
+    "basis": [
+     {
+      "opportunityId": "cop_2c630ec307bf4c3499e6",
+      "field": "humanHours"
+     }
+    ]
+   }
+  ],
+  "disagreements": [],
+  "revisionId": "rev_0f525efe4cac_e7a403",
+  "digest": "0f525efe4cac97d5728dbb2b",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_618d65e9a3a94101b8e5/author-A",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:15:11.581Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_0f525efe4cac_e7a403",
+  "digest": "0f525efe4cac97d5728dbb2b",
+  "contractDigest": "dad2f9b8100c0e07bebd0857",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: the agreed deals need 60 owner hours, more than the 12 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 261× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Paralegals and office managers at small litigat\" needs [figure withheld] and keeps [figure withheld], 74× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 35–60 (swept by the plan's simulation: an assumption, not established), after the 21 days left, so it brings no cash inside the goal's window.",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_2c630ec307bf4c3499e6"
+   ],
+   "integrity": [],
+   "steps": [],
+   "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 1900 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "title": "Same-week service of process for small litigation firms",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 1500,
+     "potentialReach": 1500,
+     "card": {
+      "payer": "Paralegals and office managers at small litigation firms",
+      "reachableChannel": "The county bar association's small-firm section referral list",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:20.097Z",
+      "offerScope": "Same-week service of process for small litigation firms",
+      "priceCents": 9500,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 3,
+      "requiredCapabilities": [],
+      "industry": "legal process serving",
+      "mechanism": "CAPABILITY_ARBITRAGE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 9500,
+       "currency": "USD",
+       "deliverable": "Same-week service of process for small litigation firms",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: The county bar association's small-firm section referral list"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 1900 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 1900 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by The owner, personally (a person says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 12, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "10 days to usable cash against 21 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Same-week service of process for small litigation firms to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$12",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "The owner does the work personally.",
+       "kind": "PERSON"
+      },
+      {
+       "field": "payer",
+       "value": "Paralegals and office managers at small litigation firms",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "The county's three largest process-serving firms list $95 for standard service completed within 7 days (published rate cards, 2026-10).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 150000,
+    "daysLeft": 21,
+    "hoursCeiling": 12,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": 4
+   },
+   "at": "2026-11-27T12:12:09.088Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_0f525efe4cac_e7a403",
+   "revisionDigest": "0f525efe4cac97d5728dbb2b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_618d65e9a3a94101b8e5/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_0cafccd2ea3248b692f2/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is the right stance and the decisive gap is a true constraint, not missing evidence. The only opening (same-week service of process) has every link established, including 20 written acceptances at $95 ($1,900 gross), but its recorded fulfiller is the owner personally at 3 hours per serve (card fulfillmentOwner + humanHours 3). Recomputed: net per serve $95 - $12 = $83; $1,500 / $83 = 18.07, so 19 serves = 57 owner hours (all 20 agreements = 60 h, matching Brain's figure); the goal allows 4 h/week x 3 weeks = 12 h = 4 serves = $332 net. Even with every agreement in hand the evidence cannot fit the hours limit, which is what a constraint is. Settlement (10 days of 21) and cost are not the binding issue. No other fulfiller is on the record, so treating a subcontractor as available would be an unknown read as favourable; the plan correctly names it as the way out (a server below $83/serve) alongside raising the limit to ~19 h/week. The constraint basis cites the card's humanHours field.",
+   "findings": [
+    "INFO cop_2c630ec307bf4c3499e6 FULFILMENT: owner-personal fulfilment at 3 h/serve x 19 serves = 57 h vs 12 h allowed — binding OWNER_HOURS constraint.",
+    "LOW cop_2c630ec307bf4c3499e6 OFFER_AND_PRICE: price fact cites competitors' rate cards, but 20 written acceptances at $95 on the card establish this buyer's price independently.",
+    "LOW: the $95 price is also the median competitor list price; a subcontractor quote under $83 is the decisive evidence that would turn this into a plan with ~1-2 owner hours of selling and collecting."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:18:15.019Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_0f525efe4cac_e7a403",
+  "digest": "0f525efe4cac97d5728dbb2b",
+  "contractDigest": "dad2f9b8100c0e07bebd0857",
+  "plan": {
+   "goalId": "wst_5afa59fe6dad459394bb",
+   "contractDigest": "dad2f9b8100c0e07bebd0857",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening needs far more owner hours than 4 a week allows",
+    "opportunityIds": [],
+    "why": "Same-week service of process is fulfilled by the owner personally at 3 hours per serve. Reaching $1,500 settled needs 19 serves at $95 less $12 direct cost ($1,577 net), i.e. 57 owner hours; the goal allows 4 hours a week x 3 weeks = 12 hours, enough for 4 serves ($332 net). The 20 recorded agreements would need 60 owner hours. No other fulfiller is named on the card."
+   },
+   "alternatives": [
+    {
+     "title": "Serve only what 12 owner hours allow",
+     "why": "4 serves x $83 net = $332, far below $1,500."
+    },
+    {
+     "title": "Subcontract the serves to another process server",
+     "why": "No subcontractor, its price or availability is on the record; the card names the owner as the fulfiller."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner whether the weekly hours limit can rise to about 19 hours a week, or identify a licensed process server who would take the serves below $83 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "hoursPerServe",
+      "src_fulfil"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 95,
+     "unit": "USD per serve",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "hoursPerServe",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "owner hours per serve",
+     "sources": [
+      "src_fulfil"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "USD per serve",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "servesNeeded",
+     "status": "ESTIMATE",
+     "value": 19,
+     "unit": "serves to net $1,500 (1500/83)",
+     "sources": [
+      "src_price",
+      "src_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#price",
+     "dated": "2026-10",
+     "claim": "County's three largest process-serving firms list $95 for standard 7-day service; 20 firms agreed at $95",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_fulfil",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#fulfillment",
+     "dated": "2026-11",
+     "claim": "The owner does the work personally (3 hours per serve)",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_2c630ec307bf4c3499e6#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $12 per serve",
+     "population": "paralegals and office managers at small litigation firms",
+     "matchesBuyer": true,
+     "opportunityId": "cop_2c630ec307bf4c3499e6"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: every serve is fulfilled by the owner personally at 3 hours, so the $1,500 target needs about 57 owner hours against the 12 hours (4/week x 3 weeks) the goal allows; no other fulfiller is established.",
+    "resolution": "Raise the owner-time limit to about 19 hours a week (57 hours over the 21 days) to serve 19 of the 20 agreed firms, or find a process server who will take the serves for less than $83 each so the owner only sells and collects.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_2c630ec307bf4c3499e6",
+     "why": "Its fulfiller is the owner at 3 hours per serve; the 19 serves the target needs take 57 owner hours, beyond the 12 the goal allows."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Allow about 19 owner hours a week (57 hours across the 21 days) for 19 serves at $95 ($1,577 net), or keep 4 hours a week and accept about $332.",
+     "basis": [
+      {
+       "opportunityId": "cop_2c630ec307bf4c3499e6",
+       "field": "humanHours"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_0f525efe4cac_e7a403",
+   "digest": "0f525efe4cac97d5728dbb2b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_618d65e9a3a94101b8e5/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:15:11.581Z"
+  },
+  "review": {
+   "revisionId": "rev_0f525efe4cac_e7a403",
+   "revisionDigest": "0f525efe4cac97d5728dbb2b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_618d65e9a3a94101b8e5/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_0cafccd2ea3248b692f2/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is the right stance and the decisive gap is a true constraint, not missing evidence. The only opening (same-week service of process) has every link established, including 20 written acceptances at $95 ($1,900 gross), but its recorded fulfiller is the owner personally at 3 hours per serve (card fulfillmentOwner + humanHours 3). Recomputed: net per serve $95 - $12 = $83; $1,500 / $83 = 18.07, so 19 serves = 57 owner hours (all 20 agreements = 60 h, matching Brain's figure); the goal allows 4 h/week x 3 weeks = 12 h = 4 serves = $332 net. Even with every agreement in hand the evidence cannot fit the hours limit, which is what a constraint is. Settlement (10 days of 21) and cost are not the binding issue. No other fulfiller is on the record, so treating a subcontractor as available would be an unknown read as favourable; the plan correctly names it as the way out (a server below $83/serve) alongside raising the limit to ~19 h/week. The constraint basis cites the card's humanHours field.",
+   "findings": [
+    "INFO cop_2c630ec307bf4c3499e6 FULFILMENT: owner-personal fulfilment at 3 h/serve x 19 serves = 57 h vs 12 h allowed — binding OWNER_HOURS constraint.",
+    "LOW cop_2c630ec307bf4c3499e6 OFFER_AND_PRICE: price fact cites competitors' rate cards, but 20 written acceptances at $95 on the card establish this buyer's price independently.",
+    "LOW: the $95 price is also the median competitor list price; a subcontractor quote under $83 is the decisive evidence that would turn this into a plan with ~1-2 owner hours of selling and collecting."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:18:15.019Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $1,500 of settled cash within 21 days with no more than 4 hours a week of owner time.",
+   "terms": "4250f2086f755371",
+   "openings": {
+    "cop_2c630ec307bf4c3499e6": "bae53178daac9ab2"
+   }
+  },
+  "at": "2026-11-27T12:18:53.636Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

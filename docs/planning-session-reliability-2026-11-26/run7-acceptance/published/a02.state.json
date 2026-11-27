@@ -1,0 +1,1355 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_757e2a4a8f034bbb873e",
+      "words": "Collect $4,500 of settled cash within 40 days with at most $1,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 450000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 40,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 100000,
+        "proofCondition": "$4,500 of buyer payments settled and usable within 40 days, with no more than $1,000 of capital out at any time",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "ef65f3b6f339849d2b4fa04e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_757e2a4a8f034bbb873e",
+        "contractDigest": "ef65f3b6f339849d2b4fa04e",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the four signed tent-install work orders through Summit Event Crews",
+          "opportunityIds": [
+            "cop_9f905d1024b6413ab06d"
+          ],
+          "why": "Four rental companies signed written work orders at $1,600 per install (signed orders 2026-11, four written acceptances recorded); Summit Event Crews gave a written $1,000-per-install quote; exposure $0; cash usable 10 days after the install. 4 x $1,600 = $6,400 collected (3 installs alone = $4,800) >= $4,500 within 40 days, never more than $0 of capital out, inside the $1,000 cap."
+        },
+        "alternatives": [
+          {
+            "title": "Add overnight security staffing ($1,200 x 2 signed)",
+            "why": "Excluded: no fulfiller is named or quoted on its card, so delivery is not established."
+          },
+          {
+            "title": "Sell the loss-and-damage workbook to 220 association members",
+            "why": "Excluded: the $350 price is only the owner's say-so; no buyer is shown paying it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm schedules with the four rental companies' operations managers who signed $1,600 work orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_agree"
+            ],
+            "priceCents": 160000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Summit Event Crews LLC installs and strikes four frame tents at its written $1,000-per-install quote",
+            "performer": "Summit Event Crews LLC",
+            "costCents": 400000,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Summit Event Crews LLC",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $1,600 per install from each rental company; usable 10 days after the install",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 640000,
+            "label": "Four signed work orders at $1,600",
+            "settlesDay": 15,
+            "stepId": "s3"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 400000,
+            "label": "Pay Summit Event Crews $1,000 x 4 installs (card exposure $0: paid from collected receipts)",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 160000,
+            "unit": "cents per install",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 100000,
+            "unit": "cents per install",
+            "sources": [
+              "s_cost",
+              "s_fulfil"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#price",
+            "dated": "2026-11",
+            "claim": "Four rental companies signed work orders at $1,600 per tent install (signed orders, 2026-11)",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#agreements",
+            "dated": "2026-11",
+            "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,600 each, state AGREED",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#fulfillment",
+            "dated": "2026-11",
+            "claim": "Summit Event Crews LLC (written quote, $1,000 per install) quoted to do the work",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,000 direct cost per install",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "10 days to first cash",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_secprice",
+            "url": "https://brain.local/card/cop_0c346141cef14905b942#price",
+            "dated": "2026-11",
+            "claim": "Two rental companies signed for overnight site security at $1,200 per event weekend; no fulfiller on the card",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_0c346141cef14905b942"
+          },
+          {
+            "id": "s_wbprice",
+            "url": "https://brain.local/card/cop_dc4c49e51e004459b1c0#price",
+            "dated": "2026-11",
+            "claim": "The owner says rental companies would pay $350 (PERSON, not evidence)",
+            "population": "Party rental company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dc4c49e51e004459b1c0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9f905d1024b6413ab06d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_0c346141cef14905b942",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_dc4c49e51e004459b1c0",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_0c346141cef14905b942",
+            "why": "No fulfiller is named or quoted for overnight security staffing; FULFILMENT not established."
+          },
+          {
+            "opportunityId": "cop_dc4c49e51e004459b1c0",
+            "why": "The $350 price is only the owner's statement (PERSON); no buyer is shown paying it, so OFFER_AND_PRICE is not established."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_9f905d1024b6413ab06d",
+            "deals": 4,
+            "price": 1600,
+            "directCost": 1000,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_08cddd312fa6_93931f",
+        "digest": "08cddd312fa6126d0f10d213",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bb1a8e5a2f264da39c4b/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:33.549Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_757e2a4a8f034bbb873e",
+      "contractDigest": "ef65f3b6f339849d2b4fa04e",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fulfil the four signed tent-install work orders through Summit Event Crews",
+        "opportunityIds": [
+          "cop_9f905d1024b6413ab06d"
+        ],
+        "why": "Four rental companies signed written work orders at $1,600 per install (signed orders 2026-11, four written acceptances recorded); Summit Event Crews gave a written $1,000-per-install quote; exposure $0; cash usable 10 days after the install. 4 x $1,600 = $6,400 collected (3 installs alone = $4,800) >= $4,500 within 40 days, never more than $0 of capital out, inside the $1,000 cap."
+      },
+      "alternatives": [
+        {
+          "title": "Add overnight security staffing ($1,200 x 2 signed)",
+          "why": "Excluded: no fulfiller is named or quoted on its card, so delivery is not established."
+        },
+        {
+          "title": "Sell the loss-and-damage workbook to 220 association members",
+          "why": "Excluded: the $350 price is only the owner's say-so; no buyer is shown paying it."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm schedules with the four rental companies' operations managers who signed $1,600 work orders",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_agree"
+          ],
+          "priceCents": 160000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "DELIVER",
+          "label": "Summit Event Crews LLC installs and strikes four frame tents at its written $1,000-per-install quote",
+          "performer": "Summit Event Crews LLC",
+          "costCents": 400000,
+          "day": 5,
+          "dependsOn": "s1",
+          "evidence": [
+            "s_fulfil",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Summit Event Crews LLC",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $1,600 per install from each rental company; usable 10 days after the install",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 15,
+          "dependsOn": "s2",
+          "evidence": [
+            "s_settle"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 640000,
+          "label": "Four signed work orders at $1,600",
+          "settlesDay": 15,
+          "stepId": "s3"
+        },
+        {
+          "day": 15,
+          "kind": "SPEND",
+          "amountCents": 400000,
+          "label": "Pay Summit Event Crews $1,000 x 4 installs (card exposure $0: paid from collected receipts)",
+          "stepId": "s2"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 160000,
+          "unit": "cents per install",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed work orders",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "orders",
+          "sources": [
+            "s_agree"
+          ],
+          "needs": null
+        },
+        {
+          "name": "subcontract cost",
+          "status": "EVIDENCED",
+          "value": 100000,
+          "unit": "cents per install",
+          "sources": [
+            "s_cost",
+            "s_fulfil"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to cash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "s_settle"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#price",
+          "dated": "2026-11",
+          "claim": "Four rental companies signed work orders at $1,600 per tent install (signed orders, 2026-11)",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9f905d1024b6413ab06d"
+        },
+        {
+          "id": "s_agree",
+          "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#agreements",
+          "dated": "2026-11",
+          "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,600 each, state AGREED",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9f905d1024b6413ab06d"
+        },
+        {
+          "id": "s_fulfil",
+          "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#fulfillment",
+          "dated": "2026-11",
+          "claim": "Summit Event Crews LLC (written quote, $1,000 per install) quoted to do the work",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9f905d1024b6413ab06d"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#directCosts",
+          "dated": "2026-11",
+          "claim": "$1,000 direct cost per install",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9f905d1024b6413ab06d"
+        },
+        {
+          "id": "s_settle",
+          "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#timeToFirstCash",
+          "dated": "2026-11",
+          "claim": "10 days to first cash",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9f905d1024b6413ab06d"
+        },
+        {
+          "id": "s_secprice",
+          "url": "https://brain.local/card/cop_0c346141cef14905b942#price",
+          "dated": "2026-11",
+          "claim": "Two rental companies signed for overnight site security at $1,200 per event weekend; no fulfiller on the card",
+          "population": "Party and tent rental companies that signed work orders",
+          "matchesBuyer": true,
+          "opportunityId": "cop_0c346141cef14905b942"
+        },
+        {
+          "id": "s_wbprice",
+          "url": "https://brain.local/card/cop_dc4c49e51e004459b1c0#price",
+          "dated": "2026-11",
+          "claim": "The owner says rental companies would pay $350 (PERSON, not evidence)",
+          "population": "Party rental company owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_dc4c49e51e004459b1c0"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_9f905d1024b6413ab06d",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_0c346141cef14905b942",
+          "missing": [
+            "FULFILMENT"
+          ]
+        },
+        {
+          "opportunityId": "cop_dc4c49e51e004459b1c0",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_0c346141cef14905b942",
+          "why": "No fulfiller is named or quoted for overnight security staffing; FULFILMENT not established."
+        },
+        {
+          "opportunityId": "cop_dc4c49e51e004459b1c0",
+          "why": "The $350 price is only the owner's statement (PERSON); no buyer is shown paying it, so OFFER_AND_PRICE is not established."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_9f905d1024b6413ab06d",
+          "deals": 4,
+          "price": 1600,
+          "directCost": 1000,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_08cddd312fa6_93931f",
+      "digest": "08cddd312fa6126d0f10d213",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_bb1a8e5a2f264da39c4b/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:27:33.549Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_08cddd312fa6_93931f",
+      "digest": "08cddd312fa6126d0f10d213",
+      "contractDigest": "ef65f3b6f339849d2b4fa04e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 400000,
+        "committedOpenCents": 0,
+        "preProofCents": 400000,
+        "maxExposureCents": 0,
+        "minCashCents": 100000,
+        "minCashDay": 5,
+        "collectedCents": 640000,
+        "collectedInWindowCents": 640000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 240000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Overflow tent-installation crews for party rental companies\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Overflow tent-installation crews for party rental companies\" (assumption-only coverage: it reaches the target in 0% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 44× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Overflow tent-installation crews for party rental companies\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_9f905d1024b6413ab06d",
+          "cop_dc4c49e51e004459b1c0"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Overflow tent-installation crews for party rental companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Overflow tent-installation crews for party rental companies\"",
+            "owner": "PERSON",
+            "cost": 1000
+          },
+          {
+            "label": "Collect payment for \"Overflow tent-installation crews for party rental companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_9f905d1024b6413ab06d",
+            "title": "Overflow tent-installation crews for party rental companies",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4500,
+            "potentialReach": 4500,
+            "card": {
+              "payer": "Party and tent rental companies",
+              "reachableChannel": "The rental companies' operations managers who signed the work orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:21:49.292Z",
+              "offerScope": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+              "priceCents": 160000,
+              "currency": "USD",
+              "fulfillmentOwner": "Summit Event Crews LLC (written quote, $1,000 per install)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "party and tent rental",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 160000,
+                "currency": "USD",
+                "deliverable": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 160000,
+                "currency": "USD",
+                "deliverable": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 160000,
+                "currency": "USD",
+                "deliverable": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 160000,
+                "currency": "USD",
+                "deliverable": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The rental companies' operations managers who signed the work orders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 6400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 6400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Summit Event Crews LLC (written quote, $1,000 per install) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 1000, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 40 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell A three-person crew installs and strikes one frame tent up to 40x80 ft to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Summit Event Crews LLC (written quote, $1,000 per install) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Party and tent rental companies",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four rental companies signed work orders at $1,600 per tent install (signed orders, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_0c346141cef14905b942",
+            "title": "Overnight tent-site security staffing for party rental companies",
+            "missing": [
+              "FULFILMENT"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2400,
+            "potentialReach": 2400,
+            "card": {
+              "payer": "Party and tent rental companies",
+              "reachableChannel": "The rental companies' operations managers",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:21:49.292Z",
+              "offerScope": "Overnight tent-site security staffing for party rental companies",
+              "priceCents": 120000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "party and tent rental",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Overnight tent-site security staffing for party rental companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 120000,
+                "currency": "USD",
+                "deliverable": "Overnight tent-site security staffing for party rental companies",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Overnight tent-site security staffing for party rental companies to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$700",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Party and tent rental companies",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Two rental companies signed for overnight site security at $1,200 per event weekend.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_dc4c49e51e004459b1c0",
+            "title": "Rental inventory loss and damage tracking workbook for party rental companies",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 4500,
+            "card": {
+              "payer": "Party rental company owners",
+              "reachableChannel": "The state rental association's member directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:21:49.292Z",
+              "offerScope": "Rental inventory loss and damage tracking workbook for party rental companies",
+              "priceCents": 35000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "party and tent rental",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The rental companies' operations managers who signed the work orders | reach: The state rental association's member directory"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "a buyer agreed to 6400 USD | price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 6400 USD | measured on this offer's own sales: 12 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer | 14 deal(s) needed, 220 available in the window (220 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Summit Event Crews LLC (written quote, $1,000 per install) (a source says so) | Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 1000, tied up 0 | cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 40 left | 4 days to usable cash against 40 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state rental association lists 220 party rental member companies.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Rental inventory loss and damage tracking workbook for party rental companies to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "12 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Party rental company owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The owner says rental companies would pay $350 for it.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_85925e6eef674f99b39a",
+          "cnd_0d0e9b324f8347ebadd1",
+          "cnd_14ce940692ca421a9b97"
+        ],
+        "scope": {
+          "targetCents": 450000,
+          "daysLeft": 40,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:24:17.862Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_08cddd312fa6_93931f",
+        "revisionDigest": "08cddd312fa6126d0f10d213",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bb1a8e5a2f264da39c4b/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_dbfb203c458d498faeb4/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The single member (overflow tent installs) has every link established by the card's EVIDENCE: four WRITTEN_ACCEPTANCE agreements at $1,600 each (state AGREED) are real purchase prices from these buyers; the fulfiller is the recorded one, Summit Event Crews LLC, on a written $1,000-per-install quote; card exposure $0; usable cash 10 days after install. Arithmetic recomputed: 4 x $1,600 = $6,400 collected >= $4,500 (3 installs alone = $4,800 also clears it); subcontract 4 x $1,000 = $4,000 < price, paid from collected receipts so capital out stays $0 <= $1,000 cap; net $2,400; install day 5 + 10 = settled day 15 of 40. Metric is settled cash collected, so the $4,000 subcontract outflow does not reduce the target. Both excluded openings are correctly excluded: security staffing has no named or quoted fulfiller (FULFILMENT missing) and the workbook's $350 is only the owner's word (PERSON), so neither may count. EXECUTABLE is the right stance.",
+        "findings": [
+          "The install dates of the four signed orders are not on the card; the plan places them on day 5. Even if installs slipped to day 30 the 10-day settlement still lands by day 40, but any install after day 30 would push its cash out of the window; Brain should confirm the dates in step s1.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup needed before s1/s3, not an evidential gap.",
+          "If Summit requires payment before the rental companies pay, four concurrent installs would need $4,000 > the $1,000 cap; the card's EVIDENCE exposure of $0 says it does not, and the plan relies on that fact."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:31:29.586Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_08cddd312fa6_93931f",
+      "digest": "08cddd312fa6126d0f10d213",
+      "contractDigest": "ef65f3b6f339849d2b4fa04e",
+      "plan": {
+        "goalId": "wst_757e2a4a8f034bbb873e",
+        "contractDigest": "ef65f3b6f339849d2b4fa04e",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the four signed tent-install work orders through Summit Event Crews",
+          "opportunityIds": [
+            "cop_9f905d1024b6413ab06d"
+          ],
+          "why": "Four rental companies signed written work orders at $1,600 per install (signed orders 2026-11, four written acceptances recorded); Summit Event Crews gave a written $1,000-per-install quote; exposure $0; cash usable 10 days after the install. 4 x $1,600 = $6,400 collected (3 installs alone = $4,800) >= $4,500 within 40 days, never more than $0 of capital out, inside the $1,000 cap."
+        },
+        "alternatives": [
+          {
+            "title": "Add overnight security staffing ($1,200 x 2 signed)",
+            "why": "Excluded: no fulfiller is named or quoted on its card, so delivery is not established."
+          },
+          {
+            "title": "Sell the loss-and-damage workbook to 220 association members",
+            "why": "Excluded: the $350 price is only the owner's say-so; no buyer is shown paying it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm schedules with the four rental companies' operations managers who signed $1,600 work orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_agree"
+            ],
+            "priceCents": 160000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Summit Event Crews LLC installs and strikes four frame tents at its written $1,000-per-install quote",
+            "performer": "Summit Event Crews LLC",
+            "costCents": 400000,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Summit Event Crews LLC",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $1,600 per install from each rental company; usable 10 days after the install",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_settle"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 640000,
+            "label": "Four signed work orders at $1,600",
+            "settlesDay": 15,
+            "stepId": "s3"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 400000,
+            "label": "Pay Summit Event Crews $1,000 x 4 installs (card exposure $0: paid from collected receipts)",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 160000,
+            "unit": "cents per install",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontract cost",
+            "status": "EVIDENCED",
+            "value": 100000,
+            "unit": "cents per install",
+            "sources": [
+              "s_cost",
+              "s_fulfil"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#price",
+            "dated": "2026-11",
+            "claim": "Four rental companies signed work orders at $1,600 per tent install (signed orders, 2026-11)",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#agreements",
+            "dated": "2026-11",
+            "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,600 each, state AGREED",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#fulfillment",
+            "dated": "2026-11",
+            "claim": "Summit Event Crews LLC (written quote, $1,000 per install) quoted to do the work",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#directCosts",
+            "dated": "2026-11",
+            "claim": "$1,000 direct cost per install",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_settle",
+            "url": "https://brain.local/card/cop_9f905d1024b6413ab06d#timeToFirstCash",
+            "dated": "2026-11",
+            "claim": "10 days to first cash",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9f905d1024b6413ab06d"
+          },
+          {
+            "id": "s_secprice",
+            "url": "https://brain.local/card/cop_0c346141cef14905b942#price",
+            "dated": "2026-11",
+            "claim": "Two rental companies signed for overnight site security at $1,200 per event weekend; no fulfiller on the card",
+            "population": "Party and tent rental companies that signed work orders",
+            "matchesBuyer": true,
+            "opportunityId": "cop_0c346141cef14905b942"
+          },
+          {
+            "id": "s_wbprice",
+            "url": "https://brain.local/card/cop_dc4c49e51e004459b1c0#price",
+            "dated": "2026-11",
+            "claim": "The owner says rental companies would pay $350 (PERSON, not evidence)",
+            "population": "Party rental company owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_dc4c49e51e004459b1c0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9f905d1024b6413ab06d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_0c346141cef14905b942",
+            "missing": [
+              "FULFILMENT"
+            ]
+          },
+          {
+            "opportunityId": "cop_dc4c49e51e004459b1c0",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_0c346141cef14905b942",
+            "why": "No fulfiller is named or quoted for overnight security staffing; FULFILMENT not established."
+          },
+          {
+            "opportunityId": "cop_dc4c49e51e004459b1c0",
+            "why": "The $350 price is only the owner's statement (PERSON); no buyer is shown paying it, so OFFER_AND_PRICE is not established."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_9f905d1024b6413ab06d",
+            "deals": 4,
+            "price": 1600,
+            "directCost": 1000,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_08cddd312fa6_93931f",
+        "digest": "08cddd312fa6126d0f10d213",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bb1a8e5a2f264da39c4b/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:33.549Z"
+      },
+      "review": {
+        "revisionId": "rev_08cddd312fa6_93931f",
+        "revisionDigest": "08cddd312fa6126d0f10d213",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bb1a8e5a2f264da39c4b/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_dbfb203c458d498faeb4/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The single member (overflow tent installs) has every link established by the card's EVIDENCE: four WRITTEN_ACCEPTANCE agreements at $1,600 each (state AGREED) are real purchase prices from these buyers; the fulfiller is the recorded one, Summit Event Crews LLC, on a written $1,000-per-install quote; card exposure $0; usable cash 10 days after install. Arithmetic recomputed: 4 x $1,600 = $6,400 collected >= $4,500 (3 installs alone = $4,800 also clears it); subcontract 4 x $1,000 = $4,000 < price, paid from collected receipts so capital out stays $0 <= $1,000 cap; net $2,400; install day 5 + 10 = settled day 15 of 40. Metric is settled cash collected, so the $4,000 subcontract outflow does not reduce the target. Both excluded openings are correctly excluded: security staffing has no named or quoted fulfiller (FULFILMENT missing) and the workbook's $350 is only the owner's word (PERSON), so neither may count. EXECUTABLE is the right stance.",
+        "findings": [
+          "The install dates of the four signed orders are not on the card; the plan places them on day 5. Even if installs slipped to day 30 the 10-day settlement still lands by day 40, but any install after day 30 would push its cash out of the window; Brain should confirm the dates in step s1.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup needed before s1/s3, not an evidential gap.",
+          "If Summit requires payment before the rental companies pay, four concurrent installs would need $4,000 > the $1,000 cap; the card's EVIDENCE exposure of $0 says it does not, and the plan relies on that fact."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:31:29.586Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,500 of settled cash within 40 days with at most $1,000 of capital.",
+        "terms": "f7e2740896daae22",
+        "openings": {
+          "cop_0c346141cef14905b942": "994597009c56f4cb",
+          "cop_9f905d1024b6413ab06d": "0f458cfd0cdd8ba1",
+          "cop_dc4c49e51e004459b1c0": "fea85f1c869b43af"
+        }
+      },
+      "at": "2026-11-27T08:33:50.636Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

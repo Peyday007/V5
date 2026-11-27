@@ -1,0 +1,1875 @@
+{
+ "contract": {
+  "goalId": "wst_48e5d2c8015e41c983e5",
+  "words": "Collect $3,000 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 300000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 28,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": null,
+   "proofCondition": "$3,000 of settled cash received in the owner's account within 28 days",
+   "ownerHoursPerWeek": 2,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "63ec2650979c6c9fc913d5a4"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_48e5d2c8015e41c983e5",
+   "contractDigest": "63ec2650979c6c9fc913d5a4",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 9 signed inspection-ready log binders at $375, payable on delivery",
+    "opportunityIds": [
+     "cop_197df9a8d3a54fc78fe7"
+    ],
+    "why": "Nine pool service owners signed $375 order forms payable on delivery. Brain produces the binder spreadsheet (no owner hours), direct cost $6 each, $0 exposure, cash 5 days after delivery. 9 x $375 = $3,375 gross, $3,321 after $54 direct cost, settled by about day 8 of 28 with zero owner hours against the 8 allowed."
+   },
+   "alternatives": [
+    {
+     "title": "Seasonal pool technician shifts at $28/hour",
+     "why": "Excluded: one hotel group is a single employer, not a buyer population; the owner would work the shifts personally, and 2 hours a week x 4 weeks = 8 hours earns at most $224; close rate and volume are unestablished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 9 signed $375 binder orders with each pool service owner",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 37500,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the inspection-ready chemical log binder to the 9 buyers",
+     "performer": "BRAIN",
+     "costCents": 5400,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Collect $375 from each buyer on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 5400,
+     "label": "Direct cost $6 per binder x 9",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 337500,
+     "label": "9 x $375 payable on delivery",
+     "settlesDay": 8,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 375,
+     "unit": "USD per binder",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "USD per binder",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#price",
+     "dated": "2026-11",
+     "claim": "Nine pool service owners signed $375 orders for the binder, payable on delivery",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $6 per binder; exposure $0",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "5 days to first cash",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_hotel_price",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#price",
+     "dated": "2026-11",
+     "claim": "Resort hotel group's job posting pays $28/hour, biweekly",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    },
+    {
+     "id": "src_hotel_vol",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Posting lists 160 open technician hours this month",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "why": "A single hotel group's job posting is one employer, not a population of buyers; close rate and buyer count are unestablished; the owner works each $28 hour personally and only 8 owner hours are allowed ($224 at most)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "deals": 9,
+     "price": 375,
+     "directCost": 6,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_9d3b01626cbc_42dd31",
+   "digest": "9d3b01626cbc647915c1487e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:15:31.974Z"
+  },
+  {
+   "goalId": "wst_48e5d2c8015e41c983e5",
+   "contractDigest": "63ec2650979c6c9fc913d5a4",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 9 signed inspection-ready log binders at $375, payable on delivery",
+    "opportunityIds": [
+     "cop_197df9a8d3a54fc78fe7"
+    ],
+    "why": "Nine pool service owners signed $375 order forms payable on delivery. Brain produces the binder spreadsheet (no owner hours), direct cost $6 each, $0 exposure, cash 5 days after delivery. 9 x $375 = $3,375 gross, $3,321 after $54 direct cost, settled by about day 8 of 28 with zero owner hours against the 8 allowed."
+   },
+   "alternatives": [
+    {
+     "title": "Seasonal pool technician shifts at $28/hour",
+     "why": "Excluded: one hotel group is a single employer, not a buyer population; the owner would work the shifts personally, and 2 hours a week x 4 weeks = 8 hours earns at most $224; close rate and volume are unestablished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 9 signed $375 binder orders with each pool service owner",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 37500,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the inspection-ready chemical log binder to the 9 buyers",
+     "performer": "BRAIN",
+     "costCents": 5400,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Collect $375 from each buyer on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "FUNDING",
+     "amountCents": 5400,
+     "label": "Owner advances the $54 direct cost until the delivery payments settle (goal sets no capital limit)",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 5400,
+     "label": "Direct cost $6 per binder x 9",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 337500,
+     "label": "9 x $375 payable on delivery",
+     "settlesDay": 8,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 375,
+     "unit": "USD per binder",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "USD per binder",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#price",
+     "dated": "2026-11",
+     "claim": "Nine pool service owners signed $375 orders for the binder, payable on delivery",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $6 per binder; exposure $0",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "5 days to first cash",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_hotel_price",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#price",
+     "dated": "2026-11",
+     "claim": "Resort hotel group's job posting pays $28/hour, biweekly",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    },
+    {
+     "id": "src_hotel_vol",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Posting lists 160 open technician hours this month",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "why": "A single hotel group's job posting is one employer, not a population of buyers; close rate and buyer count are unestablished; the owner works each $28 hour personally and only 8 owner hours are allowed ($224 at most)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "deals": 9,
+     "price": 375,
+     "directCost": 6,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_34121a4c51fd_b247df",
+   "digest": "34121a4c51fd1f1e46e0e54c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:15:42.959Z"
+  },
+  {
+   "goalId": "wst_48e5d2c8015e41c983e5",
+   "contractDigest": "63ec2650979c6c9fc913d5a4",
+   "parentRevisionId": "rev_34121a4c51fd_b247df",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 9 signed inspection-ready log binders at $375, payable on delivery",
+    "opportunityIds": [
+     "cop_197df9a8d3a54fc78fe7"
+    ],
+    "why": "Nine pool service owners signed $375 order forms payable on delivery. Brain produces the binder spreadsheet (no owner hours), direct cost $6 each, $0 exposure, cash 5 days after delivery. 9 x $375 = $3,375 gross, $3,321 after $54 direct cost, settled by about day 8 of 28 with zero owner hours against the 8 allowed."
+   },
+   "alternatives": [
+    {
+     "title": "Seasonal pool technician shifts at $28/hour",
+     "why": "Excluded: one hotel group is a single employer, not a buyer population; the owner would work the shifts personally, and 2 hours a week x 4 weeks = 8 hours earns at most $224; close rate and volume are unestablished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 9 signed $375 binder orders with each pool service owner",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 37500,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the inspection-ready chemical log binder to the 9 buyers",
+     "performer": "BRAIN",
+     "costCents": 5400,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Collect $375 from each buyer on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "FUNDING",
+     "amountCents": 5400,
+     "label": "Owner advances the $54 direct cost until the delivery payments settle (goal sets no capital limit)",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 5400,
+     "label": "Direct cost $6 per binder x 9",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 337500,
+     "label": "9 x $375 payable on delivery",
+     "settlesDay": 8,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 375,
+     "unit": "USD per binder",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "USD per binder",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#price",
+     "dated": "2026-11",
+     "claim": "Nine pool service owners signed $375 orders for the binder, payable on delivery",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $6 per binder; exposure $0",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "5 days to first cash",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_hotel_price",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#price",
+     "dated": "2026-11",
+     "claim": "Resort hotel group's job posting pays $28/hour, biweekly",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    },
+    {
+     "id": "src_hotel_vol",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Posting lists 160 open technician hours this month",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MEDIUM cop_197df9a8d3a54fc78fe7 owner hours: plan asserts 0 owner hours; card humanHours 0.5/deal and Brain step 'Deliver' owner PERSON; 4.5 h on day 3 > 2 h/week if owner's.",
+     "resolution": "Rebutted, with the record. The 0.5 h per deal is the fulfiller's work, and the fulfiller is Brain, not the owner: the card names no fulfillmentOwner, its requiredCapabilities is PRODUCE_SPREADSHEET (PRESENT), its delivery fact (EVIDENCE) reads 'A spreadsheet Brain produces', and Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. Under the fulfilment rule humanHours is work per deal by that fulfiller and is owner work only when the owner is the fulfiller. The 'PERSON' label in Brain's generic step list is not the card's record; contrast the hotel opening, whose card does name 'The owner, personally'. Every step in this plan is performed by BRAIN, so owner hours are 0 of the 8 allowed."
+    },
+    {
+     "finding": "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: zero collection margin (8 of 9 = $2,952 net).",
+     "resolution": "Acknowledged as a risk, not a gap in evidence: all nine payers signed written orders payable on delivery, so the plan counts all nine; the margin over target is $321. No conversion or volume for new pool-operator buyers is established on the card, so a replacement sale is not counted in the ledger."
+    },
+    {
+     "finding": "LOW cop_197df9a8d3a54fc78fe7: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed before day 1/3.",
+     "resolution": "Noted; these are Brain's routine operations, attached by Brain to the steps, and Brain accepted every step."
+    },
+    {
+     "finding": "INFO cop_8970644e6d3a48baba64: exclusion correct — single employer, owner-performed hourly work capped at $224.",
+     "resolution": "Agreed; kept excluded."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "why": "A single hotel group's job posting is one employer, not a population of buyers; close rate and buyer count are unestablished; the owner works each $28 hour personally and only 8 owner hours are allowed ($224 at most)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "deals": 9,
+     "price": 375,
+     "directCost": 6,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_eb99517eb27f_5fc027",
+   "digest": "eb99517eb27fc2a10cec441f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:21:14.088Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_48e5d2c8015e41c983e5",
+  "contractDigest": "63ec2650979c6c9fc913d5a4",
+  "parentRevisionId": "rev_34121a4c51fd_b247df",
+  "stance": "EXECUTABLE",
+  "strategy": {
+   "title": "Deliver the 9 signed inspection-ready log binders at $375, payable on delivery",
+   "opportunityIds": [
+    "cop_197df9a8d3a54fc78fe7"
+   ],
+   "why": "Nine pool service owners signed $375 order forms payable on delivery. Brain produces the binder spreadsheet (no owner hours), direct cost $6 each, $0 exposure, cash 5 days after delivery. 9 x $375 = $3,375 gross, $3,321 after $54 direct cost, settled by about day 8 of 28 with zero owner hours against the 8 allowed."
+  },
+  "alternatives": [
+   {
+    "title": "Seasonal pool technician shifts at $28/hour",
+    "why": "Excluded: one hotel group is a single employer, not a buyer population; the owner would work the shifts personally, and 2 hours a week x 4 weeks = 8 hours earns at most $224; close rate and volume are unestablished."
+   }
+  ],
+  "steps": [
+   {
+    "id": "s0",
+    "kind": "SELL",
+    "label": "Confirm the 9 signed $375 binder orders with each pool service owner",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "signedOrders",
+     "price",
+     "src_price"
+    ],
+    "priceCents": 37500,
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s1",
+    "kind": "DELIVER",
+    "label": "Produce and deliver the inspection-ready chemical log binder to the 9 buyers",
+    "performer": "BRAIN",
+    "costCents": 5400,
+    "day": 3,
+    "dependsOn": "s0",
+    "evidence": [
+     "directCost",
+     "src_delivery",
+     "src_cost"
+    ],
+    "executor": {
+     "operation": "BRAIN_PRODUCES",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "PRODUCE_SPREADSHEET",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s2",
+    "kind": "COLLECT",
+    "label": "Collect $375 from each buyer on delivery",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 3,
+    "dependsOn": "s1",
+    "evidence": [
+     "price",
+     "daysToCash",
+     "src_price",
+     "src_ttfc"
+    ],
+    "executor": {
+     "operation": "COLLECT_PAYMENT",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "ISSUE_AN_INVOICE",
+       "state": "NOT_CONNECTED"
+      }
+     ],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [
+   {
+    "day": 3,
+    "kind": "FUNDING",
+    "amountCents": 5400,
+    "label": "Owner advances the $54 direct cost until the delivery payments settle (goal sets no capital limit)",
+    "stepId": "s1"
+   },
+   {
+    "day": 3,
+    "kind": "SPEND",
+    "amountCents": 5400,
+    "label": "Direct cost $6 per binder x 9",
+    "stepId": "s1"
+   },
+   {
+    "day": 3,
+    "kind": "RECEIPT",
+    "amountCents": 337500,
+    "label": "9 x $375 payable on delivery",
+    "settlesDay": 8,
+    "stepId": "s2"
+   }
+  ],
+  "proofDay": 8,
+  "quantities": [
+   {
+    "name": "signedOrders",
+    "status": "EVIDENCED",
+    "value": 9,
+    "unit": "signed order forms",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 375,
+    "unit": "USD per binder",
+    "sources": [
+     "src_price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "directCost",
+    "status": "EVIDENCED",
+    "value": 6,
+    "unit": "USD per binder",
+    "sources": [
+     "src_cost"
+    ],
+    "needs": null
+   },
+   {
+    "name": "daysToCash",
+    "status": "EVIDENCED",
+    "value": 5,
+    "unit": "days",
+    "sources": [
+     "src_ttfc"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "src_price",
+    "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#price",
+    "dated": "2026-11",
+    "claim": "Nine pool service owners signed $375 orders for the binder, payable on delivery",
+    "population": "owners of pool service companies maintaining HOA and hotel pools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_197df9a8d3a54fc78fe7"
+   },
+   {
+    "id": "src_delivery",
+    "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#delivery",
+    "dated": "2026-11",
+    "claim": "A spreadsheet Brain produces",
+    "population": "owners of pool service companies maintaining HOA and hotel pools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_197df9a8d3a54fc78fe7"
+   },
+   {
+    "id": "src_cost",
+    "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#directCosts",
+    "dated": "2026-11",
+    "claim": "Direct cost $6 per binder; exposure $0",
+    "population": "owners of pool service companies maintaining HOA and hotel pools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_197df9a8d3a54fc78fe7"
+   },
+   {
+    "id": "src_ttfc",
+    "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#timeToFirstCash",
+    "dated": "2026-11",
+    "claim": "5 days to first cash",
+    "population": "owners of pool service companies maintaining HOA and hotel pools",
+    "matchesBuyer": true,
+    "opportunityId": "cop_197df9a8d3a54fc78fe7"
+   },
+   {
+    "id": "src_hotel_price",
+    "url": "https://brain.local/card/cop_8970644e6d3a48baba64#price",
+    "dated": "2026-11",
+    "claim": "Resort hotel group's job posting pays $28/hour, biweekly",
+    "population": "one resort hotel group (single employer)",
+    "matchesBuyer": false,
+    "opportunityId": "cop_8970644e6d3a48baba64"
+   },
+   {
+    "id": "src_hotel_vol",
+    "url": "https://brain.local/card/cop_8970644e6d3a48baba64#buyerVolume",
+    "dated": "2026-11",
+    "claim": "Posting lists 160 open technician hours this month",
+    "population": "one resort hotel group (single employer)",
+    "matchesBuyer": false,
+    "opportunityId": "cop_8970644e6d3a48baba64"
+   }
+  ],
+  "validation": null,
+  "noPlan": null,
+  "reach": null,
+  "answers": [
+   {
+    "finding": "MEDIUM cop_197df9a8d3a54fc78fe7 owner hours: plan asserts 0 owner hours; card humanHours 0.5/deal and Brain step 'Deliver' owner PERSON; 4.5 h on day 3 > 2 h/week if owner's.",
+    "resolution": "Rebutted, with the record. The 0.5 h per deal is the fulfiller's work, and the fulfiller is Brain, not the owner: the card names no fulfillmentOwner, its requiredCapabilities is PRODUCE_SPREADSHEET (PRESENT), its delivery fact (EVIDENCE) reads 'A spreadsheet Brain produces', and Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. Under the fulfilment rule humanHours is work per deal by that fulfiller and is owner work only when the owner is the fulfiller. The 'PERSON' label in Brain's generic step list is not the card's record; contrast the hotel opening, whose card does name 'The owner, personally'. Every step in this plan is performed by BRAIN, so owner hours are 0 of the 8 allowed."
+   },
+   {
+    "finding": "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: zero collection margin (8 of 9 = $2,952 net).",
+    "resolution": "Acknowledged as a risk, not a gap in evidence: all nine payers signed written orders payable on delivery, so the plan counts all nine; the margin over target is $321. No conversion or volume for new pool-operator buyers is established on the card, so a replacement sale is not counted in the ledger."
+   },
+   {
+    "finding": "LOW cop_197df9a8d3a54fc78fe7: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed before day 1/3.",
+    "resolution": "Noted; these are Brain's routine operations, attached by Brain to the steps, and Brain accepted every step."
+   },
+   {
+    "finding": "INFO cop_8970644e6d3a48baba64: exclusion correct — single employer, owner-performed hourly work capped at $224.",
+    "resolution": "Agreed; kept excluded."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_197df9a8d3a54fc78fe7",
+    "missing": []
+   },
+   {
+    "opportunityId": "cop_8970644e6d3a48baba64",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_8970644e6d3a48baba64",
+    "why": "A single hotel group's job posting is one employer, not a population of buyers; close rate and buyer count are unestablished; the owner works each $28 hour personally and only 8 owner hours are allowed ($224 at most)."
+   }
+  ],
+  "members": [
+   {
+    "opportunityId": "cop_197df9a8d3a54fc78fe7",
+    "deals": 9,
+    "price": 375,
+    "directCost": 6,
+    "capital": 0
+   }
+  ],
+  "resolves": [],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_eb99517eb27f_5fc027",
+  "digest": "eb99517eb27fc2a10cec441f",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:21:14.088Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_eb99517eb27f_5fc027",
+  "digest": "eb99517eb27fc2a10cec441f",
+  "contractDigest": "63ec2650979c6c9fc913d5a4",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 5400,
+   "committedOpenCents": 0,
+   "preProofCents": 5400,
+   "maxExposureCents": 5400,
+   "minCashCents": 0,
+   "minCashDay": 3,
+   "collectedCents": 337500,
+   "collectedInWindowCents": 337500,
+   "refundsCents": 0,
+   "ownerFundedCents": 5400,
+   "netCents": 332100
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "\"Only: Inspection-ready chemical log binder for commercial pool ser\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Inspection-ready chemical log binder for commercial pool ser\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6034× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Owners of pool service companies that maintain \" needs [figure withheld] and keeps [figure withheld], 359× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Inspection-ready chemical log binder for commercial pool service compa\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_197df9a8d3a54fc78fe7",
+    "cop_8970644e6d3a48baba64"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Inspection-ready chemical log binder for commercial pool service companies\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Inspection-ready chemical log binder for commercial pool service companies\"",
+     "owner": "PERSON",
+     "cost": 6
+    },
+    {
+     "label": "Collect payment for \"Inspection-ready chemical log binder for commercial pool service companies\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+   "openings": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "title": "Inspection-ready chemical log binder for commercial pool service companies",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 3000,
+     "potentialReach": 3000,
+     "card": {
+      "payer": "Owners of pool service companies that maintain HOA and hotel pools",
+      "reachableChannel": "Emails in the county health department's licensed public-pool operator list",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:25.512Z",
+      "offerScope": "Inspection-ready chemical log binder for commercial pool service companies",
+      "priceCents": 37500,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "commercial pool service",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 37500,
+       "currency": "USD",
+       "deliverable": "Inspection-ready chemical log binder for commercial pool service companies",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Emails in the county health department's licensed public-pool operator list"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 3375 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 3375 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "no new deals needed"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 6, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "5 days to usable cash against 28 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Inspection-ready chemical log binder for commercial pool service companies to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$6",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Owners of pool service companies that maintain HOA and hotel pools",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Nine pool service owners signed $375 orders for the inspection-ready log binder, payable on delivery (signed order forms, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "5 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "title": "Seasonal pool technician shifts for a resort hotel group",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 28,
+     "potentialReach": 3000,
+     "card": {
+      "payer": "Resort hotel group",
+      "reachableChannel": "The hotel group's careers page",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:25.512Z",
+      "offerScope": "Seasonal pool technician shifts for a resort hotel group",
+      "priceCents": 2800,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "commercial pool service",
+      "mechanism": "CAPABILITY_ARBITRAGE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Emails in the county health department's licensed public-pool operator list | reach: The hotel group's careers page"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 3375 USD | price 28 USD (EVIDENCE)"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "buyers have agreed to 3375 USD | 200 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "no new deals needed | 50 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET | fulfilled by The owner, personally (a person says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 6, tied up 0 | cost 0, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "5 days to usable cash against 28 left | 14 days to usable cash against 28 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "The posting lists 160 open technician hours this month.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Seasonal pool technician shifts for a resort hotel group to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "The owner does the work personally.",
+       "kind": "PERSON"
+      },
+      {
+       "field": "payer",
+       "value": "Resort hotel group",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "The resort hotel group's job posting pays seasonal pool technicians $28 an hour, paid biweekly.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "14 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_0f23ce9d71744e0d91d0",
+    "cnd_b3a1296675674364892c"
+   ],
+   "scope": {
+    "targetCents": 300000,
+    "daysLeft": 28,
+    "hoursCeiling": 8,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": 2
+   },
+   "at": "2026-11-27T12:12:21.385Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_34121a4c51fd_b247df",
+   "revisionDigest": "34121a4c51fd1f1e46e0e54c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_13bc290fdea642c883bf/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "The opening itself is sound: nine written acceptances at $375 payable on delivery from the card's payer (pool service owners), a spreadsheet Brain produces (PRODUCE_SPREADSHEET PRESENT), $6 direct cost. Recomputed: 9 x $375 = $3,375; cost $54 (owner-advanced, no capital limit set); net $3,321 >= $3,000; settles day 8 of 28. The hotel-shift alternative is correctly excluded (one employer is not a population; owner-performed at $28/h with 8 h allowed = $224 max). What blocks a PASS is the owner-hours claim. The goal binds owner time at 2 h/week, and the plan states 'zero owner hours' with no record behind the zero: the card records humanHours 0.5 per deal, and Brain's own step list assigns Deliver to PERSON. If those 0.5 h are the owner's, 9 x 0.5 = 4.5 h, all scheduled on day 3, exceeds 2 h in week 1 (it fits the 8 h total). Unknown hours are unknown, not zero. Revise by either citing the record that the 0.5 h/deal is Brain's and not the owner's, or scheduling delivery and collection to fit 2 h/week (e.g. 4 binders in week 1, 4 in week 2, 1 in week 3: 2.0/2.0/0.5 h), which still settles by about day 20 of 28. Also note collection has no margin: 8 of 9 paying gives $2,952 net, under target, so a non-payer must be replaceable inside the window (the licensed pool-operator list is the channel).",
+   "findings": [
+    "MEDIUM cop_197df9a8d3a54fc78fe7 owner hours: plan asserts 0 owner hours; card humanHours 0.5/deal and Brain step 'Deliver' owner PERSON; 4.5 h on day 3 > 2 h/week if owner's.",
+    "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: zero collection margin (8 of 9 = $2,952 net).",
+    "LOW cop_197df9a8d3a54fc78fe7: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed before day 1/3.",
+    "INFO cop_8970644e6d3a48baba64: exclusion correct — single employer, owner-performed hourly work capped at $224."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:18:51.388Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_eb99517eb27f_5fc027",
+   "revisionDigest": "eb99517eb27fc2a10cec441f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_13bc290fdea642c883bf/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "Rebuttal accepted: the record supports zero owner hours. The card names no fulfillmentOwner, its delivery fact (EVIDENCE) is 'A spreadsheet Brain produces', its required capability PRODUCE_SPREADSHEET is PRESENT and Brain's FULFILMENT basis is 'Brain has proved', whereas the excluded hotel card explicitly names 'The owner, personally'; so the 0.5 h/deal is the fulfiller's (Brain's) work and the 2 h/week limit is not touched. The rest stands as recomputed before: nine written acceptances at $375 payable on delivery; 9 x $375 = $3,375; $54 direct cost advanced by the owner (no capital limit set; it is repaid from day-8 receipts); net $3,321 >= $3,000; settles day 8 of 28. Remaining risk is collection margin (8 of 9 = $2,952 net), acknowledged in the plan; 20 days of window remain for recovery. I would let the owner act on it.",
+   "findings": [
+    "INFO cop_197df9a8d3a54fc78fe7 owner hours: rebuttal accepted on the card record (no fulfillmentOwner; Brain-produced delivery).",
+    "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: all nine must pay; one non-payer misses target by $48.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; connect before day 1/3."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:22:06.428Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_eb99517eb27f_5fc027",
+  "digest": "eb99517eb27fc2a10cec441f",
+  "contractDigest": "63ec2650979c6c9fc913d5a4",
+  "plan": {
+   "goalId": "wst_48e5d2c8015e41c983e5",
+   "contractDigest": "63ec2650979c6c9fc913d5a4",
+   "parentRevisionId": "rev_34121a4c51fd_b247df",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the 9 signed inspection-ready log binders at $375, payable on delivery",
+    "opportunityIds": [
+     "cop_197df9a8d3a54fc78fe7"
+    ],
+    "why": "Nine pool service owners signed $375 order forms payable on delivery. Brain produces the binder spreadsheet (no owner hours), direct cost $6 each, $0 exposure, cash 5 days after delivery. 9 x $375 = $3,375 gross, $3,321 after $54 direct cost, settled by about day 8 of 28 with zero owner hours against the 8 allowed."
+   },
+   "alternatives": [
+    {
+     "title": "Seasonal pool technician shifts at $28/hour",
+     "why": "Excluded: one hotel group is a single employer, not a buyer population; the owner would work the shifts personally, and 2 hours a week x 4 weeks = 8 hours earns at most $224; close rate and volume are unestablished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "SELL",
+     "label": "Confirm the 9 signed $375 binder orders with each pool service owner",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "signedOrders",
+      "price",
+      "src_price"
+     ],
+     "priceCents": 37500,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the inspection-ready chemical log binder to the 9 buyers",
+     "performer": "BRAIN",
+     "costCents": 5400,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "directCost",
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "COLLECT",
+     "label": "Collect $375 from each buyer on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "daysToCash",
+      "src_price",
+      "src_ttfc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "FUNDING",
+     "amountCents": 5400,
+     "label": "Owner advances the $54 direct cost until the delivery payments settle (goal sets no capital limit)",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 5400,
+     "label": "Direct cost $6 per binder x 9",
+     "stepId": "s1"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 337500,
+     "label": "9 x $375 payable on delivery",
+     "settlesDay": 8,
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 9,
+     "unit": "signed order forms",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 375,
+     "unit": "USD per binder",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "USD per binder",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "daysToCash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "src_ttfc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#price",
+     "dated": "2026-11",
+     "claim": "Nine pool service owners signed $375 orders for the binder, payable on delivery",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $6 per binder; exposure $0",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_ttfc",
+     "url": "https://brain.local/card/cop_197df9a8d3a54fc78fe7#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "5 days to first cash",
+     "population": "owners of pool service companies maintaining HOA and hotel pools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_197df9a8d3a54fc78fe7"
+    },
+    {
+     "id": "src_hotel_price",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#price",
+     "dated": "2026-11",
+     "claim": "Resort hotel group's job posting pays $28/hour, biweekly",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    },
+    {
+     "id": "src_hotel_vol",
+     "url": "https://brain.local/card/cop_8970644e6d3a48baba64#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Posting lists 160 open technician hours this month",
+     "population": "one resort hotel group (single employer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8970644e6d3a48baba64"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MEDIUM cop_197df9a8d3a54fc78fe7 owner hours: plan asserts 0 owner hours; card humanHours 0.5/deal and Brain step 'Deliver' owner PERSON; 4.5 h on day 3 > 2 h/week if owner's.",
+     "resolution": "Rebutted, with the record. The 0.5 h per deal is the fulfiller's work, and the fulfiller is Brain, not the owner: the card names no fulfillmentOwner, its requiredCapabilities is PRODUCE_SPREADSHEET (PRESENT), its delivery fact (EVIDENCE) reads 'A spreadsheet Brain produces', and Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. Under the fulfilment rule humanHours is work per deal by that fulfiller and is owner work only when the owner is the fulfiller. The 'PERSON' label in Brain's generic step list is not the card's record; contrast the hotel opening, whose card does name 'The owner, personally'. Every step in this plan is performed by BRAIN, so owner hours are 0 of the 8 allowed."
+    },
+    {
+     "finding": "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: zero collection margin (8 of 9 = $2,952 net).",
+     "resolution": "Acknowledged as a risk, not a gap in evidence: all nine payers signed written orders payable on delivery, so the plan counts all nine; the margin over target is $321. No conversion or volume for new pool-operator buyers is established on the card, so a replacement sale is not counted in the ledger."
+    },
+    {
+     "finding": "LOW cop_197df9a8d3a54fc78fe7: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed before day 1/3.",
+     "resolution": "Noted; these are Brain's routine operations, attached by Brain to the steps, and Brain accepted every step."
+    },
+    {
+     "finding": "INFO cop_8970644e6d3a48baba64: exclusion correct — single employer, owner-performed hourly work capped at $224.",
+     "resolution": "Agreed; kept excluded."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8970644e6d3a48baba64",
+     "why": "A single hotel group's job posting is one employer, not a population of buyers; close rate and buyer count are unestablished; the owner works each $28 hour personally and only 8 owner hours are allowed ($224 at most)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_197df9a8d3a54fc78fe7",
+     "deals": 9,
+     "price": 375,
+     "directCost": 6,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_eb99517eb27f_5fc027",
+   "digest": "eb99517eb27fc2a10cec441f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:21:14.088Z"
+  },
+  "review": {
+   "revisionId": "rev_eb99517eb27f_5fc027",
+   "revisionDigest": "eb99517eb27fc2a10cec441f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_31d9a4b22dcb4cadad5a/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_13bc290fdea642c883bf/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "Rebuttal accepted: the record supports zero owner hours. The card names no fulfillmentOwner, its delivery fact (EVIDENCE) is 'A spreadsheet Brain produces', its required capability PRODUCE_SPREADSHEET is PRESENT and Brain's FULFILMENT basis is 'Brain has proved', whereas the excluded hotel card explicitly names 'The owner, personally'; so the 0.5 h/deal is the fulfiller's (Brain's) work and the 2 h/week limit is not touched. The rest stands as recomputed before: nine written acceptances at $375 payable on delivery; 9 x $375 = $3,375; $54 direct cost advanced by the owner (no capital limit set; it is repaid from day-8 receipts); net $3,321 >= $3,000; settles day 8 of 28. Remaining risk is collection margin (8 of 9 = $2,952 net), acknowledged in the plan; 20 days of window remain for recovery. I would let the owner act on it.",
+   "findings": [
+    "INFO cop_197df9a8d3a54fc78fe7 owner hours: rebuttal accepted on the card record (no fulfillmentOwner; Brain-produced delivery).",
+    "LOW cop_197df9a8d3a54fc78fe7 SETTLES_IN_TIME: all nine must pay; one non-payer misses target by $48.",
+    "LOW: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; connect before day 1/3."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:22:06.428Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $3,000 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+   "terms": "ebb8b82c4cfa0e13",
+   "openings": {
+    "cop_197df9a8d3a54fc78fe7": "8360368bff1901cc",
+    "cop_8970644e6d3a48baba64": "a0e55e5a295d81d2"
+   }
+  },
+  "at": "2026-11-27T12:23:15.912Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

@@ -1,0 +1,783 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9c5111145fbf442e93cf",
+      "words": "Collect $4,500 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 450000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$4,500 of buyer payments settled within 30 days with no up-front capital",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "6ff70ee01cdc75ba70c19b16"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9c5111145fbf442e93cf",
+        "contractDigest": "6ff70ee01cdc75ba70c19b16",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the audit workbook has no established price",
+          "opportunityIds": [],
+          "why": "The only price on the card is what charter management organisations pay for a student-information-system software licence ($1,500/year per campus, vendor price sheet) - a different product, not a price any buyer paid or agreed for this enrollment-lottery audit workbook. Without an established price the number of deals the $4,500 target needs is unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the workbook at $1,500 anyway",
+            "why": "That figure is borrowed from a software licence; treating it as the workbook's price would size the plan on a number nobody established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Send a priced offer for the audit workbook to operations directors from the state charter school association directory and record accepted orders at that stated price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "reachableChannel"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price a buyer pays for the workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "price"
+            ],
+            "needs": "accepted orders at a stated workbook price"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "schools",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#price",
+            "dated": "2026",
+            "claim": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence",
+            "population": "charter management organisations buying SIS software",
+            "matchesBuyer": false
+          },
+          {
+            "id": "buyerVolume",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 charter schools are authorised by the state and must run an enrollment lottery each spring",
+            "population": "state charter schools",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No price is established for the enrollment-lottery audit workbook: the card's $1,500 is a software-licence price for a different product, so how many sales the $4,500 target needs is unknown.",
+          "resolution": "Brain quotes the workbook at a stated price to operations directors in the state charter school association directory and records accepted orders; once a buyer accepts at a stated price, re-plan with that price and the measured acceptance rate.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Brain accepts 'price 1500 USD (EVIDENCE)', but the price fact is a vendor price sheet for a student-information-system software licence, a different product; no buyer has agreed to or paid a price for this workbook."
+          }
+        ],
+        "revisionId": "rev_fc76475bca1e_b3fadb",
+        "digest": "fc76475bca1e6c48afbedb9c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:45.023Z"
+      },
+      {
+        "goalId": "wst_9c5111145fbf442e93cf",
+        "contractDigest": "6ff70ee01cdc75ba70c19b16",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the audit workbook has no established price",
+          "opportunityIds": [],
+          "why": "The only price on the card is what charter management organisations pay for a student-information-system software licence ($1,500/year per campus, vendor price sheet) - a different product, not a price any buyer paid or agreed for this enrollment-lottery audit workbook. Without an established price the number of deals the $4,500 target needs is unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the workbook at $1,500 anyway",
+            "why": "That figure is borrowed from a software licence; treating it as the workbook's price would size the plan on a number nobody established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Send a priced offer for the audit workbook to operations directors from the state charter school association directory and record accepted orders at that stated price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "reachableChannel"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price a buyer pays for the workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "accepted orders at a stated workbook price"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "schools",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#price",
+            "dated": "2026",
+            "claim": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence",
+            "population": "charter management organisations buying SIS software",
+            "matchesBuyer": false
+          },
+          {
+            "id": "buyerVolume",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 charter schools are authorised by the state and must run an enrollment lottery each spring",
+            "population": "state charter schools",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No price is established for the enrollment-lottery audit workbook: the card's $1,500 is a software-licence price for a different product, so how many sales the $4,500 target needs is unknown.",
+          "resolution": "Brain quotes the workbook at a stated price to operations directors in the state charter school association directory and records accepted orders; once a buyer accepts at a stated price, re-plan with that price and the measured acceptance rate.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Brain accepts 'price 1500 USD (EVIDENCE)', but the price fact is a vendor price sheet for a student-information-system software licence, a different product; no buyer has agreed to or paid a price for this workbook."
+          }
+        ],
+        "revisionId": "rev_c19c4011c1a8_731112",
+        "digest": "c19c4011c1a8cf1bd3a27cd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:19.352Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9c5111145fbf442e93cf",
+      "contractDigest": "6ff70ee01cdc75ba70c19b16",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the audit workbook has no established price",
+        "opportunityIds": [],
+        "why": "The only price on the card is what charter management organisations pay for a student-information-system software licence ($1,500/year per campus, vendor price sheet) - a different product, not a price any buyer paid or agreed for this enrollment-lottery audit workbook. Without an established price the number of deals the $4,500 target needs is unknown."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the workbook at $1,500 anyway",
+          "why": "That figure is borrowed from a software licence; treating it as the workbook's price would size the plan on a number nobody established."
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "TEST",
+          "label": "Send a priced offer for the audit workbook to operations directors from the state charter school association directory and record accepted orders at that stated price",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "price",
+            "reachableChannel"
+          ],
+          "priceCents": 150000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price a buyer pays for the workbook",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [],
+          "needs": "accepted orders at a stated workbook price"
+        },
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 260,
+          "unit": "schools",
+          "sources": [
+            "buyerVolume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#price",
+          "dated": "2026",
+          "claim": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence",
+          "population": "charter management organisations buying SIS software",
+          "matchesBuyer": false
+        },
+        {
+          "id": "buyerVolume",
+          "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "260 charter schools are authorised by the state and must run an enrollment lottery each spring",
+          "population": "state charter schools",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No price is established for the enrollment-lottery audit workbook: the card's $1,500 is a software-licence price for a different product, so how many sales the $4,500 target needs is unknown.",
+        "resolution": "Brain quotes the workbook at a stated price to operations directors in the state charter school association directory and records accepted orders; once a buyer accepts at a stated price, re-plan with that price and the measured acceptance rate.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_27f085b710f349c7ab8b",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_27f085b710f349c7ab8b",
+          "link": "OFFER_AND_PRICE",
+          "reason": "Brain accepts 'price 1500 USD (EVIDENCE)', but the price fact is a vendor price sheet for a student-information-system software licence, a different product; no buyer has agreed to or paid a price for this workbook."
+        }
+      ],
+      "revisionId": "rev_c19c4011c1a8_731112",
+      "digest": "c19c4011c1a8cf1bd3a27cd8",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:28:19.352Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_c19c4011c1a8_731112",
+      "digest": "c19c4011c1a8cf1bd3a27cd8",
+      "contractDigest": "6ff70ee01cdc75ba70c19b16",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Enrollment-lottery and waitlist audit workbook for charter s\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Enrollment-lottery and waitlist audit workbook for charter s\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 121095× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Enrollment-lottery and waitlist audit workbook for charter schools\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_27f085b710f349c7ab8b"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Enrollment-lottery and waitlist audit workbook for charter schools\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Enrollment-lottery and waitlist audit workbook for charter schools\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"Enrollment-lottery and waitlist audit workbook for charter schools\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "title": "Enrollment-lottery and waitlist audit workbook for charter schools",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 4500,
+            "potentialReach": 4500,
+            "card": {
+              "payer": "Charter school operations directors",
+              "reachableChannel": "Operations-director emails in the state charter school association directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:54.250Z",
+              "offerScope": "Enrollment-lottery and waitlist audit workbook for charter schools",
+              "priceCents": 150000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "charter schools",
+              "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Operations-director emails in the state charter school association directory"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 1500 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 12 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "4 deal(s) needed, 260 available in the window (260 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "260 charter schools are authorised by the state; each must run and document a public enrollment lottery every spring.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Enrollment-lottery and waitlist audit workbook for charter schools to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "12 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Charter school operations directors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence (vendor price sheet, 2026).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 450000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:18.878Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_c19c4011c1a8_731112",
+        "revisionDigest": "c19c4011c1a8cf1bd3a27cd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5b72c80dc22d4d2caad3/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE as the decisive gap is right. The card's only price fact is a vendor price sheet for a student-information-system software licence ($1,500/yr per campus) bought by charter management organisations: a different product and someone else's charge, not a price any buyer paid or agreed for this audit workbook, and no agreement is recorded. The author's disagreement with Brain's OFFER_AND_PRICE link cites that specific contradicting record (the price fact itself), so it is properly grounded. Every other link checks: 260 reachable schools, 12/120 conversion, Brain produces the spreadsheet ($5), $0 exposure, 7 days to cash. With an unknown price the deal count for $4,500 is unknown; it is stated as a gap, not a constraint (constraints empty), which is correct.",
+        "findings": [
+          "The resolution correctly relies on accepted orders at a stated price (a live priced offer), not a benchmark; that test is the only thing that establishes this buyer's price. Once one price is measured, $4,500/P deals vs ~26 expected sales (10% of 260) decides reach: any accepted price above ~$175 would carry the target.",
+          "Step t1 carries priceCents $1,500, the borrowed SIS figure; the test price should be labelled a test price, not the card price, and the offer recorded with whatever price is quoted.",
+          "Inconsistency to resolve on the card: conversionRates says 12 agreements from 120 contacts measured on this offer, yet no agreement or agreed price is recorded; if those agreements exist, their price is the missing evidence.",
+          "SEND_A_MESSAGE is NOT_CONNECTED, so the test cannot run until a mailbox is connected."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.407Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_c19c4011c1a8_731112",
+      "digest": "c19c4011c1a8cf1bd3a27cd8",
+      "contractDigest": "6ff70ee01cdc75ba70c19b16",
+      "plan": {
+        "goalId": "wst_9c5111145fbf442e93cf",
+        "contractDigest": "6ff70ee01cdc75ba70c19b16",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the audit workbook has no established price",
+          "opportunityIds": [],
+          "why": "The only price on the card is what charter management organisations pay for a student-information-system software licence ($1,500/year per campus, vendor price sheet) - a different product, not a price any buyer paid or agreed for this enrollment-lottery audit workbook. Without an established price the number of deals the $4,500 target needs is unknown."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the workbook at $1,500 anyway",
+            "why": "That figure is borrowed from a software licence; treating it as the workbook's price would size the plan on a number nobody established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Send a priced offer for the audit workbook to operations directors from the state charter school association directory and record accepted orders at that stated price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "reachableChannel"
+            ],
+            "priceCents": 150000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price a buyer pays for the workbook",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "accepted orders at a stated workbook price"
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "schools",
+            "sources": [
+              "buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#price",
+            "dated": "2026",
+            "claim": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence",
+            "population": "charter management organisations buying SIS software",
+            "matchesBuyer": false
+          },
+          {
+            "id": "buyerVolume",
+            "url": "https://brain.local/card/cop_27f085b710f349c7ab8b#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "260 charter schools are authorised by the state and must run an enrollment lottery each spring",
+            "population": "state charter schools",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No price is established for the enrollment-lottery audit workbook: the card's $1,500 is a software-licence price for a different product, so how many sales the $4,500 target needs is unknown.",
+          "resolution": "Brain quotes the workbook at a stated price to operations directors in the state charter school association directory and records accepted orders; once a buyer accepts at a stated price, re-plan with that price and the measured acceptance rate.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_27f085b710f349c7ab8b",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Brain accepts 'price 1500 USD (EVIDENCE)', but the price fact is a vendor price sheet for a student-information-system software licence, a different product; no buyer has agreed to or paid a price for this workbook."
+          }
+        ],
+        "revisionId": "rev_c19c4011c1a8_731112",
+        "digest": "c19c4011c1a8cf1bd3a27cd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:19.352Z"
+      },
+      "review": {
+        "revisionId": "rev_c19c4011c1a8_731112",
+        "revisionDigest": "c19c4011c1a8cf1bd3a27cd8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99ab5bb8ccc144b6b301/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5b72c80dc22d4d2caad3/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE as the decisive gap is right. The card's only price fact is a vendor price sheet for a student-information-system software licence ($1,500/yr per campus) bought by charter management organisations: a different product and someone else's charge, not a price any buyer paid or agreed for this audit workbook, and no agreement is recorded. The author's disagreement with Brain's OFFER_AND_PRICE link cites that specific contradicting record (the price fact itself), so it is properly grounded. Every other link checks: 260 reachable schools, 12/120 conversion, Brain produces the spreadsheet ($5), $0 exposure, 7 days to cash. With an unknown price the deal count for $4,500 is unknown; it is stated as a gap, not a constraint (constraints empty), which is correct.",
+        "findings": [
+          "The resolution correctly relies on accepted orders at a stated price (a live priced offer), not a benchmark; that test is the only thing that establishes this buyer's price. Once one price is measured, $4,500/P deals vs ~26 expected sales (10% of 260) decides reach: any accepted price above ~$175 would carry the target.",
+          "Step t1 carries priceCents $1,500, the borrowed SIS figure; the test price should be labelled a test price, not the card price, and the offer recorded with whatever price is quoted.",
+          "Inconsistency to resolve on the card: conversionRates says 12 agreements from 120 contacts measured on this offer, yet no agreement or agreed price is recorded; if those agreements exist, their price is the missing evidence.",
+          "SEND_A_MESSAGE is NOT_CONNECTED, so the test cannot run until a mailbox is connected."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.407Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:32:56.334Z"
+    },
+    "staleFinal": null
+  }
+}

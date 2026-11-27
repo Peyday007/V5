@@ -1,0 +1,29 @@
+{
+  "id": "ho-06-wedding-owner-hours",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_1aa181036dfc_cfc9d0",
+  "stance": "EXECUTABLE",
+  "checkProblems": [],
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [wedding] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "STEP_FIELD_ABSENT"
+    ],
+    "gaps": [
+      "step.price"
+    ],
+    "detail": "steps do not carry step.price"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

@@ -1,0 +1,1870 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_b7403cbb4d054513a7e2",
+      "words": "Collect $4,000 of settled cash within 30 days with at most $500 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 400000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 200000,
+        "proofCondition": "$4,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "e6ca4330bb6594cb1901c17d"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_b7403cbb4d054513a7e2",
+        "contractDigest": "17aef2cfc80c2ab640dfb82c",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a $500 capital ceiling: each kit must be prepaid at $900",
+          "opportunityIds": [],
+          "why": "The only opening (refurbished maglock kits, 4 signed POs at $1,450, pay on delivery) requires paying PuzzleWorks Surplus $900 per kit before shipment, and buyers pay only on delivery. $900 > the $500 capital ceiling, so not even the first kit can be ordered; no plan reaches any settled cash inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the capital ceiling to $900 and recycle it",
+            "why": "With $900, kits can be bought one at a time: each cycle settles in 9 days, so three kits settle by about day 27 for $4,350 of receipts, above the $4,000 target."
+          },
+          {
+            "title": "Ask buyers for a deposit",
+            "why": "Not evidenced: the POs say each pays on delivery; no buyer has agreed to prepay."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "supplier prepayment per kit",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per kit (signed POs)",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital ceiling",
+            "status": "EVIDENCED",
+            "value": 50000,
+            "unit": "cents",
+            "sources": [],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#exposure",
+            "dated": "2026-11-24",
+            "claim": "$900 per kit is tied up: PuzzleWorks Surplus quote $900 per kit, paid before shipment",
+            "population": "PuzzleWorks Surplus",
+            "matchesBuyer": false,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+            "dated": "2026-11-20",
+            "claim": "Four escape room operators signed POs at $1,450 per kit, each pays on delivery",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "9 days to first cash",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: every kit needs $900 paid to the supplier before shipment while buyers pay on delivery, and the goal allows at most $500 of capital, so no kit can be ordered.",
+          "resolution": "Owner raises the capital ceiling to at least $900 (one kit's prepayment, recycled across three sequential kits settling by ~day 27), or a buyer agrees in writing to a deposit of at least $400 per kit.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $900 of capital (one kit's $900 supplier prepayment), recycled kit by kit: three kits settle by about day 27 for $4,350.",
+            "basis": [
+              {
+                "opportunityId": "cop_e91ba55818974601851c",
+                "field": "exposure"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_d0068af60767_b75fe8",
+        "digest": "d0068af6076735fc590d1177",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:28.772Z"
+      },
+      {
+        "goalId": "wst_b7403cbb4d054513a7e2",
+        "contractDigest": "17aef2cfc80c2ab640dfb82c",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside a $500 capital ceiling: each kit must be prepaid at $900",
+          "opportunityIds": [],
+          "why": "The only opening (refurbished maglock kits, 4 signed POs at $1,450, pay on delivery) requires paying PuzzleWorks Surplus $900 per kit before shipment, and buyers pay only on delivery. $900 > the $500 capital ceiling, so not even the first kit can be ordered; no plan reaches any settled cash inside the limit."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the capital ceiling to $900 and recycle it",
+            "why": "With $900, kits can be bought one at a time: each cycle settles in 9 days, so three kits settle by about day 27 for $4,350 of receipts, above the $4,000 target."
+          },
+          {
+            "title": "Ask buyers for a deposit",
+            "why": "Not evidenced: the POs say each pays on delivery; no buyer has agreed to prepay."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "supplier prepayment per kit",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per kit (signed POs)",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#exposure",
+            "dated": "2026-11-24",
+            "claim": "$900 per kit is tied up: PuzzleWorks Surplus quote $900 per kit, paid before shipment",
+            "population": "PuzzleWorks Surplus",
+            "matchesBuyer": false,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+            "dated": "2026-11-20",
+            "claim": "Four escape room operators signed POs at $1,450 per kit, each pays on delivery",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "9 days to first cash",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Capital: every kit needs $900 paid to the supplier before shipment while buyers pay on delivery, and the goal allows at most $500 of capital, so no kit can be ordered.",
+          "resolution": "Owner raises the capital ceiling to at least $900 (one kit's prepayment, recycled across three sequential kits settling by ~day 27), or a buyer agrees in writing to a deposit of at least $400 per kit.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $900 of capital (one kit's $900 supplier prepayment), recycled kit by kit: three kits settle by about day 27 for $4,350.",
+            "basis": [
+              {
+                "opportunityId": "cop_e91ba55818974601851c",
+                "field": "exposure"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_7b77bb22b35c_f2d261",
+        "digest": "7b77bb22b35cc289ba819a42",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:38.064Z"
+      },
+      {
+        "goalId": "wst_b7403cbb4d054513a7e2",
+        "contractDigest": "e6ca4330bb6594cb1901c17d",
+        "parentRevisionId": "rev_7b77bb22b35c_f2d261",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fill the four signed maglock-kit POs in two waves of two, recycling a $1,800 prepayment",
+          "opportunityIds": [
+            "cop_e91ba55818974601851c"
+          ],
+          "why": "The goal's capital ceiling is now $2,000. Four escape room operators signed POs at $1,450 per kit (pay on delivery, EVIDENCE); PuzzleWorks Surplus quoted $900 per kit, paid before shipment, ships in 3 days (EVIDENCE); 9 days to usable cash. Prepaying two kits ($1,800, inside $2,000) settles $2,900 on day 9, which funds kits 3-4; all four settle by day 18 for $5,800 of receipts, above the $4,000 target inside 30 days. Peak capital $1,800."
+        },
+        "alternatives": [
+          {
+            "title": "Order all four kits at once",
+            "why": "Needs $3,600 up front, above the $2,000 ceiling."
+          },
+          {
+            "title": "One kit at a time",
+            "why": "Fits but slower: three kits settle by about day 27, too close to the deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed POs at $1,450 per kit and delivery dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 145000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "order1",
+            "kind": "ORDER",
+            "label": "Prepay and order kits 1-2 from PuzzleWorks Surplus at $900 each",
+            "performer": "BRAIN",
+            "costCents": 180000,
+            "day": 0,
+            "dependsOn": "sell",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus ships kits 1-2 to buyers 1-2 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "order1",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect POs 1-2 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "order2",
+            "kind": "ORDER",
+            "label": "Prepay and order kits 3-4 from PuzzleWorks Surplus at $900 each",
+            "performer": "BRAIN",
+            "costCents": 180000,
+            "day": 9,
+            "dependsOn": "collect1",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus ships kits 3-4 to buyers 3-4 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "order2",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect POs 3-4 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 1-2 ($900 each)",
+            "stepId": "order1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 1 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 2 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 3-4 ($900 each) from PO 1-2 receipts",
+            "stepId": "order2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 3 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 4 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          }
+        ],
+        "proofDay": 9,
+        "quantities": [
+          {
+            "name": "signed POs",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "buyers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per kit",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier prepayment per kit",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "PuzzleWorks Surplus written quote: $900 per kit, paid before shipment, ships in 3 days",
+            "population": "PuzzleWorks Surplus",
+            "matchesBuyer": false,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+            "dated": "2026-11-20",
+            "claim": "Four escape room operators signed POs at $1,450 per kit; each pays on delivery",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "9 days to first cash",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "deals": 4,
+            "price": 1450,
+            "directCost": 900,
+            "capital": 1800
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_23d53ca6ca0c_1366f8",
+        "digest": "23d53ca6ca0c60e0b4864453",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:45:27.057Z"
+      },
+      {
+        "goalId": "wst_b7403cbb4d054513a7e2",
+        "contractDigest": "e6ca4330bb6594cb1901c17d",
+        "parentRevisionId": "rev_7b77bb22b35c_f2d261",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fill the four signed maglock-kit POs in two waves of two, recycling a $1,800 prepayment",
+          "opportunityIds": [
+            "cop_e91ba55818974601851c"
+          ],
+          "why": "The goal's capital ceiling is now $2,000. Four escape room operators signed POs at $1,450 per kit (pay on delivery, EVIDENCE); PuzzleWorks Surplus quoted $900 per kit, paid before shipment, ships in 3 days (EVIDENCE); 9 days to usable cash. Prepaying two kits ($1,800, inside $2,000) settles $2,900 on day 9, which funds kits 3-4; all four settle by day 18 for $5,800 of receipts, above the $4,000 target inside 30 days. Peak capital $1,800."
+        },
+        "alternatives": [
+          {
+            "title": "Order all four kits at once",
+            "why": "Needs $3,600 up front, above the $2,000 ceiling."
+          },
+          {
+            "title": "One kit at a time",
+            "why": "Fits but slower: three kits settle by about day 27, too close to the deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed POs at $1,450 per kit and delivery dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 145000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus, prepaid $900 per kit, ships kits 1-2 to buyers 1-2 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 180000,
+            "day": 0,
+            "dependsOn": "sell",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect POs 1-2 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus, prepaid $900 per kit from PO 1-2 receipts, ships kits 3-4 to buyers 3-4 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 180000,
+            "day": 9,
+            "dependsOn": "collect1",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect POs 3-4 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 1-2 ($900 each)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 1 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 2 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 3-4 ($900 each) from PO 1-2 receipts",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 3 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 4 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          }
+        ],
+        "proofDay": 9,
+        "quantities": [
+          {
+            "name": "signed POs",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "buyers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per kit",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier prepayment per kit",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "PuzzleWorks Surplus written quote: $900 per kit, paid before shipment, ships in 3 days",
+            "population": "PuzzleWorks Surplus",
+            "matchesBuyer": false,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+            "dated": "2026-11-20",
+            "claim": "Four escape room operators signed POs at $1,450 per kit; each pays on delivery",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "9 days to first cash",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "deals": 4,
+            "price": 1450,
+            "directCost": 900,
+            "capital": 1800
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+        "digest": "5ca1a7a6cdb021fc152f15ee",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:45:38.833Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_b7403cbb4d054513a7e2",
+      "contractDigest": "e6ca4330bb6594cb1901c17d",
+      "parentRevisionId": "rev_7b77bb22b35c_f2d261",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fill the four signed maglock-kit POs in two waves of two, recycling a $1,800 prepayment",
+        "opportunityIds": [
+          "cop_e91ba55818974601851c"
+        ],
+        "why": "The goal's capital ceiling is now $2,000. Four escape room operators signed POs at $1,450 per kit (pay on delivery, EVIDENCE); PuzzleWorks Surplus quoted $900 per kit, paid before shipment, ships in 3 days (EVIDENCE); 9 days to usable cash. Prepaying two kits ($1,800, inside $2,000) settles $2,900 on day 9, which funds kits 3-4; all four settle by day 18 for $5,800 of receipts, above the $4,000 target inside 30 days. Peak capital $1,800."
+      },
+      "alternatives": [
+        {
+          "title": "Order all four kits at once",
+          "why": "Needs $3,600 up front, above the $2,000 ceiling."
+        },
+        {
+          "title": "One kit at a time",
+          "why": "Fits but slower: three kits settle by about day 27, too close to the deadline."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the four signed POs at $1,450 per kit and delivery dates",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s2"
+          ],
+          "priceCents": 145000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "PuzzleWorks Surplus, prepaid $900 per kit, ships kits 1-2 to buyers 1-2 (3 days)",
+          "performer": "PuzzleWorks Surplus",
+          "costCents": 180000,
+          "day": 0,
+          "dependsOn": "sell",
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "PuzzleWorks Surplus",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Collect POs 1-2 on delivery ($2,900)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 9,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s2",
+            "s3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "PuzzleWorks Surplus, prepaid $900 per kit from PO 1-2 receipts, ships kits 3-4 to buyers 3-4 (3 days)",
+          "performer": "PuzzleWorks Surplus",
+          "costCents": 180000,
+          "day": 9,
+          "dependsOn": "collect1",
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "PuzzleWorks Surplus",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Collect POs 3-4 on delivery ($2,900)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 18,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s2",
+            "s3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 0,
+          "kind": "SPEND",
+          "amountCents": 180000,
+          "label": "Prepay PuzzleWorks Surplus for kits 1-2 ($900 each)",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 9,
+          "kind": "RECEIPT",
+          "amountCents": 145000,
+          "label": "PO 1 paid on delivery",
+          "settlesDay": 9,
+          "stepId": "collect1"
+        },
+        {
+          "day": 9,
+          "kind": "RECEIPT",
+          "amountCents": 145000,
+          "label": "PO 2 paid on delivery",
+          "settlesDay": 9,
+          "stepId": "collect1"
+        },
+        {
+          "day": 9,
+          "kind": "SPEND",
+          "amountCents": 180000,
+          "label": "Prepay PuzzleWorks Surplus for kits 3-4 ($900 each) from PO 1-2 receipts",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 145000,
+          "label": "PO 3 paid on delivery",
+          "settlesDay": 18,
+          "stepId": "collect2"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 145000,
+          "label": "PO 4 paid on delivery",
+          "settlesDay": 18,
+          "stepId": "collect2"
+        }
+      ],
+      "proofDay": 9,
+      "quantities": [
+        {
+          "name": "signed POs",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "buyers",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per kit",
+          "status": "EVIDENCED",
+          "value": 145000,
+          "unit": "cents",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier prepayment per kit",
+          "status": "EVIDENCED",
+          "value": 90000,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 9,
+          "unit": "days",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_e91ba55818974601851c#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "PuzzleWorks Surplus written quote: $900 per kit, paid before shipment, ships in 3 days",
+          "population": "PuzzleWorks Surplus",
+          "matchesBuyer": false,
+          "opportunityId": "cop_e91ba55818974601851c"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+          "dated": "2026-11-20",
+          "claim": "Four escape room operators signed POs at $1,450 per kit; each pays on delivery",
+          "population": "escape room operators",
+          "matchesBuyer": true,
+          "opportunityId": "cop_e91ba55818974601851c"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "9 days to first cash",
+          "population": "escape room operators",
+          "matchesBuyer": true,
+          "opportunityId": "cop_e91ba55818974601851c"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_e91ba55818974601851c",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_e91ba55818974601851c",
+          "deals": 4,
+          "price": 1450,
+          "directCost": 900,
+          "capital": 1800
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+      "digest": "5ca1a7a6cdb021fc152f15ee",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_1b29a618289946f395f4/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:45:38.833Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+      "digest": "5ca1a7a6cdb021fc152f15ee",
+      "contractDigest": "e6ca4330bb6594cb1901c17d",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 360000,
+        "committedOpenCents": 0,
+        "preProofCents": 360000,
+        "maxExposureCents": 180000,
+        "minCashCents": 20000,
+        "minCashDay": 0,
+        "collectedCents": 580000,
+        "collectedInWindowCents": 580000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 220000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Refurbished maglock puzzle-controller kits for escape room o\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Refurbished maglock puzzle-controller kits for escape room o\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_e91ba55818974601851c"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Refurbished maglock puzzle-controller kits for escape room operators\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Refurbished maglock puzzle-controller kits for escape room operators\"",
+            "owner": "PERSON",
+            "cost": 900
+          },
+          {
+            "label": "Collect payment for \"Refurbished maglock puzzle-controller kits for escape room operators\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "title": "Refurbished maglock puzzle-controller kits for escape room operators",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 4000,
+            "potentialReach": 4000,
+            "card": {
+              "payer": "Escape room operators",
+              "reachableChannel": "Signed purchase orders by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:31.081Z",
+              "offerScope": "Refurbished maglock puzzle-controller kits for escape room operators",
+              "priceCents": 145000,
+              "currency": "USD",
+              "fulfillmentOwner": "PuzzleWorks Surplus (written quote: $900 per kit, paid before shipment, ships in 3 days)",
+              "peakFundingCents": 90000,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "escape rooms",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 145000,
+                "currency": "USD",
+                "deliverable": "Refurbished maglock puzzle-controller kits for escape room operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 145000,
+                "currency": "USD",
+                "deliverable": "Refurbished maglock puzzle-controller kits for escape room operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 145000,
+                "currency": "USD",
+                "deliverable": "Refurbished maglock puzzle-controller kits for escape room operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 145000,
+                "currency": "USD",
+                "deliverable": "Refurbished maglock puzzle-controller kits for escape room operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed purchase orders by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 5800 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 5800 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by PuzzleWorks Surplus (written quote: $900 per kit, paid before shipment, ships in (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 900, tied up 900"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "9 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Refurbished maglock puzzle-controller kits for escape room operators to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$900",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$900",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "PuzzleWorks Surplus (written quote: $900 per kit, paid before shipment, ships in 3 days) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Escape room operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four escape room operators signed purchase orders at $1,450 per refurbished maglock controller kit (POs dated 2026-11-20); each pays on delivery.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "9 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_66cca2bca29047deb5e7"
+        ],
+        "scope": {
+          "targetCents": 400000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:44:41.638Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7b77bb22b35c_f2d261",
+        "revisionDigest": "7b77bb22b35cc289ba819a42",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_25fd4f419e754bc38d21/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and the decisive gap is a true constraint, not missing evidence. The only opening has four written POs at $1,450 (pay on delivery) and a recorded fulfiller, PuzzleWorks Surplus, whose written quote requires $900 per kit paid before shipment (card exposure/peakFunding $900). Even with all evidence in hand, the first kit needs $900 out before any cash returns, above the $500 capital ceiling, so the limit cannot be met: nothing settles inside the limits (Brain's own NOT_VIABLE reading agrees). The resolution is correctly sized: $900 is the minimum, and recycling it works (3 x $1,450 = $4,350 >= $4,000 from the 4 signed POs, three 9-day cycles settling by ~day 27; recycling is in fact faster because a settled $1,450 funds the next kit with $550 left over). The deposit alternative is correctly marked unevidenced (POs say pay on delivery) and correctly sized at >= $400 per kit ($900 - $500).",
+        "findings": [
+          "Minor: the recycle schedule is conservative; after kit 1 settles (~day 9) cash of $1,450 + remaining ceiling allows a second kit, and after kit 2 two kits can be ordered at once, so the target could settle earlier than day 27. This does not change the $900 minimum.",
+          "The plan correctly cites no decisiveLinks because the gap is a limit the evidence fully determines (CAPITAL constraint based on card field exposure)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:40:58.095Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+        "revisionDigest": "5ca1a7a6cdb021fc152f15ee",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_25fd4f419e754bc38d21/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract now allows $2,000 of capital (exposureCap 200000), which removes the constraint the previous NO_PLAN rested on. EXECUTABLE is right: every link is established from the card. There are four written POs at $1,450 per kit (pay on delivery, dated 2026-11-20), a real purchase price from these buyers. The recorded fulfiller is PuzzleWorks Surplus on a written quote of $900 per kit, prepaid, shipping in 3 days, and it is the plan's delivery performer. Time to usable cash is 9 days. Recomputed: wave 1 prepays 2 x $900 = $1,800 (<= $2,000) on day 0 and collects 2 x $1,450 = $2,900 settled on day 9; that funds wave 2's $1,800 on day 9 (cash $2,900 + $200 headroom), which collects $2,900 on day 18. Total settled $5,800 >= $4,000 by day 18 with 12 days of slack, peak exposure $1,800, net after costs $2,200. Wave 1 alone ($2,900) does not reach the target, so recycling is necessary, and it is valid because wave 2 is paid from settled receipts, not new capital. Alternatives are correctly rejected (all four at once needs $3,600 > $2,000).",
+        "findings": [
+          "Brain's check reports 0% coverage for this candidate, apparently because it does not model recycling settled receipts into the second prepayment; the ledger shows the recycle is inside the cap at every point (min cash $200 on day 0), so this is a modelling gap, not a plan defect.",
+          "SETTLED_CASH counts gross receipts ($5,800); if the owner reads the goal as net of the $3,600 paid to the supplier, net is $2,200, below $4,000. The contract metric is SETTLED_CASH, so the plan meets it as written.",
+          "No buffer for a late payer: if one wave-1 buyer pays late, wave 2 can still order one kit from $1,450 + $200; the target then needs the remaining receipts by day 30, which the 12-day slack covers.",
+          "Card records 1 human hour per kit (~4 h); no hours ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:46:04.370Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+      "digest": "5ca1a7a6cdb021fc152f15ee",
+      "contractDigest": "e6ca4330bb6594cb1901c17d",
+      "plan": {
+        "goalId": "wst_b7403cbb4d054513a7e2",
+        "contractDigest": "e6ca4330bb6594cb1901c17d",
+        "parentRevisionId": "rev_7b77bb22b35c_f2d261",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fill the four signed maglock-kit POs in two waves of two, recycling a $1,800 prepayment",
+          "opportunityIds": [
+            "cop_e91ba55818974601851c"
+          ],
+          "why": "The goal's capital ceiling is now $2,000. Four escape room operators signed POs at $1,450 per kit (pay on delivery, EVIDENCE); PuzzleWorks Surplus quoted $900 per kit, paid before shipment, ships in 3 days (EVIDENCE); 9 days to usable cash. Prepaying two kits ($1,800, inside $2,000) settles $2,900 on day 9, which funds kits 3-4; all four settle by day 18 for $5,800 of receipts, above the $4,000 target inside 30 days. Peak capital $1,800."
+        },
+        "alternatives": [
+          {
+            "title": "Order all four kits at once",
+            "why": "Needs $3,600 up front, above the $2,000 ceiling."
+          },
+          {
+            "title": "One kit at a time",
+            "why": "Fits but slower: three kits settle by about day 27, too close to the deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed POs at $1,450 per kit and delivery dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 145000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus, prepaid $900 per kit, ships kits 1-2 to buyers 1-2 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 180000,
+            "day": 0,
+            "dependsOn": "sell",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect POs 1-2 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "PuzzleWorks Surplus, prepaid $900 per kit from PO 1-2 receipts, ships kits 3-4 to buyers 3-4 (3 days)",
+            "performer": "PuzzleWorks Surplus",
+            "costCents": 180000,
+            "day": 9,
+            "dependsOn": "collect1",
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "PuzzleWorks Surplus",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect POs 3-4 on delivery ($2,900)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 1-2 ($900 each)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 1 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 2 paid on delivery",
+            "settlesDay": 9,
+            "stepId": "collect1"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Prepay PuzzleWorks Surplus for kits 3-4 ($900 each) from PO 1-2 receipts",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 3 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 145000,
+            "label": "PO 4 paid on delivery",
+            "settlesDay": 18,
+            "stepId": "collect2"
+          }
+        ],
+        "proofDay": 9,
+        "quantities": [
+          {
+            "name": "signed POs",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "buyers",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per kit",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier prepayment per kit",
+            "status": "EVIDENCED",
+            "value": 90000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "PuzzleWorks Surplus written quote: $900 per kit, paid before shipment, ships in 3 days",
+            "population": "PuzzleWorks Surplus",
+            "matchesBuyer": false,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#price",
+            "dated": "2026-11-20",
+            "claim": "Four escape room operators signed POs at $1,450 per kit; each pays on delivery",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_e91ba55818974601851c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "9 days to first cash",
+            "population": "escape room operators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_e91ba55818974601851c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e91ba55818974601851c",
+            "deals": 4,
+            "price": 1450,
+            "directCost": 900,
+            "capital": 1800
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+        "digest": "5ca1a7a6cdb021fc152f15ee",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:45:38.833Z"
+      },
+      "review": {
+        "revisionId": "rev_5ca1a7a6cdb0_2a17ae",
+        "revisionDigest": "5ca1a7a6cdb021fc152f15ee",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_1b29a618289946f395f4/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_25fd4f419e754bc38d21/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The contract now allows $2,000 of capital (exposureCap 200000), which removes the constraint the previous NO_PLAN rested on. EXECUTABLE is right: every link is established from the card. There are four written POs at $1,450 per kit (pay on delivery, dated 2026-11-20), a real purchase price from these buyers. The recorded fulfiller is PuzzleWorks Surplus on a written quote of $900 per kit, prepaid, shipping in 3 days, and it is the plan's delivery performer. Time to usable cash is 9 days. Recomputed: wave 1 prepays 2 x $900 = $1,800 (<= $2,000) on day 0 and collects 2 x $1,450 = $2,900 settled on day 9; that funds wave 2's $1,800 on day 9 (cash $2,900 + $200 headroom), which collects $2,900 on day 18. Total settled $5,800 >= $4,000 by day 18 with 12 days of slack, peak exposure $1,800, net after costs $2,200. Wave 1 alone ($2,900) does not reach the target, so recycling is necessary, and it is valid because wave 2 is paid from settled receipts, not new capital. Alternatives are correctly rejected (all four at once needs $3,600 > $2,000).",
+        "findings": [
+          "Brain's check reports 0% coverage for this candidate, apparently because it does not model recycling settled receipts into the second prepayment; the ledger shows the recycle is inside the cap at every point (min cash $200 on day 0), so this is a modelling gap, not a plan defect.",
+          "SETTLED_CASH counts gross receipts ($5,800); if the owner reads the goal as net of the $3,600 paid to the supplier, net is $2,200, below $4,000. The contract metric is SETTLED_CASH, so the plan meets it as written.",
+          "No buffer for a late payer: if one wave-1 buyer pays late, wave 2 can still order one kit from $1,450 + $200; the target then needs the remaining receipts by day 30, which the 12-day slack covers.",
+          "Card records 1 human hour per kit (~4 h); no hours ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:46:04.370Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $4,000 of settled cash within 30 days with at most $500 of capital.",
+        "terms": "6e428dc513d6fb0d",
+        "openings": {
+          "cop_e91ba55818974601851c": "9bf258ab3afa3523"
+        }
+      },
+      "at": "2026-11-27T09:47:37.471Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

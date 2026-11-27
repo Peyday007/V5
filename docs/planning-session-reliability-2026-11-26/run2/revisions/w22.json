@@ -1,0 +1,32 @@
+{
+ "contractDigest": "99c384548e04e9dc68e2297f",
+ "parentRevisionId": null,
+ "stance": "NO_PLAN",
+ "strategy": {"title": "No executable plan: the trucking PM workbook has no evidenced price", "opportunityIds": [],
+   "why": "The only opening's price fact ($1,200) describes HVAC contractors paying for a per-technician field-service software seat per year, not regional trucking fleet managers buying a preventive-maintenance scheduling workbook. A price from another population and another product is not evidence of what this buyer pays, so the offer, the deal count needed for $5,000 and the economics are all unestablished."},
+ "alternatives": [{"title": "Sell the workbook at the card's $1,200 (5 deals) to fleet managers by email", "why": "Rejected: the $1,200 figure is an HVAC software-seat price, a mismatched population and product; counting on it would be an assumption, not evidence."}],
+ "steps": [
+  {"id":"research","kind":"RESEARCH","label":"Establish what regional trucking fleet managers actually pay for a preventive-maintenance scheduling workbook/template (published prices with source and date)","performer":"BRAIN","costCents":0,"day":3,"dependsOn":null,"evidence":["price"],"ownerHours":0},
+  {"id":"test","kind":"TEST","label":"Quote the workbook at a stated price to fleet managers via published business email and record paid pre-orders at that price","performer":"BRAIN","costCents":0,"day":10,"dependsOn":"research","evidence":["price"],"ownerHours":0}
+ ],
+ "cash": [],
+ "proofDay": null,
+ "quantities": [
+  {"name":"price","status":"UNKNOWN","value":null,"unit":"USD/deal","sources":[],"needs":"A published price paid by regional trucking fleets for a PM scheduling workbook, or paid pre-orders at a quoted price"},
+  {"name":"conversionRate","status":"EVIDENCED","value":0.06,"unit":"paid/visitor","sources":["s2"]},
+  {"name":"buyerVolume","status":"EVIDENCED","value":600,"unit":"fleets","sources":["s3"]}
+ ],
+ "sources": [
+  {"id":"s1","url":"https://brain.local/card/cop_c3da64d2e8914555a103#price","dated":"2026-11-26","claim":"Software Advice analyzed data from HVAC contractors: field-service management software for HVAC businesses costs $1,200 a year per technician seat.","population":"HVAC contractors buying field-service software seats","matchesBuyer":false},
+  {"id":"s2","url":"https://brain.local/card/cop_c3da64d2e8914555a103#conversionRates","dated":"2026-11-26","claim":"24 paid pre-orders from 400 unique visitors","population":"Regional trucking fleet managers","matchesBuyer":true},
+  {"id":"s3","url":"https://brain.local/card/cop_c3da64d2e8914555a103#buyerVolume","dated":"2026-11-26","claim":"600 regional trucking fleets hold state motor-carrier permits; each schedules preventive maintenance monthly.","population":"Regional trucking fleets","matchesBuyer":true}
+ ],
+ "validation": null,
+ "noPlan": {"decisiveGap":"OFFER_AND_PRICE: no evidenced price that regional trucking fleet managers pay for a preventive-maintenance scheduling workbook; the card's $1,200 is an HVAC field-service software seat price (different buyers, different product), so neither the deal count for $5,000 nor the economics can be established.","resolution":"Research published prices for trucking PM scheduling workbooks/templates paid by fleet managers (source + date), or quote a price to fleet managers via their published business emails and record paid pre-orders at that price; re-plan once a matching price is recorded on the card."},
+ "reach": null, "answers": [],
+ "chain": [{"opportunityId":"cop_c3da64d2e8914555a103","missing":["OFFER_AND_PRICE","ECONOMICS"]}],
+ "excluded": [],
+ "members": [],
+ "resolves": ["OFFER_AND_PRICE","ECONOMICS"],
+ "constraints": []
+}

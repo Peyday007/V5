@@ -1,0 +1,35 @@
+{
+  "id": "fx-02-orchard-paperwork",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 1,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_1d6a6aeaba11_40b189",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_53fbc6563d634182a4ff/reviewer-zeta",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [packingAudit] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

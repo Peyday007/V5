@@ -1,0 +1,25 @@
+{
+  "id": "ho-17-funeral-conversion-unmeasured",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_eae0af915154_f0bd9c",
+  "stance": "CONDITIONAL",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names CONVERSION",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

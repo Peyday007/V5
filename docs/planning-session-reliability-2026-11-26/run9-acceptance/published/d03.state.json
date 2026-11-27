@@ -1,0 +1,1869 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_052cb06d832b484883b0",
+      "words": "Collect $12,000 of settled cash within 45 days. I can invest up to $2,500 and give it no more than 4 hours a week of my own time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": 250000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$12,000 of settled cash received within 45 days",
+        "ownerHoursPerWeek": 4,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "42012994bceaa18dd1a8d0ab"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_052cb06d832b484883b0",
+        "contractDigest": "42012994bceaa18dd1a8d0ab",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: test whether local businesses pay $1,500 for a subcontracted website before committing",
+          "opportunityIds": [],
+          "why": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion)."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile management retainer",
+            "why": "Same unestablished demand, price and conversion; at $299/month only one or two payments settle in the window, so it cannot carry the target alone"
+          },
+          {
+            "title": "Fiverr resume gig",
+            "why": "Unestablished demand and price; $120 gigs need ~100 orders and Fiverr earnings clear 14 days after completion"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains three fixed-price quotes from Upwork web designers for a 5-page local-business site (fulfiller and direct cost)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "REACH",
+            "label": "Brain sets up an Instantly Growth workspace and sending domains, builds a list of local businesses with no website from map listings, and sends up to 1,500 emails",
+            "performer": "BRAIN",
+            "costCents": 14700,
+            "day": 2,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Owner takes the 15-minute calls with repliers and asks for a $750 deposit (50%) on a $1,500 site",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "t2",
+            "evidence": [
+              "s4"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Outreach Growth plan, one month",
+            "stepId": "t2"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Sending domains and mailboxes (estimate)",
+            "stepId": "t2"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "close rate from cold-email reply to paid deposit",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [
+              "s4"
+            ],
+            "needs": "live offer to repliers"
+          },
+          {
+            "name": "price local businesses pay for this site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a paid deposit at $1,500"
+          },
+          {
+            "name": "subcontractor fee per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "three Upwork fixed-price quotes"
+          },
+          {
+            "name": "cold-email reply rate",
+            "status": "ESTIMATE",
+            "value": 3.43,
+            "unit": "percent",
+            "sources": [
+              "s4"
+            ],
+            "needs": "measured on this campaign"
+          },
+          {
+            "name": "test spend",
+            "status": "ESTIMATE",
+            "value": 147,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+            "dated": "2025-11-10",
+            "claim": "Freelancer custom small-business websites are listed at $1,000-$3,000 (vendor benchmark, not a measured buyer payment; Brain's verifier rejected it as price evidence)",
+            "population": "small businesses buying a website",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s2",
+            "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+            "dated": "2025-08-21",
+            "claim": "17% of 406 surveyed US small business owners have no website (shows the buyer group exists; verifier rejected it as a reachable count)",
+            "population": "US small business owners",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s3",
+            "url": "https://census.gov/content/dam/Census/library/visualizations/2023/comm/cbp-employer-establishments.pdf",
+            "dated": "2023-04-27",
+            "claim": "8,148,606 US employer establishments in 2021",
+            "population": "US employer establishments",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s4",
+            "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+            "dated": "2025-12-18",
+            "claim": "Average cold-email reply rate 3.43% across Instantly campaigns Jan-Dec 2025; no reply-to-sale rate published",
+            "population": "Instantly B2B cold email campaigns",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026-11-27",
+            "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+            "population": "Instantly customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7-14 days after the first live payment; US settlement timing 2 business days thereafter",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s7",
+            "url": "https://whitespark.ca/google-my-business-management-service/",
+            "dated": "2026-11-27",
+            "claim": "An agency sells Google Business Profile management at $499 per month and says it is fully booked (the offer exists; not a price this operation's buyers are shown to pay)",
+            "population": "local businesses buying GBP management",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s8",
+            "url": "https://www.semrush.com/blog/local-seo-pricing/",
+            "dated": "2025",
+            "claim": "Local SEO retainers are sold monthly; ranges published by vendors, not measured payments",
+            "population": "local businesses",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s9",
+            "url": "https://fiverr.com/lambertcv/deliver-24-hour-professional-resume-writing-services",
+            "dated": "2026-11-27",
+            "claim": "Resume-writing gigs are listed on Fiverr (the offer exists)",
+            "population": "Fiverr buyers of resume writing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          },
+          {
+            "id": "s10",
+            "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+            "dated": "2026-11-27",
+            "claim": "Your earnings become available 14 days after the order is completed.",
+            "population": "Fiverr sellers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion).",
+          "resolution": "Run a $147 market test inside the $2,500 cap: Brain gets 3 Upwork fixed-price quotes (day 1), emails up to 1,500 local businesses without a website via Instantly (days 2-9), the owner offers a $1,500 site for a $750 deposit. PROOF: at least 2 paid deposits and a quote at or below $700 by day 16. STOP: no paid deposit after 1,500 delivered emails, or no quote at or below $900. CONTINUE: hire the freelancer, scale sending to reach 8 sales at $1,500.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_46f6af3fb06244799c45",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea212f080a7f4abc8ccd",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_8cdd5a2790ec4052acf5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_59dde65c3be5_6b7dca",
+        "digest": "59dde65c3be5c2a89212b956",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:16.968Z"
+      },
+      {
+        "goalId": "wst_052cb06d832b484883b0",
+        "contractDigest": "42012994bceaa18dd1a8d0ab",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: test whether local businesses pay $1,500 for a subcontracted website before committing",
+          "opportunityIds": [],
+          "why": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion)."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile management retainer",
+            "why": "Same unestablished demand, price and conversion; at $299/month only one or two payments settle in the window, so it cannot carry the target alone"
+          },
+          {
+            "title": "Fiverr resume gig",
+            "why": "Unestablished demand and price; $120 gigs need ~100 orders and Fiverr earnings clear 14 days after completion"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains three fixed-price quotes from Upwork web designers for a 5-page local-business site (fulfiller and direct cost)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "REACH",
+            "label": "Brain sets up an Instantly Growth workspace and sending domains, builds a list of local businesses with no website from map listings, and sends up to 1,500 emails",
+            "performer": "BRAIN",
+            "costCents": 14700,
+            "day": 2,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Owner takes the 15-minute calls with repliers and asks for a $750 deposit (50%) on a $1,500 site",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "t2",
+            "evidence": [
+              "s4"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Outreach Growth plan, one month",
+            "stepId": "t2"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Sending domains and mailboxes (estimate)",
+            "stepId": "t2"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "close rate from cold-email reply to paid deposit",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "live offer to repliers"
+          },
+          {
+            "name": "price local businesses pay for this site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a paid deposit at $1,500"
+          },
+          {
+            "name": "subcontractor fee per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "three Upwork fixed-price quotes"
+          },
+          {
+            "name": "cold-email reply rate from local businesses without a website",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "percent",
+            "sources": [],
+            "needs": "measured on this campaign (Instantly's 3.43% platform average, s4, is a different population and is not transferred)"
+          },
+          {
+            "name": "test spend",
+            "status": "ESTIMATE",
+            "value": 147,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+            "dated": "2025-11-10",
+            "claim": "Freelancer custom small-business websites are listed at $1,000-$3,000 (vendor benchmark, not a measured buyer payment; Brain's verifier rejected it as price evidence)",
+            "population": "small businesses buying a website",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s2",
+            "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+            "dated": "2025-08-21",
+            "claim": "17% of 406 surveyed US small business owners have no website (shows the buyer group exists; verifier rejected it as a reachable count)",
+            "population": "US small business owners",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s3",
+            "url": "https://census.gov/content/dam/Census/library/visualizations/2023/comm/cbp-employer-establishments.pdf",
+            "dated": "2023-04-27",
+            "claim": "8,148,606 US employer establishments in 2021",
+            "population": "US employer establishments",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s4",
+            "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+            "dated": "2025-12-18",
+            "claim": "Average cold-email reply rate 3.43% across Instantly campaigns Jan-Dec 2025; no reply-to-sale rate published",
+            "population": "Instantly B2B cold email campaigns",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026-11-27",
+            "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+            "population": "Instantly customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7-14 days after the first live payment; US settlement timing 2 business days thereafter",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s7",
+            "url": "https://whitespark.ca/google-my-business-management-service/",
+            "dated": "2026-11-27",
+            "claim": "An agency sells Google Business Profile management at $499 per month and says it is fully booked (the offer exists; not a price this operation's buyers are shown to pay)",
+            "population": "local businesses buying GBP management",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s8",
+            "url": "https://www.semrush.com/blog/local-seo-pricing/",
+            "dated": "2025",
+            "claim": "Local SEO retainers are sold monthly; ranges published by vendors, not measured payments",
+            "population": "local businesses",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s9",
+            "url": "https://fiverr.com/lambertcv/deliver-24-hour-professional-resume-writing-services",
+            "dated": "2026-11-27",
+            "claim": "Resume-writing gigs are listed on Fiverr (the offer exists)",
+            "population": "Fiverr buyers of resume writing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          },
+          {
+            "id": "s10",
+            "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+            "dated": "2026-11-27",
+            "claim": "Your earnings become available 14 days after the order is completed.",
+            "population": "Fiverr sellers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion).",
+          "resolution": "Run a $147 market test inside the $2,500 cap: Brain gets 3 Upwork fixed-price quotes (day 1), emails up to 1,500 local businesses without a website via Instantly (days 2-9), the owner offers a $1,500 site for a $750 deposit. PROOF: at least 2 paid deposits and a quote at or below $700 by day 16. STOP: no paid deposit after 1,500 delivered emails, or no quote at or below $900. CONTINUE: hire the freelancer, scale sending to reach 8 sales at $1,500.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_46f6af3fb06244799c45",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea212f080a7f4abc8ccd",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_8cdd5a2790ec4052acf5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_7bd6fb2c7b9d_987619",
+        "digest": "7bd6fb2c7b9df6b0afad1583",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:25.259Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_052cb06d832b484883b0",
+      "contractDigest": "42012994bceaa18dd1a8d0ab",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan yet: test whether local businesses pay $1,500 for a subcontracted website before committing",
+        "opportunityIds": [],
+        "why": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion)."
+      },
+      "alternatives": [
+        {
+          "title": "Google Business Profile management retainer",
+          "why": "Same unestablished demand, price and conversion; at $299/month only one or two payments settle in the window, so it cannot carry the target alone"
+        },
+        {
+          "title": "Fiverr resume gig",
+          "why": "Unestablished demand and price; $120 gigs need ~100 orders and Fiverr earnings clear 14 days after completion"
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "RESEARCH",
+          "label": "Brain obtains three fixed-price quotes from Upwork web designers for a 5-page local-business site (fulfiller and direct cost)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "t2",
+          "kind": "REACH",
+          "label": "Brain sets up an Instantly Growth workspace and sending domains, builds a list of local businesses with no website from map listings, and sends up to 1,500 emails",
+          "performer": "BRAIN",
+          "costCents": 14700,
+          "day": 2,
+          "dependsOn": "t1",
+          "evidence": [
+            "s4",
+            "s5"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "t3",
+          "kind": "TEST",
+          "label": "Owner takes the 15-minute calls with repliers and asks for a $750 deposit (50%) on a $1,500 site",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 9,
+          "dependsOn": "t2",
+          "evidence": [
+            "s4"
+          ],
+          "ownerHours": 1.5,
+          "priceCents": 150000,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 2,
+          "kind": "SPEND",
+          "amountCents": 4700,
+          "label": "Instantly Outreach Growth plan, one month",
+          "stepId": "t2"
+        },
+        {
+          "day": 2,
+          "kind": "SPEND",
+          "amountCents": 10000,
+          "label": "Sending domains and mailboxes (estimate)",
+          "stepId": "t2"
+        }
+      ],
+      "proofDay": 16,
+      "quantities": [
+        {
+          "name": "close rate from cold-email reply to paid deposit",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "share",
+          "sources": [],
+          "needs": "live offer to repliers"
+        },
+        {
+          "name": "price local businesses pay for this site",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": "a paid deposit at $1,500"
+        },
+        {
+          "name": "subcontractor fee per site",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "three Upwork fixed-price quotes"
+        },
+        {
+          "name": "cold-email reply rate from local businesses without a website",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "percent",
+          "sources": [],
+          "needs": "measured on this campaign (Instantly's 3.43% platform average, s4, is a different population and is not transferred)"
+        },
+        {
+          "name": "test spend",
+          "status": "ESTIMATE",
+          "value": 147,
+          "unit": "USD",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+          "dated": "2025-11-10",
+          "claim": "Freelancer custom small-business websites are listed at $1,000-$3,000 (vendor benchmark, not a measured buyer payment; Brain's verifier rejected it as price evidence)",
+          "population": "small businesses buying a website",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s2",
+          "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+          "dated": "2025-08-21",
+          "claim": "17% of 406 surveyed US small business owners have no website (shows the buyer group exists; verifier rejected it as a reachable count)",
+          "population": "US small business owners",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s3",
+          "url": "https://census.gov/content/dam/Census/library/visualizations/2023/comm/cbp-employer-establishments.pdf",
+          "dated": "2023-04-27",
+          "claim": "8,148,606 US employer establishments in 2021",
+          "population": "US employer establishments",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s4",
+          "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+          "dated": "2025-12-18",
+          "claim": "Average cold-email reply rate 3.43% across Instantly campaigns Jan-Dec 2025; no reply-to-sale rate published",
+          "population": "Instantly B2B cold email campaigns",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s5",
+          "url": "https://instantly.ai/pricing",
+          "dated": "2026-11-27",
+          "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+          "population": "Instantly customers",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s6",
+          "url": "https://docs.stripe.com/payouts",
+          "dated": "2026-11-27",
+          "claim": "First Stripe payout typically 7-14 days after the first live payment; US settlement timing 2 business days thereafter",
+          "population": "Stripe accounts",
+          "matchesBuyer": false,
+          "opportunityId": "cop_46f6af3fb06244799c45"
+        },
+        {
+          "id": "s7",
+          "url": "https://whitespark.ca/google-my-business-management-service/",
+          "dated": "2026-11-27",
+          "claim": "An agency sells Google Business Profile management at $499 per month and says it is fully booked (the offer exists; not a price this operation's buyers are shown to pay)",
+          "population": "local businesses buying GBP management",
+          "matchesBuyer": false,
+          "opportunityId": "cop_ea212f080a7f4abc8ccd"
+        },
+        {
+          "id": "s8",
+          "url": "https://www.semrush.com/blog/local-seo-pricing/",
+          "dated": "2025",
+          "claim": "Local SEO retainers are sold monthly; ranges published by vendors, not measured payments",
+          "population": "local businesses",
+          "matchesBuyer": false,
+          "opportunityId": "cop_ea212f080a7f4abc8ccd"
+        },
+        {
+          "id": "s9",
+          "url": "https://fiverr.com/lambertcv/deliver-24-hour-professional-resume-writing-services",
+          "dated": "2026-11-27",
+          "claim": "Resume-writing gigs are listed on Fiverr (the offer exists)",
+          "population": "Fiverr buyers of resume writing",
+          "matchesBuyer": false,
+          "opportunityId": "cop_8cdd5a2790ec4052acf5"
+        },
+        {
+          "id": "s10",
+          "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+          "dated": "2026-11-27",
+          "claim": "Your earnings become available 14 days after the order is completed.",
+          "population": "Fiverr sellers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_8cdd5a2790ec4052acf5"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion).",
+        "resolution": "Run a $147 market test inside the $2,500 cap: Brain gets 3 Upwork fixed-price quotes (day 1), emails up to 1,500 local businesses without a website via Instantly (days 2-9), the owner offers a $1,500 site for a $750 deposit. PROOF: at least 2 paid deposits and a quote at or below $700 by day 16. STOP: no paid deposit after 1,500 delivered emails, or no quote at or below $900. CONTINUE: hire the freelancer, scale sending to reach 8 sales at $1,500.",
+        "decisiveLinks": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_46f6af3fb06244799c45",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_ea212f080a7f4abc8ccd",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_8cdd5a2790ec4052acf5",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_7bd6fb2c7b9d_987619",
+      "digest": "7bd6fb2c7b9df6b0afad1583",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:09:25.259Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_7bd6fb2c7b9d_987619",
+      "digest": "7bd6fb2c7b9df6b0afad1583",
+      "contractDigest": "42012994bceaa18dd1a8d0ab",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 14700,
+        "committedOpenCents": 0,
+        "preProofCents": 14700,
+        "maxExposureCents": 14700,
+        "minCashCents": 235300,
+        "minCashDay": 2,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": -14700
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_46f6af3fb06244799c45",
+          "cop_ea212f080a7f4abc8ccd",
+          "cop_8cdd5a2790ec4052acf5"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_46f6af3fb06244799c45",
+            "title": "Done-for-you small-business website build sold by cold email",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "US local small-business owner without a modern website",
+              "reachableChannel": "Cold email through an Instantly workspace to local businesses found without websites",
+              "offerScope": "5-page mobile website for a local business, built by a contracted Upwork web designer, delivered in 10 days; 50% deposit, balance on delivery",
+              "priceCents": 150000,
+              "currency": "USD",
+              "fulfillmentOwner": "Upwork freelance web designer (hourly $15-$30 per Upwork's web-designer cost page), ~20 hours per 5-page site",
+              "peakFundingCents": 40000,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "Web design for local small businesses",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email through an Instantly workspace to local businesses found without webs"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 400"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email through an Instantly workspace to local businesses found without websites",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page mobile website for a local business, built by a contracted Upwork web designer, delivered in 10 days; 50% deposit, balance on delivery to US local small-business owner without a modern website, reached through Cold email through an Instantly workspace to local businesses found without websites, at $1,500; Upwork freelance web designer (hourly $15-$30 per Upwork's web-designer cost page), ~20 hours per 5-page site delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$400",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Upwork freelance web designer (hourly $15-$30 per Upwork's web-designer cost page), ~20 hours per 5-page site.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page mobile website for a local business, built by a contracted Upwork web designer, delivered in 10 days; 50% deposit, balance on delivery",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US local small-business owner without a modern website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.manypixels.co/blog/web-design/for-small-businesses; Upwork web designer cost; https://clutch.co/press-releases/smb-websites-2025; https://instantly.ai/cold-email-benchmark-report-2026",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_ea212f080a7f4abc8ccd",
+            "title": "Google Business Profile management retainer for local businesses",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 299,
+            "card": {
+              "payer": "Local service business owner",
+              "reachableChannel": "Cold email through Instantly to local service businesses",
+              "offerScope": "Monthly Google Business Profile optimisation, weekly posts, review responses",
+              "priceCents": 29900,
+              "currency": "USD",
+              "fulfillmentOwner": "Upwork freelancer offering monthly Google Business Profile management",
+              "peakFundingCents": 30000,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "Local SEO",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email through Instantly to local service businesses"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 299 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 100, tied up 300"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email through Instantly to local service businesses",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Monthly Google Business Profile optimisation, weekly posts, review responses to Local service business owner, reached through Cold email through Instantly to local service businesses, at $299; Upwork freelancer offering monthly Google Business Profile management delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$100",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Upwork freelancer offering monthly Google Business Profile management.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.5 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Monthly Google Business Profile optimisation, weekly posts, review responses",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local service business owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$299",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$299",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://whitespark.ca/google-my-business-management-service/; https://www.semrush.com/blog/local-seo-pricing/; https://instantly.ai/cold-email-benchmark-report-2026",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_8cdd5a2790ec4052acf5",
+            "title": "Resume and LinkedIn rewrite gig on Fiverr",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 120,
+            "card": {
+              "payer": "Individual job seeker",
+              "reachableChannel": "Fiverr gig listing",
+              "offerScope": "ATS resume rewrite plus cover letter, 2-day delivery",
+              "priceCents": 12000,
+              "currency": "USD",
+              "fulfillmentOwner": "Upwork freelance resume writer",
+              "peakFundingCents": 0,
+              "humanHours": 0.25,
+              "requiredCapabilities": [],
+              "industry": "Career services",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Fiverr gig listing"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 120 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 50, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "21 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Fiverr gig listing",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell ATS resume rewrite plus cover letter, 2-day delivery to Individual job seeker, reached through Fiverr gig listing, at $120; Upwork freelance resume writer delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$50",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Upwork freelance resume writer.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0.25 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "ATS resume rewrite plus cover letter, 2-day delivery",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Individual job seeker",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$120",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$120",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "Fiverr professional resume writing gig price; https://help.fiverr.com/hc/en-us/articles/360010639617",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "21 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 1200000,
+          "daysLeft": 45,
+          "hoursCeiling": 26,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 4
+        },
+        "at": "2026-11-27T11:08:24.410Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7bd6fb2c7b9d_987619",
+        "revisionDigest": "7bd6fb2c7b9df6b0afad1583",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5ded2ab66fe046549ba3/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and the decisive gap is named correctly. All three openings hold only RECOMMENDATION facts: no buying signal, no price any buyer of this kind is shown to pay (the ManyPixels/Upwork benchmarks and the Clutch/Census counts were verified as not matching this buyer), and no close rate, so nothing establishes 8 x $1,500 = $12,000 settled by day 45. Brain's check agrees (NOT_VIABLE: $0 reachable at shown prices). The gap is missing evidence, not mis-stated as a constraint (constraints empty). Excluding the $299 GBP retainer and $120 Fiverr gig as carriers is arithmetically right: a $299 monthly retainer settles at most one or two payments per client in 45 days (~40 clients needed), and 100 Fiverr orders whose earnings clear 14 days after completion is not credible here. The suggested $147 test fits the $2,500 cap and the 4 h/week owner limit (1.5 h of calls).",
+        "findings": [
+          "Arithmetic: 12,000 / 1,500 = 8 sales; test spend $47 + $100 = $147 (5.9% of the cap).",
+          "Calibrate the resolution's gate before running it: 2 deposits from 1,500 emails is a 0.13% rate, at which 8 sales need ~6,000 emails, above the 5,000/month Instantly Growth tier cited and hard to send from new domains inside the window. Passing the gate as written would not show $12,000 is reachable; the proof should be about 1 sale per ~190 emails (8/1,500) or the plan must show the sending volume.",
+          "Proof and stop thresholds leave a hole: proof needs a designer quote <= $700, stop fires only if none <= $900; a $701-$900 quote is neither.",
+          "Two unsourced feasibility assumptions in the test: (a) sending 1,500 cold emails on days 2-9 from freshly bought domains without warm-up, and (b) finding email addresses for businesses that by definition have no website. Both should be checked before the test is counted as a measurement.",
+          "Settlement after a pass is feasible: deposit at sale, balance on delivery ~10 days later, Stripe first payout 7-14 days after first live payment then ~2 business days; sales closed by about day 30 still settle by day 45.",
+          "decisiveLinks could also name FULFILMENT/ECONOMICS (subcontractor fee unknown; the test's quotes address it) and SETTLES_IN_TIME, which are equally unestablished on the card."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:12:07.251Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_7bd6fb2c7b9d_987619",
+      "digest": "7bd6fb2c7b9df6b0afad1583",
+      "contractDigest": "42012994bceaa18dd1a8d0ab",
+      "plan": {
+        "goalId": "wst_052cb06d832b484883b0",
+        "contractDigest": "42012994bceaa18dd1a8d0ab",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: test whether local businesses pay $1,500 for a subcontracted website before committing",
+          "opportunityIds": [],
+          "why": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion)."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile management retainer",
+            "why": "Same unestablished demand, price and conversion; at $299/month only one or two payments settle in the window, so it cannot carry the target alone"
+          },
+          {
+            "title": "Fiverr resume gig",
+            "why": "Unestablished demand and price; $120 gigs need ~100 orders and Fiverr earnings clear 14 days after completion"
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Brain obtains three fixed-price quotes from Upwork web designers for a 5-page local-business site (fulfiller and direct cost)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t2",
+            "kind": "REACH",
+            "label": "Brain sets up an Instantly Growth workspace and sending domains, builds a list of local businesses with no website from map listings, and sends up to 1,500 emails",
+            "performer": "BRAIN",
+            "costCents": 14700,
+            "day": 2,
+            "dependsOn": "t1",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "t3",
+            "kind": "TEST",
+            "label": "Owner takes the 15-minute calls with repliers and asks for a $750 deposit (50%) on a $1,500 site",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "t2",
+            "evidence": [
+              "s4"
+            ],
+            "ownerHours": 1.5,
+            "priceCents": 150000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 4700,
+            "label": "Instantly Outreach Growth plan, one month",
+            "stepId": "t2"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 10000,
+            "label": "Sending domains and mailboxes (estimate)",
+            "stepId": "t2"
+          }
+        ],
+        "proofDay": 16,
+        "quantities": [
+          {
+            "name": "close rate from cold-email reply to paid deposit",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share",
+            "sources": [],
+            "needs": "live offer to repliers"
+          },
+          {
+            "name": "price local businesses pay for this site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a paid deposit at $1,500"
+          },
+          {
+            "name": "subcontractor fee per site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "three Upwork fixed-price quotes"
+          },
+          {
+            "name": "cold-email reply rate from local businesses without a website",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "percent",
+            "sources": [],
+            "needs": "measured on this campaign (Instantly's 3.43% platform average, s4, is a different population and is not transferred)"
+          },
+          {
+            "name": "test spend",
+            "status": "ESTIMATE",
+            "value": 147,
+            "unit": "USD",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+            "dated": "2025-11-10",
+            "claim": "Freelancer custom small-business websites are listed at $1,000-$3,000 (vendor benchmark, not a measured buyer payment; Brain's verifier rejected it as price evidence)",
+            "population": "small businesses buying a website",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s2",
+            "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+            "dated": "2025-08-21",
+            "claim": "17% of 406 surveyed US small business owners have no website (shows the buyer group exists; verifier rejected it as a reachable count)",
+            "population": "US small business owners",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s3",
+            "url": "https://census.gov/content/dam/Census/library/visualizations/2023/comm/cbp-employer-establishments.pdf",
+            "dated": "2023-04-27",
+            "claim": "8,148,606 US employer establishments in 2021",
+            "population": "US employer establishments",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s4",
+            "url": "https://instantly.ai/cold-email-benchmark-report-2026",
+            "dated": "2025-12-18",
+            "claim": "Average cold-email reply rate 3.43% across Instantly campaigns Jan-Dec 2025; no reply-to-sale rate published",
+            "population": "Instantly B2B cold email campaigns",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s5",
+            "url": "https://instantly.ai/pricing",
+            "dated": "2026-11-27",
+            "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+            "population": "Instantly customers",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s6",
+            "url": "https://docs.stripe.com/payouts",
+            "dated": "2026-11-27",
+            "claim": "First Stripe payout typically 7-14 days after the first live payment; US settlement timing 2 business days thereafter",
+            "population": "Stripe accounts",
+            "matchesBuyer": false,
+            "opportunityId": "cop_46f6af3fb06244799c45"
+          },
+          {
+            "id": "s7",
+            "url": "https://whitespark.ca/google-my-business-management-service/",
+            "dated": "2026-11-27",
+            "claim": "An agency sells Google Business Profile management at $499 per month and says it is fully booked (the offer exists; not a price this operation's buyers are shown to pay)",
+            "population": "local businesses buying GBP management",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s8",
+            "url": "https://www.semrush.com/blog/local-seo-pricing/",
+            "dated": "2025",
+            "claim": "Local SEO retainers are sold monthly; ranges published by vendors, not measured payments",
+            "population": "local businesses",
+            "matchesBuyer": false,
+            "opportunityId": "cop_ea212f080a7f4abc8ccd"
+          },
+          {
+            "id": "s9",
+            "url": "https://fiverr.com/lambertcv/deliver-24-hour-professional-resume-writing-services",
+            "dated": "2026-11-27",
+            "claim": "Resume-writing gigs are listed on Fiverr (the offer exists)",
+            "population": "Fiverr buyers of resume writing",
+            "matchesBuyer": false,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          },
+          {
+            "id": "s10",
+            "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+            "dated": "2026-11-27",
+            "claim": "Your earnings become available 14 days after the order is completed.",
+            "population": "Fiverr sellers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_8cdd5a2790ec4052acf5"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No buyer has been shown to want and pay for this offer: the website route's demand, price and close rate are all unestablished (Brain's verifier rejected the vendor price benchmarks and the survey counts as not matching this buyer), so nothing shows that 8 sales at $1,500 can be sold and settled by day 45. The GBP retainer and the Fiverr resume gig fail the same links, and each also settles too little in the window ($299/month retainers; $120 gigs whose earnings clear 14 days after completion).",
+          "resolution": "Run a $147 market test inside the $2,500 cap: Brain gets 3 Upwork fixed-price quotes (day 1), emails up to 1,500 local businesses without a website via Instantly (days 2-9), the owner offers a $1,500 site for a $750 deposit. PROOF: at least 2 paid deposits and a quote at or below $700 by day 16. STOP: no paid deposit after 1,500 delivered emails, or no quote at or below $900. CONTINUE: hire the freelancer, scale sending to reach 8 sales at $1,500.",
+          "decisiveLinks": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_46f6af3fb06244799c45",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_ea212f080a7f4abc8ccd",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_8cdd5a2790ec4052acf5",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_7bd6fb2c7b9d_987619",
+        "digest": "7bd6fb2c7b9df6b0afad1583",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:25.259Z"
+      },
+      "review": {
+        "revisionId": "rev_7bd6fb2c7b9d_987619",
+        "revisionDigest": "7bd6fb2c7b9df6b0afad1583",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fbb3d137a1c34f7ea335/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_5ded2ab66fe046549ba3/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and the decisive gap is named correctly. All three openings hold only RECOMMENDATION facts: no buying signal, no price any buyer of this kind is shown to pay (the ManyPixels/Upwork benchmarks and the Clutch/Census counts were verified as not matching this buyer), and no close rate, so nothing establishes 8 x $1,500 = $12,000 settled by day 45. Brain's check agrees (NOT_VIABLE: $0 reachable at shown prices). The gap is missing evidence, not mis-stated as a constraint (constraints empty). Excluding the $299 GBP retainer and $120 Fiverr gig as carriers is arithmetically right: a $299 monthly retainer settles at most one or two payments per client in 45 days (~40 clients needed), and 100 Fiverr orders whose earnings clear 14 days after completion is not credible here. The suggested $147 test fits the $2,500 cap and the 4 h/week owner limit (1.5 h of calls).",
+        "findings": [
+          "Arithmetic: 12,000 / 1,500 = 8 sales; test spend $47 + $100 = $147 (5.9% of the cap).",
+          "Calibrate the resolution's gate before running it: 2 deposits from 1,500 emails is a 0.13% rate, at which 8 sales need ~6,000 emails, above the 5,000/month Instantly Growth tier cited and hard to send from new domains inside the window. Passing the gate as written would not show $12,000 is reachable; the proof should be about 1 sale per ~190 emails (8/1,500) or the plan must show the sending volume.",
+          "Proof and stop thresholds leave a hole: proof needs a designer quote <= $700, stop fires only if none <= $900; a $701-$900 quote is neither.",
+          "Two unsourced feasibility assumptions in the test: (a) sending 1,500 cold emails on days 2-9 from freshly bought domains without warm-up, and (b) finding email addresses for businesses that by definition have no website. Both should be checked before the test is counted as a measurement.",
+          "Settlement after a pass is feasible: deposit at sale, balance on delivery ~10 days later, Stripe first payout 7-14 days after first live payment then ~2 business days; sales closed by about day 30 still settle by day 45.",
+          "decisiveLinks could also name FULFILMENT/ECONOMICS (subcontractor fee unknown; the test's quotes address it) and SETTLES_IN_TIME, which are equally unestablished on the card."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:12:07.251Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $12,000 of settled cash within 45 days. I can invest up to $2,500 and give it no more than 4 hours a week of my own time.",
+        "terms": "42893e8e16c33915",
+        "openings": {
+          "cop_46f6af3fb06244799c45": "2132d4967dbebc98",
+          "cop_8cdd5a2790ec4052acf5": "67f3f403a2f70ab9",
+          "cop_ea212f080a7f4abc8ccd": "5ef33651d143901a"
+        }
+      },
+      "at": "2026-11-27T11:13:36.010Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

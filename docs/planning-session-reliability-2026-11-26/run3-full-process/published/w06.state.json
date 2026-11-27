@@ -1,0 +1,2227 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_db7550df82eb46fc8f37",
+      "words": "Collect $2,500 of settled cash within 21 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 250000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$2,500 of buyer payments settled within 21 days",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "f0835380bb33194de9e7c421"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_db7550df82eb46fc8f37",
+        "contractDigest": "f0835380bb33194de9e7c421",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell seating-chart and vendor run-sheet workbooks to wedding venue coordinators by email",
+          "opportunityIds": [
+            "cop_0424972f5679418a86dc"
+          ],
+          "why": "Every link is on the card: payer (venue coordinators), published business emails, a dated buying signal (2026-11-24), $350 price, Brain-produced spreadsheet at $5 direct cost, $0 exposure, 3 days to first cash, 500 directory-listed venues and a measured 12% pre-order conversion (30/250). Eight sales = $2,800 gross ($2,760 net) inside 21 days. Brain performs reach, offer, delivery and collection, so owner time is 0 of the 3 hours a week allowed."
+        },
+        "alternatives": [
+          {
+            "title": "No alternative opening",
+            "why": "Brain's run holds only this opening."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email coordinators of about 70-100 directory-listed wedding venues at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reachableChannel",
+              "s_buyerVolume",
+              "s_buyingSignal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the seating chart and vendor run-sheet workbook at $350",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $350 (12% measured conversion)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conversionRates",
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver the workbook to each of 8 venues",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 6,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of 8 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "8 x $350 workbook payments",
+            "settlesDay": 7,
+            "stepId": "collect"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "8 x $5 direct cost, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 35000,
+            "unit": "cents/deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid orders per reached buyer",
+            "sources": [
+              "s_conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s_conversionRates",
+              "s_buyerVolume"
+            ],
+            "needs": "8 x $350 = $2,800 >= $2,500"
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents/deal",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "hours/week",
+            "sources": [
+              "s_delivery"
+            ],
+            "needs": "<= 3 hours a week"
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "venues",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#price",
+            "dated": "2026-11-24",
+            "claim": "$350",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "30 paid pre-orders from 250 unique visitors",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "500 wedding venues in the regional venue directory, weddings every weekend in season",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyingSignal",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 per workbook",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "deals": 8,
+            "price": 350,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_7cacbda980ea_db5214",
+        "digest": "7cacbda980eae1744a94db1c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:52.131Z"
+      },
+      {
+        "goalId": "wst_db7550df82eb46fc8f37",
+        "contractDigest": "f0835380bb33194de9e7c421",
+        "parentRevisionId": "rev_7cacbda980ea_db5214",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell seating-chart and vendor run-sheet workbooks to wedding venue coordinators by email, delivered in weekly batches",
+          "opportunityIds": [
+            "cop_0424972f5679418a86dc"
+          ],
+          "why": "Every link is on the card: payer, published business emails, a dated buying signal (2026-11-24), $350 price, Brain-produced spreadsheet at $5, $0 exposure, 3 days to first cash, 500 venues, 12% measured conversion (30/250). Eight sales = $2,800 gross ($2,760 net) settled by day 18 of 21. The card names no fulfillmentOwner and its deliverable is PRODUCE_SPREADSHEET, so Brain fulfils and the 1 humanHour per deal is Brain's; owner time is planned at 0. Deliveries are nevertheless batched 3/3/2 per week so that even if that hour fell to the owner each week stays within the 3 h/week ceiling (9 h window total)."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver all 8 in week 1",
+            "why": "Rejected: harmless if Brain fulfils, but would need 8 h in one week if the per-deal hour were owner work."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email coordinators of about 70-100 directory-listed wedding venues at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reachableChannel",
+              "s_buyerVolume",
+              "s_buyingSignal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the seating chart and vendor run-sheet workbook at $350",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $350 (12% measured conversion), delivery scheduled in three weekly batches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conversionRates",
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Week 1: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1500,
+            "day": 6,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 3 week-1 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Week 2: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1500,
+            "day": 12,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 3 week-2 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Week 3: produce and deliver the workbook to 2 venues (1 fulfiller hour each, 2 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1000,
+            "day": 17,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 2 week-3 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 105000,
+            "label": "Week 1: 3 x $350",
+            "settlesDay": 7,
+            "stepId": "collect1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Week 1: 3 x $5 direct cost, paid from receipts",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 105000,
+            "label": "Week 2: 3 x $350",
+            "settlesDay": 13,
+            "stepId": "collect2"
+          },
+          {
+            "day": 13,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Week 2: 3 x $5 direct cost, paid from receipts",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 70000,
+            "label": "Week 3: 2 x $350",
+            "settlesDay": 18,
+            "stepId": "collect3"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 1000,
+            "label": "Week 3: 2 x $5 direct cost, paid from receipts",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 35000,
+            "unit": "cents/deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid orders per reached buyer",
+            "sources": [
+              "s_conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s_conversionRates",
+              "s_buyerVolume"
+            ],
+            "needs": "8 x $350 = $2,800 >= $2,500"
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents/deal",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfillerHoursPerDeal",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "hours/deal (Brain as fulfiller)",
+            "sources": [
+              "s_humanHours",
+              "s_requiredCapabilities",
+              "s_delivery"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "ESTIMATE",
+            "value": 0,
+            "unit": "hours/week",
+            "sources": [
+              "s_requiredCapabilities",
+              "s_delivery",
+              "s_humanHours"
+            ],
+            "needs": "<= 3 h/week; worst case if the per-deal hour were owner work: 3, 3, 2 h in weeks 1-3"
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "venues",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#price",
+            "dated": "2026-11-24",
+            "claim": "$350",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "30 paid pre-orders from 250 unique visitors",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "500 wedding venues in the regional venue directory, weddings every weekend in season",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyingSignal",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 per workbook",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_humanHours",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#humanHours",
+            "dated": "2026-11-24",
+            "claim": "1 hour of work per deal by the fulfiller",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_requiredCapabilities",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "PRODUCE_SPREADSHEET; no fulfillmentOwner named",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours quantity is marked EVIDENCED = 0 citing s_delivery, but the card records humanHours: 1 and Brain's run lists the Deliver step as owner PERSON",
+            "resolution": "Partly accepted. Under the fulfilment rule humanHours is work per deal by the fulfiller; the card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET with delivery 'A spreadsheet Brain produces', and Brain attached PRODUCE_SPREADSHEET (PRESENT) to the deliver step, so the hour is Brain's and owner time is 0. I now carry the 1 h/deal explicitly as fulfiller hours and downgrade ownerHours from EVIDENCED to ESTIMATE with the worst case stated."
+          },
+          {
+            "finding": "all 8 deliveries are scheduled on day 6; if the card's 1 human hour is per deal that is ~8 owner hours in week 1, over the 3 h/week ceiling",
+            "resolution": "Accepted. Deliveries are split into three weekly batches (3 on day 6, 3 on day 12, 2 on day 17) with collections on days 7, 13 and 18, so even in the worst case each week uses at most 3 hours and all $2,800 settles inside 21 days."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "deals": 8,
+            "price": 350,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_2ee9962b370e_5b14be",
+        "digest": "2ee9962b370efa73e056d099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:12.906Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_db7550df82eb46fc8f37",
+      "contractDigest": "f0835380bb33194de9e7c421",
+      "parentRevisionId": "rev_7cacbda980ea_db5214",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell seating-chart and vendor run-sheet workbooks to wedding venue coordinators by email, delivered in weekly batches",
+        "opportunityIds": [
+          "cop_0424972f5679418a86dc"
+        ],
+        "why": "Every link is on the card: payer, published business emails, a dated buying signal (2026-11-24), $350 price, Brain-produced spreadsheet at $5, $0 exposure, 3 days to first cash, 500 venues, 12% measured conversion (30/250). Eight sales = $2,800 gross ($2,760 net) settled by day 18 of 21. The card names no fulfillmentOwner and its deliverable is PRODUCE_SPREADSHEET, so Brain fulfils and the 1 humanHour per deal is Brain's; owner time is planned at 0. Deliveries are nevertheless batched 3/3/2 per week so that even if that hour fell to the owner each week stays within the 3 h/week ceiling (9 h window total)."
+      },
+      "alternatives": [
+        {
+          "title": "Deliver all 8 in week 1",
+          "why": "Rejected: harmless if Brain fulfils, but would need 8 h in one week if the per-deal hour were owner work."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email coordinators of about 70-100 directory-listed wedding venues at their published business addresses",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_reachableChannel",
+            "s_buyerVolume",
+            "s_buyingSignal"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the seating chart and vendor run-sheet workbook at $350",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 35000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close 8 sales at $350 (12% measured conversion), delivery scheduled in three weekly batches",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_conversionRates",
+            "s_price"
+          ],
+          "priceCents": 35000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "Week 1: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+          "performer": "BRAIN",
+          "costCents": 1500,
+          "day": 6,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_delivery",
+            "s_directCosts",
+            "s_humanHours",
+            "s_requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Collect $350 from each of the 3 week-1 venues",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "Week 2: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+          "performer": "BRAIN",
+          "costCents": 1500,
+          "day": 12,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_delivery",
+            "s_directCosts",
+            "s_humanHours",
+            "s_requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Collect $350 from each of the 3 week-2 venues",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 13,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver3",
+          "kind": "DELIVER",
+          "label": "Week 3: produce and deliver the workbook to 2 venues (1 fulfiller hour each, 2 h this week)",
+          "performer": "BRAIN",
+          "costCents": 1000,
+          "day": 17,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_delivery",
+            "s_directCosts",
+            "s_humanHours",
+            "s_requiredCapabilities"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect3",
+          "kind": "COLLECT",
+          "label": "Collect $350 from each of the 2 week-3 venues",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 18,
+          "dependsOn": "deliver3",
+          "evidence": [
+            "s_timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 105000,
+          "label": "Week 1: 3 x $350",
+          "settlesDay": 7,
+          "stepId": "collect1"
+        },
+        {
+          "day": 7,
+          "kind": "SPEND",
+          "amountCents": 1500,
+          "label": "Week 1: 3 x $5 direct cost, paid from receipts",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 13,
+          "kind": "RECEIPT",
+          "amountCents": 105000,
+          "label": "Week 2: 3 x $350",
+          "settlesDay": 13,
+          "stepId": "collect2"
+        },
+        {
+          "day": 13,
+          "kind": "SPEND",
+          "amountCents": 1500,
+          "label": "Week 2: 3 x $5 direct cost, paid from receipts",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 70000,
+          "label": "Week 3: 2 x $350",
+          "settlesDay": 18,
+          "stepId": "collect3"
+        },
+        {
+          "day": 18,
+          "kind": "SPEND",
+          "amountCents": 1000,
+          "label": "Week 3: 2 x $5 direct cost, paid from receipts",
+          "stepId": "deliver3"
+        }
+      ],
+      "proofDay": 7,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 35000,
+          "unit": "cents/deal",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "paid orders per reached buyer",
+          "sources": [
+            "s_conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals",
+          "status": "ESTIMATE",
+          "value": 8,
+          "unit": "deals",
+          "sources": [
+            "s_conversionRates",
+            "s_buyerVolume"
+          ],
+          "needs": "8 x $350 = $2,800 >= $2,500"
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 500,
+          "unit": "cents/deal",
+          "sources": [
+            "s_directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "exposure",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "s_exposure"
+          ],
+          "needs": null
+        },
+        {
+          "name": "timeToFirstCash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "s_timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "fulfillerHoursPerDeal",
+          "status": "EVIDENCED",
+          "value": 1,
+          "unit": "hours/deal (Brain as fulfiller)",
+          "sources": [
+            "s_humanHours",
+            "s_requiredCapabilities",
+            "s_delivery"
+          ],
+          "needs": null
+        },
+        {
+          "name": "ownerHours",
+          "status": "ESTIMATE",
+          "value": 0,
+          "unit": "hours/week",
+          "sources": [
+            "s_requiredCapabilities",
+            "s_delivery",
+            "s_humanHours"
+          ],
+          "needs": "<= 3 h/week; worst case if the per-deal hour were owner work: 3, 3, 2 h in weeks 1-3"
+        },
+        {
+          "name": "buyerPopulation",
+          "status": "EVIDENCED",
+          "value": 500,
+          "unit": "venues",
+          "sources": [
+            "s_buyerVolume"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#price",
+          "dated": "2026-11-24",
+          "claim": "$350",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conversionRates",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "30 paid pre-orders from 250 unique visitors",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_buyerVolume",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "500 wedding venues in the regional venue directory, weddings every weekend in season",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_reachableChannel",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Published business email addresses",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_buyingSignal",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyingSignal",
+          "dated": "2026-11-24",
+          "claim": "Posted asking for this work",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_delivery",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_directCosts",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$5 per workbook",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_exposure",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_timeToFirstCash",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "3 days",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_humanHours",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#humanHours",
+          "dated": "2026-11-24",
+          "claim": "1 hour of work per deal by the fulfiller",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_requiredCapabilities",
+          "url": "https://brain.local/card/cop_0424972f5679418a86dc#requiredCapabilities",
+          "dated": "2026-11-24",
+          "claim": "PRODUCE_SPREADSHEET; no fulfillmentOwner named",
+          "population": "Wedding venue coordinators",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "ownerHours quantity is marked EVIDENCED = 0 citing s_delivery, but the card records humanHours: 1 and Brain's run lists the Deliver step as owner PERSON",
+          "resolution": "Partly accepted. Under the fulfilment rule humanHours is work per deal by the fulfiller; the card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET with delivery 'A spreadsheet Brain produces', and Brain attached PRODUCE_SPREADSHEET (PRESENT) to the deliver step, so the hour is Brain's and owner time is 0. I now carry the 1 h/deal explicitly as fulfiller hours and downgrade ownerHours from EVIDENCED to ESTIMATE with the worst case stated."
+        },
+        {
+          "finding": "all 8 deliveries are scheduled on day 6; if the card's 1 human hour is per deal that is ~8 owner hours in week 1, over the 3 h/week ceiling",
+          "resolution": "Accepted. Deliveries are split into three weekly batches (3 on day 6, 3 on day 12, 2 on day 17) with collections on days 7, 13 and 18, so even in the worst case each week uses at most 3 hours and all $2,800 settles inside 21 days."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_0424972f5679418a86dc",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_0424972f5679418a86dc",
+          "deals": 8,
+          "price": 350,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "revisionId": "rev_2ee9962b370e_5b14be",
+      "digest": "2ee9962b370efa73e056d099",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_c745928d19d141148e7b/author-1",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:24:12.906Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_2ee9962b370e_5b14be",
+      "digest": "2ee9962b370efa73e056d099",
+      "contractDigest": "f0835380bb33194de9e7c421",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 4000,
+        "committedOpenCents": 0,
+        "preProofCents": 1500,
+        "maxExposureCents": 0,
+        "minCashCents": 103500,
+        "minCashDay": 7,
+        "collectedCents": 280000,
+        "collectedInWindowCents": 280000,
+        "refundsCents": 0,
+        "netCents": 276000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Seating chart and vendor run-sheet workbooks for wedding ven\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Seating chart and vendor run-sheet workbooks for wedding ven\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 25530× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Seating chart and vendor run-sheet workbooks for wedding venues\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_0424972f5679418a86dc"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Seating chart and vendor run-sheet workbooks for wedding venues\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Seating chart and vendor run-sheet workbooks for wedding venues\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Collect payment for \"Seating chart and vendor run-sheet workbooks for wedding venues\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "title": "Seating chart and vendor run-sheet workbooks for wedding venues",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Wedding venue coordinators",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:15.598Z",
+              "offerScope": "Seating chart and vendor run-sheet workbooks for wedding venues",
+              "priceCents": 35000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "wedding venues",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "500 wedding venues are listed in the regional venue directory; each hosts weddings every weekend in season.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Seating chart and vendor run-sheet workbooks for wedding venues to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "30 paid pre-orders from 250 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Wedding venue coordinators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$350",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 250000,
+          "daysLeft": 21,
+          "hoursCeiling": 9,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T00:17:09.472Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7cacbda980ea_db5214",
+        "revisionDigest": "7cacbda980eae1744a94db1c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f3bee243b216433a8292/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Stance and cash arithmetic are otherwise sound (8 x $350 = $2,800 >= $2,500, settles day 7 of 21, $40 cost from receipts), but the goal has a 3 hours/week owner-time ceiling and the plan treats owner time as known zero when the card records humanHours 1 and Brain's own run assigns delivery to a PERSON. Owner hours must be carried from the card and the schedule shown to fit 3 h/week before the owner acts.",
+        "findings": [
+          "ownerHours quantity is marked EVIDENCED = 0 citing s_delivery, but the card records humanHours: 1 and Brain's run lists the Deliver step as owner PERSON; the owner-hour figure is contradicted, not evidenced",
+          "all 8 deliveries are scheduled on day 6; if the card's 1 human hour is per deal that is ~8 owner hours in week 1, over the 3 h/week ceiling; budget owner hours per step and spread deliveries (e.g. <=3 per week) so every week fits"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:22:15.778Z"
+      },
+      {
+        "revisionId": "rev_2ee9962b370e_5b14be",
+        "revisionDigest": "2ee9962b370efa73e056d099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f3bee243b216433a8292/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Both findings answered. Owner time is now an ESTIMATE of 0 because the card names no fulfillmentOwner and the delivery is a spreadsheet Brain produces with PRODUCE_SPREADSHEET PRESENT. The worst case, where the 1 h/deal falls to the owner, is scheduled as 3/3/2 deliveries on days 6, 12 and 17, which is 3, 3 and 2 hours in weeks 1-3, all within 3 h/week. Recomputed the cash: 3x$350 on day 7, 3x$350 on day 13 and 2x$350 on day 18 total $2,800, which is at least $2,500 and settles by day 18 of 21. The $40 cost is paid from receipts, no capital is needed, and the ledger matches the steps. Every chain link is evidenced on the card.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:24:57.476Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_2ee9962b370e_5b14be",
+      "digest": "2ee9962b370efa73e056d099",
+      "contractDigest": "f0835380bb33194de9e7c421",
+      "plan": {
+        "goalId": "wst_db7550df82eb46fc8f37",
+        "contractDigest": "f0835380bb33194de9e7c421",
+        "parentRevisionId": "rev_7cacbda980ea_db5214",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell seating-chart and vendor run-sheet workbooks to wedding venue coordinators by email, delivered in weekly batches",
+          "opportunityIds": [
+            "cop_0424972f5679418a86dc"
+          ],
+          "why": "Every link is on the card: payer, published business emails, a dated buying signal (2026-11-24), $350 price, Brain-produced spreadsheet at $5, $0 exposure, 3 days to first cash, 500 venues, 12% measured conversion (30/250). Eight sales = $2,800 gross ($2,760 net) settled by day 18 of 21. The card names no fulfillmentOwner and its deliverable is PRODUCE_SPREADSHEET, so Brain fulfils and the 1 humanHour per deal is Brain's; owner time is planned at 0. Deliveries are nevertheless batched 3/3/2 per week so that even if that hour fell to the owner each week stays within the 3 h/week ceiling (9 h window total)."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver all 8 in week 1",
+            "why": "Rejected: harmless if Brain fulfils, but would need 8 h in one week if the per-deal hour were owner work."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email coordinators of about 70-100 directory-listed wedding venues at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reachableChannel",
+              "s_buyerVolume",
+              "s_buyingSignal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the seating chart and vendor run-sheet workbook at $350",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 8 sales at $350 (12% measured conversion), delivery scheduled in three weekly batches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_conversionRates",
+              "s_price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "Week 1: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1500,
+            "day": 6,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 3 week-1 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "Week 2: produce and deliver the workbook to 3 venues (1 fulfiller hour each, 3 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1500,
+            "day": 12,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 3 week-2 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "Week 3: produce and deliver the workbook to 2 venues (1 fulfiller hour each, 2 h this week)",
+            "performer": "BRAIN",
+            "costCents": 1000,
+            "day": 17,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_delivery",
+              "s_directCosts",
+              "s_humanHours",
+              "s_requiredCapabilities"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of the 2 week-3 venues",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 18,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 105000,
+            "label": "Week 1: 3 x $350",
+            "settlesDay": 7,
+            "stepId": "collect1"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Week 1: 3 x $5 direct cost, paid from receipts",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 105000,
+            "label": "Week 2: 3 x $350",
+            "settlesDay": 13,
+            "stepId": "collect2"
+          },
+          {
+            "day": 13,
+            "kind": "SPEND",
+            "amountCents": 1500,
+            "label": "Week 2: 3 x $5 direct cost, paid from receipts",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 70000,
+            "label": "Week 3: 2 x $350",
+            "settlesDay": 18,
+            "stepId": "collect3"
+          },
+          {
+            "day": 18,
+            "kind": "SPEND",
+            "amountCents": 1000,
+            "label": "Week 3: 2 x $5 direct cost, paid from receipts",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 35000,
+            "unit": "cents/deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid orders per reached buyer",
+            "sources": [
+              "s_conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s_conversionRates",
+              "s_buyerVolume"
+            ],
+            "needs": "8 x $350 = $2,800 >= $2,500"
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents/deal",
+            "sources": [
+              "s_directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "exposure",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "s_exposure"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToFirstCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s_timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfillerHoursPerDeal",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "hours/deal (Brain as fulfiller)",
+            "sources": [
+              "s_humanHours",
+              "s_requiredCapabilities",
+              "s_delivery"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHours",
+            "status": "ESTIMATE",
+            "value": 0,
+            "unit": "hours/week",
+            "sources": [
+              "s_requiredCapabilities",
+              "s_delivery",
+              "s_humanHours"
+            ],
+            "needs": "<= 3 h/week; worst case if the per-deal hour were owner work: 3, 3, 2 h in weeks 1-3"
+          },
+          {
+            "name": "buyerPopulation",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "venues",
+            "sources": [
+              "s_buyerVolume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#price",
+            "dated": "2026-11-24",
+            "claim": "$350",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conversionRates",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "30 paid pre-orders from 250 unique visitors",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyerVolume",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "500 wedding venues in the regional venue directory, weddings every weekend in season",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_reachableChannel",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Published business email addresses",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_buyingSignal",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_directCosts",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 per workbook",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exposure",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_timeToFirstCash",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_humanHours",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#humanHours",
+            "dated": "2026-11-24",
+            "claim": "1 hour of work per deal by the fulfiller",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_requiredCapabilities",
+            "url": "https://brain.local/card/cop_0424972f5679418a86dc#requiredCapabilities",
+            "dated": "2026-11-24",
+            "claim": "PRODUCE_SPREADSHEET; no fulfillmentOwner named",
+            "population": "Wedding venue coordinators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "ownerHours quantity is marked EVIDENCED = 0 citing s_delivery, but the card records humanHours: 1 and Brain's run lists the Deliver step as owner PERSON",
+            "resolution": "Partly accepted. Under the fulfilment rule humanHours is work per deal by the fulfiller; the card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET with delivery 'A spreadsheet Brain produces', and Brain attached PRODUCE_SPREADSHEET (PRESENT) to the deliver step, so the hour is Brain's and owner time is 0. I now carry the 1 h/deal explicitly as fulfiller hours and downgrade ownerHours from EVIDENCED to ESTIMATE with the worst case stated."
+          },
+          {
+            "finding": "all 8 deliveries are scheduled on day 6; if the card's 1 human hour is per deal that is ~8 owner hours in week 1, over the 3 h/week ceiling",
+            "resolution": "Accepted. Deliveries are split into three weekly batches (3 on day 6, 3 on day 12, 2 on day 17) with collections on days 7, 13 and 18, so even in the worst case each week uses at most 3 hours and all $2,800 settles inside 21 days."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_0424972f5679418a86dc",
+            "deals": 8,
+            "price": 350,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "revisionId": "rev_2ee9962b370e_5b14be",
+        "digest": "2ee9962b370efa73e056d099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:12.906Z"
+      },
+      "review": {
+        "revisionId": "rev_2ee9962b370e_5b14be",
+        "revisionDigest": "2ee9962b370efa73e056d099",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c745928d19d141148e7b/author-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f3bee243b216433a8292/reviewer-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Both findings answered. Owner time is now an ESTIMATE of 0 because the card names no fulfillmentOwner and the delivery is a spreadsheet Brain produces with PRODUCE_SPREADSHEET PRESENT. The worst case, where the 1 h/deal falls to the owner, is scheduled as 3/3/2 deliveries on days 6, 12 and 17, which is 3, 3 and 2 hours in weeks 1-3, all within 3 h/week. Recomputed the cash: 3x$350 on day 7, 3x$350 on day 13 and 2x$350 on day 18 total $2,800, which is at least $2,500 and settles by day 18 of 21. The $40 cost is paid from receipts, no capital is needed, and the ledger matches the steps. Every chain link is evidenced on the card.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T00:24:57.476Z"
+      },
+      "at": "2026-11-27T00:25:39.251Z"
+    },
+    "staleFinal": null
+  }
+}

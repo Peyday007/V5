@@ -1,0 +1,13 @@
+{
+ "goal_id": "wst_7a26baf2238548c99031",
+ "revision_id": "rev_258bea6567c3_96b82b",
+ "verdict": "PASS",
+ "reasons": "EXECUTABLE is right: Brain's links[] establish all eight links for cop_cc75008978c5450d9cd3 from card EVIDENCE (published-email reach, $180 price for this buyer, 22/200 conversion measured on this offer's own page, 35 pharmacies x 20 deliveries/week volume, MedCourier LLC as the card's recorded fulfiller at $95, $0 exposure, 7-day settlement). Recomputed: 18 x $180 = $3,240 >= $3,000; cost 18 x $95 = $1,710 < price; receipts settle day 10 and the courier is paid day 11 from collected cash, so minimum cash $0 inside the $0 exposure cap; net $1,530. Owner hours 0.5. Nothing unknown is treated as known.",
+ "findings": [
+  "Minor: the sell step's 'about 164 page visitors' cannot come from a 35-pharmacy reach; the arithmetic that actually carries the plan is ~4 converting pharmacies (11% of 35) each routing ~5 of their ~80 monthly cold-chain deliveries, which the stated buyer volume supports. Label should say so.",
+  "Minor: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before day 1, not a chain defect."
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-zeta",
+ "reviewer_model": "claude-opus-5-5"
+}

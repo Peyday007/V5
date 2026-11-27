@@ -1,0 +1,1269 @@
+{
+ "contract": {
+  "goalId": "wst_496eee185f9e44b9938b",
+  "words": "Keep $2,000 of net cash after supplier costs within 30 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 200000,
+   "currency": "USD",
+   "metric": "CONTRIBUTION",
+   "windowDays": 30,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "Net cash kept after supplier costs reaches the target within the window",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "4adcb6b3da9308af7ff318d1"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_496eee185f9e44b9938b",
+   "contractDigest": "4adcb6b3da9308af7ff318d1",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Fulfil the eight signed $1,200 polo orders through Stitchline at $840 each",
+    "opportunityIds": [
+     "cop_83c3b6efee7947639813"
+    ],
+    "why": "Eight studio owners signed $1,200 orders paid in full on proof approval; Stitchline quoted $840 per order on net-15 terms, so cash arrives before the supplier is paid (no up-front capital). 8 x $360 = $2,880 net, above the $2,000 target, settling in about 4 days."
+   },
+   "alternatives": [
+    {
+     "title": "Winter jacket orders",
+     "why": "Excluded: Stitchline cost $1,560 per order exceeds the $1,500 price, so every deal loses money."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Send each of the eight signed studios its polo proof for approval and invoice $1,200 payable on approval",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Collect $1,200 from each of the eight studios on proof approval",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Stitchline Embroidery Co. embroiders and ships eight 40-polo orders at $840 each, invoiced net-15",
+     "performer": "Stitchline Embroidery Co.",
+     "costCents": 672000,
+     "day": 5,
+     "dependsOn": "s_collect",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Stitchline Embroidery Co.",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 960000,
+     "label": "8 x $1,200 paid on proof approval",
+     "settlesDay": 4,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 672000,
+     "label": "Stitchline 8 x $840, net-15 from order",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 4,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per order",
+     "status": "EVIDENCED",
+     "value": 120000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "supplier cost per order",
+     "status": "EVIDENCED",
+     "value": 84000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to first cash",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net cash kept",
+     "status": "EVIDENCED",
+     "value": 288000,
+     "unit": "cents",
+     "sources": [
+      "s1",
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#price",
+     "dated": "2026-11-24",
+     "claim": "Eight studio owners signed $1,200 orders for 40 embroidered polos each, paid in full on proof approval (signed orders, 2026-11)",
+     "population": "independent fitness studio owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are owners of independent fitness studios",
+     "population": "independent fitness studio owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Stitchline Embroidery Co. quoted $840 per 40-polo order, net-15 terms",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $840 per order",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "4 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_47d173dc2e4f49e4a618#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Jacket cost $1,560 per order against a $1,500 price",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_47d173dc2e4f49e4a618"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_83c3b6efee7947639813",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_47d173dc2e4f49e4a618",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_47d173dc2e4f49e4a618",
+     "why": "Supplier cost $1,560 per order is above the $1,500 price: every deal loses $60."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_83c3b6efee7947639813",
+     "deals": 8,
+     "price": 1200,
+     "directCost": 840,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_cf0f52a2d4f1_434b1f",
+   "digest": "cf0f52a2d4f1ed75086785b9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e465833e9bbd499c8f4c/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:13:32.844Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_496eee185f9e44b9938b",
+  "contractDigest": "4adcb6b3da9308af7ff318d1",
+  "parentRevisionId": null,
+  "stance": "EXECUTABLE",
+  "strategy": {
+   "title": "Fulfil the eight signed $1,200 polo orders through Stitchline at $840 each",
+   "opportunityIds": [
+    "cop_83c3b6efee7947639813"
+   ],
+   "why": "Eight studio owners signed $1,200 orders paid in full on proof approval; Stitchline quoted $840 per order on net-15 terms, so cash arrives before the supplier is paid (no up-front capital). 8 x $360 = $2,880 net, above the $2,000 target, settling in about 4 days."
+  },
+  "alternatives": [
+   {
+    "title": "Winter jacket orders",
+    "why": "Excluded: Stitchline cost $1,560 per order exceeds the $1,500 price, so every deal loses money."
+   }
+  ],
+  "steps": [
+   {
+    "id": "s_sell",
+    "kind": "SELL",
+    "label": "Send each of the eight signed studios its polo proof for approval and invoice $1,200 payable on approval",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s1",
+     "s2"
+    ],
+    "priceCents": 120000,
+    "executor": {
+     "operation": "SEND_OFFER",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s_collect",
+    "kind": "COLLECT",
+    "label": "Collect $1,200 from each of the eight studios on proof approval",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 4,
+    "dependsOn": "s_sell",
+    "evidence": [
+     "s1",
+     "s5"
+    ],
+    "executor": {
+     "operation": "COLLECT_PAYMENT",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "ISSUE_AN_INVOICE",
+       "state": "NOT_CONNECTED"
+      }
+     ],
+     "routine": true
+    }
+   },
+   {
+    "id": "s_deliver",
+    "kind": "DELIVER",
+    "label": "Stitchline Embroidery Co. embroiders and ships eight 40-polo orders at $840 each, invoiced net-15",
+    "performer": "Stitchline Embroidery Co.",
+    "costCents": 672000,
+    "day": 5,
+    "dependsOn": "s_collect",
+    "evidence": [
+     "s3",
+     "s4"
+    ],
+    "executor": {
+     "operation": "SUPPLIER_DELIVERS",
+     "performedBy": "PROVIDER",
+     "provider": "Stitchline Embroidery Co.",
+     "capabilities": [
+      {
+       "id": "SEND_A_MESSAGE",
+       "state": "NOT_CONNECTED"
+      },
+      {
+       "id": "READ_REPLIES",
+       "state": "UNREAD"
+      }
+     ],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [
+   {
+    "day": 4,
+    "kind": "RECEIPT",
+    "amountCents": 960000,
+    "label": "8 x $1,200 paid on proof approval",
+    "settlesDay": 4,
+    "stepId": "s_collect"
+   },
+   {
+    "day": 20,
+    "kind": "SPEND",
+    "amountCents": 672000,
+    "label": "Stitchline 8 x $840, net-15 from order",
+    "stepId": "s_deliver"
+   }
+  ],
+  "proofDay": 4,
+  "quantities": [
+   {
+    "name": "signed orders",
+    "status": "EVIDENCED",
+    "value": 8,
+    "unit": "orders",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   },
+   {
+    "name": "price per order",
+    "status": "EVIDENCED",
+    "value": 120000,
+    "unit": "cents",
+    "sources": [
+     "s1"
+    ],
+    "needs": null
+   },
+   {
+    "name": "supplier cost per order",
+    "status": "EVIDENCED",
+    "value": 84000,
+    "unit": "cents",
+    "sources": [
+     "s3",
+     "s4"
+    ],
+    "needs": null
+   },
+   {
+    "name": "days to first cash",
+    "status": "EVIDENCED",
+    "value": 4,
+    "unit": "days",
+    "sources": [
+     "s5"
+    ],
+    "needs": null
+   },
+   {
+    "name": "net cash kept",
+    "status": "EVIDENCED",
+    "value": 288000,
+    "unit": "cents",
+    "sources": [
+     "s1",
+     "s3"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://brain.local/card/cop_83c3b6efee7947639813#price",
+    "dated": "2026-11-24",
+    "claim": "Eight studio owners signed $1,200 orders for 40 embroidered polos each, paid in full on proof approval (signed orders, 2026-11)",
+    "population": "independent fitness studio owners",
+    "matchesBuyer": true,
+    "opportunityId": "cop_83c3b6efee7947639813"
+   },
+   {
+    "id": "s2",
+    "url": "https://brain.local/card/cop_83c3b6efee7947639813#payer",
+    "dated": "2026-11-24",
+    "claim": "Payers are owners of independent fitness studios",
+    "population": "independent fitness studio owners",
+    "matchesBuyer": true,
+    "opportunityId": "cop_83c3b6efee7947639813"
+   },
+   {
+    "id": "s3",
+    "url": "https://brain.local/card/cop_83c3b6efee7947639813#fulfillment",
+    "dated": "2026-11-24",
+    "claim": "Stitchline Embroidery Co. quoted $840 per 40-polo order, net-15 terms",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_83c3b6efee7947639813"
+   },
+   {
+    "id": "s4",
+    "url": "https://brain.local/card/cop_83c3b6efee7947639813#directCosts",
+    "dated": "2026-11-24",
+    "claim": "Direct cost $840 per order",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_83c3b6efee7947639813"
+   },
+   {
+    "id": "s5",
+    "url": "https://brain.local/card/cop_83c3b6efee7947639813#timeToFirstCash",
+    "dated": "2026-11-24",
+    "claim": "4 days to first cash",
+    "population": "this opening",
+    "matchesBuyer": true,
+    "opportunityId": "cop_83c3b6efee7947639813"
+   },
+   {
+    "id": "s6",
+    "url": "https://brain.local/card/cop_47d173dc2e4f49e4a618#directCosts",
+    "dated": "2026-11-24",
+    "claim": "Jacket cost $1,560 per order against a $1,500 price",
+    "population": "supplier quote",
+    "matchesBuyer": true,
+    "opportunityId": "cop_47d173dc2e4f49e4a618"
+   }
+  ],
+  "validation": null,
+  "noPlan": null,
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_83c3b6efee7947639813",
+    "missing": []
+   },
+   {
+    "opportunityId": "cop_47d173dc2e4f49e4a618",
+    "missing": [
+     "ECONOMICS"
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_47d173dc2e4f49e4a618",
+    "why": "Supplier cost $1,560 per order is above the $1,500 price: every deal loses $60."
+   }
+  ],
+  "members": [
+   {
+    "opportunityId": "cop_83c3b6efee7947639813",
+    "deals": 8,
+    "price": 1200,
+    "directCost": 840,
+    "capital": 0
+   }
+  ],
+  "resolves": [],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_cf0f52a2d4f1_434b1f",
+  "digest": "cf0f52a2d4f1ed75086785b9",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_e465833e9bbd499c8f4c/author-B",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:13:32.844Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_cf0f52a2d4f1_434b1f",
+  "digest": "cf0f52a2d4f1ed75086785b9",
+  "contractDigest": "4adcb6b3da9308af7ff318d1",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 672000,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 288000,
+   "minCashDay": 20,
+   "collectedCents": 960000,
+   "collectedInWindowCents": 960000,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 288000
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2880× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Brokered embroidered staff polos for independent fitness studios\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_83c3b6efee7947639813"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Brokered embroidered staff polos for independent fitness studios\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Brokered embroidered staff polos for independent fitness studios\"",
+     "owner": "PERSON",
+     "cost": 840
+    },
+    {
+     "label": "Collect payment for \"Brokered embroidered staff polos for independent fitness studios\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+   "openings": [
+    {
+     "opportunityId": "cop_83c3b6efee7947639813",
+     "title": "Brokered embroidered staff polos for independent fitness studios",
+     "missing": [],
+     "stage": "E_COMMITTED",
+     "supportedReach": 2000,
+     "potentialReach": 2000,
+     "card": {
+      "payer": "Owners of independent fitness studios",
+      "reachableChannel": "Studio owners' emails from the regional fitness business association",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:42.053Z",
+      "offerScope": "Brokered embroidered staff polos for independent fitness studios",
+      "priceCents": 120000,
+      "currency": "USD",
+      "fulfillmentOwner": "Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms)",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "custom embroidery",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 120000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered staff polos for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Studio owners' emails from the regional fitness business association"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 9600 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 9600 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms) (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 840, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "4 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Brokered embroidered staff polos for independent fitness studios to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$840",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Stitchline Embroidery Co. (quoted $840 per 40-polo order, net-15 terms) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Owners of independent fitness studios",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Eight studio owners signed $1,200 orders for 40 embroidered staff polos each, paid in full on proof approval (signed orders, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "4 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_47d173dc2e4f49e4a618",
+     "title": "Brokered embroidered winter jackets for independent fitness studios",
+     "missing": [
+      "ECONOMICS"
+     ],
+     "stage": "E_COMMITTED",
+     "supportedReach": 0,
+     "potentialReach": 0,
+     "card": {
+      "payer": "Owners of independent fitness studios",
+      "reachableChannel": "Studio owners' emails from the regional fitness business association",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:42.053Z",
+      "offerScope": "Brokered embroidered winter jackets for independent fitness studios",
+      "priceCents": 150000,
+      "currency": "USD",
+      "fulfillmentOwner": "Stitchline Embroidery Co. (quoted $1,560 per 20-jacket order)",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "custom embroidery",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 150000,
+       "currency": "USD",
+       "deliverable": "Brokered embroidered winter jackets for independent fitness studios",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Brokered embroidered winter jackets for independent fitness studios to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$1560",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Stitchline Embroidery Co. (quoted $1,560 per 20-jacket order) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Owners of independent fitness studios",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Six studio owners signed $1,500 orders for 20 embroidered winter jackets each (signed orders, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "4 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_d9308a3a6e634966b5a2",
+    "cnd_30c6997eb9f342dda1f1",
+    "cnd_1cc36f2dc3774b8f8085"
+   ],
+   "scope": {
+    "targetCents": 200000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:10:58.190Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_cf0f52a2d4f1_434b1f",
+   "revisionDigest": "cf0f52a2d4f1ed75086785b9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e465833e9bbd499c8f4c/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_63570570d41540c4837e/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "EXECUTABLE is justified. Eight written acceptances at $1,200 (40 polos each, paid in full on proof approval) are on the card from the payer it names; the fulfiller is a named supplier with a quote (Stitchline, $840 per order, net-15), so the delivery performer in s_deliver is the recorded fulfiller. Recomputed against the contribution metric: 8 x $1,200 = $9,600 collected day 4; 8 x $840 = $6,720 paid day 20 (net-15 from a day-5 order); kept $2,880 >= $2,000, on day 20 of 30. Exposure is $0 because buyers pay before the supplier is due, so the 0 cap holds (trace maxExposure 0, min cash $2,880). Margin: 6 of 8 studios paying still keeps $2,160; it fails only if 3 drop. The winter-jacket opening is correctly excluded: $1,560 supplier cost exceeds the $1,500 price, losing $60 per order. I would let the owner act on it.",
+   "findings": [
+    "LOW cop_83c3b6efee7947639813 sequencing: s_sell sends a proof on day 1 but no step obtains the proof from Stitchline before the order is placed on day 5; confirm Stitchline issues proofs before an order (or a mock-up is Brain-made) so approval and payment can happen first, keeping exposure at $0.",
+    "LOW cop_83c3b6efee7947639813: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed day 1/4. Card humanHours 1/order (~8 h) is unconstrained by this contract.",
+    "INFO cop_47d173dc2e4f49e4a618 ECONOMICS: exclusion correct (negative margin)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:20:53.598Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_cf0f52a2d4f1_434b1f",
+  "digest": "cf0f52a2d4f1ed75086785b9",
+  "contractDigest": "4adcb6b3da9308af7ff318d1",
+  "plan": {
+   "goalId": "wst_496eee185f9e44b9938b",
+   "contractDigest": "4adcb6b3da9308af7ff318d1",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Fulfil the eight signed $1,200 polo orders through Stitchline at $840 each",
+    "opportunityIds": [
+     "cop_83c3b6efee7947639813"
+    ],
+    "why": "Eight studio owners signed $1,200 orders paid in full on proof approval; Stitchline quoted $840 per order on net-15 terms, so cash arrives before the supplier is paid (no up-front capital). 8 x $360 = $2,880 net, above the $2,000 target, settling in about 4 days."
+   },
+   "alternatives": [
+    {
+     "title": "Winter jacket orders",
+     "why": "Excluded: Stitchline cost $1,560 per order exceeds the $1,500 price, so every deal loses money."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s_sell",
+     "kind": "SELL",
+     "label": "Send each of the eight signed studios its polo proof for approval and invoice $1,200 payable on approval",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_collect",
+     "kind": "COLLECT",
+     "label": "Collect $1,200 from each of the eight studios on proof approval",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "s_sell",
+     "evidence": [
+      "s1",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s_deliver",
+     "kind": "DELIVER",
+     "label": "Stitchline Embroidery Co. embroiders and ships eight 40-polo orders at $840 each, invoiced net-15",
+     "performer": "Stitchline Embroidery Co.",
+     "costCents": 672000,
+     "day": 5,
+     "dependsOn": "s_collect",
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Stitchline Embroidery Co.",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 960000,
+     "label": "8 x $1,200 paid on proof approval",
+     "settlesDay": 4,
+     "stepId": "s_collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 672000,
+     "label": "Stitchline 8 x $840, net-15 from order",
+     "stepId": "s_deliver"
+    }
+   ],
+   "proofDay": 4,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per order",
+     "status": "EVIDENCED",
+     "value": 120000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "supplier cost per order",
+     "status": "EVIDENCED",
+     "value": 84000,
+     "unit": "cents",
+     "sources": [
+      "s3",
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to first cash",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "days",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net cash kept",
+     "status": "EVIDENCED",
+     "value": 288000,
+     "unit": "cents",
+     "sources": [
+      "s1",
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#price",
+     "dated": "2026-11-24",
+     "claim": "Eight studio owners signed $1,200 orders for 40 embroidered polos each, paid in full on proof approval (signed orders, 2026-11)",
+     "population": "independent fitness studio owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#payer",
+     "dated": "2026-11-24",
+     "claim": "Payers are owners of independent fitness studios",
+     "population": "independent fitness studio owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Stitchline Embroidery Co. quoted $840 per 40-polo order, net-15 terms",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $840 per order",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_83c3b6efee7947639813#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "4 days to first cash",
+     "population": "this opening",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83c3b6efee7947639813"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_47d173dc2e4f49e4a618#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Jacket cost $1,560 per order against a $1,500 price",
+     "population": "supplier quote",
+     "matchesBuyer": true,
+     "opportunityId": "cop_47d173dc2e4f49e4a618"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_83c3b6efee7947639813",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_47d173dc2e4f49e4a618",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_47d173dc2e4f49e4a618",
+     "why": "Supplier cost $1,560 per order is above the $1,500 price: every deal loses $60."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_83c3b6efee7947639813",
+     "deals": 8,
+     "price": 1200,
+     "directCost": 840,
+     "capital": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_cf0f52a2d4f1_434b1f",
+   "digest": "cf0f52a2d4f1ed75086785b9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e465833e9bbd499c8f4c/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:13:32.844Z"
+  },
+  "review": {
+   "revisionId": "rev_cf0f52a2d4f1_434b1f",
+   "revisionDigest": "cf0f52a2d4f1ed75086785b9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e465833e9bbd499c8f4c/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_63570570d41540c4837e/fleet-1",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "EXECUTABLE is justified. Eight written acceptances at $1,200 (40 polos each, paid in full on proof approval) are on the card from the payer it names; the fulfiller is a named supplier with a quote (Stitchline, $840 per order, net-15), so the delivery performer in s_deliver is the recorded fulfiller. Recomputed against the contribution metric: 8 x $1,200 = $9,600 collected day 4; 8 x $840 = $6,720 paid day 20 (net-15 from a day-5 order); kept $2,880 >= $2,000, on day 20 of 30. Exposure is $0 because buyers pay before the supplier is due, so the 0 cap holds (trace maxExposure 0, min cash $2,880). Margin: 6 of 8 studios paying still keeps $2,160; it fails only if 3 drop. The winter-jacket opening is correctly excluded: $1,560 supplier cost exceeds the $1,500 price, losing $60 per order. I would let the owner act on it.",
+   "findings": [
+    "LOW cop_83c3b6efee7947639813 sequencing: s_sell sends a proof on day 1 but no step obtains the proof from Stitchline before the order is placed on day 5; confirm Stitchline issues proofs before an order (or a mock-up is Brain-made) so approval and payment can happen first, keeping exposure at $0.",
+    "LOW cop_83c3b6efee7947639813: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; needed day 1/4. Card humanHours 1/order (~8 h) is unconstrained by this contract.",
+    "INFO cop_47d173dc2e4f49e4a618 ECONOMICS: exclusion correct (negative margin)."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:20:53.598Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Keep $2,000 of net cash after supplier costs within 30 days using no up-front capital.",
+   "terms": "8aed60e10cea6db3",
+   "openings": {
+    "cop_47d173dc2e4f49e4a618": "fff636d84b4d79fd",
+    "cop_83c3b6efee7947639813": "15cb469fb49f9c6f"
+   }
+  },
+  "at": "2026-11-27T12:21:35.052Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

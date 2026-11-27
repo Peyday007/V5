@@ -1,0 +1,23 @@
+{"contractDigest":"69be2212142ce0204f03d45f","parentRevisionId":null,"stance":"NO_PLAN",
+"strategy":{"title":"No executable plan: ballast-water record packs have no established way to reach the buyer","opportunityIds":[],"why":"Price ($2,500), demand signal, Brain-produced delivery at $50, $0 exposure and 14-day time to cash are evidenced and two deals would carry $5,000, but the card records no reachable channel: nothing establishes a published, permitted way to contact the 90 registered coastal operators, so no sale can start."},
+"alternatives":[{"title":"Sell the packs through the port-authority register","why":"The register establishes that 90 operators exist, not that their contacts are published or that outreach to them is permitted."}],
+"steps":[
+{"id":"research","kind":"RESEARCH","label":"Find a published, permitted channel to coastal ship operators (port-authority register contacts, association list, operators' own published contact pages) and how many it reaches","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["buyerVolume"],"ownerHours":0}],
+"cash":[],
+"proofDay":null,
+"quantities":[
+{"name":"price","status":"EVIDENCED","value":2500,"unit":"USD per pack","sources":["s1"]},
+{"name":"buyerVolume","status":"EVIDENCED","value":90,"unit":"registered coastal operators","sources":["s2"]},
+{"name":"conversionRate","status":"EVIDENCED","value":0.075,"unit":"paid pre-orders per unique visitor","sources":["s3"]},
+{"name":"reachableBuyers","status":"UNKNOWN","value":null,"unit":"operators reachable through a published channel","sources":[],"needs":"A sourced published contact channel for coastal ship operators and the count it reaches"}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_6d21bc251d32435e8aaf#price","dated":"2026-11-26","claim":"$2500","population":"Coastal ship operators","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_6d21bc251d32435e8aaf#buyerVolume","dated":"2026-11-26","claim":"90 coastal operators are registered with the port authority; each needs a pack per vessel each year.","population":"Coastal ship operators","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_6d21bc251d32435e8aaf#conversionRates","dated":"2026-11-26","claim":"9 paid pre-orders from 120 unique visitors","population":"Coastal ship operators","matchesBuyer":true}],
+"validation":null,
+"noPlan":{"decisiveGap":"REACHABLE_BUYER: the opening has no recorded channel through which coastal ship operators can be reached for this offer; every other link needed for two $2,500 sales is evidenced.","resolution":"Research and record a published, permitted contact channel (port-authority register with contacts, maritime association directory, or operators' published contact pages) with its source and the number of operators it reaches; with it, two sales at $2,500 within the 14-day time to cash meet the target."},
+"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_6d21bc251d32435e8aaf","missing":["REACHABLE_BUYER"]}],
+"excluded":[],
+"members":[],
+"resolves":["REACHABLE_BUYER"],"constraints":[]}

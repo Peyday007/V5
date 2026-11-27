@@ -1,0 +1,31 @@
+{
+  "id": "ho-11-pharmacy-courier",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_1c7911c04570_72020b",
+  "stance": "EXECUTABLE",
+  "checkProblems": [],
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [pharmacy] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "STEP_FIELD_ABSENT",
+      "PERFORMER_MISMATCH",
+      "OWNER_ROUTINE_WORK"
+    ],
+    "gaps": [
+      "step.price"
+    ],
+    "detail": "pharmacy is fulfilled by owner, the evidence names subcontractor; steps do not carry step.price; 1 routine owner step(s) where the objective allows no owner hours"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "the plan cannot be carried out: PERFORMER_MISMATCH, OWNER_ROUTINE_WORK"
+  }
+}

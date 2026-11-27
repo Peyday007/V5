@@ -54,6 +54,7 @@ import { BIN_TOOLS } from './binTools.ts';
 import { ENGINEERING_TOOLS } from './engineeringTools.ts';
 import { DEADLINE_TOOLS } from './deadlineTools.ts';
 import { OPERATOR_TOOLS } from './operatorTools.ts';
+import { PLANNING_TOOLS } from './planningTools.ts';
 import { OWNER_NOTICE_TOOLS } from './ownerNoticeTools.ts';
 import { fetchSourceTool } from './sourceTools.ts';
 import { activeBinForWorker, confinementFor } from '../repos/bins.ts';
@@ -631,6 +632,27 @@ const completeTool: McpTool = {
      * or release the lease so somebody else can. Releasing is the correct move
      * when you are out of budget, and it costs the packet nothing.
      */
+    // A plan review is done when this worker's review of that revision is recorded, not when it says so.
+    if (item.workType === 'PLAN_REVIEW') {
+      const { reviewRecordedBy } = await import('../services/planning/sessionPlanning.ts');
+      const p = item.payload as { goalId?: string; revisionId?: string };
+      if (!p.goalId || !p.revisionId || !(await reviewRecordedBy(p.goalId, p.revisionId, workerId))) {
+        throw conflictError(
+          'This is a PLAN_REVIEW item and no review of its revision by you is recorded, so completing it would end the ' +
+            'review without doing it. Record brain_planning_review first, or call brain_release_work to hand it back.',
+        );
+      }
+    }
+    if (item.workType === 'PLAN_VERIFY') {
+      const { verificationRecordedBy } = await import('../services/planning/sessionPlanning.ts');
+      const p = item.payload as { goalId?: string; needId?: string };
+      if (!p.goalId || !p.needId || !(await verificationRecordedBy(p.goalId, p.needId, workerId))) {
+        throw conflictError(
+          'This is a PLAN_VERIFY item and no verification of its research by you is recorded. Record ' +
+            'brain_planning_verify_research first, or call brain_release_work to hand it back.',
+        );
+      }
+    }
     const { researchItemRecorded } = await import('../services/research/packetRunner.ts');
     if (!(await researchItemRecorded(item))) {
       throw conflictError(
@@ -1030,6 +1052,9 @@ export const TOOLS: readonly McpTool[] = [
   // §106 — the operator directs every goal through these. Same array, same
   // reason: who may *succeed* with them is `operator:act`, decided at execution.
   ...OPERATOR_TOOLS,
+  // The app-session planning adapter (sessionPlanning.ts): the owner's Claude app session plans a
+  // goal through Brain's machinery. Same authorization: READ to read, operator:act to write.
+  ...PLANNING_TOOLS,
   // The owner's own Claude Code conversation reads the notices Brain records for it (owner,
   // 2026-11-13). Same array, same reason: project:read to read, checkpoints:write to mark delivered.
   ...OWNER_NOTICE_TOOLS,

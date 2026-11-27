@@ -1,0 +1,36 @@
+{
+  "id": "ag-08-pallet-price-contradicted",
+  "step": 1,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+  "stance": "CONDITIONAL",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_1134825151a94b759f4f/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

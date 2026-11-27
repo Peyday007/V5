@@ -1,0 +1,35 @@
+{
+  "id": "ag-10-facade-grant-not-a-price",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_28471061d160_e08fbd",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_bc8b3d425afc4e19ad80/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

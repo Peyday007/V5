@@ -1,0 +1,35 @@
+{
+  "id": "fx-07-crane-yards",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 1,
+  "reviews": 1,
+  "reviewVerdicts": [
+    "PASS"
+  ],
+  "revisionId": "rev_4c95f4cc1c7f_b16f21",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_18d112f729a040d7b9c2/reviewer-beta",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [crane] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

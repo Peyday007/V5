@@ -1,0 +1,1655 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_931b9f4794644a7e9b33",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "proofCondition": "$3,000 of settled cash collected by day 30",
+        "currency": "USD",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "b5610186ddd23b301d17adca"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_931b9f4794644a7e9b33",
+        "contractDigest": "b5610186ddd23b301d17adca",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the lien-sale compliance workbook to self-storage operators by email",
+          "opportunityIds": [
+            "cop_47ee25e5f4b3448aa4a3"
+          ],
+          "why": "Every link is evidenced on the card: 18 paid invoices at $250 from 150 contacts (12% measured on this offer's own sales), 340 operators in the association directory who need monthly lien notices, Brain produces the spreadsheet itself at $4 direct cost, no capital tied up, and cash settles 4 days after sale. 12 deals reach $3,000; we plan 13 from about 150 contacts (expected 18), well inside the 340 available."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the price or bundle a monthly update",
+            "why": "Not evidenced; the $250 price is the one buyers actually paid, so it is kept."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 150 self-storage facility operators through the state self-storage association member directory office emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "8aa4a3-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the lien-sale notice and auction compliance workbook at $250",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 13 paid orders at $250 (measured conversion 0.12)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 13 copies of the spreadsheet deliverable ($4 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 5200,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "8aa4a3-delivery",
+              "8aa4a3-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 13 payments of $250",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 5200,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 325000,
+            "label": "13 x $250",
+            "settlesDay": 8,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "orders per contact",
+            "sources": [
+              "8aa4a3-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "buyers",
+            "sources": [
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 13,
+            "unit": "deals",
+            "sources": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "8aa4a3-buyerVolume",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-captureMechanism",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell A workbook that schedules statutory lien-sale notices and documents each auction step to each buyer.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-conversionRates",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-delivery",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-directCosts",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-exposure",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-payer",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#payer",
+            "dated": "2026-11-24",
+            "claim": "Self-storage facility operators",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-price",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#price",
+            "dated": "2026-11-24",
+            "claim": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "deals": 13,
+            "price": 250,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_03ae669b10e2_b094ac",
+        "digest": "03ae669b10e2c83208c5346c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:19:05.275Z"
+      },
+      {
+        "goalId": "wst_931b9f4794644a7e9b33",
+        "contractDigest": "b5610186ddd23b301d17adca",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the lien-sale compliance workbook to self-storage operators by email",
+          "opportunityIds": [
+            "cop_47ee25e5f4b3448aa4a3"
+          ],
+          "why": "Every link is evidenced on the card: 18 paid invoices at $250 from 150 contacts (12% measured on this offer's own sales), 340 operators in the association directory who need monthly lien notices, Brain produces the spreadsheet itself at $4 direct cost, no capital tied up, and cash settles 4 days after sale. 12 deals reach $3,000; we plan 13 from about 150 contacts (expected 18), well inside the 340 available."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the price or bundle a monthly update",
+            "why": "Not evidenced; the $250 price is the one buyers actually paid, so it is kept."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 150 self-storage facility operators through the state self-storage association member directory office emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "8aa4a3-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the lien-sale notice and auction compliance workbook at $250",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 13 paid orders at $250 (measured conversion 0.12)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 13 copies of the spreadsheet deliverable ($4 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 5200,
+            "day": 8,
+            "dependsOn": "collect",
+            "evidence": [
+              "8aa4a3-delivery",
+              "8aa4a3-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 13 payments of $250, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 5200,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 325000,
+            "label": "13 x $250",
+            "settlesDay": 8,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "orders per contact",
+            "sources": [
+              "8aa4a3-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "buyers",
+            "sources": [
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 13,
+            "unit": "deals",
+            "sources": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "8aa4a3-buyerVolume",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-captureMechanism",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell A workbook that schedules statutory lien-sale notices and documents each auction step to each buyer.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-conversionRates",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-delivery",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-directCosts",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-exposure",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-payer",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#payer",
+            "dated": "2026-11-24",
+            "claim": "Self-storage facility operators",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-price",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#price",
+            "dated": "2026-11-24",
+            "claim": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "deals": 13,
+            "price": 250,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d889d943f60e_34d8ce",
+        "digest": "d889d943f60eb8d6ad1b021d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:19:22.599Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_931b9f4794644a7e9b33",
+      "contractDigest": "b5610186ddd23b301d17adca",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Sell the lien-sale compliance workbook to self-storage operators by email",
+        "opportunityIds": [
+          "cop_47ee25e5f4b3448aa4a3"
+        ],
+        "why": "Every link is evidenced on the card: 18 paid invoices at $250 from 150 contacts (12% measured on this offer's own sales), 340 operators in the association directory who need monthly lien notices, Brain produces the spreadsheet itself at $4 direct cost, no capital tied up, and cash settles 4 days after sale. 12 deals reach $3,000; we plan 13 from about 150 contacts (expected 18), well inside the 340 available."
+      },
+      "alternatives": [
+        {
+          "title": "Raise the price or bundle a monthly update",
+          "why": "Not evidenced; the $250 price is the one buyers actually paid, so it is kept."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email 150 self-storage facility operators through the state self-storage association member directory office emails",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "8aa4a3-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the lien-sale notice and auction compliance workbook at $250",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "8aa4a3-price"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Close 13 paid orders at $250 (measured conversion 0.12)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "offer",
+          "evidence": [
+            "8aa4a3-conversionRates",
+            "8aa4a3-price"
+          ],
+          "priceCents": 25000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Produce and deliver 13 copies of the spreadsheet deliverable ($4 direct cost each)",
+          "performer": "BRAIN",
+          "costCents": 5200,
+          "day": 8,
+          "dependsOn": "collect",
+          "evidence": [
+            "8aa4a3-delivery",
+            "8aa4a3-directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect 13 payments of $250, invoiced on order and paid before delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "sell",
+          "evidence": [
+            "8aa4a3-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 8,
+          "kind": "SPEND",
+          "amountCents": 5200,
+          "label": "direct delivery cost",
+          "stepId": "deliver"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 325000,
+          "label": "13 x $250",
+          "settlesDay": 8,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 14,
+      "quantities": [
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "orders per contact",
+          "sources": [
+            "8aa4a3-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 250,
+          "unit": "USD per deal",
+          "sources": [
+            "8aa4a3-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 340,
+          "unit": "buyers",
+          "sources": [
+            "8aa4a3-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals planned",
+          "status": "EVIDENCED",
+          "value": 13,
+          "unit": "deals",
+          "sources": [
+            "8aa4a3-conversionRates",
+            "8aa4a3-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "USD per deal",
+          "sources": [
+            "8aa4a3-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to settled cash",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "8aa4a3-timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "8aa4a3-buyerVolume",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-captureMechanism",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#captureMechanism",
+          "dated": "2026-11-24",
+          "claim": "Sell A workbook that schedules statutory lien-sale notices and documents each auction step to each buyer.",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-conversionRates",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "18 agreements from 150 contacts",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-delivery",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces.",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-directCosts",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$4",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-exposure",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-payer",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#payer",
+          "dated": "2026-11-24",
+          "claim": "Self-storage facility operators",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-price",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#price",
+          "dated": "2026-11-24",
+          "claim": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "8aa4a3-timeToFirstCash",
+          "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "4 days",
+          "population": "Self-storage facility operators",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+          "deals": 13,
+          "price": 250,
+          "directCost": 4,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_d889d943f60e_34d8ce",
+      "digest": "d889d943f60eb8d6ad1b021d",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:19:22.599Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_d889d943f60e_34d8ce",
+      "digest": "d889d943f60eb8d6ad1b021d",
+      "contractDigest": "b5610186ddd23b301d17adca",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 5200,
+        "committedOpenCents": 0,
+        "preProofCents": 5200,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 4,
+        "collectedCents": 325000,
+        "collectedInWindowCents": 325000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 319800
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Lien-sale notice and auction compliance workbook for self-st\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Lien-sale notice and auction compliance workbook for self-st\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 26814× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Lien-sale notice and auction compliance workbook for self-storage oper\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_47ee25e5f4b3448aa4a3"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Lien-sale notice and auction compliance workbook for self-storage operators\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Lien-sale notice and auction compliance workbook for self-storage operators\"",
+            "owner": "PERSON",
+            "cost": 4
+          },
+          {
+            "label": "Collect payment for \"Lien-sale notice and auction compliance workbook for self-storage operators\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "title": "Lien-sale notice and auction compliance workbook for self-storage operators",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Self-storage facility operators",
+              "reachableChannel": "Facility office emails published in the state self-storage association member directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:07:47.955Z",
+              "offerScope": "A workbook that schedules statutory lien-sale notices and documents each auction step",
+              "priceCents": 25000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "self-storage facilities",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Facility office emails published in the state self-storage association member di"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 250 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "13 deal(s) needed, 340 available in the window (340 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 4, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell A workbook that schedules statutory lien-sale notices and documents each auction step to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "18 agreements from 150 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Self-storage facility operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:15:29.028Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_d889d943f60e_34d8ce",
+        "revisionDigest": "d889d943f60eb8d6ad1b021d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6bd2435865a04e6fb215/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Single opening with every chain link evidenced on this offer's own record: price $250 is what these buyers actually paid (18 paid invoices 2026-11-02..11-20), conversion 18/150 = 12% measured on this offer's own sales, delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved), direct cost $4, exposure $0, cash in 4 days. Arithmetic recomputed: 12 deals reach $3,000 (12 x $250); plan 13 x $250 = $3,250 gross, 13 x $4 = $52 cost, net $3,198. 13 deals from 150 contacts needs 8.7% against measured 12% (expected 18). Receipts day 4, settle day 8, proof day 14, inside 30 days. The $52 cost is spent day 8 after receipts settle, so no owner capital is fronted (ownerFunded 0, exposure 0) and the no-up-front-capital limit holds. Stance EXECUTABLE is right: nothing the plan relies on is an unknown; the contract has no owner-hours ceiling (card says 0.5 h).",
+        "findings": [
+          "The first outreach already contacted 150 of the 340 directory operators and 18 bought a one-time workbook; the new outreach should go to the ~190 not yet contacted (excluding prior buyers). At 12% that is ~23 expected orders vs 13 needed, so volume still holds, but the MARKET_VOLUME basis 'each buying about every 30 days' overstates repeat demand for a one-off workbook.",
+          "Execution prerequisites: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; email sending and invoicing must be connected before day 1. This is setup, not an evidential unknown.",
+          "Brain's own summary lists the deliver step as PERSON, while the card and plan record delivery as a spreadsheet Brain produces; the plan's BRAIN performer matches the card's recorded fulfiller."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:29:30.973Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_d889d943f60e_34d8ce",
+      "digest": "d889d943f60eb8d6ad1b021d",
+      "contractDigest": "b5610186ddd23b301d17adca",
+      "plan": {
+        "goalId": "wst_931b9f4794644a7e9b33",
+        "contractDigest": "b5610186ddd23b301d17adca",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the lien-sale compliance workbook to self-storage operators by email",
+          "opportunityIds": [
+            "cop_47ee25e5f4b3448aa4a3"
+          ],
+          "why": "Every link is evidenced on the card: 18 paid invoices at $250 from 150 contacts (12% measured on this offer's own sales), 340 operators in the association directory who need monthly lien notices, Brain produces the spreadsheet itself at $4 direct cost, no capital tied up, and cash settles 4 days after sale. 12 deals reach $3,000; we plan 13 from about 150 contacts (expected 18), well inside the 340 available."
+        },
+        "alternatives": [
+          {
+            "title": "Raise the price or bundle a monthly update",
+            "why": "Not evidenced; the $250 price is the one buyers actually paid, so it is kept."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 150 self-storage facility operators through the state self-storage association member directory office emails",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "8aa4a3-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the lien-sale notice and auction compliance workbook at $250",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 13 paid orders at $250 (measured conversion 0.12)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-price"
+            ],
+            "priceCents": 25000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 13 copies of the spreadsheet deliverable ($4 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 5200,
+            "day": 8,
+            "dependsOn": "collect",
+            "evidence": [
+              "8aa4a3-delivery",
+              "8aa4a3-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 13 payments of $250, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 5200,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 325000,
+            "label": "13 x $250",
+            "settlesDay": 8,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "orders per contact",
+            "sources": [
+              "8aa4a3-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 250,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 340,
+            "unit": "buyers",
+            "sources": [
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 13,
+            "unit": "deals",
+            "sources": [
+              "8aa4a3-conversionRates",
+              "8aa4a3-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "8aa4a3-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "8aa4a3-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "8aa4a3-buyerVolume",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-captureMechanism",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell A workbook that schedules statutory lien-sale notices and documents each auction step to each buyer.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-conversionRates",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-delivery",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-directCosts",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$4",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-exposure",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-payer",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#payer",
+            "dated": "2026-11-24",
+            "claim": "Self-storage facility operators",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-price",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#price",
+            "dated": "2026-11-24",
+            "claim": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "8aa4a3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_47ee25e5f4b3448aa4a3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days",
+            "population": "Self-storage facility operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_47ee25e5f4b3448aa4a3",
+            "deals": 13,
+            "price": 250,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d889d943f60e_34d8ce",
+        "digest": "d889d943f60eb8d6ad1b021d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:19:22.599Z"
+      },
+      "review": {
+        "revisionId": "rev_d889d943f60e_34d8ce",
+        "revisionDigest": "d889d943f60eb8d6ad1b021d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fac11a50328f4c1dbb4d/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6bd2435865a04e6fb215/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Single opening with every chain link evidenced on this offer's own record: price $250 is what these buyers actually paid (18 paid invoices 2026-11-02..11-20), conversion 18/150 = 12% measured on this offer's own sales, delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved), direct cost $4, exposure $0, cash in 4 days. Arithmetic recomputed: 12 deals reach $3,000 (12 x $250); plan 13 x $250 = $3,250 gross, 13 x $4 = $52 cost, net $3,198. 13 deals from 150 contacts needs 8.7% against measured 12% (expected 18). Receipts day 4, settle day 8, proof day 14, inside 30 days. The $52 cost is spent day 8 after receipts settle, so no owner capital is fronted (ownerFunded 0, exposure 0) and the no-up-front-capital limit holds. Stance EXECUTABLE is right: nothing the plan relies on is an unknown; the contract has no owner-hours ceiling (card says 0.5 h).",
+        "findings": [
+          "The first outreach already contacted 150 of the 340 directory operators and 18 bought a one-time workbook; the new outreach should go to the ~190 not yet contacted (excluding prior buyers). At 12% that is ~23 expected orders vs 13 needed, so volume still holds, but the MARKET_VOLUME basis 'each buying about every 30 days' overstates repeat demand for a one-off workbook.",
+          "Execution prerequisites: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; email sending and invoicing must be connected before day 1. This is setup, not an evidential unknown.",
+          "Brain's own summary lists the deliver step as PERSON, while the card and plan record delivery as a spreadsheet Brain produces; the plan's BRAIN performer matches the card's recorded fulfiller."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:29:30.973Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:31:37.217Z"
+    },
+    "staleFinal": null
+  }
+}

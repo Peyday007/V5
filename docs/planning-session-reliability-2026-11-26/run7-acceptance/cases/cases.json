@@ -1,0 +1,828 @@
+[
+  {
+    "id": "ag-01-electrical-arcflash-executable",
+    "heldOut": true,
+    "description": "Every link evidenced for this seller. The state licensing board roster counts 900 electrical contracting firms with published business emails; this offer was sent to 150 of them and 18 paid $400 (12% of contacts). The 750 not yet contacted at the measured 12% are ~90 deals x $400 = $36,000; even at a third of the measured rate (4%) they are 30 x $400 = $12,000, against a $3,000 target, which needs 8 deals. Brain produces the workbook at $8 a deal, cash in 5 days, nothing tied up, 30-day window. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "electrical contracting",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "arcflash",
+        "title": "NFPA 70E arc-flash label re-verification tracking workbook for electrical contractors",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "electrical contracting",
+        "payer": "Licensed electrical contracting firms",
+        "channel": "Direct email to the business addresses published on the state electrical licensing board roster",
+        "signalDaysAgo": 6,
+        "offer": "A per-site arc-flash label inventory and 5-year re-verification schedule workbook built from the contractor's job list",
+        "price": 400,
+        "priceBasis": "EVIDENCE",
+        "priceEvidence": "18 electrical contractors paid $400 each for the workbook through the checkout link in the offer email (payment processor records, 2026-11).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state electrical licensing board roster lists 900 licensed contracting firms with a published business email (counted 2026-11-20); 150 have been contacted, 750 have not. Each firm needs one workbook.",
+        "volumeBasis": "EVIDENCE",
+        "conversion": {
+          "paid": 18,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ag-02-party-rental-one-sound-of-three",
+    "heldOut": true,
+    "description": "Three party-and-tent-rental openings, one sound. Tent installation crews: four rental companies signed at $1,600 an install, crew subcontracted at $1,000 (quote), paid in 10 days: $6,400 collected against a $4,500 target in 40 days, nothing tied up (inside the $1,000 capital limit). The loss-tracking workbook's $350 price is only the owner's word, and the overnight event-security staffing has two signed buyers but nobody established to staff it. A correct plan uses the tent crews only.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "long",
+      "industry": "party and tent rental",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $4,500 of settled cash within 40 days with at most $1,000 of capital.",
+    "openings": [
+      {
+        "key": "tentCrew",
+        "title": "Overflow tent-installation crews for party rental companies",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "party and tent rental",
+        "payer": "Party and tent rental companies",
+        "channel": "The rental companies' operations managers who signed the work orders",
+        "offer": "A three-person crew installs and strikes one frame tent up to 40x80 ft",
+        "price": 1600,
+        "priceEvidence": "Four rental companies signed work orders at $1,600 per tent install (signed orders, 2026-11).",
+        "cost": 1000,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Summit Event Crews LLC (written quote, $1,000 per install)",
+        "agreements": [
+          1600,
+          1600,
+          1600,
+          1600
+        ]
+      },
+      {
+        "key": "lossWorkbook",
+        "title": "Rental inventory loss and damage tracking workbook for party rental companies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "party and tent rental",
+        "payer": "Party rental company owners",
+        "channel": "The state rental association's member directory",
+        "price": 350,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says rental companies would pay $350 for it.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state rental association lists 220 party rental member companies.",
+        "conversion": {
+          "paid": 12,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "eventSecurity",
+        "title": "Overnight tent-site security staffing for party rental companies",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "party and tent rental",
+        "payer": "Party and tent rental companies",
+        "channel": "The rental companies' operations managers",
+        "price": 1200,
+        "priceEvidence": "Two rental companies signed for overnight site security at $1,200 per event weekend.",
+        "cost": 700,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "NOBODY",
+        "agreements": [
+          1200,
+          1200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "lossWorkbook",
+        "eventSecurity"
+      ],
+      "capitalMax": 1000
+    }
+  },
+  {
+    "id": "ag-03-home-inspection-owner-hours",
+    "heldOut": true,
+    "description": "2 owner hours a week over 28 days is 8 owner hours. Brain produces the report-template pack with no owner work: the state roster counts 1,100 licensed home inspectors with published emails, 210 were offered it and 21 paid $250 (10% of contacts); the 890 uncontacted at even 3% are 26 deals x $250 = $6,500 against a $2,000 target (8 deals). The owner's personal peer-review of inspection reports takes 5 owner hours a deal, so the 4 signed reviews ($1,200) need 20 hours, over the limit. A correct plan uses the template pack and no more than 8 owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "home inspection",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $2,000 of settled cash within 28 days with no more than 2 hours a week of owner time and no up-front capital.",
+    "openings": [
+      {
+        "key": "templatePack",
+        "title": "State-standards-of-practice report template and defect narrative library for home inspectors",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "home inspection",
+        "payer": "Licensed home inspectors",
+        "channel": "Direct email to addresses published on the state home inspector licensing roster",
+        "price": 250,
+        "priceEvidence": "21 home inspectors paid $250 each through the offer's checkout link (payment processor records, 2026-11).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state home inspector licensing roster lists 1,100 active licensees with a published email (counted 2026-11-18); 210 have been contacted, 890 have not. Each buys one pack.",
+        "conversion": {
+          "paid": 21,
+          "of": 210,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "peerReview",
+        "title": "Owner peer-review of home inspection reports before delivery",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "home inspection",
+        "payer": "Newly licensed home inspectors",
+        "channel": "The inspectors who signed",
+        "price": 300,
+        "priceEvidence": "Four new inspectors signed for a $300 report peer review.",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 5,
+        "performer": "OWNER",
+        "agreements": [
+          300,
+          300,
+          300,
+          300
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 8,
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ag-04-tradeshow-net-profit",
+    "heldOut": true,
+    "description": "A net objective: keep $3,000 after direct costs. Exhibit install-and-dismantle labour: five exhibitors signed at $2,200, subcontracted labour quoted at $1,300, paid in 14 days: 5 x $900 = $4,500 kept against $3,000 inside 45 days. Rush booth-graphics printing has three signed orders at $1,800 ($5,400 gross, which alone would 'reach' $3,000 of revenue) but the printer's quote is $1,950 a job: it loses $150 a deal and may not be used. Executable on the I&D labour alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "trade show exhibiting",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Keep $3,000 of net profit after direct costs, settled within 45 days, using no up-front capital.",
+    "openings": [
+      {
+        "key": "installLabor",
+        "title": "Booth install-and-dismantle labour for exhibitors at the regional convention centre",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "trade show exhibiting",
+        "payer": "Trade show exhibitors",
+        "channel": "The exhibitors' event managers who signed",
+        "price": 2200,
+        "priceEvidence": "Five exhibitors signed I&D labour orders at $2,200 per show (signed orders, 2026-11).",
+        "cost": 1300,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Keystone Exhibit Labor (written quote, $1,300 per show)",
+        "agreements": [
+          2200,
+          2200,
+          2200,
+          2200,
+          2200
+        ]
+      },
+      {
+        "key": "rushGraphics",
+        "title": "Rush booth-graphics printing for trade show exhibitors",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "trade show exhibiting",
+        "payer": "Trade show exhibitors",
+        "channel": "The exhibitors' event managers who signed",
+        "price": 1800,
+        "priceEvidence": "Three exhibitors signed rush graphics orders at $1,800 each.",
+        "cost": 1950,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "WideFormat Print Co. (written quote, $1,950 per rush job)",
+        "agreements": [
+          1800,
+          1800,
+          1800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "rushGraphics"
+      ],
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ag-05-forklift-capital-raised",
+    "heldOut": true,
+    "description": "Two warehouses signed purchase agreements at $9,500 for a refurbished forklift, paid on delivery 12 days out; the dealer's quote is $6,800 a unit, paid up front. First reading, at most $2,000 of capital: each unit ties up $6,800 and nothing evidences prepayment, so no plan (capital). The owner then raises the capital limit to $15,000: both units together tie up $13,600, inside it, and collect $19,000 against $15,000 in 45 days ($5,400 kept). Executable after the change.",
+    "dimensions": {
+      "capital": "large",
+      "target": "large",
+      "deadline": "long",
+      "industry": "warehouse material handling",
+      "mechanism": "RESALE_OR_ASSET",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true
+    },
+    "objective": "Collect $15,000 of settled cash within 45 days with at most $2,000 of capital.",
+    "openings": [
+      {
+        "key": "forklift",
+        "title": "Refurbished 5,000 lb electric forklifts resold to regional warehouses",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "warehouse material handling",
+        "payer": "Regional warehouse operators",
+        "channel": "The warehouse operations managers who signed",
+        "price": 9500,
+        "priceEvidence": "Two warehouses signed purchase agreements at $9,500 per refurbished unit, payable on delivery.",
+        "cost": 6800,
+        "capital": 6800,
+        "daysToCash": 12,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Midstate Lift Trucks (dealer quote, $6,800 per refurbished unit incl. delivery)",
+        "agreements": [
+          9500,
+          9500
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 2000
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 15000
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 15000
+    }
+  },
+  {
+    "id": "ag-06-martial-arts-recurring-short",
+    "heldOut": true,
+    "description": "Recurring revenue in a short window: five martial-arts schools signed a $280-a-month member-retention report Brain produces from their member-management export, first month paid in 7 days: $1,400 a month against a $1,200 monthly target within 14 days. Executable, no owner time, nothing tied up.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "industry": "martial arts schools",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Earn $1,200 a month in recurring revenue within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "retention",
+        "title": "Monthly member-retention and churn-risk report for martial-arts schools",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "martial arts schools",
+        "payer": "Martial-arts school owners",
+        "channel": "The school owners who signed",
+        "price": 280,
+        "monthly": true,
+        "priceEvidence": "Five schools signed monthly subscriptions at $280 a month (signed agreements, 2026-11).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "310 martial-arts schools are listed in the state's two governing-body directories; each bills members monthly.",
+        "agreements": [
+          280,
+          280,
+          280,
+          280,
+          280
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ag-07-medspa-price-only-said",
+    "heldOut": true,
+    "description": "Laser and IPL device maintenance logs for medical spas: a counted roster, a channel, a measured rate and Brain as producer, but the $300 price is only the owner's word: nothing shows a med spa pays it. Price is the decisive gap; the first priced offers measure it.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "industry": "medical spas",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "deviceLogs",
+        "title": "Laser and IPL device maintenance and calibration log workbook for medical spas",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "medical spas",
+        "payer": "Medical spa practice managers",
+        "channel": "Practice-manager emails published on the state medical board's registered facility list",
+        "price": 300,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says medical spas would pay $300 for it.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "480 medical spas are on the state medical board's registered facility list; each must keep device maintenance logs for inspection.",
+        "conversion": {
+          "paid": 15,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "deviceLogs"
+      }
+    }
+  },
+  {
+    "id": "ag-08-pallet-price-contradicted",
+    "heldOut": true,
+    "description": "ISPM-15 heat-treatment record workbooks for pallet manufacturers. First reading: 1,400 certified facilities counted, 26 of 200 contacts paid $700 (13%), Brain produces it: the 1,200 uncontacted at even 4% are 48 x $700 = $33,600 against $5,000 in 30 days. Executable. Then a new source states the price is $70 a workbook: the figure the plan rests on is contradicted (at $70, $5,000 needs 72 sales). On a contested price no executable plan is established; price (and so economics) is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "pallet manufacturing",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "ispm15",
+        "title": "ISPM-15 heat-treatment batch record workbook for pallet manufacturers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "pallet manufacturing",
+        "payer": "Certified pallet and wood-packaging manufacturers",
+        "channel": "Contact emails on the national wood-packaging certification agency's public facility list",
+        "price": 700,
+        "priceEvidence": "26 pallet manufacturers paid $700 each through the offer's checkout link (payment processor records, 2026-11).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The certification agency lists 1,400 ISPM-15 certified facilities with a contact email (counted 2026-11-15); 200 have been contacted. Each needs one workbook.",
+        "conversion": {
+          "paid": 26,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "CONTRADICTING_EVIDENCE",
+          "opening": "ispm15",
+          "field": "price",
+          "value": 70
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "ispm15"
+      }
+    }
+  },
+  {
+    "id": "ag-09-signing-agents-volume-estimated",
+    "heldOut": true,
+    "description": "Overflow mobile loan-signing coverage for title companies: $150 a signing, a named notary network at $75, paid in 7 days, 9 of 60 title companies agreed to use it. But how many signings those companies will send is only Brain's estimate. $3,000 needs 20 signings; nothing evidences that many orders inside 30 days. Market volume is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "title and escrow",
+      "mechanism": "SUBCONTRACTED_FULFILMENT",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "signings",
+        "title": "Overflow mobile loan-signing agent coverage for title companies",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "title and escrow",
+        "payer": "Title and escrow companies",
+        "channel": "Closing-department emails of the title companies on the state land-title association roster",
+        "price": 150,
+        "priceEvidence": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11).",
+        "cost": 75,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "SignRight Notary Network (written rate, $75 per signing)",
+        "volume": "Title companies in the metro area probably order about 2,000 mobile signings a month.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 9,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "signings"
+      }
+    }
+  },
+  {
+    "id": "ag-10-facade-grant-not-a-price",
+    "heldOut": true,
+    "description": "The $7,500 is the city's facade-improvement grant, paid by the city to building owners for exterior restoration; it is not what an owner pays for Brain's application packet. Reach, a roster, a fulfiller and settlement are filed, but no buyer is shown paying anything for the packet. At no evidenced price, no plan: the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "historic building restoration",
+      "mechanism": "INFORMATION_ASYMMETRY",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $7,500 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "facade",
+        "title": "Facade-improvement grant application packets for historic-district building owners",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "historic building restoration",
+        "payer": "Historic-district building owners",
+        "channel": "Owner mailing addresses from the county assessor's parcel records for the district",
+        "price": 7500,
+        "priceEvidence": "The city's Facade Improvement Grant program awards up to $7,500 to downtown historic-district building owners for exterior restoration work (city program page, 2026-10).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 2,
+        "performer": "BRAIN",
+        "volume": "85 buildings in the downtown historic district are eligible; the grant round is open until 2027-01-15.",
+        "conversion": {
+          "paid": 4,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "facade"
+      },
+      "notAPurchasePrice": [
+        "facade"
+      ]
+    }
+  },
+  {
+    "id": "ag-11-transit-one-payer",
+    "heldOut": true,
+    "description": "One named transit authority issued one $6,000 purchase order for a bus-stop accessibility audit (subcontracted surveyors at $2,400, paid in 30 days). Nothing says it buys again or that any other agency buys: the most this opening is shown to bring is $6,000 against an $18,000 target in 60 days. Modelling it as many repeat buyers invents the rest. No plan; how many deals the market holds is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "industry": "public transit",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $18,000 of settled cash within 60 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "transit",
+        "title": "ADA bus-stop accessibility audit for Tri-County Regional Transit Authority",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "public transit",
+        "payer": "Tri-County Regional Transit Authority",
+        "channel": "The authority's procurement office (published email)",
+        "price": 6000,
+        "priceEvidence": "Tri-County Regional Transit Authority issued a $6,000 purchase order for an ADA bus-stop accessibility audit of 120 stops (award notice, 2026-11-10).",
+        "cost": 2400,
+        "capital": 0,
+        "daysToCash": 30,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Access Survey Partners (written quote, $2,400 for 120 stops)"
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "transit"
+      },
+      "payerDealsMax": {
+        "transit": 1
+      }
+    }
+  },
+  {
+    "id": "ag-12-film-permits-pay-after-deadline",
+    "heldOut": true,
+    "description": "Four production companies signed $2,000 location-permit packets Brain prepares, but they pay net-45 and the deadline is 21 days: no cash from them can settle in time, and there is no other opening. Infeasible on the deadline.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "long",
+      "industry": "film and video production",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $5,000 of settled cash within 21 days with at most $500 of capital.",
+    "openings": [
+      {
+        "key": "permits",
+        "title": "Location film-permit application packets for independent production companies",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "film and video production",
+        "payer": "Independent film and video production companies",
+        "channel": "The line producers who signed",
+        "price": 2000,
+        "priceEvidence": "Four production companies signed for permit packets at $2,000 each, payable net-45 from invoice.",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          2000,
+          2000,
+          2000,
+          2000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      },
+      "capitalMax": 500
+    }
+  },
+  {
+    "id": "ag-13-drone-scouting-owner-hours",
+    "heldOut": true,
+    "description": "Six row-crop farms signed $900 drone crop-scouting flights, but the owner is the licensed pilot and each flight takes 8 owner hours. $4,000 needs 5 flights = 40 owner hours; 4 hours a week over 21 days allows 12. No subcontracted pilot is established. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "industry": "row-crop farming",
+      "mechanism": "CAPABILITY_ARBITRAGE",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false
+    },
+    "objective": "Collect $4,000 of settled cash within 21 days with no more than 4 hours a week of owner time and no up-front capital.",
+    "openings": [
+      {
+        "key": "droneScout",
+        "title": "Drone multispectral crop-scouting flights for row-crop farms",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "row-crop farming",
+        "payer": "Row-crop farm operators",
+        "channel": "The farm operators who signed",
+        "price": 900,
+        "priceEvidence": "Six farms signed scouting orders at $900 per field-set flight.",
+        "cost": 40,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          900,
+          900,
+          900,
+          900,
+          900,
+          900
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "ag-14-childcare-target-raised-out-of-reach",
+    "heldOut": true,
+    "description": "Staff-ratio scheduling workbooks for licensed child-care centres. First reading, $6,000 in 30 days: the state registry counts 1,400 centres with director emails; 300 were offered it and 43 paid $300 (14%); the 1,100 uncontacted at even 7% are 77 deals x $300 = $23,100 against 20 deals needed. Brain produces it at $5. Executable. The owner then changes the objective to $500,000 in 30 days: every counted centre buying its one workbook is 1,400 x $300 = $420,000, under the target at any conversion. Infeasible as stated.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "industry": "child care centres",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "ratioWorkbook",
+        "title": "Staff-to-child ratio scheduling workbook for licensed child-care centres",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "child care centres",
+        "payer": "Licensed child-care centre directors",
+        "channel": "Director emails published in the state child-care licensing registry",
+        "price": 300,
+        "priceEvidence": "43 centre directors paid $300 each through the offer's checkout link (payment processor records, 2026-11).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state child-care licensing registry lists 1,400 licensed centres with a director email (counted 2026-11-12); 300 have been contacted. Each needs one workbook a year.",
+        "conversion": {
+          "paid": 43,
+          "of": 300,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $500,000 of settled cash within 30 days using no up-front capital."
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET",
+          "DEADLINE"
+        ]
+      },
+      "targetAfterChange": 500000
+    }
+  }
+]

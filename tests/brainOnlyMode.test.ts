@@ -307,6 +307,29 @@ describe('the assignment query enforces it', () => {
     if (answer.assigned) expect(answer.assignment.binId).toBe(goalBin);
   });
 
+  it('admits the planning path’s review and verification of an owner-directed goal’s plan, and no other goal’s (2026-11-27 journey 1)', async () => {
+    const owner = await createUser({ email: `pr-${Math.random().toString(36).slice(2, 10)}@example.test`, displayName: 'Owner', password: 'correct horse battery staple' });
+    const now = new Date().toISOString();
+    const insert = (id: string, ownerId: string | null) => getDb().run(
+      `INSERT INTO workstreams (id, project_id, title, intent, purpose, owner_user_id, target_metric, target_amount_cents,
+         target_currency, target_project_id, target_set_at, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'COLLECTED_CASH', 1000000, 'USD', ?, ?, ?, ?)`,
+      [id, play.project.id, '$10K', 'Collect 10000 dollars', 'REVENUE_DIRECT', ownerId, play.project.id, now, now, now],
+    );
+    await insert('wst_0e0a1a7e0000000000000a01', owner.id);
+    await insert('wst_0e0a1a7e0000000000000a02', null);
+    const item = (workType: string, goalId: string) => ({ bin_id: null, orchestration_id: null, project_id: play.project.id, work_type: workType, payload: JSON.stringify({ goalId, revisionId: 'rev_x' }) });
+    expect(await workItemPurposeAdmits(item('PLAN_REVIEW', 'wst_0e0a1a7e0000000000000a01'))).toBe(true);
+    expect(await workItemPurposeAdmits(item('PLAN_VERIFY', 'wst_0e0a1a7e0000000000000a01'))).toBe(true);
+    // A goal nobody owns (one a connector's worker created) is not owner-directed: its review is held back.
+    expect(await workItemPurposeAdmits(item('PLAN_REVIEW', 'wst_0e0a1a7e0000000000000a02'))).toBe(false);
+    // The exception is the planning items' alone: any other bin-less work on that goal's play project stays denied.
+    expect(await workItemPurposeAdmits(item('SOMETHING_ELSE', 'wst_0e0a1a7e0000000000000a01'))).toBe(false);
+    // Paused, the owner-directed goal's review goes back to waiting like the rest of its work.
+    await getDb().run("UPDATE workstreams SET paused_at = ?, paused_reason = 'test' WHERE id = ?", [now, 'wst_0e0a1a7e0000000000000a01']);
+    expect(await workItemPurposeAdmits(item('PLAN_REVIEW', 'wst_0e0a1a7e0000000000000a01'))).toBe(false);
+  });
+
   it('reaches the goal’s research through a mission the goal links, as the goal model does', async () => {
     const goalId = OWNER_DIRECTED_GOAL_IDS[0]!;
     const now = new Date().toISOString();

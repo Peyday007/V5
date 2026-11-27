@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_bc08da146dc64a199b4e",
+ "revision_id": "rev_721d8fc863f9_863d2e",
+ "verdict": "PASS",
+ "reasons": "NO_PLAN on CAPITAL is correct: the card's EVIDENCE directCosts/exposure show the supplier (Coastal Dental Supply, the recorded fulfiller) requires $1,400 with order per case lot, and no buyer prepayment is recorded, so even one lot needs $1,400 committed against a $500 capital limit; with all evidence in hand the limit still cannot be met. One lot at $2,000 already exceeds the $1,500 target, so raising capital to $1,400 is sufficient; margin arithmetic ($600/lot, $1,800 for three) checks.",
+ "findings": [
+  "The CAPITAL suggestion says three sequential lots bring $6,000 within 30 days; ordered one at a time with 12 days to usable cash, the third lot's receipt lands about day 36, outside the window. Two lots ($4,000) settle in time, which still clears the target, so the suggestion should say so.",
+  "The buyer-deposit alternative ($900+ per lot) is not on the card; it is an untested route, not an established one."
+ ],
+ "conditions": [],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-iota",
+ "reviewer_model": "claude-opus-5-5"
+}

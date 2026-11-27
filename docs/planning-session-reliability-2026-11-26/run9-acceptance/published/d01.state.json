@@ -1,0 +1,2790 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_f520930b52ce402b8c6d",
+      "words": "I want to collect $1,000 of settled cash within 14 days. I have no money to put in up front. Find me something real.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 100000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "A paying buyer's money has settled in the owner's account",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "7541a8f3b8469758b059538c"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_f520930b52ce402b8c6d",
+        "contractDigest": "7541a8f3b8469758b059538c",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Upwork fixed-price writing contracts, delivered by the owner with AI assistance",
+          "opportunityIds": [
+            "cop_4cdcaf9772cb4de1b707"
+          ],
+          "why": "The only route that needs $0, reaches a buyer population that posts fresh paid requests daily (about 99 new Upwork writing jobs a day; 794,000 active Upwork clients), and can settle inside 14 days (approval + Upwork's 5-day fixed-price hold). What buyers actually pay a new profile and how many proposals turn into funded contracts are unknown, so a $0 five-day test decides whether to go on."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile optimisation sold by cold email to local businesses",
+            "why": "Price is only a vendor list price ($150-$750 asked, no purchase shown), close rate unknown, and Stripe's first payout waits 7-14 days after the first live payment, leaving no room inside 14 days."
+          },
+          {
+            "title": "DataAnnotation hourly AI-training work by the owner",
+            "why": "One payer, selective acceptance and no guaranteed hours: the owner may not be approved or given 40 paid hours within 14 days; it is a job, not a population of buyers."
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Brain refused it: Fiverr's 14-day clearing period puts the first settled cash after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Set up the owner's Upwork freelancer profile and send proposals to posted fixed-price writing/research jobs with a stated budget of at least $200, using free Connects only",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_up_jobs",
+              "src_up_clients"
+            ],
+            "ownerHours": 5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "TEST",
+            "label": "Measure proposals sent vs contracts funded into escrow, and the funded price, by day 5 (proof/stop gate)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "proposal_to_hire_rate",
+              "price_paid"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Accept fixed-price contracts at $200 each, funded into Upwork escrow before work starts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "price_paid"
+            ],
+            "ownerHours": 2,
+            "priceCents": 20000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Write and deliver each contract's deliverable (owner, AI-assisted), submit milestone for approval within 1-2 days of hire",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_up_card_fulfil"
+            ],
+            "ownerHours": 18,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Client approves milestone; Upwork deducts its service fee and holds fixed-price funds for its 5-day security period, then funds are withdrawable",
+            "performer": "Upwork",
+            "costCents": 12000,
+            "day": 13,
+            "dependsOn": "s4",
+            "evidence": [
+              "settlement_days",
+              "src_up_hold"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Upwork",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 1 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 12,
+            "stepId": "s5"
+          },
+          {
+            "day": 7,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 1",
+            "stepId": "s5"
+          },
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 2 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 12,
+            "stepId": "s5"
+          },
+          {
+            "day": 7,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 2",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 3 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 3",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 4 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 4",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 5 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 5",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 6 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) on contract 6",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "proposal_to_hire_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "funded contracts per proposal",
+            "sources": [],
+            "needs": "Measured in the day-1-to-5 test on the owner's own new profile"
+          },
+          {
+            "name": "price_paid",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per funded contract",
+            "sources": [
+              "src_up_jobs"
+            ],
+            "needs": "Stated budgets (median $100, average $648, 7 days to 2026-11-27) are not paid contract values; measured by the first funded contracts"
+          },
+          {
+            "name": "contracts_needed",
+            "status": "ESTIMATE",
+            "value": 6,
+            "unit": "contracts at $200 gross",
+            "sources": [],
+            "needs": "6 x $200 less ~10% fee = $1,080 settled"
+          },
+          {
+            "name": "settlement_days",
+            "status": "ESTIMATE",
+            "value": 5,
+            "unit": "days after approval",
+            "sources": [
+              "src_up_hold"
+            ],
+            "needs": "Upwork 5-day security hold on fixed-price funds; client approval time is the client's"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 26,
+            "unit": "hours in 14 days",
+            "sources": [],
+            "needs": "3 hours per contract plus proposals"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_up_jobs",
+            "url": "https://snipework.com/market/rates/writing",
+            "dated": "2026-11-27",
+            "claim": "694 Upwork writing jobs posted in the last 7 days; 99 in the last 24 hours; average stated fixed budget $648, median $100 (stated budgets, not final contract values)",
+            "population": "Upwork clients posting writing jobs",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_clients",
+            "url": "https://www.sec.gov/Archives/edgar/data/1627475/000162747525000055/upwork3q25-pressrelease.htm",
+            "dated": "2025-11-03",
+            "claim": "Upwork had 794,000 active clients; GSV per active client $5,036",
+            "population": "All Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_hold",
+            "url": "https://wise.com/gb/blog/upwork-payments",
+            "dated": "2025-08-11",
+            "claim": "As soon as payment is approved or released, Upwork places your earnings in a five-day security hold. Once this time is over, you can withdraw your money.",
+            "population": "Upwork freelancers on fixed-price contracts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_card_fulfil",
+            "url": "https://brain.local/card/cop_4cdcaf9772cb4de1b707#fulfillmentOwner",
+            "dated": "2026-11-27",
+            "claim": "The owner, personally, fulfils the deliverable",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_gbp_price",
+            "url": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile",
+            "dated": "2026-11-27",
+            "claim": "Sellers list one-time Google Business Profile optimisation offers (vendor list prices, not purchases)",
+            "population": "Local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_gbp_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; it cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_da_faq",
+            "url": "https://www.dataannotation.tech/faq",
+            "dated": "2026-11-27",
+            "claim": "General track $25-$50/hour; PayPal deposits within a few days of request; approval within a few days of the Starter Assessment",
+            "population": "DataAnnotation workers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          }
+        ],
+        "validation": {
+          "proof": "By day 5, at least 2 fixed-price contracts of at least $200 each are funded into Upwork escrow from no more than 40 proposals, and the first deliverable is approved by its client",
+          "stop": [
+            "No contract funded into escrow after 40 proposals or by day 5",
+            "Funded contracts average under $150, so 6 cannot carry $1,000 settled",
+            "First client rejects the deliverable or requests a refund",
+            "Any step would require buying Connects or another cash outlay (cap is $0)"
+          ],
+          "continue": [
+            "2 or more contracts funded at $200+ by day 5: keep proposing until 6 are funded by day 8, deliver within 1-2 days each so approvals land by day 9"
+          ],
+          "decides": [
+            "CONVERSION",
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "why": "Stripe's 7-14 day first-payout wait plus sales time leaves no settled cash by day 14; price not established"
+          },
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "why": "Single payer with selective acceptance and no guaranteed hours; cannot be relied on for 40 paid hours in 14 days"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "deals": 6,
+            "price": 200,
+            "directCost": 20,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_05d1e3655072_f5b95c",
+        "digest": "05d1e3655072e56c0dde223d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:08:45.336Z"
+      },
+      {
+        "goalId": "wst_f520930b52ce402b8c6d",
+        "contractDigest": "7541a8f3b8469758b059538c",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Upwork fixed-price writing contracts, delivered by the owner with AI assistance",
+          "opportunityIds": [
+            "cop_4cdcaf9772cb4de1b707"
+          ],
+          "why": "The only route that needs $0, reaches a buyer population that posts fresh paid requests daily (about 99 new Upwork writing jobs a day; 794,000 active Upwork clients), and can settle inside 14 days (approval + Upwork's 5-day fixed-price hold). What buyers actually pay a new profile and how many proposals turn into funded contracts are unknown, so a $0 five-day test decides whether to go on."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile optimisation sold by cold email to local businesses",
+            "why": "Price is only a vendor list price ($150-$750 asked, no purchase shown), close rate unknown, and Stripe's first payout waits 7-14 days after the first live payment, leaving no room inside 14 days."
+          },
+          {
+            "title": "DataAnnotation hourly AI-training work by the owner",
+            "why": "One payer, selective acceptance and no guaranteed hours: the owner may not be approved or given 40 paid hours within 14 days; it is a job, not a population of buyers."
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Brain refused it: Fiverr's 14-day clearing period puts the first settled cash after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Set up the owner's Upwork freelancer profile and send proposals to posted fixed-price writing/research jobs with a stated budget of at least $200, using free Connects only",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_up_jobs",
+              "src_up_clients"
+            ],
+            "ownerHours": 5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "TEST",
+            "label": "Measure proposals sent vs contracts funded into escrow, and the funded price, by day 5 (proof/stop gate)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "proposal_to_hire_rate",
+              "price_paid"
+            ],
+            "ownerHours": 1,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Accept fixed-price contracts at $200 each, funded into Upwork escrow before work starts",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "price_paid"
+            ],
+            "ownerHours": 2,
+            "priceCents": 20000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Write and deliver each contract's deliverable (owner, AI-assisted), submit milestone for approval within 1-2 days of hire",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_up_card_fulfil"
+            ],
+            "ownerHours": 18,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Client approves milestone; Upwork deducts its service fee and holds fixed-price funds for its 5-day security period, then funds are withdrawable",
+            "performer": "Upwork",
+            "costCents": 12000,
+            "day": 13,
+            "dependsOn": "s4",
+            "evidence": [
+              "settlement_days",
+              "src_up_hold"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "Upwork",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 1 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 12,
+            "stepId": "s5"
+          },
+          {
+            "day": 12,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 1 at release",
+            "stepId": "s5"
+          },
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 2 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 12,
+            "stepId": "s5"
+          },
+          {
+            "day": 12,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 2 at release",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 3 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 3 at release",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 4 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 4 at release",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 5 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 5 at release",
+            "stepId": "s5"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 20000,
+            "label": "Contract 6 milestone approved; $200 released after 5-day hold",
+            "settlesDay": 13,
+            "stepId": "s5"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 2000,
+            "label": "Upwork service fee (~10%) netted from contract 6 at release",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "proposal_to_hire_rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "funded contracts per proposal",
+            "sources": [],
+            "needs": "Measured in the day-1-to-5 test on the owner's own new profile"
+          },
+          {
+            "name": "price_paid",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per funded contract",
+            "sources": [
+              "src_up_jobs"
+            ],
+            "needs": "Stated budgets (median $100, average $648, 7 days to 2026-11-27) are not paid contract values; measured by the first funded contracts"
+          },
+          {
+            "name": "contracts_needed",
+            "status": "ESTIMATE",
+            "value": 6,
+            "unit": "contracts at $200 gross",
+            "sources": [],
+            "needs": "6 x $200 less ~10% fee = $1,080 settled"
+          },
+          {
+            "name": "settlement_days",
+            "status": "ESTIMATE",
+            "value": 5,
+            "unit": "days after approval",
+            "sources": [
+              "src_up_hold"
+            ],
+            "needs": "Upwork 5-day security hold on fixed-price funds; client approval time is the client's"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 26,
+            "unit": "hours in 14 days",
+            "sources": [],
+            "needs": "3 hours per contract plus proposals"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_up_jobs",
+            "url": "https://snipework.com/market/rates/writing",
+            "dated": "2026-11-27",
+            "claim": "694 Upwork writing jobs posted in the last 7 days; 99 in the last 24 hours; average stated fixed budget $648, median $100 (stated budgets, not final contract values)",
+            "population": "Upwork clients posting writing jobs",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_clients",
+            "url": "https://www.sec.gov/Archives/edgar/data/1627475/000162747525000055/upwork3q25-pressrelease.htm",
+            "dated": "2025-11-03",
+            "claim": "Upwork had 794,000 active clients; GSV per active client $5,036",
+            "population": "All Upwork clients",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_hold",
+            "url": "https://wise.com/gb/blog/upwork-payments",
+            "dated": "2025-08-11",
+            "claim": "As soon as payment is approved or released, Upwork places your earnings in a five-day security hold. Once this time is over, you can withdraw your money.",
+            "population": "Upwork freelancers on fixed-price contracts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_card_fulfil",
+            "url": "https://brain.local/card/cop_4cdcaf9772cb4de1b707#fulfillmentOwner",
+            "dated": "2026-11-27",
+            "claim": "The owner, personally, fulfils the deliverable",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_gbp_price",
+            "url": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile",
+            "dated": "2026-11-27",
+            "claim": "Sellers list one-time Google Business Profile optimisation offers (vendor list prices, not purchases)",
+            "population": "Local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_gbp_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; it cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_da_faq",
+            "url": "https://www.dataannotation.tech/faq",
+            "dated": "2026-11-27",
+            "claim": "General track $25-$50/hour; PayPal deposits within a few days of request; approval within a few days of the Starter Assessment",
+            "population": "DataAnnotation workers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          }
+        ],
+        "validation": {
+          "proof": "By day 5, at least 2 fixed-price contracts of at least $200 each are funded into Upwork escrow from no more than 40 proposals, and the first deliverable is approved by its client",
+          "stop": [
+            "No contract funded into escrow after 40 proposals or by day 5",
+            "Funded contracts average under $150, so 6 cannot carry $1,000 settled",
+            "First client rejects the deliverable or requests a refund",
+            "Any step would require buying Connects or another cash outlay (cap is $0)"
+          ],
+          "continue": [
+            "2 or more contracts funded at $200+ by day 5: keep proposing until 6 are funded by day 8, deliver within 1-2 days each so approvals land by day 9"
+          ],
+          "decides": [
+            "CONVERSION",
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "why": "Stripe's 7-14 day first-payout wait plus sales time leaves no settled cash by day 14; price not established"
+          },
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "why": "Single payer with selective acceptance and no guaranteed hours; cannot be relied on for 40 paid hours in 14 days"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "deals": 6,
+            "price": 200,
+            "directCost": 20,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ba58bf2aa9fc_9d8f3b",
+        "digest": "ba58bf2aa9fc88a49228a31b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:09:02.529Z"
+      },
+      {
+        "goalId": "wst_f520930b52ce402b8c6d",
+        "contractDigest": "7541a8f3b8469758b059538c",
+        "parentRevisionId": "rev_ba58bf2aa9fc_9d8f3b",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Paid AI-training work at DataAnnotation, performed by the owner, $0 in",
+          "opportunityIds": [
+            "cop_2481b7cdb58e4838a534"
+          ],
+          "why": "It is the only opening whose price is evidenced on its card (the payer's own FAQ: General track $25-$50/h), it needs no money and no Connects, approval is stated as a few days after the assessment and PayPal deposits a few days after each request, so 44 hours worked on days 5-10 settle by day 13. It is conditional on what only the attempt can show: whether the owner is approved, and whether enough paid hours are offered (one payer, no guaranteed hours)."
+        },
+        "alternatives": [
+          {
+            "title": "Upwork fixed-price writing contracts",
+            "why": "Not startable at $0: proposals cost Connects (about 12 each), the 50-Connect bonus requires buying a bundle or Freelancer Plus, and only some accounts get 10 free a month; and approval + 5-day hold + withdrawal leaves no slack in 14 days. If 10 free Connects are on the owner's account, one proposal can run alongside at $0, but nothing is counted from it."
+          },
+          {
+            "title": "Google Business Profile optimisation by cold email",
+            "why": "Price only a seller list price, close rate unknown, and Stripe's first payout waits 7-14 days after the first live payment."
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: 14-day clearing puts first cash after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Owner signs up at DataAnnotation and completes the Starter Assessment on day 1",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_da_faq"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "TEST",
+            "label": "Gate on day 5: owner approved, and paid projects at >= $25/h visible on the dashboard with enough work for ~7 h/day",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "approval",
+              "hours_available"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Take General-track paid projects at the published starting rate of $25/h",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s2",
+            "evidence": [
+              "src_da_faq"
+            ],
+            "ownerHours": 0.5,
+            "priceCents": 2500,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Owner performs 44 paid hours of AI-response evaluation/writing tasks, days 5-10 (~7.3 h/day)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_da_card_fulfil"
+            ],
+            "ownerHours": 44,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Request PayPal withdrawals on day 7 (20 h) and day 10 (24 h); deposits arrive within a few days of each request",
+            "performer": "DataAnnotation via PayPal",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_da_faq",
+              "payout_days"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "DataAnnotation via PayPal",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "Withdrawal 1: 20 paid hours x $25",
+            "settlesDay": 10,
+            "stepId": "s5"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "Withdrawal 2: 24 paid hours x $25",
+            "settlesDay": 13,
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "hourly_rate",
+            "status": "EVIDENCED",
+            "value": 25,
+            "unit": "USD per hour (starting, General)",
+            "sources": [
+              "src_da_faq",
+              "src_da_card_fulfil"
+            ],
+            "needs": "Payer's published starting rate"
+          },
+          {
+            "name": "approval",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "approved by day 5 (yes/no)",
+            "sources": [
+              "src_da_faq"
+            ],
+            "needs": "Stated 'within a few days' of the assessment; acceptance is selective; measured on day 5"
+          },
+          {
+            "name": "hours_available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid hours offered days 5-10",
+            "sources": [],
+            "needs": "No guaranteed hours; 44 needed; measured on the dashboard on day 5-7"
+          },
+          {
+            "name": "payout_days",
+            "status": "ESTIMATE",
+            "value": 3,
+            "unit": "days from request to PayPal deposit",
+            "sources": [
+              "src_da_faq"
+            ],
+            "needs": "'within a few days'; first withdrawal on day 7 measures it"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 47,
+            "unit": "hours in 14 days",
+            "sources": [],
+            "needs": "Objective sets no hours ceiling"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_da_faq",
+            "url": "https://www.dataannotation.tech/faq",
+            "dated": "2026-11-27",
+            "claim": "General: $25-$50/hour; 'We send payments via PayPal. Deposits will be delivered within a few days after you request them.'; 'Workers typically receive approval notification within a few days after completing the Starter Assessment.'",
+            "population": "DataAnnotation workers (the payer's own terms)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          },
+          {
+            "id": "src_da_card_fulfil",
+            "url": "https://brain.local/card/cop_2481b7cdb58e4838a534#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Card EVIDENCE: DataAnnotation publishes starting pay of $25-$50/hour for General-track work, PayPal deposits within a few days",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          },
+          {
+            "id": "src_up_jobs",
+            "url": "https://snipework.com/market/rates/writing",
+            "dated": "2026-11-27",
+            "claim": "694 Upwork writing jobs posted in 7 days; median stated fixed budget $100 (stated budgets, not contract values)",
+            "population": "Upwork clients posting writing jobs",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_connects",
+            "url": "https://gigradar.io/blog/free-upwork-connects",
+            "dated": "2026-04-21",
+            "claim": "New users get a one-time 50-Connect bonus only after purchasing their first bundle or subscribing to Freelancer Plus; some freelancers get 10 free Connects monthly; average ~12 Connects per proposal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_hold",
+            "url": "https://wise.com/gb/blog/upwork-payments",
+            "dated": "2025-08-11",
+            "claim": "As soon as payment is approved or released, Upwork places your earnings in a five-day security hold",
+            "population": "Upwork freelancers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_gbp_price",
+            "url": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile",
+            "dated": "2026-11-27",
+            "claim": "Sellers list one-time Google Business Profile optimisation offers (list prices, not purchases)",
+            "population": "Local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_gbp_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; it cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          }
+        ],
+        "validation": {
+          "proof": "By day 5 the owner is approved and at least one paid project at >= $25/h is available; by day 7 at least 18 paid hours are logged and the first withdrawal is requested; it lands in PayPal by day 10",
+          "stop": [
+            "Not approved by day 5 (44 hours cannot then be worked and paid out by day 14)",
+            "No paid project at >= $25/h available by day 6",
+            "Fewer than 18 paid hours logged by day 7",
+            "First withdrawal not deposited by day 11"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "continue": [
+            "Approved with work available: keep ~7 h/day to day 10, withdraw on days 7 and 10"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Arithmetic: 6 x $200 = $1,200; at 10% fee $1,080 net; at a 15% fee $1,020, still >= $1,000 but with $20 of margin, so a single contract below $200 or one late approval misses the target.",
+            "resolution": "Accepted; Upwork is no longer a member, so the fee margin no longer carries the target."
+          },
+          {
+            "finding": "Cash timing: hold is 5 days from approval (src_up_hold, Wise blog, secondary). Contracts approved day 8 settle day 13; day 9 -> 14; day 10 -> 15 (outside).",
+            "resolution": "Accepted; Upwork settlement slack is nil, which is one reason it is dropped as a member."
+          },
+          {
+            "finding": "Price: the only price research (SnipeWork stated budgets, median $100, average $648) was verified INSUFFICIENT; the plan rightly treats price_paid as UNKNOWN and filters to jobs budgeted >= $200, but a new profile winning at $200 when the median posting is $100 is the core bet.",
+            "resolution": "Accepted; price_paid on Upwork stays unestablished and Upwork is now an alternative only."
+          },
+          {
+            "finding": "Alternative under-used: DataAnnotation now has an EVIDENCE price on its card (its own FAQ: General $25-$50/h, PayPal deposits within days, approval within days). It is $0, needs no Connects and settles fast; it is a legitimate parallel test to run alongside Upwork rather than a reason to exclude, though hours available are not guaranteed.",
+            "resolution": "Accepted: DataAnnotation (EVIDENCE price on its card, $0, no Connects, payouts within days) is now the plan's member, gated on approval and hours available."
+          },
+          {
+            "finding": "Owner hours ~26 in 14 days; contract has no hour ceiling, fine.",
+            "resolution": "Noted; owner hours are now ~47, the objective sets no ceiling."
+          },
+          {
+            "finding": "Fiverr exclusion on 14-day clearance is correct.",
+            "resolution": "Agreed; Fiverr stays excluded."
+          },
+          {
+            "finding": "The route is sensible for a $0, 14-day goal and the plan honestly marks price and hire rate UNKNOWN, but as written it is not startable inside its own limits and its gate does not predict the target. (1) $0 cap vs Connects: every Upwork proposal costs Connects; the plan assumes 40+ proposals on 'free Connects only' with no source for how many free Connects a new profile gets (the routeSearches pag",
+            "resolution": "Accepted: Upwork cannot run at $0 (Connects cost money: src_up_connects), so the plan moves to the $0 opening with an evidenced price, and decides now lists every unestablished link."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "exposure",
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          },
+          {
+            "condition": 3,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "why": "Proposals need Connects that cost money (no guaranteed free allowance), breaking the $0 cap; settlement slack in 14 days is nil"
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "why": "Stripe's 7-14 day first-payout wait plus sales time leaves no settled cash by day 14; price not established"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "deals": 44,
+            "price": 25,
+            "directCost": 0,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_768ddb9f8260_fa8a9c",
+        "digest": "768ddb9f826082384451be15",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:15:43.845Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_f520930b52ce402b8c6d",
+      "contractDigest": "7541a8f3b8469758b059538c",
+      "parentRevisionId": "rev_ba58bf2aa9fc_9d8f3b",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Paid AI-training work at DataAnnotation, performed by the owner, $0 in",
+        "opportunityIds": [
+          "cop_2481b7cdb58e4838a534"
+        ],
+        "why": "It is the only opening whose price is evidenced on its card (the payer's own FAQ: General track $25-$50/h), it needs no money and no Connects, approval is stated as a few days after the assessment and PayPal deposits a few days after each request, so 44 hours worked on days 5-10 settle by day 13. It is conditional on what only the attempt can show: whether the owner is approved, and whether enough paid hours are offered (one payer, no guaranteed hours)."
+      },
+      "alternatives": [
+        {
+          "title": "Upwork fixed-price writing contracts",
+          "why": "Not startable at $0: proposals cost Connects (about 12 each), the 50-Connect bonus requires buying a bundle or Freelancer Plus, and only some accounts get 10 free a month; and approval + 5-day hold + withdrawal leaves no slack in 14 days. If 10 free Connects are on the owner's account, one proposal can run alongside at $0, but nothing is counted from it."
+        },
+        {
+          "title": "Google Business Profile optimisation by cold email",
+          "why": "Price only a seller list price, close rate unknown, and Stripe's first payout waits 7-14 days after the first live payment."
+        },
+        {
+          "title": "Fiverr gig",
+          "why": "Refused by Brain: 14-day clearing puts first cash after day 14."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "REACH",
+          "label": "Owner signs up at DataAnnotation and completes the Starter Assessment on day 1",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "src_da_faq"
+          ],
+          "ownerHours": 2,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "TEST",
+          "label": "Gate on day 5: owner approved, and paid projects at >= $25/h visible on the dashboard with enough work for ~7 h/day",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "s1",
+          "evidence": [
+            "approval",
+            "hours_available"
+          ],
+          "ownerHours": 0.5,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "SELL",
+          "label": "Take General-track paid projects at the published starting rate of $25/h",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "s2",
+          "evidence": [
+            "src_da_faq"
+          ],
+          "ownerHours": 0.5,
+          "priceCents": 2500,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "DELIVER",
+          "label": "Owner performs 44 paid hours of AI-response evaluation/writing tasks, days 5-10 (~7.3 h/day)",
+          "performer": "OWNER",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "s3",
+          "evidence": [
+            "src_da_card_fulfil"
+          ],
+          "ownerHours": 44,
+          "executor": {
+            "operation": "OWNER_TASK",
+            "performedBy": "OWNER",
+            "provider": null,
+            "capabilities": [],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "COLLECT",
+          "label": "Request PayPal withdrawals on day 7 (20 h) and day 10 (24 h); deposits arrive within a few days of each request",
+          "performer": "DataAnnotation via PayPal",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "s4",
+          "evidence": [
+            "src_da_faq",
+            "payout_days"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": "DataAnnotation via PayPal",
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "Withdrawal 1: 20 paid hours x $25",
+          "settlesDay": 10,
+          "stepId": "s5"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 60000,
+          "label": "Withdrawal 2: 24 paid hours x $25",
+          "settlesDay": 13,
+          "stepId": "s5"
+        }
+      ],
+      "proofDay": 5,
+      "quantities": [
+        {
+          "name": "hourly_rate",
+          "status": "EVIDENCED",
+          "value": 25,
+          "unit": "USD per hour (starting, General)",
+          "sources": [
+            "src_da_faq",
+            "src_da_card_fulfil"
+          ],
+          "needs": "Payer's published starting rate"
+        },
+        {
+          "name": "approval",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "approved by day 5 (yes/no)",
+          "sources": [
+            "src_da_faq"
+          ],
+          "needs": "Stated 'within a few days' of the assessment; acceptance is selective; measured on day 5"
+        },
+        {
+          "name": "hours_available",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "paid hours offered days 5-10",
+          "sources": [],
+          "needs": "No guaranteed hours; 44 needed; measured on the dashboard on day 5-7"
+        },
+        {
+          "name": "payout_days",
+          "status": "ESTIMATE",
+          "value": 3,
+          "unit": "days from request to PayPal deposit",
+          "sources": [
+            "src_da_faq"
+          ],
+          "needs": "'within a few days'; first withdrawal on day 7 measures it"
+        },
+        {
+          "name": "owner_hours",
+          "status": "ESTIMATE",
+          "value": 47,
+          "unit": "hours in 14 days",
+          "sources": [],
+          "needs": "Objective sets no hours ceiling"
+        }
+      ],
+      "sources": [
+        {
+          "id": "src_da_faq",
+          "url": "https://www.dataannotation.tech/faq",
+          "dated": "2026-11-27",
+          "claim": "General: $25-$50/hour; 'We send payments via PayPal. Deposits will be delivered within a few days after you request them.'; 'Workers typically receive approval notification within a few days after completing the Starter Assessment.'",
+          "population": "DataAnnotation workers (the payer's own terms)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_2481b7cdb58e4838a534"
+        },
+        {
+          "id": "src_da_card_fulfil",
+          "url": "https://brain.local/card/cop_2481b7cdb58e4838a534#revenueRange",
+          "dated": "2026-11-27",
+          "claim": "Card EVIDENCE: DataAnnotation publishes starting pay of $25-$50/hour for General-track work, PayPal deposits within a few days",
+          "population": "this opening",
+          "matchesBuyer": true,
+          "opportunityId": "cop_2481b7cdb58e4838a534"
+        },
+        {
+          "id": "src_up_jobs",
+          "url": "https://snipework.com/market/rates/writing",
+          "dated": "2026-11-27",
+          "claim": "694 Upwork writing jobs posted in 7 days; median stated fixed budget $100 (stated budgets, not contract values)",
+          "population": "Upwork clients posting writing jobs",
+          "matchesBuyer": true,
+          "opportunityId": "cop_4cdcaf9772cb4de1b707"
+        },
+        {
+          "id": "src_up_connects",
+          "url": "https://gigradar.io/blog/free-upwork-connects",
+          "dated": "2026-04-21",
+          "claim": "New users get a one-time 50-Connect bonus only after purchasing their first bundle or subscribing to Freelancer Plus; some freelancers get 10 free Connects monthly; average ~12 Connects per proposal",
+          "population": "Upwork freelancers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_4cdcaf9772cb4de1b707"
+        },
+        {
+          "id": "src_up_hold",
+          "url": "https://wise.com/gb/blog/upwork-payments",
+          "dated": "2025-08-11",
+          "claim": "As soon as payment is approved or released, Upwork places your earnings in a five-day security hold",
+          "population": "Upwork freelancers",
+          "matchesBuyer": true,
+          "opportunityId": "cop_4cdcaf9772cb4de1b707"
+        },
+        {
+          "id": "src_gbp_price",
+          "url": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile",
+          "dated": "2026-11-27",
+          "claim": "Sellers list one-time Google Business Profile optimisation offers (list prices, not purchases)",
+          "population": "Local businesses",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+        },
+        {
+          "id": "src_gbp_stripe",
+          "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+          "dated": "2026-11-27",
+          "claim": "There is a 7-14 day waiting period for the first payout; it cannot be waived",
+          "population": "New Stripe accounts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+        }
+      ],
+      "validation": {
+        "proof": "By day 5 the owner is approved and at least one paid project at >= $25/h is available; by day 7 at least 18 paid hours are logged and the first withdrawal is requested; it lands in PayPal by day 10",
+        "stop": [
+          "Not approved by day 5 (44 hours cannot then be worked and paid out by day 14)",
+          "No paid project at >= $25/h available by day 6",
+          "Fewer than 18 paid hours logged by day 7",
+          "First withdrawal not deposited by day 11"
+        ],
+        "decides": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "continue": [
+          "Approved with work available: keep ~7 h/day to day 10, withdraw on days 7 and 10"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Arithmetic: 6 x $200 = $1,200; at 10% fee $1,080 net; at a 15% fee $1,020, still >= $1,000 but with $20 of margin, so a single contract below $200 or one late approval misses the target.",
+          "resolution": "Accepted; Upwork is no longer a member, so the fee margin no longer carries the target."
+        },
+        {
+          "finding": "Cash timing: hold is 5 days from approval (src_up_hold, Wise blog, secondary). Contracts approved day 8 settle day 13; day 9 -> 14; day 10 -> 15 (outside).",
+          "resolution": "Accepted; Upwork settlement slack is nil, which is one reason it is dropped as a member."
+        },
+        {
+          "finding": "Price: the only price research (SnipeWork stated budgets, median $100, average $648) was verified INSUFFICIENT; the plan rightly treats price_paid as UNKNOWN and filters to jobs budgeted >= $200, but a new profile winning at $200 when the median posting is $100 is the core bet.",
+          "resolution": "Accepted; price_paid on Upwork stays unestablished and Upwork is now an alternative only."
+        },
+        {
+          "finding": "Alternative under-used: DataAnnotation now has an EVIDENCE price on its card (its own FAQ: General $25-$50/h, PayPal deposits within days, approval within days). It is $0, needs no Connects and settles fast; it is a legitimate parallel test to run alongside Upwork rather than a reason to exclude, though hours available are not guaranteed.",
+          "resolution": "Accepted: DataAnnotation (EVIDENCE price on its card, $0, no Connects, payouts within days) is now the plan's member, gated on approval and hours available."
+        },
+        {
+          "finding": "Owner hours ~26 in 14 days; contract has no hour ceiling, fine.",
+          "resolution": "Noted; owner hours are now ~47, the objective sets no ceiling."
+        },
+        {
+          "finding": "Fiverr exclusion on 14-day clearance is correct.",
+          "resolution": "Agreed; Fiverr stays excluded."
+        },
+        {
+          "finding": "The route is sensible for a $0, 14-day goal and the plan honestly marks price and hire rate UNKNOWN, but as written it is not startable inside its own limits and its gate does not predict the target. (1) $0 cap vs Connects: every Upwork proposal costs Connects; the plan assumes 40+ proposals on 'free Connects only' with no source for how many free Connects a new profile gets (the routeSearches pag",
+          "resolution": "Accepted: Upwork cannot run at $0 (Connects cost money: src_up_connects), so the plan moves to the $0 opening with an evidenced price, and decides now lists every unestablished link."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "exposure",
+            "directCosts",
+            "brain:ECONOMICS"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "timeToFirstCash",
+            "brain:SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "condition": 2,
+          "decision": "ACCEPTED",
+          "records": [
+            "brain:CONVERSION"
+          ]
+        },
+        {
+          "condition": 3,
+          "decision": "ACCEPTED",
+          "records": [
+            "price",
+            "revenueRange",
+            "brain:OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_2481b7cdb58e4838a534",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_4cdcaf9772cb4de1b707",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_4cdcaf9772cb4de1b707",
+          "why": "Proposals need Connects that cost money (no guaranteed free allowance), breaking the $0 cap; settlement slack in 14 days is nil"
+        },
+        {
+          "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+          "why": "Stripe's 7-14 day first-payout wait plus sales time leaves no settled cash by day 14; price not established"
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_2481b7cdb58e4838a534",
+          "deals": 44,
+          "price": 25,
+          "directCost": 0,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "MARKET_VOLUME",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_768ddb9f8260_fa8a9c",
+      "digest": "768ddb9f826082384451be15",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b1751bd606204aa7925c/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T11:15:43.845Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_768ddb9f8260_fa8a9c",
+      "digest": "768ddb9f826082384451be15",
+      "contractDigest": "7541a8f3b8469758b059538c",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 7,
+        "collectedCents": 110000,
+        "collectedInWindowCents": 110000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 110000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Paid AI-training contract work (DataAnnotation) performed by\", \"Google Business Profile optimisation for local small busines\", \"Upwork fixed-price AI-assisted writing/research deliverables\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 75× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Google Business Profile optimisation for local small busines\" needs [figure withheld] and keeps [figure withheld], 240× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_2481b7cdb58e4838a534",
+          "cop_c1e7e3128c944dd6a7bb",
+          "cop_4cdcaf9772cb4de1b707"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Research first: the deep dives on \"Paid AI-training contract work (DataAnnotation) performed by\", \"Google Business Profile optimisation for local small busines\", \"Upwork fixed-price AI-assisted writing/research deliverables\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+        "openings": [
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "title": "Google Business Profile optimisation for local small businesses",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 250,
+            "card": {
+              "payer": "Local service businesses with incomplete Google Business Profiles",
+              "reachableChannel": "Cold email to local businesses found on Google Maps with incomplete profiles; Stripe payment link",
+              "offerScope": "One-time Google Business Profile audit and optimisation (categories, description, services, photos plan, Q&A, posts) done by Brain",
+              "priceCents": 25000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "Local small-business marketing",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to local businesses found on Google Maps with incomplete profiles; St"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 10, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to local businesses found on Google Maps with incomplete profiles; Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell One-time Google Business Profile audit and optimisation (categories, description, services, photos plan, Q&A, posts) done by Brain to Local service businesses with incomplete Google Business Profiles, reached through Cold email to local businesses found on Google Maps with incomplete profiles; Stripe payment link, at $250; The owner, AI-assisted, under the owner's own account delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$10",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner, AI-assisted, under the owner's own account.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "One-time Google Business Profile audit and optimisation (categories, description, services, photos plan, Q&A, posts) done by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Local service businesses with incomplete Google Business Profiles",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; https://officeconsumer.com/how-much-does-google-business-profile-optimization-cost-w-examples-faqs/; https://fiverr.com/jgillman824/optimize-your-google-business-profile; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "title": "Upwork fixed-price AI-assisted writing/research deliverables",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 200,
+            "card": {
+              "payer": "Upwork clients who post fixed-price jobs",
+              "reachableChannel": "Proposals to posted Upwork fixed-price jobs using free Connects",
+              "offerScope": "Fixed-price written deliverables (articles, research summaries, data cleanup) drafted by Brain, checked by owner, delivered through the owner's Upwork account",
+              "priceCents": 20000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "Freelance services marketplace (content/research)",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Proposals to posted Upwork fixed-price jobs using free Connects"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Proposals to posted Upwork fixed-price jobs using free Connects",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Fixed-price written deliverables (articles, research summaries, data cleanup) drafted by Brain, checked by owner, delivered through the owner's Upwork account to Upwork clients who post fixed-price jobs, reached through Proposals to posted Upwork fixed-price jobs using free Connects, at $200; The owner, AI-assisted, under the owner's own account delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner, AI-assisted, under the owner's own account.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "3 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Fixed-price written deliverables (articles, research summaries, data cleanup) drafted by Brain, checked by owner, delivered through the owner's Upwork account",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Upwork clients who post fixed-price jobs",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$200",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; Upwork fixed-price payment security period 5 days; https://www.upwork.com/resources/how-to-get-free-connects; Upwork free Connects new freelancers monthly",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "title": "Paid AI-training contract work (DataAnnotation) performed by the owner",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1000,
+            "card": {
+              "payer": "DataAnnotation (AI training data platform)",
+              "reachableChannel": "Apply through DataAnnotation's Starter Assessment",
+              "offerScope": "Hourly AI-response evaluation/writing tasks performed by the owner",
+              "priceCents": 2500,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "AI model training data",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Apply through DataAnnotation's Starter Assessment"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 25 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "160 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "40 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "7 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Apply through DataAnnotation's Starter Assessment",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "1 DataAnnotation (AI training data platform) (40 paid hours at 5/h; work availability not guaranteed and acceptance selective)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Hourly AI-response evaluation/writing tasks performed by the owner to DataAnnotation (AI training data platform), reached through Apply through DataAnnotation's Starter Assessment, at $25; The owner delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "1 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Hourly AI-response evaluation/writing tasks performed by the owner",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "DataAnnotation (AI training data platform)",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$25",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "DataAnnotation publishes starting pay of $25-$50/hour for General-track work, paid via PayPal with deposits within a few days of request; approval typically within a few days of the Starter Assessment. This is the payer's own published rate, not a guarantee of hours.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.dataannotation.tech/faq; https://www.dataannotation.tech/faq; https://www.dataannotation.tech/blog/does-data-annotation-pay-well",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 100000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T11:14:39.337Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_ba58bf2aa9fc_9d8f3b",
+        "revisionDigest": "ba58bf2aa9fc88a49228a31b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b9e649dc52e54979990f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The route is sensible for a $0, 14-day goal and the plan honestly marks price and hire rate UNKNOWN, but as written it is not startable inside its own limits and its gate does not predict the target. (1) $0 cap vs Connects: every Upwork proposal costs Connects; the plan assumes 40+ proposals on 'free Connects only' with no source for how many free Connects a new profile gets (the routeSearches page is not in sources; I could not open it, 403 to WebFetch and brain_fetch_source). If the free allowance covers only a handful of proposals, the test cannot run at $0. This is research-answerable and must be established or the proposal count sized to it. (2) The ledger contradicts the continue rule and has no slack: the continue rule says 6 contracts funded by day 8 and delivered within 1-2 days so approvals land by day 9, but the cash rows approve contracts 3-6 on day 8 (settling day 13). With approvals on day 9 settlement is day 14, the last day, and day 10 means day 15, outside the window. Client approval time is the client's (fixed-price milestones can sit for days before auto-release) and withdrawal from Upwork to the owner's account, which is what the proof condition requires ('settled in the owner's account'), adds further days not modelled. (3) The proof gate does not imply the target: 2 funded from 40 proposals is a 5% hire rate, at which 6 contracts need ~120 proposals, so 80 more in 3 days, which collides with point (1). (4) validation.decides lists CONVERSION and OFFER_AND_PRICE only, but SETTLES_IN_TIME (approval + hold + withdrawal inside 14 days), ECONOMICS (Connects at $0 and the Upwork fee, '~10%' unsourced) and FULFILMENT (new-profile approval in the Writing category) are equally unestablished.",
+        "findings": [
+          "Arithmetic: 6 x $200 = $1,200; at 10% fee $1,080 net; at a 15% fee $1,020, still >= $1,000 but with $20 of margin, so a single contract below $200 or one late approval misses the target.",
+          "Cash timing: hold is 5 days from approval (src_up_hold, Wise blog, secondary). Contracts approved day 8 settle day 13; day 9 -> 14; day 10 -> 15 (outside).",
+          "Price: the only price research (SnipeWork stated budgets, median $100, average $648) was verified INSUFFICIENT; the plan rightly treats price_paid as UNKNOWN and filters to jobs budgeted >= $200, but a new profile winning at $200 when the median posting is $100 is the core bet.",
+          "Alternative under-used: DataAnnotation now has an EVIDENCE price on its card (its own FAQ: General $25-$50/h, PayPal deposits within days, approval within days). It is $0, needs no Connects and settles fast; it is a legitimate parallel test to run alongside Upwork rather than a reason to exclude, though hours available are not guaranteed.",
+          "Owner hours ~26 in 14 days; contract has no hour ceiling, fine.",
+          "Fiverr exclusion on 14-day clearance is correct."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:11:30.056Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "link": "ECONOMICS",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "freeConnects",
+            "why": "The card does not hold how many free Connects a new profile receives or what a proposal costs; with a $0 exposure cap the 40-120 proposals the plan needs may require buying Connects."
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "link": "SETTLES_IN_TIME",
+            "basis": "EVIDENCE",
+            "field": "timeToFirstCash",
+            "why": "timeToFirstCash is a RECOMMENDATION (10 days); client approval time and withdrawal to the owner's account are not established, and the plan's own continue rule puts approvals on day 9, settling on day 14 with zero slack."
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "link": "CONVERSION",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "conversionRates",
+            "why": "No hire rate for a new Upwork writing profile; the 2-of-40 gate implies ~120 proposals for 6 contracts."
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "Card price is a RECOMMENDATION ($200); the verified research shows only stated budgets (median $100), not paid contract values."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_768ddb9f8260_fa8a9c",
+        "revisionDigest": "768ddb9f826082384451be15",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b9e649dc52e54979990f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right and this is a plan the owner can start today at $0. The price is the payer's own published rate (DataAnnotation FAQ, which I opened: General 'Starting at $25-$50 per hour'; 'Deposits will be delivered within a few days after you request them'; approval 'within a few days after completing the Starter Assessment'), so it is a real purchase price for this payer, not a benchmark. The unknowns are exactly what only the attempt can measure (approval, paid hours offered, payout speed), each with a dated gate and stop: approval by day 5, >= 18 paid hours by day 7, first deposit by day 11. No money is needed, no Connects, and the Upwork exclusion is now sourced (Connects cost money; the 50-Connect bonus needs a purchase). Arithmetic: 44 h x $25 = $1,100 >= $1,000; withdrawals $500 (day 7, lands ~day 10) + $600 (day 10, lands ~day 13); ledger matches the steps.",
+        "findings": [
+          "Slack is one day: with 'a few days' = 3 the second deposit lands day 13; if the first withdrawal takes the full 4 days the stop rule allows (deposited day 11), the second lands day 14, the last day. Withdrawing more often (e.g. daily from day 7, or the second on day 9) would buy slack at no cost.",
+          "Margin is $100 (10%): 40 paid hours is the floor; the gate's 18 h by day 7 is consistent with ~7 h/day from day 5.",
+          "Eligibility is not stated on the FAQ (it says contractors are global, English fluency required, paid via PayPal); the day-5 approval gate covers it.",
+          "'Settled in the owner's account' is read as the PayPal balance; a bank transfer from PayPal would add days not in the ledger.",
+          "Owner hours ~47 in 14 days, ~7.3 h/day on days 5-10; the objective sets no ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:17:48.340Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_768ddb9f8260_fa8a9c",
+      "digest": "768ddb9f826082384451be15",
+      "contractDigest": "7541a8f3b8469758b059538c",
+      "plan": {
+        "goalId": "wst_f520930b52ce402b8c6d",
+        "contractDigest": "7541a8f3b8469758b059538c",
+        "parentRevisionId": "rev_ba58bf2aa9fc_9d8f3b",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Paid AI-training work at DataAnnotation, performed by the owner, $0 in",
+          "opportunityIds": [
+            "cop_2481b7cdb58e4838a534"
+          ],
+          "why": "It is the only opening whose price is evidenced on its card (the payer's own FAQ: General track $25-$50/h), it needs no money and no Connects, approval is stated as a few days after the assessment and PayPal deposits a few days after each request, so 44 hours worked on days 5-10 settle by day 13. It is conditional on what only the attempt can show: whether the owner is approved, and whether enough paid hours are offered (one payer, no guaranteed hours)."
+        },
+        "alternatives": [
+          {
+            "title": "Upwork fixed-price writing contracts",
+            "why": "Not startable at $0: proposals cost Connects (about 12 each), the 50-Connect bonus requires buying a bundle or Freelancer Plus, and only some accounts get 10 free a month; and approval + 5-day hold + withdrawal leaves no slack in 14 days. If 10 free Connects are on the owner's account, one proposal can run alongside at $0, but nothing is counted from it."
+          },
+          {
+            "title": "Google Business Profile optimisation by cold email",
+            "why": "Price only a seller list price, close rate unknown, and Stripe's first payout waits 7-14 days after the first live payment."
+          },
+          {
+            "title": "Fiverr gig",
+            "why": "Refused by Brain: 14-day clearing puts first cash after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Owner signs up at DataAnnotation and completes the Starter Assessment on day 1",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_da_faq"
+            ],
+            "ownerHours": 2,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "TEST",
+            "label": "Gate on day 5: owner approved, and paid projects at >= $25/h visible on the dashboard with enough work for ~7 h/day",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "approval",
+              "hours_available"
+            ],
+            "ownerHours": 0.5,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Take General-track paid projects at the published starting rate of $25/h",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s2",
+            "evidence": [
+              "src_da_faq"
+            ],
+            "ownerHours": 0.5,
+            "priceCents": 2500,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Owner performs 44 paid hours of AI-response evaluation/writing tasks, days 5-10 (~7.3 h/day)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s3",
+            "evidence": [
+              "src_da_card_fulfil"
+            ],
+            "ownerHours": 44,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Request PayPal withdrawals on day 7 (20 h) and day 10 (24 h); deposits arrive within a few days of each request",
+            "performer": "DataAnnotation via PayPal",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_da_faq",
+              "payout_days"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": "DataAnnotation via PayPal",
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "Withdrawal 1: 20 paid hours x $25",
+            "settlesDay": 10,
+            "stepId": "s5"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 60000,
+            "label": "Withdrawal 2: 24 paid hours x $25",
+            "settlesDay": 13,
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "hourly_rate",
+            "status": "EVIDENCED",
+            "value": 25,
+            "unit": "USD per hour (starting, General)",
+            "sources": [
+              "src_da_faq",
+              "src_da_card_fulfil"
+            ],
+            "needs": "Payer's published starting rate"
+          },
+          {
+            "name": "approval",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "approved by day 5 (yes/no)",
+            "sources": [
+              "src_da_faq"
+            ],
+            "needs": "Stated 'within a few days' of the assessment; acceptance is selective; measured on day 5"
+          },
+          {
+            "name": "hours_available",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "paid hours offered days 5-10",
+            "sources": [],
+            "needs": "No guaranteed hours; 44 needed; measured on the dashboard on day 5-7"
+          },
+          {
+            "name": "payout_days",
+            "status": "ESTIMATE",
+            "value": 3,
+            "unit": "days from request to PayPal deposit",
+            "sources": [
+              "src_da_faq"
+            ],
+            "needs": "'within a few days'; first withdrawal on day 7 measures it"
+          },
+          {
+            "name": "owner_hours",
+            "status": "ESTIMATE",
+            "value": 47,
+            "unit": "hours in 14 days",
+            "sources": [],
+            "needs": "Objective sets no hours ceiling"
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_da_faq",
+            "url": "https://www.dataannotation.tech/faq",
+            "dated": "2026-11-27",
+            "claim": "General: $25-$50/hour; 'We send payments via PayPal. Deposits will be delivered within a few days after you request them.'; 'Workers typically receive approval notification within a few days after completing the Starter Assessment.'",
+            "population": "DataAnnotation workers (the payer's own terms)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          },
+          {
+            "id": "src_da_card_fulfil",
+            "url": "https://brain.local/card/cop_2481b7cdb58e4838a534#revenueRange",
+            "dated": "2026-11-27",
+            "claim": "Card EVIDENCE: DataAnnotation publishes starting pay of $25-$50/hour for General-track work, PayPal deposits within a few days",
+            "population": "this opening",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2481b7cdb58e4838a534"
+          },
+          {
+            "id": "src_up_jobs",
+            "url": "https://snipework.com/market/rates/writing",
+            "dated": "2026-11-27",
+            "claim": "694 Upwork writing jobs posted in 7 days; median stated fixed budget $100 (stated budgets, not contract values)",
+            "population": "Upwork clients posting writing jobs",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_connects",
+            "url": "https://gigradar.io/blog/free-upwork-connects",
+            "dated": "2026-04-21",
+            "claim": "New users get a one-time 50-Connect bonus only after purchasing their first bundle or subscribing to Freelancer Plus; some freelancers get 10 free Connects monthly; average ~12 Connects per proposal",
+            "population": "Upwork freelancers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_up_hold",
+            "url": "https://wise.com/gb/blog/upwork-payments",
+            "dated": "2025-08-11",
+            "claim": "As soon as payment is approved or released, Upwork places your earnings in a five-day security hold",
+            "population": "Upwork freelancers",
+            "matchesBuyer": true,
+            "opportunityId": "cop_4cdcaf9772cb4de1b707"
+          },
+          {
+            "id": "src_gbp_price",
+            "url": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile",
+            "dated": "2026-11-27",
+            "claim": "Sellers list one-time Google Business Profile optimisation offers (list prices, not purchases)",
+            "population": "Local businesses",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          },
+          {
+            "id": "src_gbp_stripe",
+            "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+            "dated": "2026-11-27",
+            "claim": "There is a 7-14 day waiting period for the first payout; it cannot be waived",
+            "population": "New Stripe accounts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb"
+          }
+        ],
+        "validation": {
+          "proof": "By day 5 the owner is approved and at least one paid project at >= $25/h is available; by day 7 at least 18 paid hours are logged and the first withdrawal is requested; it lands in PayPal by day 10",
+          "stop": [
+            "Not approved by day 5 (44 hours cannot then be worked and paid out by day 14)",
+            "No paid project at >= $25/h available by day 6",
+            "Fewer than 18 paid hours logged by day 7",
+            "First withdrawal not deposited by day 11"
+          ],
+          "decides": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "MARKET_VOLUME",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ],
+          "continue": [
+            "Approved with work available: keep ~7 h/day to day 10, withdraw on days 7 and 10"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Arithmetic: 6 x $200 = $1,200; at 10% fee $1,080 net; at a 15% fee $1,020, still >= $1,000 but with $20 of margin, so a single contract below $200 or one late approval misses the target.",
+            "resolution": "Accepted; Upwork is no longer a member, so the fee margin no longer carries the target."
+          },
+          {
+            "finding": "Cash timing: hold is 5 days from approval (src_up_hold, Wise blog, secondary). Contracts approved day 8 settle day 13; day 9 -> 14; day 10 -> 15 (outside).",
+            "resolution": "Accepted; Upwork settlement slack is nil, which is one reason it is dropped as a member."
+          },
+          {
+            "finding": "Price: the only price research (SnipeWork stated budgets, median $100, average $648) was verified INSUFFICIENT; the plan rightly treats price_paid as UNKNOWN and filters to jobs budgeted >= $200, but a new profile winning at $200 when the median posting is $100 is the core bet.",
+            "resolution": "Accepted; price_paid on Upwork stays unestablished and Upwork is now an alternative only."
+          },
+          {
+            "finding": "Alternative under-used: DataAnnotation now has an EVIDENCE price on its card (its own FAQ: General $25-$50/h, PayPal deposits within days, approval within days). It is $0, needs no Connects and settles fast; it is a legitimate parallel test to run alongside Upwork rather than a reason to exclude, though hours available are not guaranteed.",
+            "resolution": "Accepted: DataAnnotation (EVIDENCE price on its card, $0, no Connects, payouts within days) is now the plan's member, gated on approval and hours available."
+          },
+          {
+            "finding": "Owner hours ~26 in 14 days; contract has no hour ceiling, fine.",
+            "resolution": "Noted; owner hours are now ~47, the objective sets no ceiling."
+          },
+          {
+            "finding": "Fiverr exclusion on 14-day clearance is correct.",
+            "resolution": "Agreed; Fiverr stays excluded."
+          },
+          {
+            "finding": "The route is sensible for a $0, 14-day goal and the plan honestly marks price and hire rate UNKNOWN, but as written it is not startable inside its own limits and its gate does not predict the target. (1) $0 cap vs Connects: every Upwork proposal costs Connects; the plan assumes 40+ proposals on 'free Connects only' with no source for how many free Connects a new profile gets (the routeSearches pag",
+            "resolution": "Accepted: Upwork cannot run at $0 (Connects cost money: src_up_connects), so the plan moves to the $0 opening with an evidenced price, and decides now lists every unestablished link."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "exposure",
+              "directCosts",
+              "brain:ECONOMICS"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          },
+          {
+            "condition": 3,
+            "decision": "ACCEPTED",
+            "records": [
+              "price",
+              "revenueRange",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "MARKET_VOLUME",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4cdcaf9772cb4de1b707",
+            "why": "Proposals need Connects that cost money (no guaranteed free allowance), breaking the $0 cap; settlement slack in 14 days is nil"
+          },
+          {
+            "opportunityId": "cop_c1e7e3128c944dd6a7bb",
+            "why": "Stripe's 7-14 day first-payout wait plus sales time leaves no settled cash by day 14; price not established"
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_2481b7cdb58e4838a534",
+            "deals": 44,
+            "price": 25,
+            "directCost": 0,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "MARKET_VOLUME",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_768ddb9f8260_fa8a9c",
+        "digest": "768ddb9f826082384451be15",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T11:15:43.845Z"
+      },
+      "review": {
+        "revisionId": "rev_768ddb9f8260_fa8a9c",
+        "revisionDigest": "768ddb9f826082384451be15",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b1751bd606204aa7925c/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b9e649dc52e54979990f/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right and this is a plan the owner can start today at $0. The price is the payer's own published rate (DataAnnotation FAQ, which I opened: General 'Starting at $25-$50 per hour'; 'Deposits will be delivered within a few days after you request them'; approval 'within a few days after completing the Starter Assessment'), so it is a real purchase price for this payer, not a benchmark. The unknowns are exactly what only the attempt can measure (approval, paid hours offered, payout speed), each with a dated gate and stop: approval by day 5, >= 18 paid hours by day 7, first deposit by day 11. No money is needed, no Connects, and the Upwork exclusion is now sourced (Connects cost money; the 50-Connect bonus needs a purchase). Arithmetic: 44 h x $25 = $1,100 >= $1,000; withdrawals $500 (day 7, lands ~day 10) + $600 (day 10, lands ~day 13); ledger matches the steps.",
+        "findings": [
+          "Slack is one day: with 'a few days' = 3 the second deposit lands day 13; if the first withdrawal takes the full 4 days the stop rule allows (deposited day 11), the second lands day 14, the last day. Withdrawing more often (e.g. daily from day 7, or the second on day 9) would buy slack at no cost.",
+          "Margin is $100 (10%): 40 paid hours is the floor; the gate's 18 h by day 7 is consistent with ~7 h/day from day 5.",
+          "Eligibility is not stated on the FAQ (it says contractors are global, English fluency required, paid via PayPal); the day-5 approval gate covers it.",
+          "'Settled in the owner's account' is read as the PayPal balance; a bank transfer from PayPal would add days not in the ledger.",
+          "Owner hours ~47 in 14 days, ~7.3 h/day on days 5-10; the objective sets no ceiling."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:17:48.340Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "I want to collect $1,000 of settled cash within 14 days. I have no money to put in up front. Find me something real.",
+        "terms": "ae06da868dd2b8d1",
+        "openings": {
+          "cop_2481b7cdb58e4838a534": "060341fd01326d26",
+          "cop_4cdcaf9772cb4de1b707": "b6aed438693e5f7a",
+          "cop_c1e7e3128c944dd6a7bb": "cce5f975db6793b1"
+        }
+      },
+      "at": "2026-11-27T11:18:20.252Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

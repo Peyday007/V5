@@ -1,0 +1,41 @@
+{
+  "id": "mv-04-marketplace-repeat-buyers",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 6,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_9c67432fef35_dafeca",
+  "stance": "CONDITIONAL",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_727cbbcd3fe143448451/reviewer-epsilon",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names MARKET_VOLUME",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no opening is startable: MARKET_VOLUME not established"
+  }
+}

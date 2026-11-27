@@ -1,0 +1,734 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_1105c4f534cd41fe914c",
+      "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$5,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "61e5f982a37bb330060354b2"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_1105c4f534cd41fe914c",
+        "contractDigest": "61e5f982a37bb330060354b2",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $5,000 figure is a state grant award, not a price buyers pay",
+          "opportunityIds": [],
+          "why": "The only opening (dementia-care training workbook for assisted living facilities) has a reachable register of 410 administrators, a dated signal, a measured 5-of-120 acceptance rate, Brain fulfilment and $20 cost, but its only 'price' is the Department of Aging grant of $5,000 awarded to a facility that completes an approved program. A grant to the facility is not what a facility pays for a workbook, so no purchase price is evidenced and the deals needed for $5,000 are undetermined."
+        },
+        "alternatives": [
+          {
+            "title": "Sell one workbook at $5,000 citing the grant",
+            "why": "The grant is paid by the state to facilities for completing an approved program; it says nothing about what an administrator will pay a vendor, nor that this workbook is an approved program."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Establish the purchase price administrators pay for a dementia-care staff training workbook: published vendor price lists and written price acceptances from administrators on the state register",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "purchase price per facility",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a price facilities pay for the workbook (price list or written acceptances)"
+          },
+          {
+            "name": "licensed facilities",
+            "status": "EVIDENCED",
+            "value": 410,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.0417,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#price",
+            "dated": "2026-10-01",
+            "claim": "Department of Aging Dementia Care Training Grant awards $5,000 to each licensed facility completing an approved program (a grant, not a purchase price).",
+            "population": "State Department of Aging grant to facilities",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "The state register lists 410 licensed assisted living facilities, each with a named administrator.",
+            "population": "Assisted living facility administrators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "5 agreements from 120 contacts.",
+            "population": "Assisted living facility administrators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No purchase price: the card's $5,000 is a state training grant awarded to facilities, not a price any administrator has paid or agreed to pay for the workbook, so revenue per deal and the deals needed for $5,000 are unknown.",
+          "resolution": "Research published prices for dementia-care staff training curricula/workbooks sold to assisted living facilities, and offer the workbook at a stated price to administrators on the state register to collect written acceptances; re-plan with the evidenced price.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_c3027c1b003a4814942e",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3e2b332f4a68_7217c9",
+        "digest": "3e2b332f4a68b5aa5227b9c5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2d8964fce374ed18859/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:58:29.135Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_1105c4f534cd41fe914c",
+      "contractDigest": "61e5f982a37bb330060354b2",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the $5,000 figure is a state grant award, not a price buyers pay",
+        "opportunityIds": [],
+        "why": "The only opening (dementia-care training workbook for assisted living facilities) has a reachable register of 410 administrators, a dated signal, a measured 5-of-120 acceptance rate, Brain fulfilment and $20 cost, but its only 'price' is the Department of Aging grant of $5,000 awarded to a facility that completes an approved program. A grant to the facility is not what a facility pays for a workbook, so no purchase price is evidenced and the deals needed for $5,000 are undetermined."
+      },
+      "alternatives": [
+        {
+          "title": "Sell one workbook at $5,000 citing the grant",
+          "why": "The grant is paid by the state to facilities for completing an approved program; it says nothing about what an administrator will pay a vendor, nor that this workbook is an approved program."
+        }
+      ],
+      "steps": [
+        {
+          "id": "t1",
+          "kind": "RESEARCH",
+          "label": "Establish the purchase price administrators pay for a dementia-care staff training workbook: published vendor price lists and written price acceptances from administrators on the state register",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "purchase price per facility",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": "a price facilities pay for the workbook (price list or written acceptances)"
+        },
+        {
+          "name": "licensed facilities",
+          "status": "EVIDENCED",
+          "value": 410,
+          "unit": "facilities",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "acceptance rate",
+          "status": "EVIDENCED",
+          "value": 0.0417,
+          "unit": "agreements per contact",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_c3027c1b003a4814942e#price",
+          "dated": "2026-10-01",
+          "claim": "Department of Aging Dementia Care Training Grant awards $5,000 to each licensed facility completing an approved program (a grant, not a purchase price).",
+          "population": "State Department of Aging grant to facilities",
+          "matchesBuyer": false,
+          "opportunityId": "cop_c3027c1b003a4814942e"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_c3027c1b003a4814942e#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "The state register lists 410 licensed assisted living facilities, each with a named administrator.",
+          "population": "Assisted living facility administrators",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c3027c1b003a4814942e"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_c3027c1b003a4814942e#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "5 agreements from 120 contacts.",
+          "population": "Assisted living facility administrators",
+          "matchesBuyer": true,
+          "opportunityId": "cop_c3027c1b003a4814942e"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "No purchase price: the card's $5,000 is a state training grant awarded to facilities, not a price any administrator has paid or agreed to pay for the workbook, so revenue per deal and the deals needed for $5,000 are unknown.",
+        "resolution": "Research published prices for dementia-care staff training curricula/workbooks sold to assisted living facilities, and offer the workbook at a stated price to administrators on the state register to collect written acceptances; re-plan with the evidenced price.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_c3027c1b003a4814942e",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_3e2b332f4a68_7217c9",
+      "digest": "3e2b332f4a68b5aa5227b9c5",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_c2d8964fce374ed18859/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:58:29.135Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3e2b332f4a68_7217c9",
+      "digest": "3e2b332f4a68b5aa5227b9c5",
+      "contractDigest": "61e5f982a37bb330060354b2",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 34723× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Assisted living facility administrators — Demen\" needs [figure withheld] and keeps [figure withheld], 4965× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Assisted living facility administrators\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_c3027c1b003a4814942e"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Assisted living facility administrators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Assisted living facility administrators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 39.973674444307214
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_c3027c1b003a4814942e",
+            "title": "Dementia-care staff training curriculum workbook for assisted living facilities",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Assisted living facility administrators",
+              "reachableChannel": "Administrator emails from the state's licensed assisted-living facility register",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:34.826Z",
+              "offerScope": "Dementia-care staff training curriculum workbook for assisted living facilities",
+              "priceCents": 500000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "assisted living facilities",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Administrator emails from the state's licensed assisted-living facility register"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 5 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The state register lists 410 licensed assisted living facilities, each with a named administrator.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Dementia-care staff training curriculum workbook for assisted living facilities to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "5 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Assisted living facility administrators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The state Department of Aging's Dementia Care Training Grant awards $5,000 to each licensed facility that completes an approved staff training program (program notice, 2026-10).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_4ce7b68e81194898a30d"
+        ],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:53.742Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_3e2b332f4a68_7217c9",
+        "revisionDigest": "3e2b332f4a68b5aa5227b9c5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2d8964fce374ed18859/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8f70299abf804ae8a1a6/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and names the decisive gap. The card's only price is the Department of Aging Dementia Care Training Grant ($5,000 awarded by the state to a facility that completes an approved program, notice 2026-10): that is a grant to the facility, not a price an administrator pays a vendor, and nothing shows this workbook is an approved program; the author correctly marks it matchesBuyer false and refuses to count it. With no purchase price, revenue per deal is unknown; the conversion fact (5 agreements from 120 contacts) states no price, so it cannot be read as a price either. Recomputed bounds so the gap is decisive: at the measured 4.2% over all 410 registered facilities about 17 deals are reachable in the window, so $5,000 needs at least ~$295 per deal - a figure no record supports; nor does any record support a single $5,000 sale. Other links hold (register of 410 administrators, dated signal, Brain produces the workbook, $20 cost, $0 exposure, 7-day settlement). No constraint is claimed, which is correct: the gap is missing evidence, not a limit the evidence cannot fit.",
+        "findings": [
+          "Resolution: 'published prices for dementia-care curricula' are other vendors' benchmarks and would not establish what these administrators pay; the decisive evidence is written, money-committed acceptances at a stated price from the register (or the price on the 5 recorded agreements, if they had one). Lead with that.",
+          "State the threshold the live offer must clear: with ~17 reachable deals at 4.2%, a price of at least ~$300 (or fewer deals at a higher price) is needed for $5,000; a lower evidenced price makes the target unreachable in this window.",
+          "If the workbook could qualify as an approved program under the grant, that would be a different, unevidenced mechanism; it is correctly not assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:10:31.627Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3e2b332f4a68_7217c9",
+      "digest": "3e2b332f4a68b5aa5227b9c5",
+      "contractDigest": "61e5f982a37bb330060354b2",
+      "plan": {
+        "goalId": "wst_1105c4f534cd41fe914c",
+        "contractDigest": "61e5f982a37bb330060354b2",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $5,000 figure is a state grant award, not a price buyers pay",
+          "opportunityIds": [],
+          "why": "The only opening (dementia-care training workbook for assisted living facilities) has a reachable register of 410 administrators, a dated signal, a measured 5-of-120 acceptance rate, Brain fulfilment and $20 cost, but its only 'price' is the Department of Aging grant of $5,000 awarded to a facility that completes an approved program. A grant to the facility is not what a facility pays for a workbook, so no purchase price is evidenced and the deals needed for $5,000 are undetermined."
+        },
+        "alternatives": [
+          {
+            "title": "Sell one workbook at $5,000 citing the grant",
+            "why": "The grant is paid by the state to facilities for completing an approved program; it says nothing about what an administrator will pay a vendor, nor that this workbook is an approved program."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "RESEARCH",
+            "label": "Establish the purchase price administrators pay for a dementia-care staff training workbook: published vendor price lists and written price acceptances from administrators on the state register",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "purchase price per facility",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": "a price facilities pay for the workbook (price list or written acceptances)"
+          },
+          {
+            "name": "licensed facilities",
+            "status": "EVIDENCED",
+            "value": 410,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "acceptance rate",
+            "status": "EVIDENCED",
+            "value": 0.0417,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#price",
+            "dated": "2026-10-01",
+            "claim": "Department of Aging Dementia Care Training Grant awards $5,000 to each licensed facility completing an approved program (a grant, not a purchase price).",
+            "population": "State Department of Aging grant to facilities",
+            "matchesBuyer": false,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "The state register lists 410 licensed assisted living facilities, each with a named administrator.",
+            "population": "Assisted living facility administrators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_c3027c1b003a4814942e#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "5 agreements from 120 contacts.",
+            "population": "Assisted living facility administrators",
+            "matchesBuyer": true,
+            "opportunityId": "cop_c3027c1b003a4814942e"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No purchase price: the card's $5,000 is a state training grant awarded to facilities, not a price any administrator has paid or agreed to pay for the workbook, so revenue per deal and the deals needed for $5,000 are unknown.",
+          "resolution": "Research published prices for dementia-care staff training curricula/workbooks sold to assisted living facilities, and offer the workbook at a stated price to administrators on the state register to collect written acceptances; re-plan with the evidenced price.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_c3027c1b003a4814942e",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3e2b332f4a68_7217c9",
+        "digest": "3e2b332f4a68b5aa5227b9c5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2d8964fce374ed18859/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:58:29.135Z"
+      },
+      "review": {
+        "revisionId": "rev_3e2b332f4a68_7217c9",
+        "revisionDigest": "3e2b332f4a68b5aa5227b9c5",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2d8964fce374ed18859/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8f70299abf804ae8a1a6/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right and names the decisive gap. The card's only price is the Department of Aging Dementia Care Training Grant ($5,000 awarded by the state to a facility that completes an approved program, notice 2026-10): that is a grant to the facility, not a price an administrator pays a vendor, and nothing shows this workbook is an approved program; the author correctly marks it matchesBuyer false and refuses to count it. With no purchase price, revenue per deal is unknown; the conversion fact (5 agreements from 120 contacts) states no price, so it cannot be read as a price either. Recomputed bounds so the gap is decisive: at the measured 4.2% over all 410 registered facilities about 17 deals are reachable in the window, so $5,000 needs at least ~$295 per deal - a figure no record supports; nor does any record support a single $5,000 sale. Other links hold (register of 410 administrators, dated signal, Brain produces the workbook, $20 cost, $0 exposure, 7-day settlement). No constraint is claimed, which is correct: the gap is missing evidence, not a limit the evidence cannot fit.",
+        "findings": [
+          "Resolution: 'published prices for dementia-care curricula' are other vendors' benchmarks and would not establish what these administrators pay; the decisive evidence is written, money-committed acceptances at a stated price from the register (or the price on the 5 recorded agreements, if they had one). Lead with that.",
+          "State the threshold the live offer must clear: with ~17 reachable deals at 4.2%, a price of at least ~$300 (or fewer deals at a higher price) is needed for $5,000; a lower evidenced price makes the target unreachable in this window.",
+          "If the workbook could qualify as an approved program under the grant, that would be a different, unevidenced mechanism; it is correctly not assumed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:10:31.627Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "6068d42e192a9a6e",
+        "openings": {
+          "cop_c3027c1b003a4814942e": "f679e9e7b4e8d2bb"
+        }
+      },
+      "at": "2026-11-27T11:13:47.910Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

@@ -1,0 +1,190 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_70e3d712c06c_c6926e",
+      "digest": "70e3d712c06c0e2d2826077e",
+      "contractDigest": "118ac3374012ca8f8bd4564d",
+      "plan": {
+        "goalId": "wst_85cae1bebacc4912b691",
+        "contractDigest": "118ac3374012ca8f8bd4564d",
+        "parentRevisionId": "rev_06e442b4feb6_94dcef",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the hive-contract price is only something a person said",
+          "opportunityIds": [],
+          "why": "The single opening has a reachable buyer (400 almond growers), dated demand, a measured 10% paid pre-order conversion, a quoted fulfiller (Valley Apiaries, $110 direct cost), zero exposure and 14-day settlement - but its $150 price is a PERSON statement, not a price growers are shown to pay. With an unevidenced price, whether 15 deals carry $2,000, and whether the $40 margin over the $110 cost exists at all, is not established."
+        },
+        "alternatives": [
+          {
+            "title": "CONDITIONAL: offer at $150 up front and measure",
+            "why": "Rejected as the plan of record: the price is an unknown that research can settle (the parked revenueRange question), and the whole target and the margin over $110 rest on it; it is the resolution path below, not an established plan."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Research what almond growers are published as paying for brokered pollination hive contracts (per contract or per hive), with source and date",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "OTHER",
+            "label": "With an evidenced price above the $110 cost, re-run the plan: deals = ceil($2,000 / price) from 400 growers",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "r1",
+            "evidence": [],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "q_price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per contract",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A published price growers actually pay; $150 is only said by a person"
+          },
+          {
+            "name": "q_conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "paid pre-orders per unique visitor",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_cost",
+            "status": "EVIDENCED",
+            "value": 110,
+            "unit": "USD per contract",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_46303c7ce2d148e78729#price",
+            "dated": null,
+            "claim": "$150 per contract, said by a person",
+            "population": "almond growers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_46303c7ce2d148e78729#conversionRates",
+            "dated": null,
+            "claim": "20 paid pre-orders from 200 unique visitors",
+            "population": "visitors to this offer's inbound page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_46303c7ce2d148e78729#directCosts",
+            "dated": null,
+            "claim": "$110 direct cost per deal",
+            "population": "supplier Valley Apiaries",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE: the $150 price is a PERSON statement, not a price almond growers are shown to pay, so neither the deal count to $2,000 nor the margin over the $110 supplier cost is established.",
+          "resolution": "Brain researches the parked revenueRange question (published prices growers pay for brokered pollination contracts, with source and date). If a price above $110 is evidenced, re-run the plan; if research is inconclusive, run a zero-capital up-front-paid offer at $150 to the first 100 growers as a CONDITIONAL plan with stop at fewer than 2 paid by day 7.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_46303c7ce2d148e78729",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_46303c7ce2d148e78729",
+            "why": "Price $150 is only said by a person, not shown paid"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_70e3d712c06c_c6926e",
+        "digest": "70e3d712c06c0e2d2826077e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_65f39c5d6721449c8f0e/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:53:25.556Z"
+      },
+      "review": {
+        "revisionId": "rev_70e3d712c06c_c6926e",
+        "revisionDigest": "70e3d712c06c0e2d2826077e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_65f39c5d6721449c8f0e/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ba3b354d26404a2688dd/reviewer-alpha",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right. Every link of the one opening is evidenced except OFFER_AND_PRICE: the $150 is a PERSON statement, not a price almond growers are shown to pay, and the whole deal count (15 x $150 = $2,250) and the $40 margin over the $110 Valley Apiaries cost rest on it. The decisive gap is evidence, not a TARGET/CAPITAL constraint, and is named correctly; the resolution (research the parked revenueRange question, else a zero-capital up-front-paid priced offer with a day-7 stop) is sound. Nothing unknown is treated as known; no cash is claimed.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T02:58:09.393Z"
+      },
+      "at": "2026-11-27T03:04:10.482Z"
+    }
+  }
+}

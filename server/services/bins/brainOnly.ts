@@ -14,7 +14,7 @@
  * variable, header, argument or prompt changes what a worker is handed.
  */
 import { getDb } from '../../db/database.ts';
-import { binLane, isBrainProject, type BinPurpose } from '../../domain/binPurpose.ts';
+import { binLane, isBrainProject, ownerDirectedGoalIdsSql, type BinPurpose } from '../../domain/binPurpose.ts';
 import type { WorkItemRow } from '../../domain/types.ts';
 import {
   binNow,
@@ -78,8 +78,29 @@ export async function setBrainOnlyMode(enabled: boolean, by: string, reason: str
  * One statement, switch included, so the answer is never a cached copy.
  */
 export async function workItemPurposeAdmits(
-  item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'> & { project_id?: string | null },
+  item: Pick<WorkItemRow, 'bin_id' | 'orchestration_id'> & { project_id?: string | null; work_type?: string | null; payload?: unknown },
 ): Promise<boolean> {
+  /*
+   * The owner's one exception (§118), for the planning path's own queue items: an independent review or
+   * verification of an owner-directed goal's plan (`PLAN_REVIEW`, `PLAN_VERIFY`, enqueued by the session
+   * planning adapter) may go to a routine exactly as that goal's bins may. No bin owns these items, so without
+   * this the project rule below denies them and the review the owner's own planning session asked for waits on
+   * a second session the owner must open — 2026-11-27, journey 1: "brain-only mode: Claude routines take only
+   * Brain-improvement work". Any other goal's planning item is held back like any other non-Brain work.
+   */
+  if ((item.work_type === 'PLAN_REVIEW' || item.work_type === 'PLAN_VERIFY') && !item.bin_id && !item.orchestration_id) {
+    const payload = (typeof item.payload === 'string' ? JSON.parse(item.payload) : item.payload) as { goalId?: unknown } | null;
+    const goalId = typeof payload?.goalId === 'string' ? payload.goalId : null;
+    if (goalId) {
+      const row = await getDb().get<{ mode: number | string; directed: number | string }>(
+        `SELECT (SELECT COUNT(*) FROM brain_switches bs WHERE bs.name = 'brain_only_mode' AND bs.enabled = 1) AS mode,
+                (SELECT COUNT(*) FROM (${ownerDirectedGoalIdsSql()}) d WHERE d.id = ?) AS directed`,
+        [goalId],
+      );
+      if (Number(row?.mode ?? 1) === 0) return true;
+      return Number(row?.directed ?? 0) > 0;
+    }
+  }
   /*
    * The newest owning bin: a packet's live bin is its newest, and its spent
    * predecessors were never tagged (the retag pass reads live bins only).

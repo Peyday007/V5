@@ -1,0 +1,943 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_61bb86a8bac54af0ab95",
+      "words": "Collect $2,500 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 250000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 28,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "ef3f5d382d99428b06b5b79d"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_61bb86a8bac54af0ab95",
+        "contractDigest": "ef3f5d382d99428b06b5b79d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 3 owner hours a week: the agreed appraisals need 40 owner hours",
+          "opportunityIds": [],
+          "why": "Eight shops signed engagement letters at $350 ($2,800 >= $2,500), settling in 7 days, but the record names the owner personally as the appraiser at 5 hours per appraisal. Reaching $2,500 needs 8 appraisals = 40 owner hours, against 12 allowed (3 h/week x 4 weeks); 12 hours fund only 2 appraisals ($700)."
+        },
+        "alternatives": [
+          {
+            "title": "Do the 2 appraisals that fit in 12 hours",
+            "why": "Brings $700, 28% of the target."
+          },
+          {
+            "title": "Subcontract the appraisals",
+            "why": "No other appraiser is named on the record; a fulfiller must exist."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed engagements",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per appraisal",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per appraisal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "hours",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target",
+            "status": "EVIDENCED",
+            "value": 40,
+            "unit": "hours",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours allowed",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "hours",
+            "sources": [],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#price",
+            "dated": "2026-11-24",
+            "claim": "Eight shops signed engagement letters at $350 per appraisal",
+            "population": "eight violin and cello shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#humanHours",
+            "dated": "2026-11-24",
+            "claim": "5 hours of work per appraisal by the fulfiller, who is the owner personally",
+            "population": "this offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Owner time: the only fulfiller is the owner, and the 8 appraisals the target needs take 40 owner hours against the 12 the objective allows.",
+          "resolution": "Allow at least 40 owner hours over the 28 days (10 h/week), or name a qualified appraiser who can perform the work so the owner's hours fall within 3 per week, then re-plan.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours over the 28 days (about 10 hours a week)",
+            "basis": [
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "humanHours"
+              },
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "link": "FULFILMENT",
+            "reason": "The record names the owner personally as fulfiller at 5 hours per appraisal (humanHours 5, fulfillment fact); 8 appraisals = 40 hours exceed the 12-hour owner ceiling (3 h/week x 4 weeks), so the fulfiller cannot deliver the deals inside the goal's limits."
+          }
+        ],
+        "revisionId": "rev_c25f353ca6b9_5a4478",
+        "digest": "c25f353ca6b979a5f94da13f",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:25.217Z"
+      },
+      {
+        "goalId": "wst_61bb86a8bac54af0ab95",
+        "contractDigest": "ef3f5d382d99428b06b5b79d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 3 owner hours a week: the agreed appraisals need 40 owner hours",
+          "opportunityIds": [],
+          "why": "Eight shops signed engagement letters at $350 ($2,800 >= $2,500), settling in 7 days, but the record names the owner personally as the appraiser at 5 hours per appraisal. Reaching $2,500 needs 8 appraisals = 40 owner hours, against 12 allowed (3 h/week x 4 weeks); 12 hours fund only 2 appraisals ($700)."
+        },
+        "alternatives": [
+          {
+            "title": "Do the 2 appraisals that fit in 12 hours",
+            "why": "Brings $700, 28% of the target."
+          },
+          {
+            "title": "Subcontract the appraisals",
+            "why": "No other appraiser is named on the record; a fulfiller must exist."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed engagements",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per appraisal",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per appraisal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "hours",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target",
+            "status": "EVIDENCED",
+            "value": 40,
+            "unit": "hours",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#price",
+            "dated": "2026-11-24",
+            "claim": "Eight shops signed engagement letters at $350 per appraisal",
+            "population": "eight violin and cello shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#humanHours",
+            "dated": "2026-11-24",
+            "claim": "5 hours of work per appraisal by the fulfiller, who is the owner personally",
+            "population": "this offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Owner time: the only fulfiller is the owner, and the 8 appraisals the target needs take 40 owner hours against the 12 the objective allows.",
+          "resolution": "Allow at least 40 owner hours over the 28 days (10 h/week), or name a qualified appraiser who can perform the work so the owner's hours fall within 3 per week, then re-plan.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours over the 28 days (about 10 hours a week)",
+            "basis": [
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "humanHours"
+              },
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "link": "FULFILMENT",
+            "reason": "The record names the owner personally as fulfiller at 5 hours per appraisal (humanHours 5, fulfillment fact); 8 appraisals = 40 hours exceed the 12-hour owner ceiling (3 h/week x 4 weeks), so the fulfiller cannot deliver the deals inside the goal's limits."
+          }
+        ],
+        "revisionId": "rev_bbdbfe1aae59_039263",
+        "digest": "bbdbfe1aae59a18446f806f9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:39.832Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_61bb86a8bac54af0ab95",
+      "contractDigest": "ef3f5d382d99428b06b5b79d",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan inside 3 owner hours a week: the agreed appraisals need 40 owner hours",
+        "opportunityIds": [],
+        "why": "Eight shops signed engagement letters at $350 ($2,800 >= $2,500), settling in 7 days, but the record names the owner personally as the appraiser at 5 hours per appraisal. Reaching $2,500 needs 8 appraisals = 40 owner hours, against 12 allowed (3 h/week x 4 weeks); 12 hours fund only 2 appraisals ($700)."
+      },
+      "alternatives": [
+        {
+          "title": "Do the 2 appraisals that fit in 12 hours",
+          "why": "Brings $700, 28% of the target."
+        },
+        {
+          "title": "Subcontract the appraisals",
+          "why": "No other appraiser is named on the record; a fulfiller must exist."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "signed engagements",
+          "status": "EVIDENCED",
+          "value": 8,
+          "unit": "deals",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per appraisal",
+          "status": "EVIDENCED",
+          "value": 350,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours per appraisal",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "hours",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "owner hours needed for target",
+          "status": "EVIDENCED",
+          "value": 40,
+          "unit": "hours",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_2ff397ceafea4474b411#price",
+          "dated": "2026-11-24",
+          "claim": "Eight shops signed engagement letters at $350 per appraisal",
+          "population": "eight violin and cello shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_2ff397ceafea4474b411"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_2ff397ceafea4474b411#humanHours",
+          "dated": "2026-11-24",
+          "claim": "5 hours of work per appraisal by the fulfiller, who is the owner personally",
+          "population": "this offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_2ff397ceafea4474b411"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Owner time: the only fulfiller is the owner, and the 8 appraisals the target needs take 40 owner hours against the 12 the objective allows.",
+        "resolution": "Allow at least 40 owner hours over the 28 days (10 h/week), or name a qualified appraiser who can perform the work so the owner's hours fall within 3 per week, then re-plan.",
+        "decisiveLinks": [
+          "FULFILMENT"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_2ff397ceafea4474b411",
+          "missing": [
+            "FULFILMENT"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "FULFILMENT"
+      ],
+      "constraints": [
+        {
+          "constraint": "OWNER_HOURS",
+          "suggestion": "Allow at least 40 owner hours over the 28 days (about 10 hours a week)",
+          "basis": [
+            {
+              "opportunityId": "cop_2ff397ceafea4474b411",
+              "field": "humanHours"
+            },
+            {
+              "opportunityId": "cop_2ff397ceafea4474b411",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [
+        {
+          "opportunityId": "cop_2ff397ceafea4474b411",
+          "link": "FULFILMENT",
+          "reason": "The record names the owner personally as fulfiller at 5 hours per appraisal (humanHours 5, fulfillment fact); 8 appraisals = 40 hours exceed the 12-hour owner ceiling (3 h/week x 4 weeks), so the fulfiller cannot deliver the deals inside the goal's limits."
+        }
+      ],
+      "revisionId": "rev_bbdbfe1aae59_039263",
+      "digest": "bbdbfe1aae59a18446f806f9",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:57:39.832Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_bbdbfe1aae59_039263",
+      "digest": "bbdbfe1aae59a18446f806f9",
+      "contractDigest": "ef3f5d382d99428b06b5b79d",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: the agreed deals need 40 owner hours, more than the 12 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2034× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_2ff397ceafea4474b411"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 2.254492917914499
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 2800 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "title": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2500,
+            "potentialReach": 2500,
+            "card": {
+              "payer": "Owners of violin and cello shops",
+              "reachableChannel": "Signed engagement letters",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:52.022Z",
+              "offerScope": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+              "priceCents": 35000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 5,
+              "requiredCapabilities": [],
+              "industry": "string instrument retail",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Insurance replacement-value appraisals of violin and cello shops' consignment stock",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed engagement letters"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 2800 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 2800 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by The owner, personally (a person says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Insurance replacement-value appraisals of violin and cello shops' consignment stock to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Owners of violin and cello shops",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Eight shops signed engagement letters at $350 per appraisal.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 250000,
+          "daysLeft": 28,
+          "hoursCeiling": 12,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T10:54:57.326Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_bbdbfe1aae59_039263",
+        "revisionDigest": "bbdbfe1aae59a18446f806f9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b8c996f288d64e2b8ece/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with an OWNER_HOURS constraint is correct. Eight written acceptances at $350 ($2,800 >= $2,500) settle in 7 days, so demand, price, conversion and settlement are established. But the card's fulfillmentOwner is 'The owner, personally' with humanHours 5 per appraisal, and the contract allows 3 owner hours a week. $2,500 / $350 = 7.14 -> 8 appraisals = 40 owner hours, against 3 x 4 = 12 hours in 28 days, which funds only 2 appraisals (10 h) = $700. The disagreement with Brain's FULFILMENT 'ok' is justified from the card's own humanHours and fulfillmentOwner fields, and Brain's own check reaches the same 40-vs-12 conclusion. Subcontracting is rightly not assumed: no other fulfiller is recorded.",
+        "findings": [
+          "Arithmetic verified: 8 x 5 h = 40 h; 12 h allowed; floor(12/5) = 2 appraisals = $700 = 28% of target.",
+          "Even 7 appraisals ($2,450) would fall short, so 8 is the true minimum and 35 h would not suffice either.",
+          "Fulfilment rests on a PERSON fact (the owner says they do it); the plan correctly treats the owner as the only recorded performer rather than inventing one.",
+          "Resolution names both levers (raise hours to ~10/week, or a named qualified appraiser), which is what the evidence decides."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:59:33.731Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_bbdbfe1aae59_039263",
+      "digest": "bbdbfe1aae59a18446f806f9",
+      "contractDigest": "ef3f5d382d99428b06b5b79d",
+      "plan": {
+        "goalId": "wst_61bb86a8bac54af0ab95",
+        "contractDigest": "ef3f5d382d99428b06b5b79d",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside 3 owner hours a week: the agreed appraisals need 40 owner hours",
+          "opportunityIds": [],
+          "why": "Eight shops signed engagement letters at $350 ($2,800 >= $2,500), settling in 7 days, but the record names the owner personally as the appraiser at 5 hours per appraisal. Reaching $2,500 needs 8 appraisals = 40 owner hours, against 12 allowed (3 h/week x 4 weeks); 12 hours fund only 2 appraisals ($700)."
+        },
+        "alternatives": [
+          {
+            "title": "Do the 2 appraisals that fit in 12 hours",
+            "why": "Brings $700, 28% of the target."
+          },
+          {
+            "title": "Subcontract the appraisals",
+            "why": "No other appraiser is named on the record; a fulfiller must exist."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "signed engagements",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "deals",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per appraisal",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours per appraisal",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "hours",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "owner hours needed for target",
+            "status": "EVIDENCED",
+            "value": 40,
+            "unit": "hours",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#price",
+            "dated": "2026-11-24",
+            "claim": "Eight shops signed engagement letters at $350 per appraisal",
+            "population": "eight violin and cello shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_2ff397ceafea4474b411#humanHours",
+            "dated": "2026-11-24",
+            "claim": "5 hours of work per appraisal by the fulfiller, who is the owner personally",
+            "population": "this offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_2ff397ceafea4474b411"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Owner time: the only fulfiller is the owner, and the 8 appraisals the target needs take 40 owner hours against the 12 the objective allows.",
+          "resolution": "Allow at least 40 owner hours over the 28 days (10 h/week), or name a qualified appraiser who can perform the work so the owner's hours fall within 3 per week, then re-plan.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow at least 40 owner hours over the 28 days (about 10 hours a week)",
+            "basis": [
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "humanHours"
+              },
+              {
+                "opportunityId": "cop_2ff397ceafea4474b411",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_2ff397ceafea4474b411",
+            "link": "FULFILMENT",
+            "reason": "The record names the owner personally as fulfiller at 5 hours per appraisal (humanHours 5, fulfillment fact); 8 appraisals = 40 hours exceed the 12-hour owner ceiling (3 h/week x 4 weeks), so the fulfiller cannot deliver the deals inside the goal's limits."
+          }
+        ],
+        "revisionId": "rev_bbdbfe1aae59_039263",
+        "digest": "bbdbfe1aae59a18446f806f9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:39.832Z"
+      },
+      "review": {
+        "revisionId": "rev_bbdbfe1aae59_039263",
+        "revisionDigest": "bbdbfe1aae59a18446f806f9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_8dbf11fb1aa5443ebf11/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b8c996f288d64e2b8ece/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with an OWNER_HOURS constraint is correct. Eight written acceptances at $350 ($2,800 >= $2,500) settle in 7 days, so demand, price, conversion and settlement are established. But the card's fulfillmentOwner is 'The owner, personally' with humanHours 5 per appraisal, and the contract allows 3 owner hours a week. $2,500 / $350 = 7.14 -> 8 appraisals = 40 owner hours, against 3 x 4 = 12 hours in 28 days, which funds only 2 appraisals (10 h) = $700. The disagreement with Brain's FULFILMENT 'ok' is justified from the card's own humanHours and fulfillmentOwner fields, and Brain's own check reaches the same 40-vs-12 conclusion. Subcontracting is rightly not assumed: no other fulfiller is recorded.",
+        "findings": [
+          "Arithmetic verified: 8 x 5 h = 40 h; 12 h allowed; floor(12/5) = 2 appraisals = $700 = 28% of target.",
+          "Even 7 appraisals ($2,450) would fall short, so 8 is the true minimum and 35 h would not suffice either.",
+          "Fulfilment rests on a PERSON fact (the owner says they do it); the plan correctly treats the owner as the only recorded performer rather than inventing one.",
+          "Resolution names both levers (raise hours to ~10/week, or a named qualified appraiser), which is what the evidence decides."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T10:59:33.731Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $2,500 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+        "terms": "498fe633be9aaa10",
+        "openings": {
+          "cop_2ff397ceafea4474b411": "df6472b46f9e7110"
+        }
+      },
+      "at": "2026-11-27T11:00:37.512Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

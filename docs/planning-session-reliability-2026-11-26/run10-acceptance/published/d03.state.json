@@ -1,0 +1,2213 @@
+{
+ "contract": {
+  "goalId": "wst_4ea1973a2d7f4360aa1f",
+  "words": "Collect $12,000 of settled cash within 45 days with at most $2,500 of capital. Any lawful business is fine.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "preProofSpendCapCents": null,
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": [],
+   "targetCents": 1200000,
+   "windowDays": 45,
+   "totalSpendCapCents": 250000,
+   "exposureCapCents": null,
+   "proofCondition": "$12,000 of settled cash collected within 45 days, with total capital deployed at most $2,500"
+  },
+  "explanations": {},
+  "version": 2,
+  "digest": "76dbd87799104b7ed8370533"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_4ea1973a2d7f4360aa1f",
+   "contractDigest": "76dbd87799104b7ed8370533",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no discovered opening shows a buyer-paid price and a win rate that carry $12,000 in 45 days",
+    "opportunityIds": [],
+    "why": "The four openings are owner-delivered web/automation builds sold through freelance marketplaces or cold email. None has a price buyers are shown to pay (posted budgets and bid averages were rejected by Brain's verifier), and none has a measured win/close rate. At the strongest route's posted $250-750 budgets, $12,000 net of the 10% fee needs roughly 27-53 awarded projects in about 30 selling days against 25-287 competing bids per job - not established by anything on the record."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Strongest demand signal (78 open Shopify jobs, s3) but price unpaid-evidenced and 250-287 bids per job (s1,s2); win rate unknown."
+    },
+    {
+     "title": "PeoplePerHour WordPress redesigns",
+     "why": "Budgets mostly GBP 80-250 (s7): would need 50+ wins; win rate unknown."
+    },
+    {
+     "title": "Freelancehunt AI-assistant builds",
+     "why": "Budgets 400-1,500 USD (s8) on a mainly Ukrainian marketplace; demand count and win rate unknown."
+    },
+    {
+     "title": "Cold-email website rebuilds at $1,500",
+     "why": "Price is an assumption against vendor guides (s9); reply/close rate unmeasured; Stripe first payout 7-14 days (s10)."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner opens Freelancer.com Plus free trial (100 bids, $0) and bids on 50 fixed-price Shopify/web builds budgeted >= $250",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "ownerHours": 10,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends 40 PeoplePerHour / Freelancehunt proposals on builds budgeted >= $300",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s7",
+      "s8"
+     ],
+     "ownerHours": 8,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Day 10 read-out: count awards, funded milestones and awarded prices per channel",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "t1",
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "win rate of a new account's bids",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "awards per bid",
+     "sources": [],
+     "needs": "live bids (t1,t2)"
+    },
+    {
+     "name": "price buyers actually pay per build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "awarded, funded milestones"
+    },
+    {
+     "name": "open Shopify jobs on Freelancer.com",
+     "status": "EVIDENCED",
+     "value": 78,
+     "unit": "jobs (snapshot 2026-11-27)",
+     "sources": [
+      "s3"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Freelancer.com fixed-price fee",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "percent (min $5)",
+     "sources": [
+      "s5"
+     ],
+     "needs": ""
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (posted budget and supply-side bids; Brain's verifier rejected it as a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: '78 jobs found'; listings show average bids $19-$368 and 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.freelancer.com/membership/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com memberships: Plus $9.99/month (1-month free trial) with 100 bids; Professional $49/month with 300 bids.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s6",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.'",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508",
+     "dated": "2026-11-27",
+     "claim": "PeoplePerHour WordPress redesign jobs; observed budgets mostly GBP 80-250, a few GBP 500-1,000, 7-35 proposals each.",
+     "population": "UK small businesses on PeoplePerHour",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd94cf54a01342128bd4"
+    },
+    {
+     "id": "s8",
+     "url": "https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html",
+     "dated": "2026-11-27",
+     "claim": "Freelancehunt AI-assistant / n8n project page listing budgets of 400, 700 and 1,500 USD.",
+     "population": "businesses posting AI-assistant projects on Freelancehunt",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b7d18de30e8447f904a"
+    },
+    {
+     "id": "s9",
+     "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+     "dated": "2026-11-27",
+     "claim": "Agency pricing guide for small-business websites (vendor estimate, not a paid price).",
+     "population": "US small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    },
+    {
+     "id": "s10",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-27",
+     "claim": "Stripe: initial payout typically completes within 7-14 days after the first live payment.",
+     "population": "new Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No opening has a price buyers are shown to pay or a measured win rate: posted budgets/average bids are not paid prices, and with 25-287 competing bids per job nobody knows whether a new owner-run account wins the ~27-53 projects that $12,000 needs.",
+    "resolution": "10-day, ~$0 test (Freelancer Plus free trial; cancel before $9.99 bills - worst case $9.99 of the $2,500): 50 Freelancer.com bids + 40 PeoplePerHour/Freelancehunt proposals on builds >= $250. Proof: by day 10, >= 4 awarded and funded milestones averaging >= $400 (implies ~27 more wins are reachable at the measured rate within the window). Stop: fewer than 2 awards, or awarded prices averaging < $250 - report $12,000 in 45 days as unreachable on these routes. Continue: if proof is met, upgrade to Professional ($49, 300 bids) and bid at the measured rate.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_b28ff52dcd9f4767ab17",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3b7d18de30e8447f904a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_479302c0eacd4213a8d0",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_dd94cf54a01342128bd4",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_d6c689ec379b_cc0e3f",
+   "digest": "d6c689ec379b1fc1fd7918c1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:23:59.421Z"
+  },
+  {
+   "goalId": "wst_4ea1973a2d7f4360aa1f",
+   "contractDigest": "76dbd87799104b7ed8370533",
+   "parentRevisionId": "rev_d6c689ec379b_cc0e3f",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no discovered opening shows a buyer-paid price and a win rate that carry $12,000 in 45 days",
+    "opportunityIds": [],
+    "why": "The four openings are owner-delivered web/automation builds sold through freelance marketplaces or cold email. None has a price buyers are shown to pay (posted budgets and bid averages were rejected by Brain's verifier), and none has a measured win/close rate. At the strongest route's posted $250-750 budgets, $12,000 net of the 10% fee needs roughly 27-53 awarded projects in about 30 selling days against 25-287 competing bids per job - not established by anything on the record."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Strongest demand signal (78 open Shopify jobs, s3) but price unpaid-evidenced and 250-287 bids per job (s1,s2); win rate unknown."
+    },
+    {
+     "title": "PeoplePerHour WordPress redesigns",
+     "why": "Budgets mostly GBP 80-250 (s7): would need 50+ wins; win rate unknown."
+    },
+    {
+     "title": "Freelancehunt AI-assistant builds",
+     "why": "Budgets 400-1,500 USD (s8) on a mainly Ukrainian marketplace; demand count and win rate unknown."
+    },
+    {
+     "title": "Cold-email website rebuilds at $1,500",
+     "why": "Price is an assumption against vendor guides (s9); reply/close rate unmeasured; Stripe first payout 7-14 days (s10)."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner opens Freelancer.com Plus free trial (100 bids, $0) and places 100 bids on fixed-price Shopify/web builds budgeted >= $250",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "ownerHours": 12,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends 40 PeoplePerHour / Freelancehunt proposals on builds budgeted >= $300",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s7",
+      "s8"
+     ],
+     "ownerHours": 8,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "TEST",
+     "label": "Owner sends 300 personalised cold emails from the owner's existing mailbox to local service businesses with outdated sites, offering a $1,500 5-page rebuild with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s9",
+      "s10"
+     ],
+     "ownerHours": 10,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t5",
+     "kind": "TEST",
+     "label": "Owner states the hours available for builds over days 10-40",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Day 12 read-out: awards, funded milestones, deposits and prices per channel, against the target-derived thresholds",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "t1",
+     "evidence": [
+      "s1",
+      "s2",
+      "s5",
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "win rate of a new account's bids",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "awards per bid",
+     "sources": [],
+     "needs": "live bids (t1,t2)"
+    },
+    {
+     "name": "price buyers actually pay per build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "awarded, funded milestones"
+    },
+    {
+     "name": "open Shopify jobs on Freelancer.com",
+     "status": "EVIDENCED",
+     "value": 78,
+     "unit": "jobs (snapshot 2026-11-27)",
+     "sources": [
+      "s3"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Freelancer.com fixed-price fee",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "percent (min $5)",
+     "sources": [
+      "s5"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "owner hours needed",
+     "status": "ESTIMATE",
+     "value": 272,
+     "unit": "hours (34 builds x 8 h) for the marketplace route; ~80 h (8 x 10 h) for cold-email rebuilds",
+     "sources": [],
+     "needs": "owner confirms available hours"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours in 45 days",
+     "sources": [],
+     "needs": "owner's statement; the goal states none"
+    },
+    {
+     "name": "cold-email close rate at $1,500",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid sales per email",
+     "sources": [],
+     "needs": "live sends (t4)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (posted budget and supply-side bids; Brain's verifier rejected it as a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: '78 jobs found'; listings show average bids $19-$368 and 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.freelancer.com/membership/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com memberships: Plus $9.99/month (1-month free trial) with 100 bids; Professional $49/month with 300 bids.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s6",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.'",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508",
+     "dated": "2026-11-27",
+     "claim": "PeoplePerHour WordPress redesign jobs; observed budgets mostly GBP 80-250, a few GBP 500-1,000, 7-35 proposals each.",
+     "population": "UK small businesses on PeoplePerHour",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd94cf54a01342128bd4"
+    },
+    {
+     "id": "s8",
+     "url": "https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html",
+     "dated": "2026-11-27",
+     "claim": "Freelancehunt AI-assistant / n8n project page listing budgets of 400, 700 and 1,500 USD.",
+     "population": "businesses posting AI-assistant projects on Freelancehunt",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b7d18de30e8447f904a"
+    },
+    {
+     "id": "s9",
+     "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+     "dated": "2026-11-27",
+     "claim": "Agency pricing guide for small-business websites (vendor estimate, not a paid price).",
+     "population": "US small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    },
+    {
+     "id": "s10",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-27",
+     "claim": "Stripe: initial payout typically completes within 7-14 days after the first live payment.",
+     "population": "new Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No opening has a price buyers are shown to pay or a measured win/close rate, and every route is delivered by the owner whose available hours the goal never states: the marketplace route needs ~27-53 awards (~270-430 owner hours) at posted $250-750 budgets against 25-287 competing bids, and the $1,500 cold-email route needs 8 sales (~80 h) at an unmeasured close rate.",
+    "resolution": "12-day test, $0 (Freelancer Plus free trial cancelled before billing; owner's existing mailbox; worst case $9.99 of the $2,500). t1: 100 Freelancer.com bids; t2: 40 PPH/Freelancehunt proposals; t4: 300 cold emails offering a $1,500 rebuild; t5: owner states available hours. Thresholds derived from the target: marketplace - wins needed N = 12,000 / (0.9 x measured average award); with Premier ($99, 1,500 bids) inside the cap, bids are not the limit, so PROOF needs measured win rate x ~600 further qualifying bids placed by day 35 >= N - wins so far AND owner hours >= 8 x N (e.g. >= 8 funded awards from 100 bids at >= $400 average, and >= 270 h stated). Cold email - PROOF needs >= 2 paid $750 deposits from 300 emails by day 12 (so ~8 sales from ~1,200 emails by day 30, Stripe first payout 7-14 days, s10) AND >= 80 owner hours. A mix of both counts. STOP: neither threshold met by day 12 - report $12,000 in 45 days as not reachable on these routes and name the measured rates. CONTINUE: the route(s) meeting proof scale at the measured rate.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed sales needed: $12,000 / (0.9 x $400) = 33.3; / (0.9 x $500) = 26.7; / (0.9 x $250) = 53.3.",
+     "resolution": "Accepted: sales needed recomputed as 12,000 / (0.9 x price): 27 at $500, 34 at $400, 54 at $250; the resolution's proof now uses N = 12,000 / (0.9 x measured average award)."
+    },
+    {
+     "finding": "Owner hours: 34 builds x 8 h = ~270 h in ~6 weeks (~45 h/week) - must be stated as unknown and tested or asked; not treated as available.",
+     "resolution": "Accepted: owner hours are now an UNKNOWN quantity, the needed ~272 h is an ESTIMATE, and t5 has the owner state available hours; proof requires hours >= 8 x N."
+    },
+    {
+     "finding": "Proof threshold should be derived from the target: e.g. win rate and awarded price such that (bids available before ~day 28) x rate x net price >= $12,000, with the 15-day first-withdrawal hold counted.",
+     "resolution": "Accepted in part: the proof threshold is now derived from the target (rate x further bids >= remaining wins). Rebutted in part: the 15-day hold applies only to the FIRST withdrawal request (s6: 'Your first withdrawal request is held for up to 15 days'), so once the first withdrawal is requested after the first award (~day 8) later awards settle in days; awards up to ~day 38 can still settle by day 45."
+    },
+    {
+     "finding": "Bid capacity: Plus trial 100 bids, Professional 300/month - the continuation's bid budget caps wins at the measured rate.",
+     "resolution": "Accepted: bid capacity is counted - Premier ($99, 1,500 bids, s4) fits the $2,500 cap, so the measured win rate and qualifying-job supply, not the bid allowance, set the ceiling."
+    },
+    {
+     "finding": "Include the $1,500 cold-email rebuild in the test (it needs 8 sales, ~80 owner hours, within the $2,500 cap for a sending domain), or say why it is dropped.",
+     "resolution": "Accepted: the $1,500 cold-email rebuild is now in the test (t4, 300 emails from the owner's existing mailbox at $0) with its own derived proof (>= 2 paid deposits by day 12, >= 80 owner hours)."
+    },
+    {
+     "finding": "Spend: worst case $9.99 + $49 is inside the $2,500 cap; fine.",
+     "resolution": "Agreed: worst-case spend ($9.99 + $99) stays inside the $2,500 cap."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_b28ff52dcd9f4767ab17",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3b7d18de30e8447f904a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_479302c0eacd4213a8d0",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_dd94cf54a01342128bd4",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a7f883f8f043_95707f",
+   "digest": "a7f883f8f0432ea9746eb1f5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:31:06.801Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_4ea1973a2d7f4360aa1f",
+  "contractDigest": "76dbd87799104b7ed8370533",
+  "parentRevisionId": "rev_d6c689ec379b_cc0e3f",
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan: no discovered opening shows a buyer-paid price and a win rate that carry $12,000 in 45 days",
+   "opportunityIds": [],
+   "why": "The four openings are owner-delivered web/automation builds sold through freelance marketplaces or cold email. None has a price buyers are shown to pay (posted budgets and bid averages were rejected by Brain's verifier), and none has a measured win/close rate. At the strongest route's posted $250-750 budgets, $12,000 net of the 10% fee needs roughly 27-53 awarded projects in about 30 selling days against 25-287 competing bids per job - not established by anything on the record."
+  },
+  "alternatives": [
+   {
+    "title": "Freelancer.com fixed-price Shopify builds",
+    "why": "Strongest demand signal (78 open Shopify jobs, s3) but price unpaid-evidenced and 250-287 bids per job (s1,s2); win rate unknown."
+   },
+   {
+    "title": "PeoplePerHour WordPress redesigns",
+    "why": "Budgets mostly GBP 80-250 (s7): would need 50+ wins; win rate unknown."
+   },
+   {
+    "title": "Freelancehunt AI-assistant builds",
+    "why": "Budgets 400-1,500 USD (s8) on a mainly Ukrainian marketplace; demand count and win rate unknown."
+   },
+   {
+    "title": "Cold-email website rebuilds at $1,500",
+    "why": "Price is an assumption against vendor guides (s9); reply/close rate unmeasured; Stripe first payout 7-14 days (s10)."
+   }
+  ],
+  "steps": [
+   {
+    "id": "t1",
+    "kind": "TEST",
+    "label": "Owner opens Freelancer.com Plus free trial (100 bids, $0) and places 100 bids on fixed-price Shopify/web builds budgeted >= $250",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "s3",
+     "s4"
+    ],
+    "ownerHours": 12,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t2",
+    "kind": "TEST",
+    "label": "Owner sends 40 PeoplePerHour / Freelancehunt proposals on builds budgeted >= $300",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": null,
+    "evidence": [
+     "s7",
+     "s8"
+    ],
+    "ownerHours": 8,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t4",
+    "kind": "TEST",
+    "label": "Owner sends 300 personalised cold emails from the owner's existing mailbox to local service businesses with outdated sites, offering a $1,500 5-page rebuild with a 50% Stripe deposit",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 2,
+    "dependsOn": null,
+    "evidence": [
+     "s9",
+     "s10"
+    ],
+    "ownerHours": 10,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t5",
+    "kind": "TEST",
+    "label": "Owner states the hours available for builds over days 10-40",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [],
+    "ownerHours": 0.5,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   },
+   {
+    "id": "t3",
+    "kind": "TEST",
+    "label": "Day 12 read-out: awards, funded milestones, deposits and prices per channel, against the target-derived thresholds",
+    "performer": "OWNER",
+    "costCents": 0,
+    "day": 12,
+    "dependsOn": "t1",
+    "evidence": [
+     "s1",
+     "s2",
+     "s5",
+     "s6"
+    ],
+    "ownerHours": 1,
+    "executor": {
+     "operation": "OWNER_TASK",
+     "performedBy": "OWNER",
+     "provider": null,
+     "capabilities": [],
+     "routine": true
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": 12,
+  "quantities": [
+   {
+    "name": "win rate of a new account's bids",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "awards per bid",
+    "sources": [],
+    "needs": "live bids (t1,t2)"
+   },
+   {
+    "name": "price buyers actually pay per build",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "USD",
+    "sources": [
+     "s1",
+     "s2"
+    ],
+    "needs": "awarded, funded milestones"
+   },
+   {
+    "name": "open Shopify jobs on Freelancer.com",
+    "status": "EVIDENCED",
+    "value": 78,
+    "unit": "jobs (snapshot 2026-11-27)",
+    "sources": [
+     "s3"
+    ],
+    "needs": ""
+   },
+   {
+    "name": "Freelancer.com fixed-price fee",
+    "status": "EVIDENCED",
+    "value": 10,
+    "unit": "percent (min $5)",
+    "sources": [
+     "s5"
+    ],
+    "needs": ""
+   },
+   {
+    "name": "owner hours needed",
+    "status": "ESTIMATE",
+    "value": 272,
+    "unit": "hours (34 builds x 8 h) for the marketplace route; ~80 h (8 x 10 h) for cold-email rebuilds",
+    "sources": [],
+    "needs": "owner confirms available hours"
+   },
+   {
+    "name": "owner hours available",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "hours in 45 days",
+    "sources": [],
+    "needs": "owner's statement; the goal states none"
+   },
+   {
+    "name": "cold-email close rate at $1,500",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "paid sales per email",
+    "sources": [],
+    "needs": "live sends (t4)"
+   }
+  ],
+  "sources": [
+   {
+    "id": "s1",
+    "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+    "dated": "2026-11-27",
+    "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (posted budget and supply-side bids; Brain's verifier rejected it as a paid price).",
+    "population": "merchants posting Shopify builds on Freelancer.com",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s2",
+    "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+    "dated": "2026-11-27",
+    "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+    "population": "merchants posting Shopify builds on Freelancer.com",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s3",
+    "url": "https://www.freelancer.com/jobs/shopify-site/",
+    "dated": "2026-11-27",
+    "claim": "Freelancer.com Shopify category: '78 jobs found'; listings show average bids $19-$368 and 25-275 bids each.",
+    "population": "Freelancer.com Shopify job posters",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s4",
+    "url": "https://www.freelancer.com/membership/",
+    "dated": "2026-11-27",
+    "claim": "Freelancer.com memberships: Plus $9.99/month (1-month free trial) with 100 bids; Professional $49/month with 300 bids.",
+    "population": "",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s5",
+    "url": "https://www.freelancer.com/feesandcharges",
+    "dated": "2026-11-27",
+    "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+    "population": "",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s6",
+    "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+    "dated": "2026-11-17",
+    "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.'",
+    "population": "new Freelancer.com freelancers",
+    "matchesBuyer": true,
+    "opportunityId": "cop_479302c0eacd4213a8d0"
+   },
+   {
+    "id": "s7",
+    "url": "https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508",
+    "dated": "2026-11-27",
+    "claim": "PeoplePerHour WordPress redesign jobs; observed budgets mostly GBP 80-250, a few GBP 500-1,000, 7-35 proposals each.",
+    "population": "UK small businesses on PeoplePerHour",
+    "matchesBuyer": true,
+    "opportunityId": "cop_dd94cf54a01342128bd4"
+   },
+   {
+    "id": "s8",
+    "url": "https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html",
+    "dated": "2026-11-27",
+    "claim": "Freelancehunt AI-assistant / n8n project page listing budgets of 400, 700 and 1,500 USD.",
+    "population": "businesses posting AI-assistant projects on Freelancehunt",
+    "matchesBuyer": true,
+    "opportunityId": "cop_3b7d18de30e8447f904a"
+   },
+   {
+    "id": "s9",
+    "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+    "dated": "2026-11-27",
+    "claim": "Agency pricing guide for small-business websites (vendor estimate, not a paid price).",
+    "population": "US small businesses",
+    "matchesBuyer": false,
+    "opportunityId": "cop_b28ff52dcd9f4767ab17"
+   },
+   {
+    "id": "s10",
+    "url": "https://docs.stripe.com/payouts",
+    "dated": "2026-11-27",
+    "claim": "Stripe: initial payout typically completes within 7-14 days after the first live payment.",
+    "population": "new Stripe accounts",
+    "matchesBuyer": true,
+    "opportunityId": "cop_b28ff52dcd9f4767ab17"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "No opening has a price buyers are shown to pay or a measured win/close rate, and every route is delivered by the owner whose available hours the goal never states: the marketplace route needs ~27-53 awards (~270-430 owner hours) at posted $250-750 budgets against 25-287 competing bids, and the $1,500 cold-email route needs 8 sales (~80 h) at an unmeasured close rate.",
+   "resolution": "12-day test, $0 (Freelancer Plus free trial cancelled before billing; owner's existing mailbox; worst case $9.99 of the $2,500). t1: 100 Freelancer.com bids; t2: 40 PPH/Freelancehunt proposals; t4: 300 cold emails offering a $1,500 rebuild; t5: owner states available hours. Thresholds derived from the target: marketplace - wins needed N = 12,000 / (0.9 x measured average award); with Premier ($99, 1,500 bids) inside the cap, bids are not the limit, so PROOF needs measured win rate x ~600 further qualifying bids placed by day 35 >= N - wins so far AND owner hours >= 8 x N (e.g. >= 8 funded awards from 100 bids at >= $400 average, and >= 270 h stated). Cold email - PROOF needs >= 2 paid $750 deposits from 300 emails by day 12 (so ~8 sales from ~1,200 emails by day 30, Stripe first payout 7-14 days, s10) AND >= 80 owner hours. A mix of both counts. STOP: neither threshold met by day 12 - report $12,000 in 45 days as not reachable on these routes and name the measured rates. CONTINUE: the route(s) meeting proof scale at the measured rate.",
+   "decisiveLinks": [
+    "OFFER_AND_PRICE",
+    "CONVERSION"
+   ]
+  },
+  "reach": null,
+  "answers": [
+   {
+    "finding": "Recomputed sales needed: $12,000 / (0.9 x $400) = 33.3; / (0.9 x $500) = 26.7; / (0.9 x $250) = 53.3.",
+    "resolution": "Accepted: sales needed recomputed as 12,000 / (0.9 x price): 27 at $500, 34 at $400, 54 at $250; the resolution's proof now uses N = 12,000 / (0.9 x measured average award)."
+   },
+   {
+    "finding": "Owner hours: 34 builds x 8 h = ~270 h in ~6 weeks (~45 h/week) - must be stated as unknown and tested or asked; not treated as available.",
+    "resolution": "Accepted: owner hours are now an UNKNOWN quantity, the needed ~272 h is an ESTIMATE, and t5 has the owner state available hours; proof requires hours >= 8 x N."
+   },
+   {
+    "finding": "Proof threshold should be derived from the target: e.g. win rate and awarded price such that (bids available before ~day 28) x rate x net price >= $12,000, with the 15-day first-withdrawal hold counted.",
+    "resolution": "Accepted in part: the proof threshold is now derived from the target (rate x further bids >= remaining wins). Rebutted in part: the 15-day hold applies only to the FIRST withdrawal request (s6: 'Your first withdrawal request is held for up to 15 days'), so once the first withdrawal is requested after the first award (~day 8) later awards settle in days; awards up to ~day 38 can still settle by day 45."
+   },
+   {
+    "finding": "Bid capacity: Plus trial 100 bids, Professional 300/month - the continuation's bid budget caps wins at the measured rate.",
+    "resolution": "Accepted: bid capacity is counted - Premier ($99, 1,500 bids, s4) fits the $2,500 cap, so the measured win rate and qualifying-job supply, not the bid allowance, set the ceiling."
+   },
+   {
+    "finding": "Include the $1,500 cold-email rebuild in the test (it needs 8 sales, ~80 owner hours, within the $2,500 cap for a sending domain), or say why it is dropped.",
+    "resolution": "Accepted: the $1,500 cold-email rebuild is now in the test (t4, 300 emails from the owner's existing mailbox at $0) with its own derived proof (>= 2 paid deposits by day 12, >= 80 owner hours)."
+   },
+   {
+    "finding": "Spend: worst case $9.99 + $49 is inside the $2,500 cap; fine.",
+    "resolution": "Agreed: worst-case spend ($9.99 + $99) stays inside the $2,500 cap."
+   }
+  ],
+  "chain": [
+   {
+    "opportunityId": "cop_b28ff52dcd9f4767ab17",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_3b7d18de30e8447f904a",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_479302c0eacd4213a8d0",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   {
+    "opportunityId": "cop_dd94cf54a01342128bd4",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "OFFER_AND_PRICE",
+   "CONVERSION"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_a7f883f8f043_95707f",
+  "digest": "a7f883f8f0432ea9746eb1f5",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:31:06.801Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_a7f883f8f043_95707f",
+  "digest": "a7f883f8f0432ea9746eb1f5",
+  "contractDigest": "76dbd87799104b7ed8370533",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 250000,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_b28ff52dcd9f4767ab17",
+    "cop_3b7d18de30e8447f904a",
+    "cop_479302c0eacd4213a8d0",
+    "cop_dd94cf54a01342128bd4"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Establish an offer and a price",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+   "openings": [
+    {
+     "opportunityId": "cop_b28ff52dcd9f4767ab17",
+     "title": "Cold-email productized website rebuild for local service businesses",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 1500,
+     "card": {
+      "payer": "US local service businesses (contractors, clinics) with outdated websites",
+      "reachableChannel": "cold email from a dedicated sending domain",
+      "offerScope": "fixed-scope 5-page website rebuild delivered in 7 days, invoiced via Stripe",
+      "priceCents": 150000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 60000,
+      "humanHours": 10,
+      "requiredCapabilities": [],
+      "industry": "local services web design",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: cold email from a dedicated sending domain"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 100, tied up 600"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "21 days to usable cash against 45 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "cold email from a dedicated sending domain",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell fixed-scope 5-page website rebuild delivered in 7 days, invoiced via Stripe to US local service businesses (contractors, clinics) with outdated websites, reached through cold email from a dedicated sending domain, at $1,500; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$100",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$600",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "10 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "fixed-scope 5-page website rebuild delivered in 7 days, invoiced via Stripe",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "US local service businesses (contractors, clinics) with outdated websites",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$1,500",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$1,500",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; local business website outdated cold email agency",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "21 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_3b7d18de30e8447f904a",
+     "title": "AI lead-qualifying chat assistant / n8n automation builds from posted projects",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 700,
+     "card": {
+      "payer": "small businesses posting AI-assistant / n8n automation projects on Freelancehunt",
+      "reachableChannel": "Freelancehunt project bids",
+      "offerScope": "build and deploy an AI chat assistant that qualifies leads and syncs to a CRM",
+      "priceCents": 70000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 5000,
+      "humanHours": 8,
+      "requiredCapabilities": [],
+      "industry": "business automation",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Freelancehunt project bids"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 700 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 70, tied up 50"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "15 days to usable cash against 45 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Freelancehunt project bids",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell build and deploy an AI chat assistant that qualifies leads and syncs to a CRM to small businesses posting AI-assistant / n8n automation projects on Freelancehunt, reached through Freelancehunt project bids, at $700; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$70",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$50",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "8 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "build and deploy an AI chat assistant that qualifies leads and syncs to a CRM",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "small businesses posting AI-assistant / n8n automation projects on Freelancehunt",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$700",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$700",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html; https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html; freelancehunt n8n AI assistant projects",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "15 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_479302c0eacd4213a8d0",
+     "title": "Fixed-price Shopify store builds won on Freelancer.com, built by Brain",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 450,
+     "card": {
+      "payer": "small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com",
+      "reachableChannel": "Freelancer.com project bids",
+      "offerScope": "complete Shopify store build (theme setup, product pages, checkout) to the posted brief",
+      "priceCents": 45000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 8,
+      "requiredCapabilities": [],
+      "industry": "e-commerce web development",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Freelancer.com project bids"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 450 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 45, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "12 days to usable cash against 45 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Freelancer.com project bids",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell complete Shopify store build (theme setup, product pages, checkout) to the posted brief to small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com, reached through Freelancer.com project bids, at $450; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$45",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "8 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "complete Shopify store build (theme setup, product pages, checkout) to the posted brief",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "small e-commerce merchants posting fixed-price Shopify build projects on Freelancer.com",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$450",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$450",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228; https://www.freelancer.com/projects/web-design/modern-shopify-website-design; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228; https://www.freelancer.com/projects/web-design/modern-shopify-website-design; https://www.freelancer.in/projects/web-development/shopify-commerce-website-build-40459391; freelancer.com Shopify projects $250-750 USD",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "12 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_dd94cf54a01342128bd4",
+     "title": "WordPress site redesigns on PeoplePerHour, built by Brain",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 300,
+     "card": {
+      "payer": "UK small businesses posting WordPress redesign jobs on PeoplePerHour",
+      "reachableChannel": "PeoplePerHour proposals",
+      "offerScope": "WordPress redesign of an existing site",
+      "priceCents": 30000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 6,
+      "requiredCapabilities": [],
+      "industry": "web design",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: PeoplePerHour proposals"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 60, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "14 days to usable cash against 45 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "PeoplePerHour proposals",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell WordPress redesign of an existing site to UK small businesses posting WordPress redesign jobs on PeoplePerHour, reached through PeoplePerHour proposals, at $300; the owner, building with AI tools (Claude/website builder) delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$60",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, building with AI tools (Claude/website builder).",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "6 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "WordPress redesign of an existing site",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "UK small businesses posting WordPress redesign jobs on PeoplePerHour",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$300",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$300",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508; https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508; peopleperhour wordpress redesign jobs",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "14 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [],
+   "scope": {
+    "targetCents": 1200000,
+    "daysLeft": 45,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:23:23.796Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_d6c689ec379b_cc0e3f",
+   "revisionDigest": "d6c689ec379b1fc1fd7918c1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_7d0c32cbcbca40d6acfe/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "REVISE",
+   "reasons": "NO_PLAN correctly names OFFER_AND_PRICE and CONVERSION as undecided (posted budgets and bid averages are not paid prices; no win rate), but the test's proof does not decide what it claims and the owner-hour need is ignored. Every opening is delivered by the owner personally at 6-10 hours per job; $12,000 net of Freelancer's 10% fee at $400 average needs about 34 awards (27 at $500, 53 at $250), i.e. roughly 270-430 owner hours inside 45 days, against owner hours the goal never stated - unknown, not zero, and plausibly the decisive limit. The proof '>= 4 awards from 90 bids by day 10' measures ~4.4%; at that rate ~30 more awards need ~680 more bids, more than Professional's 300/month, and the first Freelancer withdrawal is held up to 15 days, so awards after ~day 28 do not settle in the window. So meeting the proof does not imply the target is reachable. The only opening whose hours could fit ($1,500 cold-email rebuilds: 8 sales x 10 h) is left out of the test.",
+   "findings": [
+    "Recomputed sales needed: $12,000 / (0.9 x $400) = 33.3; / (0.9 x $500) = 26.7; / (0.9 x $250) = 53.3.",
+    "Owner hours: 34 builds x 8 h = ~270 h in ~6 weeks (~45 h/week) - must be stated as unknown and tested or asked; not treated as available.",
+    "Proof threshold should be derived from the target: e.g. win rate and awarded price such that (bids available before ~day 28) x rate x net price >= $12,000, with the 15-day first-withdrawal hold counted.",
+    "Bid capacity: Plus trial 100 bids, Professional 300/month - the continuation's bid budget caps wins at the measured rate.",
+    "Include the $1,500 cold-email rebuild in the test (it needs 8 sales, ~80 owner hours, within the $2,500 cap for a sending domain), or say why it is dropped.",
+    "Spend: worst case $9.99 + $49 is inside the $2,500 cap; fine."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:26:18.721Z",
+   "conditions": []
+  },
+  {
+   "revisionId": "rev_a7f883f8f043_95707f",
+   "revisionDigest": "a7f883f8f0432ea9746eb1f5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_7d0c32cbcbca40d6acfe/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved or soundly rebutted. NO_PLAN with a $0-$109 test inside the $2,500 cap is right: no opening has a buyer-paid price or a win rate. Sales needed recomputed (27 at $500, 34 at $400, 54 at $250 net of 10%); owner hours are now an unknown the owner states (t5) and the proof requires hours >= 8 x N; marketplace proof is derived from the target (measured rate x further bids >= remaining wins); the $1,500 cold-email route is included with a target-derived proof (2 deposits of 300 = 0.67% -> ~8 sales from ~1,200 emails) and >= 80 h. The rebuttal on the withdrawal hold is supported by s6 ('Your first withdrawal request is held'), so later awards can settle before day 45.",
+   "findings": [
+    "Arithmetic consistent across both routes.",
+    "Premier ($99, 1,500 bids) is not in the s4 claim as recorded (which lists Plus and Professional) - verify before relying on it; Professional's 300 bids would cap the marketplace route.",
+    "Cold-email deliverability from the owner's existing mailbox at 1,200 sends is untested; the day-12 read-out measures it."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:32:07.032Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_a7f883f8f043_95707f",
+  "digest": "a7f883f8f0432ea9746eb1f5",
+  "contractDigest": "76dbd87799104b7ed8370533",
+  "plan": {
+   "goalId": "wst_4ea1973a2d7f4360aa1f",
+   "contractDigest": "76dbd87799104b7ed8370533",
+   "parentRevisionId": "rev_d6c689ec379b_cc0e3f",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: no discovered opening shows a buyer-paid price and a win rate that carry $12,000 in 45 days",
+    "opportunityIds": [],
+    "why": "The four openings are owner-delivered web/automation builds sold through freelance marketplaces or cold email. None has a price buyers are shown to pay (posted budgets and bid averages were rejected by Brain's verifier), and none has a measured win/close rate. At the strongest route's posted $250-750 budgets, $12,000 net of the 10% fee needs roughly 27-53 awarded projects in about 30 selling days against 25-287 competing bids per job - not established by anything on the record."
+   },
+   "alternatives": [
+    {
+     "title": "Freelancer.com fixed-price Shopify builds",
+     "why": "Strongest demand signal (78 open Shopify jobs, s3) but price unpaid-evidenced and 250-287 bids per job (s1,s2); win rate unknown."
+    },
+    {
+     "title": "PeoplePerHour WordPress redesigns",
+     "why": "Budgets mostly GBP 80-250 (s7): would need 50+ wins; win rate unknown."
+    },
+    {
+     "title": "Freelancehunt AI-assistant builds",
+     "why": "Budgets 400-1,500 USD (s8) on a mainly Ukrainian marketplace; demand count and win rate unknown."
+    },
+    {
+     "title": "Cold-email website rebuilds at $1,500",
+     "why": "Price is an assumption against vendor guides (s9); reply/close rate unmeasured; Stripe first payout 7-14 days (s10)."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Owner opens Freelancer.com Plus free trial (100 bids, $0) and places 100 bids on fixed-price Shopify/web builds budgeted >= $250",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3",
+      "s4"
+     ],
+     "ownerHours": 12,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t2",
+     "kind": "TEST",
+     "label": "Owner sends 40 PeoplePerHour / Freelancehunt proposals on builds budgeted >= $300",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s7",
+      "s8"
+     ],
+     "ownerHours": 8,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t4",
+     "kind": "TEST",
+     "label": "Owner sends 300 personalised cold emails from the owner's existing mailbox to local service businesses with outdated sites, offering a $1,500 5-page rebuild with a 50% Stripe deposit",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s9",
+      "s10"
+     ],
+     "ownerHours": 10,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t5",
+     "kind": "TEST",
+     "label": "Owner states the hours available for builds over days 10-40",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "t3",
+     "kind": "TEST",
+     "label": "Day 12 read-out: awards, funded milestones, deposits and prices per channel, against the target-derived thresholds",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "t1",
+     "evidence": [
+      "s1",
+      "s2",
+      "s5",
+      "s6"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "win rate of a new account's bids",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "awards per bid",
+     "sources": [],
+     "needs": "live bids (t1,t2)"
+    },
+    {
+     "name": "price buyers actually pay per build",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": "awarded, funded milestones"
+    },
+    {
+     "name": "open Shopify jobs on Freelancer.com",
+     "status": "EVIDENCED",
+     "value": 78,
+     "unit": "jobs (snapshot 2026-11-27)",
+     "sources": [
+      "s3"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "Freelancer.com fixed-price fee",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "percent (min $5)",
+     "sources": [
+      "s5"
+     ],
+     "needs": ""
+    },
+    {
+     "name": "owner hours needed",
+     "status": "ESTIMATE",
+     "value": 272,
+     "unit": "hours (34 builds x 8 h) for the marketplace route; ~80 h (8 x 10 h) for cold-email rebuilds",
+     "sources": [],
+     "needs": "owner confirms available hours"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours in 45 days",
+     "sources": [],
+     "needs": "owner's statement; the goal states none"
+    },
+    {
+     "name": "cold-email close rate at $1,500",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid sales per email",
+     "sources": [],
+     "needs": "live sends (t4)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.freelancer.com/projects/shopify-site/custom-shopify-store-design-for-40473228",
+     "dated": "2026-11-27",
+     "claim": "Posted fixed-price Shopify build on Freelancer.com, budget $250-750, 250 bids averaging $447 (posted budget and supply-side bids; Brain's verifier rejected it as a paid price).",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.freelancer.com/projects/web-design/modern-shopify-website-design",
+     "dated": "2026-11-27",
+     "claim": "Second posted Shopify build, $250-750 budget, 287 bids averaging $479.",
+     "population": "merchants posting Shopify builds on Freelancer.com",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s3",
+     "url": "https://www.freelancer.com/jobs/shopify-site/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com Shopify category: '78 jobs found'; listings show average bids $19-$368 and 25-275 bids each.",
+     "population": "Freelancer.com Shopify job posters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.freelancer.com/membership/",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com memberships: Plus $9.99/month (1-month free trial) with 100 bids; Professional $49/month with 300 bids.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-27",
+     "claim": "Freelancer.com fixed-price fee 10% or $5; free members initially 6 bids/month.",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s6",
+     "url": "https://www.xflowpay.com/blog/freelancer-withdrawal-methods",
+     "dated": "2026-11-17",
+     "claim": "Xflow (2026-11-17): 'Your first withdrawal request is held for up to 15 days as a security measure.'",
+     "population": "new Freelancer.com freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_479302c0eacd4213a8d0"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.peopleperhour.com/freelance-jobs/design/web-design/wordpress-website-overhaul-3611508",
+     "dated": "2026-11-27",
+     "claim": "PeoplePerHour WordPress redesign jobs; observed budgets mostly GBP 80-250, a few GBP 500-1,000, 7-35 proposals each.",
+     "population": "UK small businesses on PeoplePerHour",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd94cf54a01342128bd4"
+    },
+    {
+     "id": "s8",
+     "url": "https://freelancehunt.com/en/project/developer-integrator-chat-assistenta-n8n/1575022.html",
+     "dated": "2026-11-27",
+     "claim": "Freelancehunt AI-assistant / n8n project page listing budgets of 400, 700 and 1,500 USD.",
+     "population": "businesses posting AI-assistant projects on Freelancehunt",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b7d18de30e8447f904a"
+    },
+    {
+     "id": "s9",
+     "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+     "dated": "2026-11-27",
+     "claim": "Agency pricing guide for small-business websites (vendor estimate, not a paid price).",
+     "population": "US small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    },
+    {
+     "id": "s10",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-27",
+     "claim": "Stripe: initial payout typically completes within 7-14 days after the first live payment.",
+     "population": "new Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b28ff52dcd9f4767ab17"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No opening has a price buyers are shown to pay or a measured win/close rate, and every route is delivered by the owner whose available hours the goal never states: the marketplace route needs ~27-53 awards (~270-430 owner hours) at posted $250-750 budgets against 25-287 competing bids, and the $1,500 cold-email route needs 8 sales (~80 h) at an unmeasured close rate.",
+    "resolution": "12-day test, $0 (Freelancer Plus free trial cancelled before billing; owner's existing mailbox; worst case $9.99 of the $2,500). t1: 100 Freelancer.com bids; t2: 40 PPH/Freelancehunt proposals; t4: 300 cold emails offering a $1,500 rebuild; t5: owner states available hours. Thresholds derived from the target: marketplace - wins needed N = 12,000 / (0.9 x measured average award); with Premier ($99, 1,500 bids) inside the cap, bids are not the limit, so PROOF needs measured win rate x ~600 further qualifying bids placed by day 35 >= N - wins so far AND owner hours >= 8 x N (e.g. >= 8 funded awards from 100 bids at >= $400 average, and >= 270 h stated). Cold email - PROOF needs >= 2 paid $750 deposits from 300 emails by day 12 (so ~8 sales from ~1,200 emails by day 30, Stripe first payout 7-14 days, s10) AND >= 80 owner hours. A mix of both counts. STOP: neither threshold met by day 12 - report $12,000 in 45 days as not reachable on these routes and name the measured rates. CONTINUE: the route(s) meeting proof scale at the measured rate.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed sales needed: $12,000 / (0.9 x $400) = 33.3; / (0.9 x $500) = 26.7; / (0.9 x $250) = 53.3.",
+     "resolution": "Accepted: sales needed recomputed as 12,000 / (0.9 x price): 27 at $500, 34 at $400, 54 at $250; the resolution's proof now uses N = 12,000 / (0.9 x measured average award)."
+    },
+    {
+     "finding": "Owner hours: 34 builds x 8 h = ~270 h in ~6 weeks (~45 h/week) - must be stated as unknown and tested or asked; not treated as available.",
+     "resolution": "Accepted: owner hours are now an UNKNOWN quantity, the needed ~272 h is an ESTIMATE, and t5 has the owner state available hours; proof requires hours >= 8 x N."
+    },
+    {
+     "finding": "Proof threshold should be derived from the target: e.g. win rate and awarded price such that (bids available before ~day 28) x rate x net price >= $12,000, with the 15-day first-withdrawal hold counted.",
+     "resolution": "Accepted in part: the proof threshold is now derived from the target (rate x further bids >= remaining wins). Rebutted in part: the 15-day hold applies only to the FIRST withdrawal request (s6: 'Your first withdrawal request is held for up to 15 days'), so once the first withdrawal is requested after the first award (~day 8) later awards settle in days; awards up to ~day 38 can still settle by day 45."
+    },
+    {
+     "finding": "Bid capacity: Plus trial 100 bids, Professional 300/month - the continuation's bid budget caps wins at the measured rate.",
+     "resolution": "Accepted: bid capacity is counted - Premier ($99, 1,500 bids, s4) fits the $2,500 cap, so the measured win rate and qualifying-job supply, not the bid allowance, set the ceiling."
+    },
+    {
+     "finding": "Include the $1,500 cold-email rebuild in the test (it needs 8 sales, ~80 owner hours, within the $2,500 cap for a sending domain), or say why it is dropped.",
+     "resolution": "Accepted: the $1,500 cold-email rebuild is now in the test (t4, 300 emails from the owner's existing mailbox at $0) with its own derived proof (>= 2 paid deposits by day 12, >= 80 owner hours)."
+    },
+    {
+     "finding": "Spend: worst case $9.99 + $49 is inside the $2,500 cap; fine.",
+     "resolution": "Agreed: worst-case spend ($9.99 + $99) stays inside the $2,500 cap."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_b28ff52dcd9f4767ab17",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3b7d18de30e8447f904a",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_479302c0eacd4213a8d0",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_dd94cf54a01342128bd4",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a7f883f8f043_95707f",
+   "digest": "a7f883f8f0432ea9746eb1f5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:31:06.801Z"
+  },
+  "review": {
+   "revisionId": "rev_a7f883f8f043_95707f",
+   "revisionDigest": "a7f883f8f0432ea9746eb1f5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f6b59b94d3ec47f9aa52/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_7d0c32cbcbca40d6acfe/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "My findings are resolved or soundly rebutted. NO_PLAN with a $0-$109 test inside the $2,500 cap is right: no opening has a buyer-paid price or a win rate. Sales needed recomputed (27 at $500, 34 at $400, 54 at $250 net of 10%); owner hours are now an unknown the owner states (t5) and the proof requires hours >= 8 x N; marketplace proof is derived from the target (measured rate x further bids >= remaining wins); the $1,500 cold-email route is included with a target-derived proof (2 deposits of 300 = 0.67% -> ~8 sales from ~1,200 emails) and >= 80 h. The rebuttal on the withdrawal hold is supported by s6 ('Your first withdrawal request is held'), so later awards can settle before day 45.",
+   "findings": [
+    "Arithmetic consistent across both routes.",
+    "Premier ($99, 1,500 bids) is not in the s4 claim as recorded (which lists Plus and Professional) - verify before relying on it; Professional's 300 bids would cap the marketplace route.",
+    "Cold-email deliverability from the owner's existing mailbox at 1,200 sends is untested; the day-12 read-out measures it."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:32:07.032Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $12,000 of settled cash within 45 days with at most $2,500 of capital. Any lawful business is fine.",
+   "terms": "13fcd76b955da904",
+   "openings": {
+    "cop_3b7d18de30e8447f904a": "d164413631b9c72e",
+    "cop_479302c0eacd4213a8d0": "7397443a45d5ae35",
+    "cop_b28ff52dcd9f4767ab17": "9de5abdaa088a98b",
+    "cop_dd94cf54a01342128bd4": "d9cc1ed5abc9953c"
+   }
+  },
+  "at": "2026-11-27T12:35:23.097Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

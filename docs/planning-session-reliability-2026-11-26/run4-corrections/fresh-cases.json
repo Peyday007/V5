@@ -1,0 +1,252 @@
+[
+  {
+    "id": "fx-01-climbing-logs",
+    "heldOut": true,
+    "description": "260 gyms evidenced, a measured 14 agreements from 120 contacts (~11.7%) gives ~30 deals at $380 (~$11,400) against $3,000 in 30 days; Brain produces it at $8, paid in 5 days, no capital. Every link evidenced: executable.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "indoor climbing gyms", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "climbing", "title": "Auto-belay inspection and route-setting log pack for indoor climbing gyms", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "industry": "indoor climbing gyms",
+        "payer": "Indoor climbing gym operators", "channel": "Email to gym managers listed in the national climbing-wall association directory", "signalDaysAgo": 4,
+        "offer": "A completed inspection and route-setting log pack ready for the insurer's annual review",
+        "price": 380, "priceBasis": "EVIDENCE", "cost": 8, "capital": 0, "daysToCash": 5, "hours": 1, "performer": "BRAIN",
+        "volume": "260 indoor climbing gyms are listed in the climbing-wall association directory; each insurer requires the logs at every annual renewal.",
+        "conversion": { "paid": 14, "of": 120, "unit": "CONTACTS" }
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "capitalMax": 0 }
+  },
+  {
+    "id": "fx-02-orchard-paperwork",
+    "heldOut": true,
+    "description": "The frost-fan figure is a state rebate paid to growers, not what anyone pays for the deliverable, so it may not be counted. The packing-house audit stands on its own: 85 houses x a measured 9/60 contacts (15%) ~ 12 deals x $650 ~ $8,300 against $3,000 in 30 days, Brain produces it, paid in 6 days. Executable without the rebate.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "tree-fruit packing", "mechanism": "PRODUCTIZED_SERVICE", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "frostRebate", "title": "Frost-fan controller rebate applications for apple orchards", "mechanism": "INFORMATION_ASYMMETRY", "industry": "apple orchards",
+        "payer": "Apple orchard growers", "channel": "Grower cooperative newsletter",
+        "price": 1500, "priceEvidence": "The state energy office pays a $1,500 rebate to each orchard that installs a qualifying frost-fan controller (program notice, 2026-10-14).",
+        "cost": 5, "capital": 0, "daysToCash": 45, "hours": 1, "performer": "BRAIN",
+        "volume": "300 orchards in the county grow apples commercially, per the agricultural census."
+      },
+      {
+        "key": "packingAudit", "title": "Cold-storage temperature log audit for apple packing houses", "mechanism": "PRODUCTIZED_SERVICE", "industry": "tree-fruit packing",
+        "payer": "Apple packing house managers", "channel": "Email to the packing houses on the state agriculture department's licensee list",
+        "price": 650, "priceEvidence": "Packing houses pay $650 for a cold-storage log audit ahead of buyer food-safety inspections (three paid invoices, 2026-11).",
+        "cost": 10, "capital": 0, "daysToCash": 6, "hours": 1, "performer": "BRAIN",
+        "volume": "85 apple packing houses hold state cold-storage licences; each must present audited temperature logs before every season's buyer inspection.",
+        "conversion": { "paid": 9, "of": 60, "unit": "CONTACTS" }
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "mustNotUse": ["frostRebate"], "notAPurchasePrice": ["frostRebate"], "capitalMax": 0 }
+  },
+  {
+    "id": "fx-03-dojo-records",
+    "heldOut": true,
+    "description": "Every link is filed, but the $220 price is only the owner's own statement; no source shows a martial-arts school pays it. The price is the decisive gap.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "martial-arts schools", "mechanism": "PRODUCTIZED_SERVICE", "autonomy": "unlimited", "missingEvidence": "OFFER_AND_PRICE", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "dojo", "title": "Belt-grading records and certificate pack for martial-arts schools", "mechanism": "PRODUCTIZED_SERVICE", "industry": "martial-arts schools",
+        "payer": "Martial-arts school owners", "channel": "Email to schools listed with the regional martial-arts federation",
+        "price": 220, "priceBasis": "PERSON", "cost": 3, "capital": 0, "daysToCash": 4, "hours": 1, "performer": "BRAIN",
+        "volume": "340 martial-arts schools are registered with the regional federation; each runs belt gradings every quarter.",
+        "conversion": { "paid": 21, "of": 210 }
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "MISSING_EVIDENCE", "links": ["OFFER_AND_PRICE"] } }
+  },
+  {
+    "id": "fx-04-lift-paperwork",
+    "heldOut": true,
+    "description": "The card prices the elevator inspection pack at $1,200 but a sourced price says $120. At $120 the $6,000 target needs 50 deals instead of 5; on a contested price no executable plan is established.",
+    "dimensions": { "capital": "none", "target": "medium", "deadline": "long", "industry": "elevator maintenance", "mechanism": "PRODUCTIZED_SERVICE", "autonomy": "unlimited", "missingEvidence": "OFFER_AND_PRICE", "contradictoryEvidence": true, "objectiveChanged": false },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "elevator", "title": "Annual inspection certificate pack for elevator maintenance contractors", "mechanism": "PRODUCTIZED_SERVICE", "industry": "elevator maintenance",
+        "payer": "Elevator maintenance contractors", "channel": "Email to contractors licensed by the state elevator safety board",
+        "price": 1200, "priceContradiction": 120, "cost": 15, "capital": 0, "daysToCash": 8, "hours": 1, "performer": "BRAIN",
+        "volume": "140 elevator maintenance contractors hold state licences; each files inspection certificates for every unit it services annually.",
+        "conversion": { "paid": 12, "of": 100, "unit": "CONTACTS" }
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "MISSING_EVIDENCE", "links": ["OFFER_AND_PRICE", "ECONOMICS"] } }
+  },
+  {
+    "id": "fx-05-studio-sterilisation",
+    "heldOut": true,
+    "description": "Spore-test log service at $149 needs 17 sales for $2,500; a conversion rate is measured, but how many studios exist and buy is only Brain's own estimate. Market volume is the decisive unknown.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "tattoo studios", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "autonomy": "unlimited", "missingEvidence": "MARKET_VOLUME", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "tattoo", "title": "Autoclave spore-test log service for tattoo studios", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "industry": "tattoo studios",
+        "payer": "Tattoo studio owners", "channel": "Landing page promoted in tattoo-artist forums",
+        "price": 149, "cost": 4, "capital": 0, "daysToCash": 3, "hours": 1, "performer": "BRAIN",
+        "volume": "Studios in the metro area probably need spore-test logs before health inspections.", "volumeBasis": "ESTIMATE",
+        "conversion": { "paid": 18, "of": 200 }
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "MISSING_EVIDENCE", "links": ["MARKET_VOLUME"] } }
+  },
+  {
+    "id": "fx-06-location-permits",
+    "heldOut": true,
+    "description": "Six production companies signed at $1,100, but the permit expediter charges $1,350 a permit: every deal loses $250, and collecting $5,000 loses ~$1,140. No sound plan; the economics are the blocker.",
+    "dimensions": { "capital": "none", "target": "medium", "deadline": "long", "industry": "film production", "mechanism": "SUBCONTRACTED_FULFILMENT", "autonomy": "unlimited", "missingEvidence": "ECONOMICS", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "filmPermits", "title": "Brokered street-location filming permits for independent production companies", "mechanism": "SUBCONTRACTED_FULFILMENT", "industry": "film production",
+        "payer": "Independent production companies", "channel": "The regional film office's production listings",
+        "price": 1100, "cost": 1350, "capital": 0, "daysToCash": 12, "hours": 2, "performer": "SUBCONTRACTOR", "subcontractor": "CityScout Permit Services (quoted)",
+        "agreements": [1100, 1100, 1100, 1100, 1100, 1100]
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "MISSING_EVIDENCE", "links": ["ECONOMICS"] } }
+  },
+  {
+    "id": "fx-07-crane-yards",
+    "heldOut": true,
+    "description": "Four crane rental yards signed for $2,400 load-test certification each ($9,600) against $8,000 in 45 days; a named inspector does the tests at $1,100, payment in 20 days, no capital. The written agreements cover the target: executable.",
+    "dimensions": { "capital": "none", "target": "medium", "deadline": "long", "industry": "crane rental", "mechanism": "SUBCONTRACTED_FULFILMENT", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "crane", "title": "Annual load-test certification for mobile crane rental yards", "mechanism": "SUBCONTRACTED_FULFILMENT", "industry": "crane rental",
+        "payer": "Crane rental yard owners", "channel": "Direct email to the four yards' fleet managers",
+        "price": 2400, "cost": 1100, "capital": 0, "daysToCash": 20, "hours": 2, "performer": "SUBCONTRACTOR", "subcontractor": "Keystone Lifting Inspections LLC (quoted)",
+        "volume": "60 crane rental yards are registered with the state labour department; each crane needs a load test every year.",
+        "agreements": [2400, 2400, 2400, 2400]
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "capitalMax": 0 }
+  },
+  {
+    "id": "fx-08-shared-desks",
+    "heldOut": true,
+    "description": "Five coworking operators signed a $450-a-month billing reconciliation that Brain performs: $2,250 a month against a $2,000 monthly target within 40 days, first payment in 14 days. Executable.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "coworking spaces", "mechanism": "PRODUCTIZED_SERVICE", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Earn $2,000 a month in recurring revenue within 40 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "coworking", "title": "Monthly member-billing and access-card reconciliation for coworking spaces", "mechanism": "PRODUCTIZED_SERVICE", "industry": "coworking spaces",
+        "payer": "Coworking space operators", "channel": "Email to operators of the signed spaces",
+        "price": 450, "monthly": true, "cost": 15, "capital": 0, "daysToCash": 14, "hours": 1, "performer": "BRAIN",
+        "volume": "210 coworking spaces are listed in the city's flexible-workspace register; each bills members monthly.",
+        "agreements": [450, 450, 450, 450, 450]
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "capitalMax": 0 }
+  },
+  {
+    "id": "fx-09-piano-valuations",
+    "heldOut": true,
+    "description": "6 owner hours a week over 28 days is 24 hours. The owner appraises pianos himself at 3 hours a deal; eight music schools signed at $500, and $3,000 needs six of them: 18 owner hours, inside the allowance. Executable using owner hours.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "music schools", "mechanism": "CAPABILITY_ARBITRAGE", "autonomy": "owner-hours-limited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $3,000 of settled cash within 28 days with no more than 6 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "piano", "title": "Insurance valuation of instrument inventories for music schools", "mechanism": "CAPABILITY_ARBITRAGE", "industry": "music schools",
+        "payer": "Music school directors", "channel": "Email to the signed schools' directors",
+        "price": 500, "cost": 0, "capital": 0, "daysToCash": 7, "hours": 3, "performer": "OWNER",
+        "agreements": [500, 500, 500, 500, 500, 500, 500, 500]
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "ownerHoursMax": 24, "capitalMax": 0 }
+  },
+  {
+    "id": "fx-10-fairway-reports",
+    "heldOut": true,
+    "description": "The owner names golf courses. Three courses signed $1,600 irrigation water-use reports Brain produces ($4,800 against $4,000 in 30 days). The bicycle-shop workbook would also reach the target but is outside the named industry and may not be used.",
+    "dimensions": { "capital": "none", "target": "small", "deadline": "long", "industry": "golf courses", "mechanism": "EXPLICIT_PAID_REQUEST", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Generate $4,000 within 30 days in a single industry the owner names: golf courses.",
+    "openings": [
+      {
+        "key": "golf", "title": "Irrigation water-use reports for golf courses under drought allocation rules", "mechanism": "EXPLICIT_PAID_REQUEST", "industry": "golf courses",
+        "payer": "Golf course superintendents", "channel": "Email to the three signed courses",
+        "price": 1600, "cost": 20, "capital": 0, "daysToCash": 10, "hours": 1, "performer": "BRAIN",
+        "volume": "48 golf courses hold water-district irrigation allocations; each must file a water-use report each quarter.",
+        "agreements": [1600, 1600, 1600]
+      },
+      {
+        "key": "bikeShops", "title": "Manufacturer warranty-claim workbooks for independent bicycle shops", "mechanism": "PRODUCTIZED_SERVICE", "industry": "bicycle retail",
+        "payer": "Independent bicycle shop owners", "channel": "Email to shops in the cycling retailers' association directory",
+        "price": 240, "cost": 4, "capital": 0, "daysToCash": 4, "hours": 1, "performer": "BRAIN",
+        "volume": "520 independent bicycle shops are listed in the retailers' association directory; each files warranty claims monthly.",
+        "conversion": { "paid": 15, "of": 150, "unit": "CONTACTS" }
+      }
+    ],
+    "expect": { "verdict": "EXECUTABLE_PLAN", "mustNotUse": ["bikeShops"] }
+  },
+  {
+    "id": "fx-11-festival-vendors",
+    "heldOut": true,
+    "description": "First read on $3,000, which 40 festivals x a measured 10/40 x $400 ($4,000) reaches. The owner then raises the target to $25,000 in the same 30 days: even every one of the 40 permitted festivals at $400 is $16,000. Infeasible on the changed target.",
+    "dimensions": { "capital": "none", "target": "out-of-reach", "deadline": "long", "industry": "music festivals", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": true },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "changedObjective": "Collect $25,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "festival", "title": "Food-vendor permit compliance packs for music festival organisers", "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION", "industry": "music festivals",
+        "payer": "Music festival organisers", "channel": "Email to organisers listed on the state mass-gathering permit register",
+        "price": 400, "cost": 6, "capital": 0, "daysToCash": 5, "hours": 1, "performer": "BRAIN",
+        "volume": "40 music festivals hold state mass-gathering permits; each needs one vendor compliance pack a season.",
+        "conversion": { "paid": 10, "of": 40, "unit": "CONTACTS" }
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "INFEASIBLE", "constraints": ["TARGET"] }, "targetAfterChange": 25000 }
+  },
+  {
+    "id": "fx-12-storage-lots",
+    "heldOut": true,
+    "description": "A furniture dealer signed for a $9,000 lien-sale lot whose $3,000 margin would cover $2,500, but the lot ties up $6,000 before it pays and the objective allows $1,000. The capital limit rules it out.",
+    "dimensions": { "capital": "small", "target": "small", "deadline": "long", "industry": "self-storage lien sales", "mechanism": "RESALE_OR_ASSET", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $2,500 of settled cash within 30 days with at most $1,000 of capital.",
+    "openings": [
+      {
+        "key": "storage", "title": "Resale of self-storage lien-sale unit contents to used-furniture dealers", "mechanism": "RESALE_OR_ASSET", "industry": "self-storage lien sales",
+        "payer": "Used-furniture dealers", "channel": "Direct call with the signed dealer",
+        "price": 9000, "cost": 6000, "capital": 6000, "daysToCash": 14, "hours": 3, "performer": "SUBCONTRACTOR", "subcontractor": "Ridgeline Moving & Hauling (quoted)",
+        "agreements": [9000]
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "INFEASIBLE", "constraints": ["CAPITAL"], "links": ["ECONOMICS"] }, "capitalMax": 1000 }
+  },
+  {
+    "id": "fx-13-district-routes",
+    "heldOut": true,
+    "description": "Three school districts signed $3,000 bus-route accessibility audits Brain produces ($9,000), but districts pay 75 days after invoice and the deadline is 14 days: no cash can settle in time. Infeasible on the deadline.",
+    "dimensions": { "capital": "none", "target": "medium", "deadline": "short", "industry": "school districts", "mechanism": "EXPLICIT_PAID_REQUEST", "autonomy": "unlimited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $6,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "district", "title": "Bus-route accessibility audits for school districts", "mechanism": "EXPLICIT_PAID_REQUEST", "industry": "school districts",
+        "payer": "School district transportation directors", "channel": "Email to the three signed districts",
+        "price": 3000, "cost": 25, "capital": 0, "daysToCash": 75, "hours": 1, "performer": "BRAIN",
+        "agreements": [3000, 3000, 3000]
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "INFEASIBLE", "constraints": ["DEADLINE"], "links": ["SETTLES_IN_TIME"] } }
+  },
+  {
+    "id": "fx-14-tree-surveys",
+    "heldOut": true,
+    "description": "Ten landscape architects signed $700 heritage-tree surveys, but the owner performs each at 8 hours: $5,000 needs 8 surveys, 64 owner hours, against ~9 allowed (2 hours a week over 30 days). Infeasible on owner hours.",
+    "dimensions": { "capital": "none", "target": "medium", "deadline": "long", "industry": "landscape architecture", "mechanism": "CAPABILITY_ARBITRAGE", "autonomy": "owner-hours-limited", "missingEvidence": "none", "contradictoryEvidence": false, "objectiveChanged": false },
+    "objective": "Collect $5,000 of settled cash within 30 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "treeSurvey", "title": "Heritage-tree condition surveys for landscape architecture firms", "mechanism": "CAPABILITY_ARBITRAGE", "industry": "landscape architecture",
+        "payer": "Landscape architecture firms", "channel": "Email to the signed firms' project leads",
+        "price": 700, "cost": 0, "capital": 0, "daysToCash": 7, "hours": 8, "performer": "OWNER",
+        "agreements": [700, 700, 700, 700, 700, 700, 700, 700, 700, 700]
+      }
+    ],
+    "expect": { "verdict": "NO_PLAN", "blocker": { "kind": "INFEASIBLE", "constraints": ["OWNER_HOURS"], "links": ["FULFILMENT"] }, "ownerHoursMax": 9 }
+  }
+]

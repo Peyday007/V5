@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_e23ff3775ca64d6d8634",
+ "revision_id": "rev_90f615e36e22_be7ab0",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-iota",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "PASS",
+ "conditions": [],
+ "reasons": "Under contract v2 (ownerHoursPerWeek 1) NO_PLAN is right and follows from arithmetic on the card: the only recorded fulfiller is the owner, humanHours is 3 a job, five $600 jobs are the minimum for $3,000, so 15 owner hours are needed against about 4.3 (1 a week over 30 days, 30/7 weeks). That covers one job, $600. Every other link holds (six written acceptances at $600, $40 cost, $0 exposure, 7-day settlement). Brain's own run reaches the same conclusion: 18 hours needed against 4. The resolution is actionable and correct: allow at least 15 hours (about 3.5 a week), or get a quoted technician paid from receipts and re-plan.",
+ "findings": [
+  "The decisive gap is an OWNER_HOURS limit computed from the card's humanHours (3) and the contract's 1 hour a week. The revision calls it 'a fulfilment gap to settle rather than an arithmetic constraint' and records no OWNER_HOURS entry in constraints. It is a constraint that even complete evidence cannot fit, and it should be recorded as one.",
+  "The disagreement with Brain's FULFILMENT link is unnecessary. The owner is the recorded fulfiller; the failure is that the hours do not fit, not that fulfilment is unestablished. Calling the 3 hours 'only a person's statement' undercuts a figure the card holds as humanHours.",
+  "The technician alternative assumes payment out of each job's receipt; no fulfiller, quote or payment term is recorded, so it stays research, as the revision correctly says."
+ ]
+}

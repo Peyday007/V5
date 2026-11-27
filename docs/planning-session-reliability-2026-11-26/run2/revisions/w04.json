@@ -1,0 +1,23 @@
+{"contractDigest":"8e68f41769eec628af3e53ae","parentRevisionId":null,"stance":"NO_PLAN",
+"strategy":{"title":"No executable plan: settlement of solar permit package sales within 10 days is not established","opportunityIds":[],"why":"Reach (published business emails), demand, $400 price, 10% paid conversion, Brain-produced delivery at $20 and $0 exposure are evidenced, and five sales would carry $2,000, but the card records no payment terms or time to first cash, so nothing shows the money is usable inside the 10-day window."},
+"alternatives":[{"title":"Sell five packages and assume card payment settles in time","why":"Assuming settlement timing would count money that may settle after the deadline; it is a fact to establish, not assume."}],
+"steps":[
+{"id":"research","kind":"RESEARCH","label":"Establish the path from first contact to usable cash: installer purchasing approval, payment terms and payout timing, in days","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["price","conversionRate"],"ownerHours":0}],
+"cash":[],
+"proofDay":null,
+"quantities":[
+{"name":"price","status":"EVIDENCED","value":400,"unit":"USD per package","sources":["s1"]},
+{"name":"conversionRate","status":"EVIDENCED","value":0.1,"unit":"paid pre-orders per unique visitor","sources":["s2"]},
+{"name":"buyerVolume","status":"EVIDENCED","value":150,"unit":"licensed solar installers","sources":["s3"]},
+{"name":"timeToFirstCash","status":"UNKNOWN","value":null,"unit":"days from first contact to usable cash","sources":[],"needs":"Published payment terms and payout timing for this sale, showing usable cash within 8 days of first contact"}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_02ba90f59a574b5294e9#price","dated":"2026-11-26","claim":"$400","population":"Residential solar installers","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_02ba90f59a574b5294e9#conversionRates","dated":"2026-11-26","claim":"30 paid pre-orders from 300 unique visitors","population":"Residential solar installers","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_02ba90f59a574b5294e9#buyerVolume","dated":"2026-11-26","claim":"150 solar installers hold state contractor licences; each files 10 interconnection applications a month.","population":"Residential solar installers","matchesBuyer":true}],
+"validation":null,
+"noPlan":{"decisiveGap":"SETTLES_IN_TIME: the opening has no recorded payment terms or time to first cash, so it is not established that $2,000 from five $400 sales becomes usable cash within 10 days.","resolution":"Research and record the payment terms and payout timing (days from first contact to cash in the account); if usable cash arrives within about 8 days, sell five packages to installers by published email at $400; if not, relax the deadline to cover the measured settlement time."},
+"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_02ba90f59a574b5294e9","missing":["SETTLES_IN_TIME"]}],
+"excluded":[],
+"members":[],
+"resolves":["SETTLES_IN_TIME"],"constraints":[]}

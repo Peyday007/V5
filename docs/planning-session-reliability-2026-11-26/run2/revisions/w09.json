@@ -1,0 +1,28 @@
+{"contractDigest":"77adcfb1d161a6ed8e4c18d7","parentRevisionId":null,"stance":"EXECUTABLE",
+"strategy":{"title":"Deliver the two written-accepted lead service line inventory workbooks","opportunityIds":["cop_f9883f38267d4692876c"],"why":"Two written acceptances at $4,000 each are recorded against this opening ($8,000 >= $6,000 target); Brain produces the spreadsheet with 3 owner hours per deal, direct cost $40, exposure $0, first cash in 21 days, inside the 30-day window."},
+"alternatives":[{"title":"Sell additional workbooks to other small water utilities","why":"Buyer volume and conversion are not counted; not needed because the two agreements cover the target."}],
+"steps":[
+{"id":"reach","kind":"REACH","label":"Confirm scope with the two accepting utility managers via their published business email","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["agreements","s3"]},
+{"id":"sell","kind":"SELL","label":"Issue invoices against the two written acceptances at $4,000 each","performer":"BRAIN","costCents":0,"day":2,"dependsOn":"reach","evidence":["agreedDeals","s2"]},
+{"id":"deliver","kind":"DELIVER","label":"Produce and deliver the two inventory workbooks (3 owner hours each)","performer":"OWNER","costCents":8000,"day":10,"dependsOn":"sell","evidence":["s4","directCost"],"ownerHours":6},
+{"id":"collect","kind":"COLLECT","label":"Collect $8,000 settled payment","performer":"BRAIN","costCents":0,"day":21,"dependsOn":"deliver","evidence":["s5"]}],
+"cash":[{"day":21,"kind":"RECEIPT","amountCents":800000,"label":"Two workbook payments","settlesDay":21},{"day":21,"kind":"FEE","amountCents":8000,"label":"Direct costs $40 x 2"}],
+"proofDay":21,
+"quantities":[
+{"name":"agreedDeals","status":"EVIDENCED","value":2,"unit":"deals","sources":["s1"]},
+{"name":"price","status":"EVIDENCED","value":4000,"unit":"USD/deal","sources":["s2"]},
+{"name":"directCost","status":"EVIDENCED","value":40,"unit":"USD/deal","sources":["s6"]},
+{"name":"timeToFirstCash","status":"EVIDENCED","value":21,"unit":"days","sources":["s5"]},
+{"name":"ownerHoursPerDeal","status":"EVIDENCED","value":3,"unit":"hours","sources":["s4"]}],
+"sources":[
+{"id":"s1","url":"https://brain.local/card/cop_f9883f38267d4692876c#agreements","dated":"2026-11-26","claim":"Two WRITTEN_ACCEPTANCE agreements, AGREED, $4,000 each","population":"Small water utility managers","matchesBuyer":true},
+{"id":"s2","url":"https://brain.local/card/cop_f9883f38267d4692876c#price","dated":"2026-11-26","claim":"Price $4000","population":"Small water utility managers","matchesBuyer":true},
+{"id":"s3","url":"https://brain.local/card/cop_f9883f38267d4692876c#reachableChannel","dated":"2026-11-26","claim":"Published business email addresses; posted asking for this work 2026-11-23","population":"Small water utility managers","matchesBuyer":true},
+{"id":"s4","url":"https://brain.local/card/cop_f9883f38267d4692876c#delivery","dated":"2026-11-26","claim":"A spreadsheet Brain produces; 3 human hours per deal","population":"Small water utility managers","matchesBuyer":true},
+{"id":"s5","url":"https://brain.local/card/cop_f9883f38267d4692876c#timeToFirstCash","dated":"2026-11-26","claim":"21 days","population":"Small water utility managers","matchesBuyer":true},
+{"id":"s6","url":"https://brain.local/card/cop_f9883f38267d4692876c#directCosts","dated":"2026-11-26","claim":"$40 direct costs; exposure $0","population":"Small water utility managers","matchesBuyer":true}],
+"validation":null,"noPlan":null,"reach":null,"answers":[],
+"chain":[{"opportunityId":"cop_f9883f38267d4692876c","missing":[]}],
+"excluded":[],
+"members":[{"opportunityId":"cop_f9883f38267d4692876c","deals":2,"price":4000,"directCost":40,"capital":0}],
+"resolves":[],"constraints":[]}

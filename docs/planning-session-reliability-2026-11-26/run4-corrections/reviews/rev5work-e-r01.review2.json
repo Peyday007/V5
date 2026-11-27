@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_bc34faf63cc64de587b9",
+ "revision_id": "rev_b7c4383ceb8b_ed73af",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "I am correcting my own earlier review. The original EXECUTABLE was supported at Brain's sizing of 18 deals, and this revision adds a condition the card does not need. CONVERSION: Brain's basis is measured on this offer's own inbound page (22 money-committed pre-orders from 200 unique visitors, population independent pharmacy owners). The reach emails owners with that same page, so the rate is this offer's own measured record, not a transfer from another channel or population. MARKET_VOLUME: per-pharmacy volume is stated on the card at 20 temperature-controlled deliveries a week, about 85 each over the window. Four buying pharmacies ordering about 5 deliveries each is a small share of their own stated volume, and these are recurring deliveries, so earlier buyers are not used up. Both disagreements are therefore unsupported, and ownerConversion and deliveriesPerBuyingPharmacy are marked UNKNOWN although the card evidences them. The defect in the first revision was sizing at 36 deals for a net reading the SETTLED_CASH (collected) metric does not require, not the stance. Everything else in this revision checks out: 18 x $180 = $3,240 collected; settles day 22; MedCourier is paid $1,710 from settled receipts; $0 exposure. The correct plan is EXECUTABLE at 18 deals with no day-8 gate. The connector state (SEND_A_MESSAGE and ISSUE_AN_INVOICE NOT_CONNECTED) is a readiness item, not a chain link.",
+ "findings": [
+  "The CONVERSION disagreement is unsupported: 22/200 is measured on this offer's own page, the same page the email links to, so it is the offer's own measured record and not a transfer.",
+  "The MARKET_VOLUME disagreement is unsupported: the card states 20 deliveries a week per pharmacy, about 85 each in the window. About 5 per buying pharmacy for 18 deals is well inside that, and the purchases recur.",
+  "Unneeded condition: ownerConversion and deliveriesPerBuyingPharmacy are marked UNKNOWN, and the day-8 gate delays the sale and settlement (proofDay 8, cash on day 22) without measuring anything the card leaves open.",
+  "Restore EXECUTABLE at 18 deals ($3,240 collected, which meets the SETTLED_CASH metric), keeping the 18-deal sizing and the courier paid from settled receipts. My earlier unit-mismatch finding overreached."
+ ]
+}

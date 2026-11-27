@@ -1,0 +1,32 @@
+{
+  "review": {
+    "revisionId": "rev_d47c67482e43_7b377b",
+    "revisionDigest": "d47c67482e43ea100d8866ae",
+    "author": {
+      "kind": "APP_SESSION",
+      "id": "session_01QF5Tk9QnzLAkLpzqLeVF6b",
+      "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+      "kind": "MODEL",
+      "id": "subagent:ae77eb5260c404c62",
+      "model": "claude-opus-5-5 (independent general-purpose agent, separate context)"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: outflows $227 (spend $217 + fees $10), open commitments $60, pre-proof $287 of $300, receipts $2,500 clearing ~days 19-20 and settling days 29-30, net $2,273; every text figure ($12, $15, $30, $160, $10, $287, $1,713, $130) matches. All blocking findings from both earlier reviews resolved. The plan stays CONDITIONAL, presents $10,000 as unlikely on this cycle, and shows reach as uncalibrated coverage.",
+    "findings": [
+      "demand quantity 'needs' still says day 18; align to 22",
+      "checker exposure excludes open commitments ($227 vs $287 with commitments)",
+      "pre-proof margin $13 rests on an unmeasured $15 API cost and an unquoted $80 reviewer ceiling: measure a real run before first intake",
+      "proof day should be relative to the reviewer-quote date",
+      "day-30 settlement at the window edge; state the calendar mapping",
+      "deliverability of 800 contacts unstated",
+      "weak low-end price source",
+      "'at most $287 spent' means $227 spent + $60 reserved",
+      "$10,000 path needs >= 6 prepaying clients by ~day 26: close to impossible on this cycle"
+    ],
+    "resolution": null,
+    "at": "2026-11-26T22:11:59.048Z"
+  },
+  "independent": true
+}

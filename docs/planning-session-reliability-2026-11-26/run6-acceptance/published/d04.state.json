@@ -1,0 +1,2264 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_7e917125353248079714",
+      "words": "Keep $15,000 of net profit, after all direct costs, in my account within 14 days. No capital from me and no time from me.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1500000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Buyer payment settled before any supplier cost is incurred",
+        "ownerHoursPerWeek": 0,
+        "ownerPhysicalWork": "FORBIDDEN",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "b85beedbe39f9281306d6965"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_7e917125353248079714",
+        "contractDigest": "b85beedbe39f9281306d6965",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no route is shown to close $15,000 of net profit from cold buyers within 14 days at zero capital and zero owner time",
+          "opportunityIds": [],
+          "why": "Each candidate needs several prepaid sales from buyers with no relationship (7 template redesigns at $3,000 net of a $600 developer, or 9 chatbot setups at $1,950 net of $300, or ~75 held meetings at $300 net of $100), all closed and settled through a new Stripe account within 14 days. No card records a buying signal, an established price, a close rate or a confirmed fulfiller, and Stripe's first payout typically lands 7-14 days after the first live payment, so sales would have to close in the first days. Nothing establishes that conversion."
+        },
+        "alternatives": [
+          {
+            "title": "Template website redesign, buyer-prepaid, subcontracted",
+            "why": "Largest margin per sale ($2,400), so fewest closes needed (7), but the $3,000 price and any close rate from cold email are unestablished and delivery by a freelancer is unconfirmed."
+          },
+          {
+            "title": "AI chatbot setup subcontracted to a Fiverr builder",
+            "why": "Managed platforms sell chatbots for $25-$150/month with no setup fee, which contradicts a $1,950 setup price; 9 closes needed."
+          },
+          {
+            "title": "Pay-per-meeting appointment setting",
+            "why": "Vendors sell packages of 10 meetings delivered over up to six months; ~75 held meetings in 14 days is far beyond any recorded pace."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Pre-sale test: Brain sends 300 personalised emails from a free mailbox to US service businesses with dated websites offering a prepaid $3,000 template redesign; count replies, calls booked and prepaid invoices within 7 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "close rate"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per email sent",
+            "sources": [],
+            "needs": "A live outreach test; no card records a measured conversion"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 3000,
+            "unit": "USD per redesign",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A buyer paying it"
+          },
+          {
+            "name": "sales needed",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "prepaid redesigns",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "15000 / (3000-600) = 6.25, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#price",
+            "dated": "2026-11-27",
+            "claim": "Route proposes $3,000 per template redesign",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Developer cost $600 per redesign (estimate)",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that cold buyers convert to prepaid orders fast enough: the plan needs at least 7 prepaid $3,000 redesigns (or 9 chatbot setups) closed in the first few days so that Stripe settles them inside 14 days, and no card records a buying signal or a close rate for any route.",
+          "resolution": "Run a zero-cost 7-day pre-sale test (Brain, free mailbox, 300 personalised emails, no spend, no owner time). Proof: 2 or more prepaid invoices paid by day 7. Stop: 0 prepaid orders after 300 sends by day 7 - the target cannot be reached in this window; ask the owner to extend the window to 60 days or lower the target to about $2,400 (one sale). Continue: 2+ prepaid orders - hire the developer from the buyer's payment and scale the same outreach.",
+          "decisiveLinks": [
+            "CONVERSION",
+            "CURRENT_DEMAND"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_554abbe23b3b_dcb0be",
+        "digest": "554abbe23b3b710fd6681f27",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:22:52.316Z"
+      },
+      {
+        "goalId": "wst_7e917125353248079714",
+        "contractDigest": "b85beedbe39f9281306d6965",
+        "parentRevisionId": "rev_554abbe23b3b_dcb0be",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no route is shown to close $15,000 of net profit from cold buyers within 14 days at zero capital and zero owner time",
+          "opportunityIds": [],
+          "why": "The best candidate (template redesign at $3,000, $600 developer, $87.30 Stripe fee: $2,312.70 contribution per sale) needs 7 prepaid sales from buyers with no relationship. Every link that decides it - a buyer paying $3,000, a close rate, a developer, and when the first payout lands - is unestablished, and no test of them fits inside the owner's limits: a prepaid order can only reach 'my account' through a payment account the owner opens or connects (0 owner hours allowed), and the contract's proof condition (buyer payment settled before any supplier cost) puts the developer after the first payout (card: 10 days to first cash), so all 7 sales would have to close by about day 4 and most delivery would fall after day 14. So this is no plan inside the stated limits; the decisive gap is conversion of cold buyers to prepaid orders in the first days, and the experiment below needs one relaxation (about 30 minutes of owner time to connect a payment account)."
+        },
+        "alternatives": [
+          {
+            "title": "Template website redesign, buyer-prepaid, subcontracted",
+            "why": "Largest contribution per sale ($2,312.70 after the $600 developer and Stripe's $87.30), so fewest closes (7), but the $3,000 price, any close rate and a developer are unestablished."
+          },
+          {
+            "title": "AI chatbot setup subcontracted to a Fiverr builder",
+            "why": "Managed platforms sell chatbots for $25-$150/month with no setup fee, which contradicts a $1,950 setup price; 9 closes needed."
+          },
+          {
+            "title": "Pay-per-meeting appointment setting",
+            "why": "Vendors sell packages of 10 meetings delivered over up to six months; ~75 held meetings in 14 days is far beyond any recorded pace."
+          }
+        ],
+        "steps": [
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Experiment (after the owner relaxes owner time by ~30 minutes to connect a payment account): Brain emails 300 US service businesses with dated websites from a free mailbox, days 1-3, offering a $3,000 prepaid template redesign sold entirely by email reply and invoice - no calls; counts paid invoices by day 4",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "close rate",
+              "sales needed"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per contact emailed",
+            "sources": [],
+            "needs": "A live outreach test; no card records a measured conversion"
+          },
+          {
+            "name": "price",
+            "status": "ASSUMED",
+            "value": 3000,
+            "unit": "USD per redesign",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A buyer paying it"
+          },
+          {
+            "name": "stripe fee",
+            "status": "ESTIMATE",
+            "value": 87.3,
+            "unit": "USD per sale (2.9% + $0.30)",
+            "sources": [
+              "s1"
+            ],
+            "needs": "Standard card pricing"
+          },
+          {
+            "name": "sales needed",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "prepaid redesigns",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "15000 / (3000 - 600 - 87.30) = 6.49, rounded up"
+          },
+          {
+            "name": "first payout delay",
+            "status": "ASSUMED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "s3"
+            ],
+            "needs": "Measured by the first payout"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#price",
+            "dated": "2026-11-27",
+            "claim": "Route proposes $3,000 per template redesign",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Developer cost $600 per redesign (estimate)",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "10 days to first usable cash",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No evidence that cold buyers convert to prepaid orders fast enough: 7 prepaid $3,000 redesigns would have to be paid by about day 4 for the first payout (card: 10 days) to settle them inside 14 days, and no card records a buying signal, a price buyers pay or a close rate for any route. No test of it fits the stated limits, because collecting a payment needs a payment account the owner connects and the owner allows 0 hours.",
+          "resolution": "Experiment, cost $0 and about 30 minutes of owner time (a relaxation of the 0-hour limit) to connect a payment account: Brain emails 300 contacts on days 1-3, selling by email reply and invoice with no calls. Proof: 7 or more invoices paid by day 4 - then hire developers only after the first payout settles, as the contract requires, and disclose that delivery completes after day 14. Stop: fewer than 7 paid by day 4 - the $15,000 cannot settle in 14 days; deliver and keep any orders taken (each still contributes about $2,313), report the measured close rate, and ask the owner to extend the window to about 45 days or lower the target to what the measured rate supports. Continue: none beyond proof - the window leaves no second round.",
+          "decisiveLinks": [
+            "CONVERSION",
+            "CURRENT_DEMAND"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL with the test as phase one, or name an evidenced constraint.",
+            "resolution": "Rebutted. A CONDITIONAL plan needs a test inside the objective's limits; this one cannot run inside them: the proof is a prepaid order in the owner's account, which needs a payment account the owner opens or connects while the owner allows 0 hours, and without collecting payment the test cannot measure conversion to prepaid orders. The test is therefore the NO_PLAN resolution with the one relaxation it needs named (about 30 minutes of owner time). No constraint is listed because no card carries an EVIDENCE figure that fixes one."
+          },
+          {
+            "finding": "Name who takes sales calls or make the sale call-free.",
+            "resolution": "Accepted. The sale is now call-free: Brain sells by email reply and invoice."
+          },
+          {
+            "finding": "Contract proof condition: the developer must wait until the payment has settled.",
+            "resolution": "Accepted. Developers are hired only after the first payout settles; with 10 days to first cash this puts most delivery after day 14, which the resolution now states, and it is part of why all 7 sales would have to close by about day 4."
+          },
+          {
+            "finding": "Proof threshold and stop leave orders undefined, and 2 by day 7 does not show the 7 needed can close in time.",
+            "resolution": "Accepted. Proof is now 7 paid invoices by day 4, stop is fewer than 7 by day 4 (with any orders taken still delivered), so no outcome is undefined."
+          },
+          {
+            "finding": "Stripe fees are a direct cost.",
+            "resolution": "Accepted. $87.30 per sale is now in the arithmetic: 15,000 / 2,312.70 = 6.49, so 7 sales."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1.",
+            "resolution": "Accepted as a prerequisite of the experiment: the free mailbox must be connected to Brain before t1 runs."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CONVERSION",
+          "CURRENT_DEMAND"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_3f00827b9069_dcfd2b",
+        "digest": "3f00827b9069081dfd974a93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:32:21.450Z"
+      },
+      {
+        "goalId": "wst_7e917125353248079714",
+        "contractDigest": "b85beedbe39f9281306d6965",
+        "parentRevisionId": "rev_3f00827b9069_dcfd2b",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Test, then sell, prepaid $3,000 template website redesigns to US service businesses by email, paid by bank transfer into the owner's account, developer hired only after each payment settles",
+          "opportunityIds": [
+            "cop_99e485ef094b46f0919b"
+          ],
+          "why": "Fewest closes of the three routes: $3,000 less a $600 developer is $2,400 contribution per sale with no card fee on a bank transfer, so 7 sales ($16,800) carry the $15,000. Zero capital and zero exposure: nothing is bought before a buyer's payment has settled, as the contract's proof condition requires. Zero owner hours: Brain sells by email reply and invoice with no calls, and buyers pay into the account the owner already holds. Price, close rate, developer and settlement time are unknown and the first 6 days measure them; the latest viable sale is day 10 (settled by day 12, developer paid by day 12)."
+        },
+        "alternatives": [
+          {
+            "title": "AI chatbot setup subcontracted to a Fiverr builder",
+            "why": "Managed platforms sell chatbots for $25-$150/month with no setup fee, contradicting a $1,950 setup price; 9 closes needed."
+          },
+          {
+            "title": "Pay-per-meeting appointment setting",
+            "why": "Vendors sell packages of 10 meetings delivered over up to six months; ~75 held meetings in 14 days is far beyond any recorded pace."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain emails 300 US service businesses with dated websites from a free mailbox (days 1-3), then up to 600 more if the test continues; no calls",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "close rate",
+              "s4"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the 5-page template redesign at $3,000, prepaid in full, sold by email reply and invoice; buyer pays by bank transfer into the owner's existing account (the account details are an authority only the owner holds and must be given to Brain before the first invoice)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "s1"
+            ],
+            "priceCents": 300000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Confirm each transfer has settled in the owner's account (assumed 1-3 days; measured on the first payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "s1",
+            "evidence": [
+              "settlement time",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Hire a freelance WordPress developer per project at $600, only after that buyer's payment has settled, paid from the settled receipt; delivery 5-7 days, so the last sites complete after day 14 (refund risk if a developer fails)",
+            "performer": "Freelance WordPress developer hired per project after buyer pays",
+            "costCents": 420000,
+            "day": 6,
+            "dependsOn": "c1",
+            "evidence": [
+              "developer cost",
+              "s2"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance WordPress developer hired per project after buyer pays",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "2 prepaid redesigns by bank transfer",
+            "settlesDay": 6,
+            "stepId": "c1"
+          },
+          {
+            "day": 6,
+            "kind": "SPEND",
+            "amountCents": 120000,
+            "label": "Developers for 2 settled orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 900000,
+            "label": "3 prepaid redesigns by bank transfer",
+            "settlesDay": 8,
+            "stepId": "c1"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Developers for 3 settled orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "2 prepaid redesigns by bank transfer",
+            "settlesDay": 10,
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 120000,
+            "label": "Developers for 2 settled orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per contact emailed",
+            "sources": [],
+            "needs": "Measured on the first 300 contacts; the plan needs at least 2 per 300"
+          },
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per redesign buyers pay",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A buyer paying $3,000 (offered price is $3,000; no buyer is shown paying it)"
+          },
+          {
+            "name": "developer cost",
+            "status": "ESTIMATE",
+            "value": 600,
+            "unit": "USD per redesign",
+            "sources": [
+              "s2"
+            ],
+            "needs": "A developer accepting the job after payment settles"
+          },
+          {
+            "name": "settlement time",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days from transfer to settled",
+            "sources": [
+              "s3"
+            ],
+            "needs": "Measured on the first payment; planned at 2 days"
+          },
+          {
+            "name": "sales needed",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "prepaid redesigns",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "15000 / (3000 - 600) = 6.25, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $3,000 per template redesign",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Developer cost $600 per redesign (estimate)",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "10 days to first usable cash via Stripe (estimate); a bank transfer is planned instead",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email to local-business lists",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 6, at least 2 transfers of $3,000 settled in the owner's account from the first 300 contacts, the settlement time measured, and a developer hired for the first order after its payment settled.",
+          "stop": [
+            "0 settled payments by day 6: stop - no capital was spent; report the measured reply and close rates",
+            "Fewer than 5 settled payments by day 9: stop selling - the 2 still needed would have to be paid by day 10 and settled by day 12, faster than the measured rate; deliver every order already taken",
+            "Settlement measured above 4 days: the latest viable sale moves earlier (day 14 minus settlement minus 0); stop selling once it has passed",
+            "A developer fails to deliver: hire a replacement from the same settled receipt or refund the buyer in full"
+          ],
+          "continue": [
+            "2 or more settled by day 6: email up to 600 more contacts on days 6-8 to reach 7 paid by day 10, each developer hired only after that payment settles"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Arithmetic checked: $2,312.70 contribution per sale, 7 sales = $16,189 >= $15,000.",
+            "resolution": "Kept; with bank transfer there is no card fee, so $2,400 per sale and 7 sales = $16,800."
+          },
+          {
+            "finding": "The day-4 deadline depends on an assumed 10-day payout.",
+            "resolution": "Accepted. The plan now uses a bank transfer, planned at 2 days and measured on the first payment; the latest viable sale is day 10."
+          },
+          {
+            "finding": "Developer cost should also be paid inside 14 days.",
+            "resolution": "Accepted. Each developer is paid from the settled receipt within 2 days of payment; the last on day 10-12."
+          },
+          {
+            "finding": "'Relax owner time by 30 minutes' should be a MISSING_AUTHORITY need.",
+            "resolution": "Accepted. No owner hours are planned; the owner's receiving-account details are recorded in s1 as an authority only the owner holds, needed before the first invoice."
+          },
+          {
+            "finding": "Proof = stop threshold leaves no continue path.",
+            "resolution": "Accepted. Proof is 2 settled by day 6, stop is 0 by day 6 or fewer than 5 by day 9, continue is 2+ by day 6 with up to 600 more contacts."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "why": "A $1,950 setup fee is contradicted by managed chatbots sold at $25-$150/month with no setup fee, and 9 closes are needed."
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "why": "About 75 held meetings would be needed in 14 days; vendors sell packages of 10 delivered over up to six months."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "deals": 7,
+            "price": 3000,
+            "directCost": 600,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_2e79f9ba707a_24c523",
+        "digest": "2e79f9ba707a86e06d296dbb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:36:34.669Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_7e917125353248079714",
+      "contractDigest": "b85beedbe39f9281306d6965",
+      "parentRevisionId": "rev_3f00827b9069_dcfd2b",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Test, then sell, prepaid $3,000 template website redesigns to US service businesses by email, paid by bank transfer into the owner's account, developer hired only after each payment settles",
+        "opportunityIds": [
+          "cop_99e485ef094b46f0919b"
+        ],
+        "why": "Fewest closes of the three routes: $3,000 less a $600 developer is $2,400 contribution per sale with no card fee on a bank transfer, so 7 sales ($16,800) carry the $15,000. Zero capital and zero exposure: nothing is bought before a buyer's payment has settled, as the contract's proof condition requires. Zero owner hours: Brain sells by email reply and invoice with no calls, and buyers pay into the account the owner already holds. Price, close rate, developer and settlement time are unknown and the first 6 days measure them; the latest viable sale is day 10 (settled by day 12, developer paid by day 12)."
+      },
+      "alternatives": [
+        {
+          "title": "AI chatbot setup subcontracted to a Fiverr builder",
+          "why": "Managed platforms sell chatbots for $25-$150/month with no setup fee, contradicting a $1,950 setup price; 9 closes needed."
+        },
+        {
+          "title": "Pay-per-meeting appointment setting",
+          "why": "Vendors sell packages of 10 meetings delivered over up to six months; ~75 held meetings in 14 days is far beyond any recorded pace."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "REACH",
+          "label": "Brain emails 300 US service businesses with dated websites from a free mailbox (days 1-3), then up to 600 more if the test continues; no calls",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "close rate",
+            "s4"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Offer the 5-page template redesign at $3,000, prepaid in full, sold by email reply and invoice; buyer pays by bank transfer into the owner's existing account (the account details are an authority only the owner holds and must be given to Brain before the first invoice)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "r1",
+          "evidence": [
+            "price",
+            "s1"
+          ],
+          "priceCents": 300000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Confirm each transfer has settled in the owner's account (assumed 1-3 days; measured on the first payment)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "s1",
+          "evidence": [
+            "settlement time",
+            "s3"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Hire a freelance WordPress developer per project at $600, only after that buyer's payment has settled, paid from the settled receipt; delivery 5-7 days, so the last sites complete after day 14 (refund risk if a developer fails)",
+          "performer": "Freelance WordPress developer hired per project after buyer pays",
+          "costCents": 420000,
+          "day": 6,
+          "dependsOn": "c1",
+          "evidence": [
+            "developer cost",
+            "s2"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Freelance WordPress developer hired per project after buyer pays",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 600000,
+          "label": "2 prepaid redesigns by bank transfer",
+          "settlesDay": 6,
+          "stepId": "c1"
+        },
+        {
+          "day": 6,
+          "kind": "SPEND",
+          "amountCents": 120000,
+          "label": "Developers for 2 settled orders",
+          "stepId": "d1"
+        },
+        {
+          "day": 6,
+          "kind": "RECEIPT",
+          "amountCents": 900000,
+          "label": "3 prepaid redesigns by bank transfer",
+          "settlesDay": 8,
+          "stepId": "c1"
+        },
+        {
+          "day": 8,
+          "kind": "SPEND",
+          "amountCents": 180000,
+          "label": "Developers for 3 settled orders",
+          "stepId": "d1"
+        },
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 600000,
+          "label": "2 prepaid redesigns by bank transfer",
+          "settlesDay": 10,
+          "stepId": "c1"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 120000,
+          "label": "Developers for 2 settled orders",
+          "stepId": "d1"
+        }
+      ],
+      "proofDay": 6,
+      "quantities": [
+        {
+          "name": "close rate",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "prepaid orders per contact emailed",
+          "sources": [],
+          "needs": "Measured on the first 300 contacts; the plan needs at least 2 per 300"
+        },
+        {
+          "name": "price",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per redesign buyers pay",
+          "sources": [
+            "s1"
+          ],
+          "needs": "A buyer paying $3,000 (offered price is $3,000; no buyer is shown paying it)"
+        },
+        {
+          "name": "developer cost",
+          "status": "ESTIMATE",
+          "value": 600,
+          "unit": "USD per redesign",
+          "sources": [
+            "s2"
+          ],
+          "needs": "A developer accepting the job after payment settles"
+        },
+        {
+          "name": "settlement time",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "days from transfer to settled",
+          "sources": [
+            "s3"
+          ],
+          "needs": "Measured on the first payment; planned at 2 days"
+        },
+        {
+          "name": "sales needed",
+          "status": "ESTIMATE",
+          "value": 7,
+          "unit": "prepaid redesigns",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": "15000 / (3000 - 600) = 6.25, rounded up"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_99e485ef094b46f0919b#price",
+          "dated": "2026-11-27",
+          "claim": "Offer priced at $3,000 per template redesign",
+          "population": "US local service businesses",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_99e485ef094b46f0919b#directCosts",
+          "dated": "2026-11-27",
+          "claim": "Developer cost $600 per redesign (estimate)",
+          "population": "US local service businesses",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_99e485ef094b46f0919b#timeToFirstCash",
+          "dated": "2026-11-27",
+          "claim": "10 days to first usable cash via Stripe (estimate); a bank transfer is planned instead",
+          "population": "US local service businesses",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_99e485ef094b46f0919b#access",
+          "dated": "2026-11-27",
+          "claim": "Cold email to local-business lists",
+          "population": "US local service businesses",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": {
+        "proof": "By day 6, at least 2 transfers of $3,000 settled in the owner's account from the first 300 contacts, the settlement time measured, and a developer hired for the first order after its payment settled.",
+        "stop": [
+          "0 settled payments by day 6: stop - no capital was spent; report the measured reply and close rates",
+          "Fewer than 5 settled payments by day 9: stop selling - the 2 still needed would have to be paid by day 10 and settled by day 12, faster than the measured rate; deliver every order already taken",
+          "Settlement measured above 4 days: the latest viable sale moves earlier (day 14 minus settlement minus 0); stop selling once it has passed",
+          "A developer fails to deliver: hire a replacement from the same settled receipt or refund the buyer in full"
+        ],
+        "continue": [
+          "2 or more settled by day 6: email up to 600 more contacts on days 6-8 to reach 7 paid by day 10, each developer hired only after that payment settles"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Arithmetic checked: $2,312.70 contribution per sale, 7 sales = $16,189 >= $15,000.",
+          "resolution": "Kept; with bank transfer there is no card fee, so $2,400 per sale and 7 sales = $16,800."
+        },
+        {
+          "finding": "The day-4 deadline depends on an assumed 10-day payout.",
+          "resolution": "Accepted. The plan now uses a bank transfer, planned at 2 days and measured on the first payment; the latest viable sale is day 10."
+        },
+        {
+          "finding": "Developer cost should also be paid inside 14 days.",
+          "resolution": "Accepted. Each developer is paid from the settled receipt within 2 days of payment; the last on day 10-12."
+        },
+        {
+          "finding": "'Relax owner time by 30 minutes' should be a MISSING_AUTHORITY need.",
+          "resolution": "Accepted. No owner hours are planned; the owner's receiving-account details are recorded in s1 as an authority only the owner holds, needed before the first invoice."
+        },
+        {
+          "finding": "Proof = stop threshold leaves no continue path.",
+          "resolution": "Accepted. Proof is 2 settled by day 6, stop is 0 by day 6 or fewer than 5 by day 9, continue is 2+ by day 6 with up to 600 more contacts."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "timeToFirstCash",
+            "brain:SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "brain:CONVERSION"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_99e485ef094b46f0919b",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_934a2f81b90f4cc4ae15",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_31051147b991482b94d8",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_31051147b991482b94d8",
+          "why": "A $1,950 setup fee is contradicted by managed chatbots sold at $25-$150/month with no setup fee, and 9 closes are needed."
+        },
+        {
+          "opportunityId": "cop_934a2f81b90f4cc4ae15",
+          "why": "About 75 held meetings would be needed in 14 days; vendors sell packages of 10 delivered over up to six months."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_99e485ef094b46f0919b",
+          "deals": 7,
+          "price": 3000,
+          "directCost": 600,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_2e79f9ba707a_24c523",
+      "digest": "2e79f9ba707a86e06d296dbb",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_af766b5f329b49f5a6d2/author-F",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:36:34.669Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_2e79f9ba707a_24c523",
+      "digest": "2e79f9ba707a86e06d296dbb",
+      "contractDigest": "b85beedbe39f9281306d6965",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 420000,
+        "committedOpenCents": 0,
+        "preProofCents": 120000,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 4,
+        "collectedCents": 2100000,
+        "collectedInWindowCents": 2100000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 1680000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 15000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Custom AI website chatbot setup for small businesses, subcon\" needs [figure withheld] and keeps [figure withheld], 1650× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Pay-per-qualified-meeting appointment setting for B), so none of its figures is shown or adopted.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_99e485ef094b46f0919b",
+          "cop_31051147b991482b94d8",
+          "cop_934a2f81b90f4cc4ae15"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 15000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "title": "Template website redesign for US service businesses, buyer-prepaid, subcontracted to a freelance developer",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 2400,
+            "card": {
+              "payer": "US local service business with an outdated website",
+              "reachableChannel": "Cold email to local-business lists; Stripe invoice",
+              "offerScope": "5-page WordPress template redesign with branding, paid in full upfront by Stripe invoice",
+              "priceCents": 300000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance WordPress developer hired per project after buyer pays",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "Web design",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email to local-business lists; Stripe invoice"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 3000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 600, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email to local-business lists; Stripe invoice",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page WordPress template redesign with branding, paid in full upfront by Stripe invoice to US local service business with an outdated website, reached through Cold email to local-business lists; Stripe invoice, at $3,000; Freelance WordPress developer hired per project after buyer pays delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$600",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance WordPress developer hired per project after buyer pays.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page WordPress template redesign with branding, paid in full upfront by Stripe invoice",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US local service business with an outdated website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$3,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$3,000",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.lowcode.agency/blog/average-cost-of-a-small-business-website-redesign; https://www.webfx.com/website-design/pricing/; cold email web design close rate; https://docs.stripe.com/payouts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "title": "Custom AI website chatbot setup for small businesses, subcontracted to a Fiverr builder",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 1650,
+            "card": {
+              "payer": "US small business owner wanting 24/7 website answers",
+              "reachableChannel": "Cold email; Stripe payment link",
+              "offerScope": "Custom chatbot trained on the business's site and FAQs, one-time setup fee",
+              "priceCents": 195000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr AI chatbot builder",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "AI automation",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Cold email; Stripe payment link"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 1950 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 300, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "10 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Cold email; Stripe payment link",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Custom chatbot trained on the business's site and FAQs, one-time setup fee to US small business owner wanting 24/7 website answers, reached through Cold email; Stripe payment link, at $1,950; Fiverr AI chatbot builder delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr AI chatbot builder.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Custom chatbot trained on the business's site and FAQs, one-time setup fee",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "US small business owner wanting 24/7 website answers",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$1,950",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$1,950",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://www.bluehost.com/blog/?p=279147; https://sitegpt.ai/blog/chatbot-for-small-business; small business chatbot adoption 2026; https://fiverr.com/swift_docs/build-a-custom-ai-chatbot-for-your-small-business-website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "title": "Pay-per-qualified-meeting appointment setting for B2B service firms",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 200,
+            "card": {
+              "payer": "B2B agency or SaaS company buying outbound meetings",
+              "reachableChannel": "Outbound email and LinkedIn to agency founders",
+              "offerScope": "Qualified, held sales meetings billed per meeting",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "Freelance SDR paid per booked meeting",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "B2B lead generation",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Outbound email and LinkedIn to agency founders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 100, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Outbound email and LinkedIn to agency founders",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Qualified, held sales meetings billed per meeting to B2B agency or SaaS company buying outbound meetings, reached through Outbound email and LinkedIn to agency founders, at $300; Freelance SDR paid per booked meeting delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$100",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Freelance SDR paid per booked meeting.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Qualified, held sales meetings billed per meeting",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "B2B agency or SaaS company buying outbound meetings",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://prospeo.io/s/appointment-setting-pricing; https://belkins.io/pay-per-appointment; https://salesbread.com/appointment-setting-services-cost/; appointment setting payment terms net 30",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 1500000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:25:24.785Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_554abbe23b3b_dcb0be",
+        "revisionDigest": "554abbe23b3b710fd6681f27",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_783ad0ca73cf4b098cd7/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The decisive gap is missing evidence (no buying signal, no close rate), which the revision itself proposes to measure with a zero-cost 7-day live test with proof, stop and continue rules. That is a CONDITIONAL plan, not NO_PLAN: nothing recorded shows the $15,000 contribution cannot fit $0 capital, 0 owner hours and 14 days even if price, conversion and fulfilment were established (7 prepaid $3,000 sales at a $600 developer cost and a 10-day time to first cash would fit). Recomputed: per sale $3,000 - $600 - Stripe $87.30 (2.9% + $0.30) = $2,312.70; 15,000 / 2,312.70 = 6.49, so 7 sales ($16,189), the same 7 the revision states even after fees it omits. But the test as written breaks two of the owner's terms: it counts 'calls booked' though the owner gives 0 hours and nobody else is named to take calls, and it relies on a Stripe account in the owner's name with no step or performer for opening it.",
+        "findings": [
+          "Re-state as CONDITIONAL with the test as phase one, or name an evidenced constraint.",
+          "Name who takes sales calls (owner time is 0, physical work forbidden) or make the sale call-free (invoice from email reply).",
+          "Contract proof condition: 'Buyer payment settled before any supplier cost is incurred'. The continue rule hires the developer 'from the buyer's payment' — it must wait until the payment has settled to the account (first payout ~7-14 days per the revision, 10 days per the card), which pushes delivery past day 14; state the refund/delivery risk this leaves after the window.",
+          "Proof threshold (>= 2 prepaid by day 7) and stop (0) leave 1 prepaid order undefined; and 2 by day 7 does not show the 7 needed can close by ~day 4-7 when first-payout timing requires early closes.",
+          "Stripe fees ($87.30/sale) are a direct cost and must be in the ledger for a CONTRIBUTION target.",
+          "SEND_A_MESSAGE is NOT_CONNECTED for t1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:29:37.589Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "link": "OFFER_AND_PRICE",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "revenueRange",
+            "why": "$3,000 is a RECOMMENDATION; no buyer of this kind is shown paying it."
+          },
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "link": "FULFILMENT",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "fulfillment",
+            "why": "The freelance developer at $600 is a RECOMMENDATION; no developer has agreed to deliver on paid-after-settlement terms."
+          },
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "10 days to first cash is a RECOMMENDATION and decides whether any sale after the first few days can settle inside 14 days."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_3f00827b9069_dcfd2b",
+        "revisionDigest": "3f00827b9069081dfd974a93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_783ad0ca73cf4b098cd7/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Improved (fees now counted: $3,000 - $600 - $87.30 = $2,312.70; 15,000 / 2,312.70 = 6.49 -> 7 sales; calls removed), but the stance still does not hold. The decisiveGap named is again missing evidence ('no evidence that cold buyers convert'), and constraints[] is empty, so no limit is shown that all the evidence could not fit. The new argument that no test fits the limits rests on two things treated as known that are not: (1) the 10-day first payout is the card's RECOMMENDATION timeToFirstCash, yet it is used to derive that all 7 sales must close by day 4 — a buyer paying by bank transfer into the account the owner already names ('my account') could settle in 1-3 days, which moves the last viable sale to about day 9-10 and lets developer costs fall inside the window; (2) that collecting money requires the owner to open or connect a payment account — receiving a transfer into an existing account needs no owner work, and if it does need an action only the owner can take, that is a missing authority to record, not a reason the plan cannot exist. Either state a CONDITIONAL plan with the zero-cost email-and-invoice test on a payment route that needs no owner time (with proof/stop/continue and the latest viable sale day derived from the measured payout), or name the binding limit as an evidenced constraint in constraints[].",
+        "findings": [
+          "Arithmetic checked: $2,312.70 contribution per sale, 7 sales = $16,189 >= $15,000.",
+          "The day-4 deadline for all 7 sales depends on an assumed 10-day payout (RECOMMENDATION); with a 2-day settlement and 5-7 day developer delivery the latest sale is ~day 7-9, not day 4.",
+          "Contract proof condition (payment settled before supplier cost) is respected by ordering developers only after settlement; for a CONTRIBUTION target the developer cost should also be paid inside 14 days, which a short payout route allows and the 10-day assumption does not.",
+          "'Relax owner time by 30 minutes' is a request to change a limit the owner set; if it is truly needed it should be recorded as a MISSING_AUTHORITY need, not folded into the experiment.",
+          "Proof = stop threshold (7 by day 4) leaves no CONDITIONAL continue path; once settlement time is measured, a second round may fit."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:39.733Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "10 days to first cash is a RECOMMENDATION, yet the revision uses it as decisive to rule out every test; the settlement time of a no-owner-work payment route is not established."
+          },
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "link": "CONVERSION",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "conversionRates",
+            "why": "No measured close rate exists for cold email to US service businesses at $3,000 prepaid; only a live test measures it."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_2e79f9ba707a_24c523",
+        "revisionDigest": "2e79f9ba707a86e06d296dbb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_783ad0ca73cf4b098cd7/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now correct and fits every limit. Price, close rate, developer and settlement time are unknown (all card facts are RECOMMENDATION) and are measured by a zero-cost first phase; nothing unknown is treated as known (settlement is planned at 2 days and the latest viable sale is re-derived from the measured value). Recomputed: 2 + 3 + 2 = 7 prepaid x $3,000 = $21,000; developers 7 x $600 = $4,200 paid on days 6, 8 and 10, each only after that buyer's transfer settled (the contract's proof condition); contribution $16,800 >= $15,000, all costs inside the 14 days; exposure and capital $0 (Brain's trace: maxExposure 0); bank transfer into the owner's existing account carries no card fee and no owner hours, with the account details correctly flagged as an authority only the owner holds. Stops are bounded at zero spend.",
+        "findings": [
+          "Contribution $16,800 = $21,000 - $4,200, all settled and paid by day 10.",
+          "Owner hours 0: the only owner input is giving the account details (a MISSING_AUTHORITY item, not work).",
+          "Exactly 1 settled payment by day 6 falls between the proof (>= 2) and the first stop (0); the day-9 rule (fewer than 5 settled) bounds it, but the continue rule should say what happens at 1.",
+          "Sites ordered on day 10 with 5-7 day delivery finish on days 15-17: a developer failure after day 14 means a $3,000 refund that would come out of profit already counted; disclosed, but the owner should know the kept $15,000 carries that tail.",
+          "Stop rule 3 reads 'day 14 minus settlement minus 0'; state the latest viable sale day formula plainly (14 - measured settlement days)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:38:17.018Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_2e79f9ba707a_24c523",
+      "digest": "2e79f9ba707a86e06d296dbb",
+      "contractDigest": "b85beedbe39f9281306d6965",
+      "plan": {
+        "goalId": "wst_7e917125353248079714",
+        "contractDigest": "b85beedbe39f9281306d6965",
+        "parentRevisionId": "rev_3f00827b9069_dcfd2b",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Test, then sell, prepaid $3,000 template website redesigns to US service businesses by email, paid by bank transfer into the owner's account, developer hired only after each payment settles",
+          "opportunityIds": [
+            "cop_99e485ef094b46f0919b"
+          ],
+          "why": "Fewest closes of the three routes: $3,000 less a $600 developer is $2,400 contribution per sale with no card fee on a bank transfer, so 7 sales ($16,800) carry the $15,000. Zero capital and zero exposure: nothing is bought before a buyer's payment has settled, as the contract's proof condition requires. Zero owner hours: Brain sells by email reply and invoice with no calls, and buyers pay into the account the owner already holds. Price, close rate, developer and settlement time are unknown and the first 6 days measure them; the latest viable sale is day 10 (settled by day 12, developer paid by day 12)."
+        },
+        "alternatives": [
+          {
+            "title": "AI chatbot setup subcontracted to a Fiverr builder",
+            "why": "Managed platforms sell chatbots for $25-$150/month with no setup fee, contradicting a $1,950 setup price; 9 closes needed."
+          },
+          {
+            "title": "Pay-per-meeting appointment setting",
+            "why": "Vendors sell packages of 10 meetings delivered over up to six months; ~75 held meetings in 14 days is far beyond any recorded pace."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "REACH",
+            "label": "Brain emails 300 US service businesses with dated websites from a free mailbox (days 1-3), then up to 600 more if the test continues; no calls",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "close rate",
+              "s4"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Offer the 5-page template redesign at $3,000, prepaid in full, sold by email reply and invoice; buyer pays by bank transfer into the owner's existing account (the account details are an authority only the owner holds and must be given to Brain before the first invoice)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "price",
+              "s1"
+            ],
+            "priceCents": 300000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Confirm each transfer has settled in the owner's account (assumed 1-3 days; measured on the first payment)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "s1",
+            "evidence": [
+              "settlement time",
+              "s3"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Hire a freelance WordPress developer per project at $600, only after that buyer's payment has settled, paid from the settled receipt; delivery 5-7 days, so the last sites complete after day 14 (refund risk if a developer fails)",
+            "performer": "Freelance WordPress developer hired per project after buyer pays",
+            "costCents": 420000,
+            "day": 6,
+            "dependsOn": "c1",
+            "evidence": [
+              "developer cost",
+              "s2"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Freelance WordPress developer hired per project after buyer pays",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "2 prepaid redesigns by bank transfer",
+            "settlesDay": 6,
+            "stepId": "c1"
+          },
+          {
+            "day": 6,
+            "kind": "SPEND",
+            "amountCents": 120000,
+            "label": "Developers for 2 settled orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 900000,
+            "label": "3 prepaid redesigns by bank transfer",
+            "settlesDay": 8,
+            "stepId": "c1"
+          },
+          {
+            "day": 8,
+            "kind": "SPEND",
+            "amountCents": 180000,
+            "label": "Developers for 3 settled orders",
+            "stepId": "d1"
+          },
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 600000,
+            "label": "2 prepaid redesigns by bank transfer",
+            "settlesDay": 10,
+            "stepId": "c1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 120000,
+            "label": "Developers for 2 settled orders",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "close rate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid orders per contact emailed",
+            "sources": [],
+            "needs": "Measured on the first 300 contacts; the plan needs at least 2 per 300"
+          },
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per redesign buyers pay",
+            "sources": [
+              "s1"
+            ],
+            "needs": "A buyer paying $3,000 (offered price is $3,000; no buyer is shown paying it)"
+          },
+          {
+            "name": "developer cost",
+            "status": "ESTIMATE",
+            "value": 600,
+            "unit": "USD per redesign",
+            "sources": [
+              "s2"
+            ],
+            "needs": "A developer accepting the job after payment settles"
+          },
+          {
+            "name": "settlement time",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days from transfer to settled",
+            "sources": [
+              "s3"
+            ],
+            "needs": "Measured on the first payment; planned at 2 days"
+          },
+          {
+            "name": "sales needed",
+            "status": "ESTIMATE",
+            "value": 7,
+            "unit": "prepaid redesigns",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "15000 / (3000 - 600) = 6.25, rounded up"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#price",
+            "dated": "2026-11-27",
+            "claim": "Offer priced at $3,000 per template redesign",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#directCosts",
+            "dated": "2026-11-27",
+            "claim": "Developer cost $600 per redesign (estimate)",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#timeToFirstCash",
+            "dated": "2026-11-27",
+            "claim": "10 days to first usable cash via Stripe (estimate); a bank transfer is planned instead",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_99e485ef094b46f0919b#access",
+            "dated": "2026-11-27",
+            "claim": "Cold email to local-business lists",
+            "population": "US local service businesses",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 6, at least 2 transfers of $3,000 settled in the owner's account from the first 300 contacts, the settlement time measured, and a developer hired for the first order after its payment settled.",
+          "stop": [
+            "0 settled payments by day 6: stop - no capital was spent; report the measured reply and close rates",
+            "Fewer than 5 settled payments by day 9: stop selling - the 2 still needed would have to be paid by day 10 and settled by day 12, faster than the measured rate; deliver every order already taken",
+            "Settlement measured above 4 days: the latest viable sale moves earlier (day 14 minus settlement minus 0); stop selling once it has passed",
+            "A developer fails to deliver: hire a replacement from the same settled receipt or refund the buyer in full"
+          ],
+          "continue": [
+            "2 or more settled by day 6: email up to 600 more contacts on days 6-8 to reach 7 paid by day 10, each developer hired only after that payment settles"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Arithmetic checked: $2,312.70 contribution per sale, 7 sales = $16,189 >= $15,000.",
+            "resolution": "Kept; with bank transfer there is no card fee, so $2,400 per sale and 7 sales = $16,800."
+          },
+          {
+            "finding": "The day-4 deadline depends on an assumed 10-day payout.",
+            "resolution": "Accepted. The plan now uses a bank transfer, planned at 2 days and measured on the first payment; the latest viable sale is day 10."
+          },
+          {
+            "finding": "Developer cost should also be paid inside 14 days.",
+            "resolution": "Accepted. Each developer is paid from the settled receipt within 2 days of payment; the last on day 10-12."
+          },
+          {
+            "finding": "'Relax owner time by 30 minutes' should be a MISSING_AUTHORITY need.",
+            "resolution": "Accepted. No owner hours are planned; the owner's receiving-account details are recorded in s1 as an authority only the owner holds, needed before the first invoice."
+          },
+          {
+            "finding": "Proof = stop threshold leaves no continue path.",
+            "resolution": "Accepted. Proof is 2 settled by day 6, stop is 0 by day 6 or fewer than 5 by day 9, continue is 2+ by day 6 with up to 600 more contacts."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "brain:CONVERSION"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_31051147b991482b94d8",
+            "why": "A $1,950 setup fee is contradicted by managed chatbots sold at $25-$150/month with no setup fee, and 9 closes are needed."
+          },
+          {
+            "opportunityId": "cop_934a2f81b90f4cc4ae15",
+            "why": "About 75 held meetings would be needed in 14 days; vendors sell packages of 10 delivered over up to six months."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_99e485ef094b46f0919b",
+            "deals": 7,
+            "price": 3000,
+            "directCost": 600,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_2e79f9ba707a_24c523",
+        "digest": "2e79f9ba707a86e06d296dbb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:36:34.669Z"
+      },
+      "review": {
+        "revisionId": "rev_2e79f9ba707a_24c523",
+        "revisionDigest": "2e79f9ba707a86e06d296dbb",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_af766b5f329b49f5a6d2/author-F",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_783ad0ca73cf4b098cd7/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now correct and fits every limit. Price, close rate, developer and settlement time are unknown (all card facts are RECOMMENDATION) and are measured by a zero-cost first phase; nothing unknown is treated as known (settlement is planned at 2 days and the latest viable sale is re-derived from the measured value). Recomputed: 2 + 3 + 2 = 7 prepaid x $3,000 = $21,000; developers 7 x $600 = $4,200 paid on days 6, 8 and 10, each only after that buyer's transfer settled (the contract's proof condition); contribution $16,800 >= $15,000, all costs inside the 14 days; exposure and capital $0 (Brain's trace: maxExposure 0); bank transfer into the owner's existing account carries no card fee and no owner hours, with the account details correctly flagged as an authority only the owner holds. Stops are bounded at zero spend.",
+        "findings": [
+          "Contribution $16,800 = $21,000 - $4,200, all settled and paid by day 10.",
+          "Owner hours 0: the only owner input is giving the account details (a MISSING_AUTHORITY item, not work).",
+          "Exactly 1 settled payment by day 6 falls between the proof (>= 2) and the first stop (0); the day-9 rule (fewer than 5 settled) bounds it, but the continue rule should say what happens at 1.",
+          "Sites ordered on day 10 with 5-7 day delivery finish on days 15-17: a developer failure after day 14 means a $3,000 refund that would come out of profit already counted; disclosed, but the owner should know the kept $15,000 carries that tail.",
+          "Stop rule 3 reads 'day 14 minus settlement minus 0'; state the latest viable sale day formula plainly (14 - measured settlement days)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:38:17.018Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:38:30.160Z"
+    },
+    "staleFinal": null
+  }
+}

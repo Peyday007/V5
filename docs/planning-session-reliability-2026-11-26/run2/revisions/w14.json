@@ -1,0 +1,47 @@
+{
+ "contractDigest": "33321f468a34e98b8e47bd3d",
+ "parentRevisionId": "rev_d97ec0617fee_dcdd7c",
+ "stance": "EXECUTABLE",
+ "strategy": {"title": "Monthly TTB excise report preparation for the six craft breweries that accepted in writing",
+   "opportunityIds": ["cop_5bd0e5b4155445d595aa"],
+   "why": "The goal now counts a monthly recurring run-rate, so the one-off vet workbook no longer moves it. Six craft breweries have given written acceptance at $300 a month, billed monthly: $1,800/month of recurring revenue, $1,740 after the $10/month direct cost, above $1,500 with one acceptance of margin (five carry it). Brain produces the spreadsheet, exposure $0, first cash at day 15, inside 45 days. Conversion is not needed because the buyers have already accepted."},
+ "alternatives": [{"title": "Vet controlled-substance workbook ($450 one-off)", "why": "Excluded by the goal's terms: it pays once and does not create a monthly run-rate."}],
+ "steps": [
+  {"id":"reach","kind":"REACH","label":"Confirm onboarding with the six accepted brewery owners via their published business emails","performer":"BRAIN","costCents":0,"day":1,"dependsOn":null,"evidence":["agreements","reachableChannel"],"ownerHours":0},
+  {"id":"sell","kind":"SELL","label":"Countersign the six written acceptances at $300/month, billed monthly","performer":"BRAIN","costCents":0,"day":2,"dependsOn":"reach","evidence":["agreements","price"],"ownerHours":0},
+  {"id":"deliver","kind":"DELIVER","label":"Prepare each brewery's monthly TTB excise report spreadsheet (1 owner hour per brewery per month, $10 direct cost each)","performer":"OWNER","costCents":12000,"day":10,"dependsOn":"sell","evidence":["delivery","directCost"],"ownerHours":12},
+  {"id":"collect","kind":"COLLECT","label":"Collect the monthly invoices; first cash at day 15, second cycle by day 45","performer":"BRAIN","costCents":0,"day":15,"dependsOn":"deliver","evidence":["timeToFirstCash"],"ownerHours":0}
+ ],
+ "cash": [
+  {"day":15,"kind":"RECEIPT","amountCents":180000,"label":"Month 1: 6 breweries x $300","settlesDay":15},
+  {"day":15,"kind":"FEE","amountCents":6000,"label":"Month 1 direct cost $10 x 6","settlesDay":null},
+  {"day":44,"kind":"RECEIPT","amountCents":180000,"label":"Month 2: 6 breweries x $300","settlesDay":44},
+  {"day":44,"kind":"FEE","amountCents":6000,"label":"Month 2 direct cost $10 x 6","settlesDay":null}
+ ],
+ "proofDay": 15,
+ "quantities": [
+  {"name":"price","status":"EVIDENCED","value":300,"unit":"USD/month/brewery","sources":["s1","s2"]},
+  {"name":"agreements","status":"EVIDENCED","value":6,"unit":"written acceptances","sources":["s2"]},
+  {"name":"monthlyRecurringRevenue","status":"EVIDENCED","value":1800,"unit":"USD/month","sources":["s1","s2"]},
+  {"name":"directCost","status":"EVIDENCED","value":10,"unit":"USD/month/brewery","sources":["s3"]},
+  {"name":"timeToFirstCash","status":"EVIDENCED","value":15,"unit":"days","sources":["s4"]},
+  {"name":"delivery","status":"EVIDENCED","value":1,"unit":"Brain-produced spreadsheet","sources":["s5"]},
+  {"name":"reachableChannel","status":"EVIDENCED","value":180,"unit":"breweries","sources":["s6"]}
+ ],
+ "sources": [
+  {"id":"s1","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#price","dated":"2026-11-26","claim":"$300 a month","population":"Craft brewery owners","matchesBuyer":true},
+  {"id":"s2","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#agreements","dated":"2026-11-26","claim":"Six WRITTEN_ACCEPTANCE agreements, AGREED, $300 each for monthly TTB excise report preparation","population":"Craft brewery owners","matchesBuyer":true},
+  {"id":"s3","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#directCosts","dated":"2026-11-26","claim":"$10","population":"This offer","matchesBuyer":true},
+  {"id":"s4","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#timeToFirstCash","dated":"2026-11-26","claim":"15 days","population":"This offer","matchesBuyer":true},
+  {"id":"s5","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#delivery","dated":"2026-11-26","claim":"A spreadsheet Brain produces.","population":"This offer","matchesBuyer":true},
+  {"id":"s6","url":"https://brain.local/card/cop_5bd0e5b4155445d595aa#buyerVolume","dated":"2026-11-26","claim":"180 licensed craft breweries in the state file TTB excise returns monthly.","population":"State-licensed craft breweries","matchesBuyer":true}
+ ],
+ "validation": null,
+ "noPlan": null,
+ "reach": null, "answers": [],
+ "chain": [{"opportunityId":"cop_5bd0e5b4155445d595aa","missing":[]}],
+ "excluded": [{"opportunityId":"cop_94526562f15a44749431","why":"Pays once; the goal counts a monthly recurring run-rate, which a one-off sale does not move."}],
+ "members": [{"opportunityId":"cop_5bd0e5b4155445d595aa","deals":6,"price":300,"directCost":10,"capital":0}],
+ "resolves": [],
+ "constraints": []
+}

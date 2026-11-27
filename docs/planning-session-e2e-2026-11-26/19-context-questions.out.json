@@ -1,0 +1,258 @@
+{
+  "goal": {
+    "id": "wst_9d79a16f495f4a858035",
+    "title": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cum",
+    "intent": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement; no required physical work by the owner."
+  },
+  "contract": {
+    "goalId": "wst_9d79a16f495f4a858035",
+    "words": "Produce the strongest executable plan you can for collecting $10,000 in customer revenue within 30 days, subject to: Maximum total spending: $2,000. Maximum cumulative spending before proof of demand: $300 across all experiments and routes combined. Minimal owner involvement; no required physical work by the owner.",
+    "source": {
+      "kind": "OWNER_MESSAGE",
+      "ref": "owner message 2026-11-26T08:52:26Z (with the 2026-11-26T16:06Z correction)",
+      "at": "2026-11-26T08:52:26.946Z"
+    },
+    "terms": {
+      "targetCents": 1000000,
+      "currency": "USD",
+      "metric": "COLLECTED_CASH",
+      "windowDays": 30,
+      "totalSpendCapCents": 200000,
+      "preProofSpendCapCents": 30000,
+      "exposureCapCents": 200000,
+      "proofCondition": "A customer-validation condition the plan states explicitly before spending past the pre-proof allowance: actual payment, a paid pilot or a meaningful deposit at workable economics (owner 2026-11-26). Not merely a first payment.",
+      "ownerHoursPerWeek": null,
+      "ownerPhysicalWork": "FORBIDDEN",
+      "exclusions": [
+        "the owner's existing offers, prospects, audiences and business assets as defaults (owner 2026-11-26T16:06Z)"
+      ],
+      "evidenceExclusions": [
+        "the owner's Instantly campaign history as evidence of demand, response, close rate or revenue ceiling (owner 2026-11-26T16:06Z)"
+      ]
+    },
+    "explanations": {},
+    "version": 1,
+    "digest": "94102304aa642d300f68b7f2"
+  },
+  "stored": {
+    "targetCents": 1000000,
+    "currency": "USD",
+    "windowDays": 30,
+    "capitalCeilingCents": 200000,
+    "capitalBeforeProofCents": 30000,
+    "hoursCeiling": null,
+    "proven": false,
+    "projectId": "prj_762b91b910fd490d953c"
+  },
+  "openings": [
+    {
+      "id": "cop_1092c4c2a7c54e2c96b0",
+      "title": "E-2 treaty-investor business plans for immigration attorneys' clients",
+      "state": "DISCOVERED",
+      "origin": "ROUTE_PROPOSAL",
+      "facts": [
+        {
+          "field": "access",
+          "value": "Cold email to immigration law firms whose own sites list E-2 work (published addresses from Maps data)",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "captureMechanism",
+          "value": "Sell A USCIS/consular-ready E-2 business plan: 5-year financials (monthly year 1), marginality and hiring analysis, sourced market section, unlimited revisions 30 days to E-2 investor clients referred by US immigration attorneys, reached through Cold email to immigration law firms whose own sites list E-2 work (published addresses from Maps data), at $1,250; AI drafting through the Anthropic API plus a contracted E-2 plan reviewer (quote prepared, not sent; no provider has accepted) delivers it.",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "directCosts",
+          "value": "$115",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "exposure",
+          "value": "$287",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "fulfillment",
+          "value": "AI drafting through the Anthropic API plus a contracted E-2 plan reviewer (quote prepared, not sent; no provider has accepted).",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "hours",
+          "value": "0 owner hours per sale",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "offer",
+          "value": "A USCIS/consular-ready E-2 business plan: 5-year financials (monthly year 1), marginality and hiring analysis, sourced market section, unlimited revisions 30 days",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "payer",
+          "value": "E-2 investor clients referred by US immigration attorneys",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "price",
+          "value": "$1,250",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "priceAnchor",
+          "value": "Published E-2 plan prices $1,200 (Mikel Consulting) to $3,200 (Avvale Premium); Joorney 2023 flat fees $1,650-$4,000",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "revenueRange",
+          "value": "$1,250",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "routeSearches",
+          "value": "E-2 business plan price; immigration attorney E-2 business plan writer referral; E-2 investor visa issuances by applicant type",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "routeStage",
+          "value": "ROUTE",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "timeToFirstCash",
+          "value": "14 days",
+          "kind": "RECOMMENDATION"
+        }
+      ]
+    },
+    {
+      "id": "cop_c1ae338836b443f4b6ef",
+      "title": "SBA loan business plans for start-up borrowers referred by SBA lenders",
+      "state": "DISCOVERED",
+      "origin": "ROUTE_PROPOSAL",
+      "facts": [
+        {
+          "field": "access",
+          "value": "Cold email to SBA lender loan officers and SBDC advisors",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "captureMechanism",
+          "value": "Sell A lender-ready business plan with 3-year projections and a debt-service coverage analysis to Start-up borrowers preparing SBA 7(a) applications, reached through Cold email to SBA lender loan officers and SBDC advisors, at $1,000; AI drafting through the Anthropic API plus a contracted plan reviewer (not engaged) delivers it.",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "exposure",
+          "value": "$150",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "fulfillment",
+          "value": "AI drafting through the Anthropic API plus a contracted plan reviewer (not engaged).",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "hours",
+          "value": "0 owner hours per sale",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "offer",
+          "value": "A lender-ready business plan with 3-year projections and a debt-service coverage analysis",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "payer",
+          "value": "Start-up borrowers preparing SBA 7(a) applications",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "price",
+          "value": "$1,000",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "priceAnchor",
+          "value": "not yet sourced",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "revenueRange",
+          "value": "$1,000",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "routeSearches",
+          "value": "SBA business plan writer price; SBA lender business plan referral; SBA 7(a) start-up loans count",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "routeStage",
+          "value": "ROUTE",
+          "kind": "RECOMMENDATION"
+        },
+        {
+          "field": "timeToFirstCash",
+          "value": "12 days",
+          "kind": "RECOMMENDATION"
+        }
+      ]
+    }
+  ],
+  "exclusions": [
+    "the owner's existing offers, prospects, audiences and business assets as defaults (owner 2026-11-26T16:06Z)"
+  ],
+  "evidenceExclusions": [
+    "the owner's Instantly campaign history as evidence of demand, response, close rate or revenue ceiling (owner 2026-11-26T16:06Z)"
+  ],
+  "openProblems": [],
+  "revisions": [],
+  "lastReview": null,
+  "final": null,
+  "brain": {
+    "at": "2026-11-26T22:38:37.861Z",
+    "completed": true,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 10000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "openings": [],
+    "excluded": [],
+    "scope": null,
+    "nextTest": "Discover, construct and research openings that can reach the 10000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them."
+  },
+  "questions": [
+    {
+      "needId": "cnd_237cd0e9158642bdb061",
+      "opportunityId": "cop_c1ae338836b443f4b6ef",
+      "field": "revenueRange",
+      "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+      "settledWhen": "The revenueRange is recorded on this card.",
+      "parked": true,
+      "returned": null
+    },
+    {
+      "needId": "cnd_1227bdb1aeb74adea601",
+      "opportunityId": "cop_c1ae338836b443f4b6ef",
+      "field": "buyerVolume",
+      "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+      "settledWhen": "The buyerVolume is recorded on this card.",
+      "parked": true,
+      "returned": null
+    },
+    {
+      "needId": "cnd_460d0068be8e483e874b",
+      "opportunityId": "cop_1092c4c2a7c54e2c96b0",
+      "field": "buyerVolume",
+      "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+      "settledWhen": "The buyerVolume is recorded on this card.",
+      "parked": true,
+      "returned": null
+    },
+    {
+      "needId": "cnd_54081fdbf8ca4831afc3",
+      "opportunityId": "cop_1092c4c2a7c54e2c96b0",
+      "field": "revenueRange",
+      "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+      "settledWhen": "The revenueRange is recorded on this card.",
+      "parked": true,
+      "returned": null
+    }
+  ]
+}

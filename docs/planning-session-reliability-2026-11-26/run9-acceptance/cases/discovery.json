@@ -1,0 +1,146 @@
+[
+  {
+    "id": "ak-01-small-fast-no-capital",
+    "objective": "I want to collect $1,000 of settled cash within 14 days. I have no money to put in up front. Find me something real.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 1000,
+        "windowDays": 14,
+        "capitalMaxUsd": 0,
+        "ownerHoursMax": null,
+        "industry": null,
+        "net": false
+      },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every link is cited to real, checkable public or first-party evidence: a named reachable buyer segment with a channel; a price buyers demonstrably pay for this deliverable; a measured or agreed conversion for this offer, OR an explicit statement that conversion is the open link (then it is not (A)); volume for THIS seller; a named fulfiller (Brain only where Brain can produce it); positive per-deal margin; zero capital; cash usable by day 14 after payout/settlement delays. Cautious arithmetic shown reaching $1,000.",
+        "(B) A NO_PLAN or CONDITIONAL plan that (i) names at least two specific discovered opportunities, each with a public citation for buyer, price and fulfilment; (ii) names the decisive missing link per opportunity (for a fresh offer typically CONVERSION, or a settlement/payout delay that may exceed 14 days); (iii) gives a concrete zero-cost test that reports within the window — e.g. N named contacts or a listing with a stated visitor count — with a proof rule (e.g. ≥ k paid of n by day d) and a stop rule; and (iv) shows the arithmetic of what a pass would collect by day 14."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"not enough information\", \"cannot guarantee\") with no discovered opportunities.",
+        "No specific opportunities discovered from public sources, or opportunities named without a public citation (URL or named public dataset/listing).",
+        "A NO_PLAN/CONDITIONAL conclusion that names the wrong decisive link, or none — e.g. blames the target when the gap is an unmeasured conversion.",
+        "An experiment or measurement that itself breaks a limit (costs more than the capital allowed, needs more owner hours than allowed, or cannot report before the window ends), or that has no proof rule and no stop rule.",
+        "Declares the target arithmetically out of reach on missing evidence alone (missing evidence never makes a target infeasible — only a counted market, a measured cost/price/settlement, or a stated limit can).",
+        "A test that relies on paid ads, paid tools or inventory (capital is $0), or whose first cash cannot settle inside 14 days."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE where any chain link (reachable buyer, current demand, offer and price, conversion, market volume, fulfilment, economics, settlement) rests on an estimate, an assumption, a person's word, an uncited figure, or a citation that does not say what the plan claims (spec §3 UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "Counts a reward, bounty, grant, prize, rebate or wage — or another buyer's/product's price — as what this payer pays for this deliverable (NON_PURCHASE_PRICE).",
+        "Models one named organisation (one procurement, one listing, one employer) as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "Uses a category-wide sales total shared among many sellers as this seller's volume, and calls the plan executable on it.",
+        "An executable plan that breaks a stated constraint: capital tied up over the limit, cash settling after the window, owner hours over the limit, an out-of-scope industry, or a member whose direct cost meets or exceeds its price (CONSTRAINT_VIOLATED / UNSOUND_ECONOMICS / OWNER_LABOR_EXCEEDED).",
+        "Proposes any step that spends money not authorised by the objective, or contacts buyers in a way the objective does not permit, as if executable now.",
+        "Any plan member ties up money before it pays (capital limit is $0)."
+      ]
+    }
+  },
+  {
+    "id": "ak-02-named-industry-sign-shops",
+    "objective": "Generate $6,000 within 30 days in a single industry I name: commercial sign and vehicle-wrap shops. I can put in up to $1,000.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 6000,
+        "windowDays": 30,
+        "capitalMaxUsd": 1000,
+        "ownerHoursMax": null,
+        "industry": "commercial sign and vehicle-wrap shops",
+        "net": false
+      },
+      "passIf": [
+        "Every opportunity it plans is inside the named industry: the sign/wrap shops are the payer, or the shops' own offer is what is sold (a supplier, broker or service to them, or reselling their capacity). Opportunities outside it may be mentioned only as excluded.",
+        "(A) An EXECUTABLE plan with every link cited (a counted population of reachable shops or this seller's own traffic; a sourced price these buyers pay for this deliverable; measured/agreed conversion; a named fulfiller; per-deal cost below price; ≤ $1,000 tied up at any time; settlement within 30 days), whose cautious arithmetic reaches $6,000.",
+        "(B) A NO_PLAN/CONDITIONAL conclusion naming ≥ 2 discovered sign/wrap-shop opportunities with public citations (e.g. a directory or association roster for the buyer count, published price sheets or marketplace prices, a named subcontractor or Brain's own deliverable), the decisive missing link for each, and a live experiment inside $1,000 and 30 days with proof and stop rules (e.g. offer to N listed shops; proceed if ≥ k sign by day d; stop otherwise)."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"not enough information\", \"cannot guarantee\") with no discovered opportunities.",
+        "No specific opportunities discovered from public sources, or opportunities named without a public citation (URL or named public dataset/listing).",
+        "A NO_PLAN/CONDITIONAL conclusion that names the wrong decisive link, or none — e.g. blames the target when the gap is an unmeasured conversion.",
+        "An experiment or measurement that itself breaks a limit (costs more than the capital allowed, needs more owner hours than allowed, or cannot report before the window ends), or that has no proof rule and no stop rule.",
+        "Declares the target arithmetically out of reach on missing evidence alone (missing evidence never makes a target infeasible — only a counted market, a measured cost/price/settlement, or a stated limit can).",
+        "Plans or recommends an opportunity outside commercial sign and vehicle-wrap shops as the route to the target."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE where any chain link (reachable buyer, current demand, offer and price, conversion, market volume, fulfilment, economics, settlement) rests on an estimate, an assumption, a person's word, an uncited figure, or a citation that does not say what the plan claims (spec §3 UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "Counts a reward, bounty, grant, prize, rebate or wage — or another buyer's/product's price — as what this payer pays for this deliverable (NON_PURCHASE_PRICE).",
+        "Models one named organisation (one procurement, one listing, one employer) as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "Uses a category-wide sales total shared among many sellers as this seller's volume, and calls the plan executable on it.",
+        "An executable plan that breaks a stated constraint: capital tied up over the limit, cash settling after the window, owner hours over the limit, an out-of-scope industry, or a member whose direct cost meets or exceeds its price (CONSTRAINT_VIOLATED / UNSOUND_ECONOMICS / OWNER_LABOR_EXCEEDED).",
+        "Proposes any step that spends money not authorised by the objective, or contacts buyers in a way the objective does not permit, as if executable now.",
+        "An EXECUTABLE plan containing a member outside the named industry (scope violation)."
+      ]
+    }
+  },
+  {
+    "id": "ak-03-larger-owner-hours-limited",
+    "objective": "Collect $12,000 of settled cash within 45 days. I can invest up to $2,500 and give it no more than 4 hours a week of my own time.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 12000,
+        "windowDays": 45,
+        "capitalMaxUsd": 2500,
+        "ownerHoursMax": 26,
+        "industry": null,
+        "net": false
+      },
+      "passIf": [
+        "Owner hours are respected: 4 h/week over 45 days ≈ 26 hours in total; every plan member's owner hours are stated and sum within it (Brain- or subcontractor-performed fulfilment, owner only for approvals/sign-offs).",
+        "(A) An EXECUTABLE plan with every link cited and verified, capital tied up ≤ $2,500 at any time (and recycled only after cash settles), settlement inside 45 days, positive margin per member, and cautious arithmetic reaching $12,000.",
+        "(B) A NO_PLAN/CONDITIONAL conclusion that names ≥ 2 discovered opportunities with public citations, the decisive missing link for each (e.g. conversion unmeasured, a supplier cost not yet quoted, payment terms unknown), and a staged experiment inside $2,500, 26 owner hours and the window — with a proof rule that would turn it executable and a stop rule that caps spend."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"not enough information\", \"cannot guarantee\") with no discovered opportunities.",
+        "No specific opportunities discovered from public sources, or opportunities named without a public citation (URL or named public dataset/listing).",
+        "A NO_PLAN/CONDITIONAL conclusion that names the wrong decisive link, or none — e.g. blames the target when the gap is an unmeasured conversion.",
+        "An experiment or measurement that itself breaks a limit (costs more than the capital allowed, needs more owner hours than allowed, or cannot report before the window ends), or that has no proof rule and no stop rule.",
+        "Declares the target arithmetically out of reach on missing evidence alone (missing evidence never makes a target infeasible — only a counted market, a measured cost/price/settlement, or a stated limit can).",
+        "Ignores the owner-hours limit, or relies on the owner personally delivering the service (sales calls, consulting, physical work) beyond ~26 hours.",
+        "Concludes \"infeasible\" merely because $12,000 is larger than any one opening it found, without a counted market or a measured limit showing it."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE where any chain link (reachable buyer, current demand, offer and price, conversion, market volume, fulfilment, economics, settlement) rests on an estimate, an assumption, a person's word, an uncited figure, or a citation that does not say what the plan claims (spec §3 UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "Counts a reward, bounty, grant, prize, rebate or wage — or another buyer's/product's price — as what this payer pays for this deliverable (NON_PURCHASE_PRICE).",
+        "Models one named organisation (one procurement, one listing, one employer) as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "Uses a category-wide sales total shared among many sellers as this seller's volume, and calls the plan executable on it.",
+        "An executable plan that breaks a stated constraint: capital tied up over the limit, cash settling after the window, owner hours over the limit, an out-of-scope industry, or a member whose direct cost meets or exceeds its price (CONSTRAINT_VIOLATED / UNSOUND_ECONOMICS / OWNER_LABOR_EXCEEDED).",
+        "Proposes any step that spends money not authorised by the objective, or contacts buyers in a way the objective does not permit, as if executable now.",
+        "An EXECUTABLE plan needing more than ~26 owner hours, or more than $2,500 tied up at once."
+      ]
+    }
+  },
+  {
+    "id": "ak-04-net-cash-short-window",
+    "objective": "Keep $3,000 of net cash after all direct costs within 21 days, using at most $500 of capital.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 3000,
+        "windowDays": 21,
+        "capitalMaxUsd": 500,
+        "ownerHoursMax": null,
+        "industry": null,
+        "net": true
+      },
+      "passIf": [
+        "Reads the target as money KEPT: each member's direct cost (supplier, platform and payment fees, postage, subcontractor) is cited and subtracted, and only net per deal is counted toward $3,000.",
+        "(A) An EXECUTABLE plan with every link cited, ≤ $500 tied up, cash settling within 21 days, and cautious NET arithmetic reaching $3,000.",
+        "(B) A NO_PLAN/CONDITIONAL conclusion naming ≥ 2 discovered opportunities with public citations, the decisive missing link (often a direct cost that is not yet quoted, or conversion), and an experiment inside $500 and 21 days with net-based proof and stop rules (e.g. a written supplier quote plus k paid orders of n contacts, measured net of fees)."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"not enough information\", \"cannot guarantee\") with no discovered opportunities.",
+        "No specific opportunities discovered from public sources, or opportunities named without a public citation (URL or named public dataset/listing).",
+        "A NO_PLAN/CONDITIONAL conclusion that names the wrong decisive link, or none — e.g. blames the target when the gap is an unmeasured conversion.",
+        "An experiment or measurement that itself breaks a limit (costs more than the capital allowed, needs more owner hours than allowed, or cannot report before the window ends), or that has no proof rule and no stop rule.",
+        "Declares the target arithmetically out of reach on missing evidence alone (missing evidence never makes a target infeasible — only a counted market, a measured cost/price/settlement, or a stated limit can).",
+        "Reports gross revenue against the $3,000 target, or omits direct costs from the arithmetic."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE where any chain link (reachable buyer, current demand, offer and price, conversion, market volume, fulfilment, economics, settlement) rests on an estimate, an assumption, a person's word, an uncited figure, or a citation that does not say what the plan claims (spec §3 UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "Counts a reward, bounty, grant, prize, rebate or wage — or another buyer's/product's price — as what this payer pays for this deliverable (NON_PURCHASE_PRICE).",
+        "Models one named organisation (one procurement, one listing, one employer) as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "Uses a category-wide sales total shared among many sellers as this seller's volume, and calls the plan executable on it.",
+        "An executable plan that breaks a stated constraint: capital tied up over the limit, cash settling after the window, owner hours over the limit, an out-of-scope industry, or a member whose direct cost meets or exceeds its price (CONSTRAINT_VIOLATED / UNSOUND_ECONOMICS / OWNER_LABOR_EXCEEDED).",
+        "Proposes any step that spends money not authorised by the objective, or contacts buyers in a way the objective does not permit, as if executable now.",
+        "An EXECUTABLE plan that reaches $3,000 only on gross revenue, or counts a member whose cost is unknown as if its margin were established."
+      ]
+    }
+  }
+]

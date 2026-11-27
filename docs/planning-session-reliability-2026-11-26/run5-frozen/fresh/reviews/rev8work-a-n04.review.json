@@ -1,0 +1,23 @@
+{
+ "goal_id": "wst_f44ff1506d07415581d0",
+ "revision_id": "rev_015e09b8ef66_6ab5ad",
+ "verdict": "REVISE",
+ "reasons": "Arithmetic holds (10 x $340 = $3,400, $60 cost, settles day 18 of 30) and price and the 9/30 win rate are this offer's own record. But the market the plan counts is wrong for the date: the buyerVolume fact says each of the 520 clinics must file one inventory in the new format DURING THIS CALENDAR YEAR, and today is 2026-11-27, so clinics that already filed this year are no longer buyers; how many of the 520 remain unfiled is not on the card. The channel is inbound quote requests, and the plan needs about 34 quote requests (10 / 0.3) within roughly ten days, a flow no record gives. EXECUTABLE treats both unknowns as known; restate as CONDITIONAL with a proof/stop on quote requests and wins in the first week (or record the remaining unfiled count and the quote-request rate).",
+ "findings": [
+  "MARKET_VOLUME counts all 520 registrants although the card's own fact limits demand to clinics still unfiled in a calendar year that is 91% over; the remaining pool is unknown.",
+  "The reach is inbound quote requests; the number of requests arriving in the window (~34 needed) is not recorded.",
+  "No proof/stop/continue checkpoint for the quantity a live test measures."
+ ],
+ "conditions": [
+  {
+   "opportunityId": "cop_4c7c2b81d11d426d8f7c",
+   "link": "MARKET_VOLUME",
+   "basis": "EVIDENCE",
+   "field": "buyerVolume",
+   "why": "The fact says each clinic files once during this calendar year; with about five weeks of the year left, clinics that already filed are not buyers, so 520 available is an upper bound and 10 sales from ~34 quote requests in the window is not established."
+  }
+ ],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5"
+}

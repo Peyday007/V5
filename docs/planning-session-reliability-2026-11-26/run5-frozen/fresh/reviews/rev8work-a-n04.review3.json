@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_f44ff1506d07415581d0",
+ "revision_id": "rev_2aeb776a96b3_1b200c",
+ "verdict": "PASS",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-eta",
+ "reviewer_model": "claude-opus-5-5",
+ "conditions": [],
+ "reasons": "The proof now implies the target. Recomputed: at the proof floor of 15 requests a week, 15 x 16/7 = 34.3 quotes x 0.3 = 10.3 wins by about day 16, and 15 x 22/7 = 47 quotes, about 14 wins, by the day-22 sales cutoff. The middle-band rule (21 requests and 5 wins by day 10) is 2.1 requests a day, about 46 quotes by day 22, comfortably above the 34 needed, and 5 wins by day 10 at the same pace gives about 11 by day 22. Everything outside the bands stops. Invoices on day 23 settle on day 29, inside the 30-day window; $3,400 received, $60 cost, net $3,340, $0 exposure, matching Brain's trace. The unfiled count and the request rate stay UNKNOWN and are what the first week measures, and MARKET_VOLUME stays marked missing, so CONDITIONAL is the right stance and the plan is startable without capital.",
+ "findings": [
+  "One day of settlement slack: every sale is invoiced in one batch on day 23 and settles on day 29. Delivering and invoicing each win as it lands (6-day settlement) would bank most of the cash well before the deadline and remove the single-day risk.",
+  "The year-end filing obligation (about day 35) lies outside the window, so late-December demand is real, but clinics may defer to the last week; the day-10 checkpoint is the right guard."
+ ]
+}

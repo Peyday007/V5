@@ -1,0 +1,869 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_3bf5e57ef5b94687ae79",
+      "words": "Collect $15,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash received totals the target within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "e300c7389d64b147246f9635"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_3bf5e57ef5b94687ae79",
+        "contractDigest": "e300c7389d64b147246f9635",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan reaches $15,000: the only opening is one committed $6,200 purchase order",
+          "opportunityIds": [],
+          "why": "The single held opening is a one-off $6,200 award from one buyer (Harbor County Regional Airport Authority). Every chain link is established, but one buyer x $6,200 = $6,200 settled within 21 days, far short of the $15,000 target. No other opening exists to carry the remaining $8,800."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the $6,200 award anyway",
+            "why": "Worth doing (settles in 21 days at $60 cost, no capital) but reaches only 41% of the target, so it is not a plan for this objective as stated."
+          },
+          {
+            "title": "Resell the same reconciliation to other airports",
+            "why": "No other airport buyer, price or demand signal is on record; one organisation is not a population of buyers."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover and research further openings (buyer, price, settlement) that could carry the remaining $8,800 within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Committed price of the only opening",
+            "status": "EVIDENCED",
+            "value": 620000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Buyers on record",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyers",
+            "sources": [
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Shortfall against target",
+            "status": "EVIDENCED",
+            "value": 880000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#price",
+            "dated": "2026-11-12",
+            "claim": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#payer",
+            "dated": "2026-11-24",
+            "claim": "The payer is one organisation: Harbor County Regional Airport Authority",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "21 days to first cash",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The established openings total at most $6,200 (one buyer x one $6,200 award) against a $15,000 target; nothing on record carries the other $8,800.",
+          "resolution": "Relax the target to $6,200 settled within 45 days and deliver the committed award (settles in ~21 days, $60 cost, no capital); or have Brain discover and research additional openings worth at least $8,800 that settle within 45 days.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $6,200 (the one committed award), or keep $15,000 only once further openings are established",
+            "basis": [
+              {
+                "opportunityId": "cop_9d317a9bafaf4d26979a",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_fb03416db5ed_b20edb",
+        "digest": "fb03416db5ed22f769bb57a1",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e5d419c8cda5421a9d61/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:35:52.907Z"
+      },
+      {
+        "goalId": "wst_3bf5e57ef5b94687ae79",
+        "contractDigest": "e300c7389d64b147246f9635",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan reaches $15,000: the only opening is one committed $6,200 purchase order",
+          "opportunityIds": [],
+          "why": "The single held opening is a one-off $6,200 award from one buyer (Harbor County Regional Airport Authority). Every chain link is established, but one buyer x $6,200 = $6,200 settled within 21 days, far short of the $15,000 target. No other opening exists to carry the remaining $8,800."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the $6,200 award anyway",
+            "why": "Worth doing (settles in 21 days at $60 cost, no capital) but reaches only 41% of the target, so it is not a plan for this objective as stated."
+          },
+          {
+            "title": "Resell the same reconciliation to other airports",
+            "why": "No other airport buyer, price or demand signal is on record; one organisation is not a population of buyers."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the airports that buy wildlife-hazard log reconciliation from a published register and research their price and settlement, to establish whether buyers beyond Harbor County can carry the remaining $8,800 within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Committed price of the only opening",
+            "status": "EVIDENCED",
+            "value": 620000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Buyers on record",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyers",
+            "sources": [
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Shortfall against target",
+            "status": "EVIDENCED",
+            "value": 880000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#price",
+            "dated": "2026-11-12",
+            "claim": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#payer",
+            "dated": "2026-11-24",
+            "claim": "The payer is one organisation: Harbor County Regional Airport Authority",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "21 days to first cash",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: only one buyer (one $6,200 award) is established against a $15,000 target; nobody has counted how many other airport authorities buy wildlife-hazard log reconciliation, or any other buyers, so nothing on record carries the other $8,800.",
+          "resolution": "Deliver the committed $6,200 award (settles in ~21 days, $60 cost, no capital), and have Brain count the market from a published register (e.g. the FAA list of Part 139 certificated airports that must keep wildlife-hazard records) and test the same offer on those airports' procurement contacts to establish at least two more buyers at an evidenced price that settle within 45 days; failing that, the owner may relax the target to $6,200.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain judges the link by the one-off needing its one buyer, which is true for $6,200. Carrying $15,000 from this offer needs at least three such awards (15000/6200 = 2.4), and the card records one payer (Harbor County Regional Airport Authority) and no buyerVolume fact counting any other airport that buys log reconciliation; one organisation is not a population of buyers, so the volume this target needs is not established."
+          }
+        ],
+        "revisionId": "rev_bfc26ec250e3_38d416",
+        "digest": "bfc26ec250e3c34e9aee3189",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e5d419c8cda5421a9d61/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:08.481Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_3bf5e57ef5b94687ae79",
+      "contractDigest": "e300c7389d64b147246f9635",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan reaches $15,000: the only opening is one committed $6,200 purchase order",
+        "opportunityIds": [],
+        "why": "The single held opening is a one-off $6,200 award from one buyer (Harbor County Regional Airport Authority). Every chain link is established, but one buyer x $6,200 = $6,200 settled within 21 days, far short of the $15,000 target. No other opening exists to carry the remaining $8,800."
+      },
+      "alternatives": [
+        {
+          "title": "Deliver the $6,200 award anyway",
+          "why": "Worth doing (settles in 21 days at $60 cost, no capital) but reaches only 41% of the target, so it is not a plan for this objective as stated."
+        },
+        {
+          "title": "Resell the same reconciliation to other airports",
+          "why": "No other airport buyer, price or demand signal is on record; one organisation is not a population of buyers."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count the airports that buy wildlife-hazard log reconciliation from a published register and research their price and settlement, to establish whether buyers beyond Harbor County can carry the remaining $8,800 within 45 days",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "Committed price of the only opening",
+          "status": "EVIDENCED",
+          "value": 620000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Buyers on record",
+          "status": "EVIDENCED",
+          "value": 1,
+          "unit": "buyers",
+          "sources": [
+            "s_payer"
+          ],
+          "needs": null
+        },
+        {
+          "name": "Shortfall against target",
+          "status": "EVIDENCED",
+          "value": 880000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#price",
+          "dated": "2026-11-12",
+          "claim": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation",
+          "population": "Harbor County Regional Airport Authority",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9d317a9bafaf4d26979a"
+        },
+        {
+          "id": "s_payer",
+          "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#payer",
+          "dated": "2026-11-24",
+          "claim": "The payer is one organisation: Harbor County Regional Airport Authority",
+          "population": "Harbor County Regional Airport Authority",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9d317a9bafaf4d26979a"
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "21 days to first cash",
+          "population": "Harbor County Regional Airport Authority",
+          "matchesBuyer": true,
+          "opportunityId": "cop_9d317a9bafaf4d26979a"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: only one buyer (one $6,200 award) is established against a $15,000 target; nobody has counted how many other airport authorities buy wildlife-hazard log reconciliation, or any other buyers, so nothing on record carries the other $8,800.",
+        "resolution": "Deliver the committed $6,200 award (settles in ~21 days, $60 cost, no capital), and have Brain count the market from a published register (e.g. the FAA list of Part 139 certificated airports that must keep wildlife-hazard records) and test the same offer on those airports' procurement contacts to establish at least two more buyers at an evidenced price that settle within 45 days; failing that, the owner may relax the target to $6,200.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_9d317a9bafaf4d26979a",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_9d317a9bafaf4d26979a",
+          "link": "MARKET_VOLUME",
+          "reason": "Brain judges the link by the one-off needing its one buyer, which is true for $6,200. Carrying $15,000 from this offer needs at least three such awards (15000/6200 = 2.4), and the card records one payer (Harbor County Regional Airport Authority) and no buyerVolume fact counting any other airport that buys log reconciliation; one organisation is not a population of buyers, so the volume this target needs is not established."
+        }
+      ],
+      "revisionId": "rev_bfc26ec250e3_38d416",
+      "digest": "bfc26ec250e3c34e9aee3189",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_e5d419c8cda5421a9d61/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:36:08.481Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_bfc26ec250e3_38d416",
+      "digest": "bfc26ec250e3c34e9aee3189",
+      "contractDigest": "e300c7389d64b147246f9635",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 15000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 6200). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 12151× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 6140× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Wildlife-hazard assessment log reconciliation for Harbor County Region\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_9d317a9bafaf4d26979a"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport\"",
+            "owner": "PERSON",
+            "cost": 60
+          },
+          {
+            "label": "Collect payment for \"Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 15000 USD still needed — the openings held reach at most 6200 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "title": "Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport Authority",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 6200,
+            "potentialReach": 6200,
+            "card": {
+              "payer": "Harbor County Regional Airport Authority",
+              "reachableChannel": "The authority’s procurement portal",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:32:04.555Z",
+              "offerScope": "Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport Authority",
+              "priceCents": 620000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "regional airport operations",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 620000,
+                "currency": "USD",
+                "deliverable": "Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport Authority",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The authority’s procurement portal"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 6200 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 6200 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 60, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "21 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Wildlife-hazard assessment log reconciliation for Harbor County Regional Airport Authority to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$60",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Harbor County Regional Airport Authority",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation (award notice, 2026-11-12).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "21 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_0a6572dce7924800a99b"
+        ],
+        "scope": {
+          "targetCents": 1500000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:17.574Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_bfc26ec250e3_38d416",
+        "revisionDigest": "bfc26ec250e3c34e9aee3189",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e5d419c8cda5421a9d61/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_485baa0bd26242489a03/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Recomputed: the only opening is one WRITTEN_ACCEPTANCE at $6,200 from one payer (Harbor County Regional Airport Authority); 1 x $6,200 = $6,200 vs $15,000 target, shortfall $8,800. One organisation is not a population, and the card holds no buyerVolume fact for any other airport, no other buyer, price or demand signal. Brain's 'a one-off needs its one buyer' is true for $6,200 but not for $15,000 (needs ceil(15000/6200) = 3 awards); the author's MARKET_VOLUME disagreement is correct. NO_PLAN is right: no startable plan reaches the target on the evidence; a CONDITIONAL plan would have to invent other airports' demand and price, not test one unknown. The decisive gap (MARKET_VOLUME) is named, and the resolution keeps the $6,200 award (21 days to cash, $60 cost, $0 capital) as worth delivering.",
+        "findings": [
+          "The FAA Part 139 register in the resolution is a suggestion, not a cited source; any count from it must be recorded on the card before re-planning.",
+          "Deliver the committed $6,200 award regardless; it settles inside 45 days at $60 cost."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:11.395Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_bfc26ec250e3_38d416",
+      "digest": "bfc26ec250e3c34e9aee3189",
+      "contractDigest": "e300c7389d64b147246f9635",
+      "plan": {
+        "goalId": "wst_3bf5e57ef5b94687ae79",
+        "contractDigest": "e300c7389d64b147246f9635",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan reaches $15,000: the only opening is one committed $6,200 purchase order",
+          "opportunityIds": [],
+          "why": "The single held opening is a one-off $6,200 award from one buyer (Harbor County Regional Airport Authority). Every chain link is established, but one buyer x $6,200 = $6,200 settled within 21 days, far short of the $15,000 target. No other opening exists to carry the remaining $8,800."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the $6,200 award anyway",
+            "why": "Worth doing (settles in 21 days at $60 cost, no capital) but reaches only 41% of the target, so it is not a plan for this objective as stated."
+          },
+          {
+            "title": "Resell the same reconciliation to other airports",
+            "why": "No other airport buyer, price or demand signal is on record; one organisation is not a population of buyers."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the airports that buy wildlife-hazard log reconciliation from a published register and research their price and settlement, to establish whether buyers beyond Harbor County can carry the remaining $8,800 within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "Committed price of the only opening",
+            "status": "EVIDENCED",
+            "value": 620000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Buyers on record",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyers",
+            "sources": [
+              "s_payer"
+            ],
+            "needs": null
+          },
+          {
+            "name": "Shortfall against target",
+            "status": "EVIDENCED",
+            "value": 880000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#price",
+            "dated": "2026-11-12",
+            "claim": "Harbor County Regional Airport Authority awarded a $6,200 purchase order for a wildlife-hazard log reconciliation",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_payer",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#payer",
+            "dated": "2026-11-24",
+            "claim": "The payer is one organisation: Harbor County Regional Airport Authority",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_9d317a9bafaf4d26979a#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "21 days to first cash",
+            "population": "Harbor County Regional Airport Authority",
+            "matchesBuyer": true,
+            "opportunityId": "cop_9d317a9bafaf4d26979a"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: only one buyer (one $6,200 award) is established against a $15,000 target; nobody has counted how many other airport authorities buy wildlife-hazard log reconciliation, or any other buyers, so nothing on record carries the other $8,800.",
+          "resolution": "Deliver the committed $6,200 award (settles in ~21 days, $60 cost, no capital), and have Brain count the market from a published register (e.g. the FAA list of Part 139 certificated airports that must keep wildlife-hazard records) and test the same offer on those airports' procurement contacts to establish at least two more buyers at an evidenced price that settle within 45 days; failing that, the owner may relax the target to $6,200.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_9d317a9bafaf4d26979a",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain judges the link by the one-off needing its one buyer, which is true for $6,200. Carrying $15,000 from this offer needs at least three such awards (15000/6200 = 2.4), and the card records one payer (Harbor County Regional Airport Authority) and no buyerVolume fact counting any other airport that buys log reconciliation; one organisation is not a population of buyers, so the volume this target needs is not established."
+          }
+        ],
+        "revisionId": "rev_bfc26ec250e3_38d416",
+        "digest": "bfc26ec250e3c34e9aee3189",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e5d419c8cda5421a9d61/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:36:08.481Z"
+      },
+      "review": {
+        "revisionId": "rev_bfc26ec250e3_38d416",
+        "revisionDigest": "bfc26ec250e3c34e9aee3189",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e5d419c8cda5421a9d61/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_485baa0bd26242489a03/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Recomputed: the only opening is one WRITTEN_ACCEPTANCE at $6,200 from one payer (Harbor County Regional Airport Authority); 1 x $6,200 = $6,200 vs $15,000 target, shortfall $8,800. One organisation is not a population, and the card holds no buyerVolume fact for any other airport, no other buyer, price or demand signal. Brain's 'a one-off needs its one buyer' is true for $6,200 but not for $15,000 (needs ceil(15000/6200) = 3 awards); the author's MARKET_VOLUME disagreement is correct. NO_PLAN is right: no startable plan reaches the target on the evidence; a CONDITIONAL plan would have to invent other airports' demand and price, not test one unknown. The decisive gap (MARKET_VOLUME) is named, and the resolution keeps the $6,200 award (21 days to cash, $60 cost, $0 capital) as worth delivering.",
+        "findings": [
+          "The FAA Part 139 register in the resolution is a suggestion, not a cited source; any count from it must be recorded on the card before re-planning.",
+          "Deliver the committed $6,200 award regardless; it settles inside 45 days at $60 cost."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:39:11.395Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $15,000 of settled cash within 45 days using no up-front capital.",
+        "terms": "0d2e2297e6f765d3",
+        "openings": {
+          "cop_9d317a9bafaf4d26979a": "f54eecf375250a66"
+        }
+      },
+      "at": "2026-11-27T09:42:11.127Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

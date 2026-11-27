@@ -72,14 +72,68 @@ export interface PlanReadyFacts {
     adopted: boolean;
     challenge: { verdict: string; model: string; reasons: string; hiddenAssumptions: string[]; missingVariables: string[]; strongerAlternative: string | null } | null;
     answeredChallenge: string | null;
-    prediction: { outcome: string; probability: number; horizonDays: number };
+    prediction: { outcome: string; probability: number | null; horizonDays: number };
   } | null;
+  /**
+   * An independent review of the exact plan revision being reported, by an explicitly identified
+   * executor other than its author (the app-hosted planning session, sessionPlanning.ts). The
+   * operator's ADOPT_PLAN decision above stays one admissible reviewer; neither is preferred by name.
+   */
+  review?: PlanReview | null;
+  /** The digest of the plan revision this report describes; a review binds to it. */
+  planDigest?: string | null;
   /** When the current accepted plan was first read as ACCEPTED; the decision must follow it. */
   acceptedSince: string | null;
   /** The goal's own capital ceiling, major units, or null when it has none. */
   capitalCeiling: number | null;
   /** The plan's integrity violations (`planIntegrity`); a plan with any is never ready. Absent reads as none recorded. */
   integrity?: { rule: string; detail: string }[];
+}
+
+export interface PlanExecutor {
+  /** What kind of executor: an app-hosted Claude session, the operator, a model challenger, a person. */
+  kind: 'APP_SESSION' | 'OPERATOR' | 'MODEL' | 'PERSON';
+  /** A stable identity: a session id, an agent id, a user id. */
+  id: string;
+  /** The model that executed, when one did; null for a person. */
+  model: string | null;
+}
+
+export interface PlanReview {
+  revisionId: string;
+  revisionDigest: string;
+  author: PlanExecutor;
+  reviewer: PlanExecutor;
+  verdict: 'PASS' | 'REVISE' | 'UNAVAILABLE';
+  reasons: string;
+  findings: string[];
+  /** The author's documented answer to a REVISE, in the next revision; null when none. */
+  resolution: string | null;
+  at: string;
+}
+
+/** Two executors are the same author when they share kind and identity: a self-review is never independent. */
+/**
+ * Whether two executors are the same for review independence. Identity is the id, whatever kind
+ * either declares (a session cannot become independent of itself by calling itself a MODEL), and
+ * an id an authenticated connection bound (`<principal>/<session>`) is the principal's: two
+ * sessions behind one credential are one executor.
+ */
+export function sameExecutor(a: PlanExecutor, b: PlanExecutor): boolean {
+  if (a.id === b.id) return true;
+  const principal = (id: string) => (id.includes('/') ? id.slice(0, id.indexOf('/')) : null);
+  const pa = principal(a.id);
+  return pa !== null && pa === principal(b.id);
+}
+
+/** Why a review does not certify the plan revision it is read against; null when it does. */
+export function reviewProblem(review: PlanReview, planDigest: string | null | undefined, acceptedSince: string | null): string | null {
+  if (review.verdict === 'UNAVAILABLE') return `the reviewer (${review.reviewer.kind} ${review.reviewer.id}) was unavailable: nothing certifies this plan`;
+  if (sameExecutor(review.author, review.reviewer)) return 'the review is the author reviewing itself: not independent';
+  if (!planDigest || review.revisionDigest !== planDigest) return 'the review was of a different plan revision than the one reported';
+  if (review.verdict === 'REVISE' && !(review.resolution ?? '').trim()) return `the reviewer said REVISE and it was not answered: ${review.reasons.slice(0, 160)}`;
+  if (acceptedSince && review.at < acceptedSince) return 'the review predates the plan being accepted';
+  return null;
 }
 
 /** The owner's starting-capital limit for the plan, major units (owner, 2026-11-13). */
@@ -103,7 +157,7 @@ export const PLAN_READY_CONDITIONS = [
   'WHY_THE_COMBINATION_REACHES_TARGET',
   'STARTING_CAPITAL_WITHIN_LIMIT',
   'DEFENSIBLE_UNCERTAINTY',
-  'CHALLENGED_BY_HERMES',
+  'INDEPENDENTLY_REVIEWED',
   'PASSED_PLANNING_AND_EVIDENCE_REQUIREMENTS',
   'PLAN_INTEGRITY',
 ] as const;
@@ -166,17 +220,19 @@ export function planReady(f: PlanReadyFacts): { ready: boolean; conditions: Reco
         : p.sample <= 0
           ? 'no sample behind the probability'
           : null,
-    CHALLENGED_BY_HERMES: !f.hermes
-      ? 'Hermes has not challenged and adopted this plan (brain_operator_decide ADOPT_PLAN)'
-      : !f.hermes.challenge
-        ? 'no challenger model answered on the adoption'
-        : f.hermes.challenge.verdict === 'REVISE' && !(f.hermes.answeredChallenge ?? '').trim()
-          ? 'the challenger said REVISE and it was not answered'
-          : !f.hermes.adopted
-            ? `Hermes chose "${f.hermes.chosenAction.slice(0, 120)}", not to adopt the plan`
-            : f.acceptedSince && f.hermes.committedAt < f.acceptedSince
-              ? 'the adoption predates the plan being accepted'
-              : null,
+    INDEPENDENTLY_REVIEWED: f.review
+      ? reviewProblem(f.review, f.planDigest, f.acceptedSince)
+      : !f.hermes
+        ? 'no independent review of this plan: neither a bound session review nor the operator ADOPT_PLAN decision'
+        : !f.hermes.challenge
+          ? 'no challenger model answered on the adoption'
+          : f.hermes.challenge.verdict === 'REVISE' && !(f.hermes.answeredChallenge ?? '').trim()
+            ? 'the challenger said REVISE and it was not answered'
+            : !f.hermes.adopted
+              ? `the operator chose "${f.hermes.chosenAction.slice(0, 120)}", not to adopt the plan`
+              : f.acceptedSince && f.hermes.committedAt < f.acceptedSince
+                ? 'the adoption predates the plan being accepted'
+                : null,
     PASSED_PLANNING_AND_EVIDENCE_REQUIREMENTS:
       f.acceptance.status !== 'ACCEPTED' || f.verdict !== 'RECOMMENDABLE'
         ? `the plan is ${f.acceptance.status} (${f.verdict}), not ACCEPTED`
@@ -193,7 +249,7 @@ export function planReady(f: PlanReadyFacts): { ready: boolean; conditions: Reco
 
 const money = (n: number, currency: string): string =>
   `${currency === 'USD' ? '$' : `${currency} `}${Math.round(n).toLocaleString('en-US')}`;
-const pct = (x: number): string => `${Math.round(x * 1000) / 10}%`;
+const pct = (x: number | null): string => (x === null ? 'an unknown probability' : `${Math.round(x * 1000) / 10}%`);
 
 /** The first line of the completion response, exactly as the owner asked for it. */
 export function completionHeader(f: Pick<PlanReadyFacts, 'targetAmount'>): string {

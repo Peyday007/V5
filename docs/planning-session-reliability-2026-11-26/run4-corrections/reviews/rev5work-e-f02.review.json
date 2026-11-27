@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_65b9d6b40bcb40db81ef",
+ "revision_id": "rev_39839528e82d_2f896d",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "The price ($650 from three paid invoices), Brain fulfilment, $10 cost, 6-day settlement and the ledger are sound (6 x $650 = $3,900; less $60 leaves $3,840 net; the money settles on day 16). The frost-fan rebate is correctly excluded: a state rebate is not a purchase price, and its 45-day settlement falls outside the window. But the volume arithmetic does not account for the buyers already contacted. The 15% rate comes from 60 contacts on this offer's own sales, and the plan re-emails all 85 licensees. If those 60 were drawn from the same 85-licensee list (the plan's only channel), only 25 uncontacted houses remain. 25 x 15% is about 3.75 acceptances, short of the 6 needed: about $2,440 against $3,000. The 9 houses that already bought this season's audit will not buy it again. The plan never establishes where the 60 contacts came from, so remaining fresh volume is unknown but treated as known.",
+ "findings": [
+  "The plan does not say whether the 60 contacts behind the 15% rate came from the 85-licensee list. If they did, only 25 houses are uncontacted and about 3.75 acceptances are expected, below the 6 needed.",
+  "The 9 houses that already accepted need one audit per season, but the plan re-emails all 85 and counts the full list ('about 7% of the list'). Buyers already served must be excluded.",
+  "Either evidence that the 60 contacts were outside these 85 (or that 6 or more fresh buyers remain), or resize the plan. Otherwise make it CONDITIONAL on measured acceptances among the uncontacted houses."
+ ]
+}

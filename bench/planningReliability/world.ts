@@ -62,7 +62,7 @@ export async function buildTemplate(dir: string): Promise<Template> {
 /** The capability a Brain-performed deliverable needs (deliverables proved at boot). */
 const BRAIN_CAPABILITY = 'PRODUCE_SPREADSHEET';
 
-async function fileOpening(f: OpeningFixture, t: Template, cashModeId: string, now: Date): Promise<string> {
+export async function fileOpening(f: OpeningFixture, t: Template, cashModeId: string, now: Date): Promise<string> {
   const { createOpportunity, updateOpportunity } = await import('../../server/repos/cashPortfolio.ts');
   const { recordCardFact } = await import('../../server/repos/cashCardFacts.ts');
   const { insertAgreement } = await import('../../server/repos/cashJourney.ts');

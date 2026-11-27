@@ -1,0 +1,4001 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d86d1a9c0c60463b9d2c",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": [],
+        "targetCents": 300000,
+        "proofCondition": "$3,000 of settled cash collected within 30 days with no up-front capital"
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "dd7545ee536fb124e1aed1a5"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 35 independent pharmacy owners in the county at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, payment per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Take paid orders from pharmacies that accept",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check: count pharmacies ordering and paid deliveries by day 10",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 10 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 95000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 1 (10 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 2 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 17,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 3 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Batch 1: 10 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 95000,
+            "label": "Pay MedCourier for batch 1 after the receipt settles (10 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 2: 13 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 2 after the receipt settles (13 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 17,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 3: 13 deliveries x $180",
+            "settlesDay": 24,
+            "stepId": "collect3"
+          },
+          {
+            "day": 24,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 3 after the receipt settles (13 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10"
+          },
+          {
+            "name": "paid deliveries per ordering pharmacy in the window",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "order volumes from the first pharmacies that buy"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 3 of the 35 emailed pharmacies have paid for deliveries and at least 10 paid deliveries are booked, with batch-1 receipts settled",
+          "stop": [
+            "Fewer than 2 pharmacies order by day 10: stop outreach; nothing has been spent",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked"
+          ],
+          "continue": [
+            "3 or more pharmacies ordering and 10+ paid deliveries by day 10: run batches 2 and 3 to reach 36 deliveries"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_f47f8cd908ec_940252",
+        "digest": "f47f8cd908ec1884509a2a13",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:05.855Z"
+      },
+      {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": "rev_f47f8cd908ec_940252",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 35 independent pharmacy owners in the county at their published business addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, payment per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Take paid orders from pharmacies that accept",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check: count pharmacies ordering and paid deliveries by day 10",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_conv"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 10 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 95000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 1 (10 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 2 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 17,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Collect payment for batch 3 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Batch 1: 10 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 95000,
+            "label": "Pay MedCourier for batch 1 after the receipt settles (10 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 2: 13 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 2 after the receipt settles (13 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 17,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 3: 13 deliveries x $180",
+            "settlesDay": 24,
+            "stepId": "collect3"
+          },
+          {
+            "day": 24,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 3 after the receipt settles (13 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+          },
+          {
+            "name": "paid deliveries per ordering pharmacy in the window",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "order volumes from the first pharmacies that buy; the card's '20 deliveries a week' may be the county total, in which case 36 deliveries is ~60% of three weeks' volume"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 3 of the 35 emailed pharmacies have paid for deliveries and at least 10 paid deliveries are booked, with batch-1 receipts settled",
+          "stop": [
+            "Fewer than 2 pharmacies order by day 10: stop outreach; nothing has been spent",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked"
+          ],
+          "continue": [
+            "3 or more pharmacies ordering and 10+ paid deliveries by day 10: run batches 2 and 3 to reach 36 deliveries"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_5336c3b13ea7_53604e",
+        "digest": "5336c3b13ea7fa06fce124c9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:19:13.536Z"
+      },
+      {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": "rev_5336c3b13ea7_53604e",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test. Outreach, offers, order-taking and invoicing are the owner's (about 6.5 hours) because Brain's messaging and invoicing are not connected."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Owner emails the 35 independent pharmacy owners in the county at their published business addresses (Brain drafts the list and message; sending is the owner's because SEND_A_MESSAGE is not connected)",
+            "performer": "OWNER",
+            "ownerHours": 2,
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Owner sends the offer: cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, paid per delivery",
+            "performer": "OWNER",
+            "ownerHours": 1,
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Owner takes paid delivery orders from pharmacies that accept and books them with MedCourier",
+            "performer": "OWNER",
+            "ownerHours": 2,
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check on day 10: cumulative paid deliveries booked against the run rate needed for 36 by day 23",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Owner invoices and collects batch 1 (13 x $180)",
+            "performer": "OWNER",
+            "ownerHours": 0.5,
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 12 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 114000,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Owner invoices and collects batch 2 (12 x $180)",
+            "performer": "OWNER",
+            "ownerHours": 0.5,
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 11 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 104500,
+            "day": 20,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Owner invoices and collects batch 3 (11 x $180)",
+            "performer": "OWNER",
+            "ownerHours": 0.5,
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 1: 13 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 1 after its receipt settles (13 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 216000,
+            "label": "Batch 2: 12 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 114000,
+            "label": "Pay MedCourier for batch 2 after its receipt settles (12 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 198000,
+            "label": "Batch 3: 11 deliveries x $180",
+            "settlesDay": 27,
+            "stepId": "collect3"
+          },
+          {
+            "day": 27,
+            "kind": "SPEND",
+            "amountCents": 104500,
+            "label": "Pay MedCourier for batch 3 after its receipt settles (11 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+          },
+          {
+            "name": "paid deliveries booked per day across all pharmacies",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "measured by the day-10 test; 1.8/day needed. Per-pharmacy volume is unknown: the card's '20 deliveries a week' may be the county total, making 36 deliveries ~55-60% of county volume in the window"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 13 paid deliveries are booked in total (the run rate of ~1.8 per day from day 3 that reaches 36 deliveries by day 23, the last delivery day that still settles inside 30 days), with batch-1 receipts settled",
+          "stop": [
+            "Fewer than 13 paid deliveries booked by day 10: stop outreach and book no further deliveries. Batch-1 deliveries already ordered (at most 13) are completed and collected; MedCourier is owed $95 per delivery ($1,235 at 13), paid from those $180 receipts after they settle, so the stop leaves a small positive balance and no exposure",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked; nothing is spent or owed"
+          ],
+          "continue": [
+            "13 or more paid deliveries booked by day 10: run batches 2 and 3 to reach 36 deliveries by day 20-23"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stop/continue leave cases with no decision (exactly 2 pharmacies; 3+ pharmacies with under 10 deliveries).",
+            "resolution": "Accepted. The decision is now one threshold on one measured quantity: 13 or more paid deliveries booked by day 10 continues, fewer stops, so every outcome has a decision."
+          },
+          {
+            "finding": "'Nothing has been spent' is false once batch 1 runs on day 3 ($950 owed).",
+            "resolution": "Accepted. The stop now states that batch-1 deliveries already ordered are completed and collected, MedCourier is owed $95 each (up to $1,235) and is paid from those receipts after they settle; only the MedCourier-terms stop happens before any spend."
+          },
+          {
+            "finding": "Per-pharmacy volume unknown; continue should be a run rate reaching 36 by about day 23.",
+            "resolution": "Accepted. Proof and continue are now a run rate (about 1.8 paid deliveries a day, 13 by day 10) that reaches 36 by day 23; batch 3 runs on day 20 and settles on day 27. The quantity is marked UNKNOWN with the county-total reading spelled out."
+          },
+          {
+            "finding": "REACH/OFFER/SELL are BRAIN-performed while SEND_A_MESSAGE is NOT_CONNECTED.",
+            "resolution": "Accepted. Outreach, offer, order-taking and invoicing are now OWNER steps with hours (6.5 in total; the goal sets no hours limit), and Brain only drafts and runs the test."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_b64d3c079e13_e25335",
+        "digest": "b64d3c079e13b51c51d0e94b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:24.584Z"
+      },
+      {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": "rev_5336c3b13ea7_53604e",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test. The goal gives the owner no hours, so Brain sends the outreach and invoices; its SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED today and must be connected before day 1, which is a stated precondition rather than an assumption."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "connect",
+            "kind": "OTHER",
+            "label": "Precondition: connect Brain's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities (both NOT_CONNECTED now) before outreach starts",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails the 35 independent pharmacy owners in the county at their published business addresses through the connected messaging capability",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "connect",
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Brain sends the offer: cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, paid per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Brain takes paid delivery orders from pharmacies that accept and books them with MedCourier",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check on day 10: cumulative paid deliveries booked against the run rate needed for 36 by day 23",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 1 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 12 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 114000,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 2 (12 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 11 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 104500,
+            "day": 20,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 3 (11 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 1: 13 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 1 after its receipt settles (13 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 216000,
+            "label": "Batch 2: 12 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 114000,
+            "label": "Pay MedCourier for batch 2 after its receipt settles (12 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 198000,
+            "label": "Batch 3: 11 deliveries x $180",
+            "settlesDay": 27,
+            "stepId": "collect3"
+          },
+          {
+            "day": 27,
+            "kind": "SPEND",
+            "amountCents": 104500,
+            "label": "Pay MedCourier for batch 3 after its receipt settles (11 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+          },
+          {
+            "name": "paid deliveries booked per day across all pharmacies",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "measured by the day-10 test; 1.8/day needed. Per-pharmacy volume is unknown: the card's '20 deliveries a week' may be the county total, making 36 deliveries ~55-60% of county volume in the window"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 13 paid deliveries are booked in total (the run rate of ~1.8 per day from day 3 that reaches 36 deliveries by day 23, the last delivery day that still settles inside 30 days), with batch-1 receipts settled",
+          "stop": [
+            "SEND_A_MESSAGE or ISSUE_AN_INVOICE not connected by day 1: do not start; nothing is spent or owed",
+            "Fewer than 13 paid deliveries booked by day 10: stop outreach and book no further deliveries. Batch-1 deliveries already ordered (at most 13) are completed and collected; MedCourier is owed $95 per delivery ($1,235 at 13), paid from those $180 receipts after they settle, so the stop leaves a small positive balance and no exposure",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked; nothing is spent or owed"
+          ],
+          "continue": [
+            "13 or more paid deliveries booked by day 10: run batches 2 and 3 to reach 36 deliveries by day 20-23"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stop/continue leave cases with no decision (exactly 2 pharmacies; 3+ pharmacies with under 10 deliveries).",
+            "resolution": "Accepted. The decision is now one threshold on one measured quantity: 13 or more paid deliveries booked by day 10 continues, fewer stops, so every outcome has a decision."
+          },
+          {
+            "finding": "'Nothing has been spent' is false once batch 1 runs on day 3 ($950 owed).",
+            "resolution": "Accepted. The stop now states that batch-1 deliveries already ordered are completed and collected, MedCourier is owed $95 each (up to $1,235) and is paid from those receipts after they settle; only the MedCourier-terms stop happens before any spend."
+          },
+          {
+            "finding": "Per-pharmacy volume unknown; continue should be a run rate reaching 36 by about day 23.",
+            "resolution": "Accepted. Proof and continue are now a run rate (about 1.8 paid deliveries a day, 13 by day 10) that reaches 36 by day 23; batch 3 runs on day 20 and settles on day 27. The quantity is marked UNKNOWN with the county-total reading spelled out."
+          },
+          {
+            "finding": "REACH/OFFER/SELL are BRAIN-performed while SEND_A_MESSAGE is NOT_CONNECTED.",
+            "resolution": "Accepted. Moving the work to the owner is refused because the goal gives the owner no hours, so the steps stay with Brain behind an explicit precondition step: SEND_A_MESSAGE and ISSUE_AN_INVOICE must be connected before day 1, or the plan stops with nothing spent."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_1a0c03e6c523_5063fc",
+        "digest": "1a0c03e6c5238f1ec9966b7b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:40.680Z"
+      },
+      {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": "rev_5336c3b13ea7_53604e",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test. The goal gives the owner no hours, so Brain sends the outreach and invoices; its SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED today and must be connected before day 1, which is a stated precondition rather than an assumption."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "connect",
+            "kind": "OTHER",
+            "label": "Precondition: connect Brain's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities (both NOT_CONNECTED now) before outreach starts",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_chan"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails the 35 independent pharmacy owners in the county at their published business addresses through the connected messaging capability",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "connect",
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Brain sends the offer: cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, paid per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Brain takes paid delivery orders from pharmacies that accept and books them with MedCourier",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check on day 10: cumulative paid deliveries booked against the run rate needed for 36 by day 23",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 1 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 12 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 114000,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 2 (12 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 11 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 104500,
+            "day": 20,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 3 (11 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 1: 13 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 1 after its receipt settles (13 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 216000,
+            "label": "Batch 2: 12 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 114000,
+            "label": "Pay MedCourier for batch 2 after its receipt settles (12 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 198000,
+            "label": "Batch 3: 11 deliveries x $180",
+            "settlesDay": 27,
+            "stepId": "collect3"
+          },
+          {
+            "day": 27,
+            "kind": "SPEND",
+            "amountCents": 104500,
+            "label": "Pay MedCourier for batch 3 after its receipt settles (11 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+          },
+          {
+            "name": "paid deliveries booked per day across all pharmacies",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "measured by the day-10 test; 1.8/day needed. Per-pharmacy volume is unknown: the card's '20 deliveries a week' may be the county total, making 36 deliveries ~55-60% of county volume in the window"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 13 paid deliveries are booked in total (the run rate of ~1.8 per day from day 3 that reaches 36 deliveries by day 23, the last delivery day that still settles inside 30 days), with batch-1 receipts settled",
+          "stop": [
+            "SEND_A_MESSAGE or ISSUE_AN_INVOICE not connected by day 1: do not start; nothing is spent or owed",
+            "Fewer than 13 paid deliveries booked by day 10: stop outreach and book no further deliveries. Batch-1 deliveries already ordered (at most 13) are completed and collected; MedCourier is owed $95 per delivery ($1,235 at 13), paid from those $180 receipts after they settle, so the stop leaves a small positive balance and no exposure",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked; nothing is spent or owed"
+          ],
+          "continue": [
+            "13 or more paid deliveries booked by day 10: run batches 2 and 3 to reach 36 deliveries by day 20-23"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stop/continue leave cases with no decision (exactly 2 pharmacies; 3+ pharmacies with under 10 deliveries).",
+            "resolution": "Accepted. The decision is now one threshold on one measured quantity: 13 or more paid deliveries booked by day 10 continues, fewer stops, so every outcome has a decision."
+          },
+          {
+            "finding": "'Nothing has been spent' is false once batch 1 runs on day 3 ($950 owed).",
+            "resolution": "Accepted. The stop now states that batch-1 deliveries already ordered are completed and collected, MedCourier is owed $95 each (up to $1,235) and is paid from those receipts after they settle; only the MedCourier-terms stop happens before any spend."
+          },
+          {
+            "finding": "Per-pharmacy volume unknown; continue should be a run rate reaching 36 by about day 23.",
+            "resolution": "Accepted. Proof and continue are now a run rate (about 1.8 paid deliveries a day, 13 by day 10) that reaches 36 by day 23; batch 3 runs on day 20 and settles on day 27. The quantity is marked UNKNOWN with the county-total reading spelled out."
+          },
+          {
+            "finding": "REACH/OFFER/SELL are BRAIN-performed while SEND_A_MESSAGE is NOT_CONNECTED.",
+            "resolution": "Accepted. Moving the work to the owner is refused because the goal gives the owner no hours, so the steps stay with Brain behind an explicit precondition step: SEND_A_MESSAGE and ISSUE_AN_INVOICE must be connected before day 1, or the plan stops with nothing spent."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_1cbab7ba9e0a_fc5085",
+        "digest": "1cbab7ba9e0a3df037a21f48",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:45.231Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d86d1a9c0c60463b9d2c",
+      "contractDigest": "dd7545ee536fb124e1aed1a5",
+      "parentRevisionId": "rev_5336c3b13ea7_53604e",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+        "opportunityIds": [
+          "cop_671431f6a1fd4868b3b4"
+        ],
+        "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test. The goal gives the owner no hours, so Brain sends the outreach and invoices; its SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED today and must be connected before day 1, which is a stated precondition rather than an assumption."
+      },
+      "alternatives": [
+        {
+          "title": "Sell 17 deliveries for $3,060 gross",
+          "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+        }
+      ],
+      "steps": [
+        {
+          "id": "connect",
+          "kind": "OTHER",
+          "label": "Precondition: connect Brain's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities (both NOT_CONNECTED now) before outreach starts",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s_chan"
+          ],
+          "executor": {
+            "operation": "PLAN_DECISION",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [],
+            "routine": false
+          }
+        },
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Brain emails the 35 independent pharmacy owners in the county at their published business addresses through the connected messaging capability",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "connect",
+          "evidence": [
+            "s_chan",
+            "s_vol",
+            "s_sig"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Brain sends the offer: cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, paid per delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "reach",
+          "evidence": [
+            "s_price",
+            "s_ful"
+          ],
+          "priceCents": 18000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Brain takes paid delivery orders from pharmacies that accept and books them with MedCourier",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "offer",
+          "evidence": [
+            "s_price"
+          ],
+          "priceCents": 18000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "test",
+          "kind": "TEST",
+          "label": "Proof check on day 10: cumulative paid deliveries booked against the run rate needed for 36 by day 23",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_price"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver1",
+          "kind": "DELIVER",
+          "label": "MedCourier performs batch 1: 13 temperature-controlled deliveries",
+          "performer": "MedCourier LLC (quoted)",
+          "costCents": 123500,
+          "day": 3,
+          "dependsOn": "sell",
+          "evidence": [
+            "s_ful",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "MedCourier LLC (quoted)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect1",
+          "kind": "COLLECT",
+          "label": "Brain invoices and collects batch 1 (13 x $180)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 3,
+          "dependsOn": "deliver1",
+          "evidence": [
+            "s_ttc"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver2",
+          "kind": "DELIVER",
+          "label": "MedCourier performs batch 2: 12 temperature-controlled deliveries",
+          "performer": "MedCourier LLC (quoted)",
+          "costCents": 114000,
+          "day": 10,
+          "dependsOn": "test",
+          "evidence": [
+            "s_ful",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "MedCourier LLC (quoted)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect2",
+          "kind": "COLLECT",
+          "label": "Brain invoices and collects batch 2 (12 x $180)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 10,
+          "dependsOn": "deliver2",
+          "evidence": [
+            "s_ttc"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver3",
+          "kind": "DELIVER",
+          "label": "MedCourier performs batch 3: 11 temperature-controlled deliveries",
+          "performer": "MedCourier LLC (quoted)",
+          "costCents": 104500,
+          "day": 20,
+          "dependsOn": "test",
+          "evidence": [
+            "s_ful",
+            "s_cost"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "MedCourier LLC (quoted)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect3",
+          "kind": "COLLECT",
+          "label": "Brain invoices and collects batch 3 (11 x $180)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 20,
+          "dependsOn": "deliver3",
+          "evidence": [
+            "s_ttc"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 3,
+          "kind": "RECEIPT",
+          "amountCents": 234000,
+          "label": "Batch 1: 13 deliveries x $180",
+          "settlesDay": 10,
+          "stepId": "collect1"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 123500,
+          "label": "Pay MedCourier for batch 1 after its receipt settles (13 x $95)",
+          "stepId": "deliver1"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 216000,
+          "label": "Batch 2: 12 deliveries x $180",
+          "settlesDay": 17,
+          "stepId": "collect2"
+        },
+        {
+          "day": 17,
+          "kind": "SPEND",
+          "amountCents": 114000,
+          "label": "Pay MedCourier for batch 2 after its receipt settles (12 x $95)",
+          "stepId": "deliver2"
+        },
+        {
+          "day": 20,
+          "kind": "RECEIPT",
+          "amountCents": 198000,
+          "label": "Batch 3: 11 deliveries x $180",
+          "settlesDay": 27,
+          "stepId": "collect3"
+        },
+        {
+          "day": 27,
+          "kind": "SPEND",
+          "amountCents": 104500,
+          "label": "Pay MedCourier for batch 3 after its receipt settles (11 x $95)",
+          "stepId": "deliver3"
+        }
+      ],
+      "proofDay": 10,
+      "quantities": [
+        {
+          "name": "price per delivery",
+          "status": "EVIDENCED",
+          "value": 18000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "fulfiller cost per delivery",
+          "status": "EVIDENCED",
+          "value": 9500,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable pharmacies",
+          "status": "EVIDENCED",
+          "value": 35,
+          "unit": "pharmacies",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deliveries needed",
+          "status": "ESTIMATE",
+          "value": 36,
+          "unit": "deliveries",
+          "sources": [
+            "s_price",
+            "s_cost"
+          ],
+          "needs": "$3,000 / $85 margin, rounded up"
+        },
+        {
+          "name": "close rate of emailed pharmacy owners",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "fraction",
+          "sources": [],
+          "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+        },
+        {
+          "name": "paid deliveries booked per day across all pharmacies",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "deliveries",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": "measured by the day-10 test; 1.8/day needed. Per-pharmacy volume is unknown: the card's '20 deliveries a week' may be the county total, making 36 deliveries ~55-60% of county volume in the window"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+          "dated": "2026-11-24",
+          "claim": "Price is $180 per delivery",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ful",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+          "dated": "2026-11-24",
+          "claim": "MedCourier LLC quoted to perform the deliveries",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_chan",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+          "dated": "2026-11-24",
+          "claim": "Pharmacy owners reachable at published business email addresses",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_sig",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+          "dated": "2026-11-24",
+          "claim": "Pharmacy owners posted asking for this work",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+          "population": "Independent pharmacies in the county",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "22 paid pre-orders from 200 unique visitors",
+          "population": "Site visitors, not the emailed pharmacy-owner list",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "First cash 7 days after sale",
+          "population": "Independent pharmacy owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": {
+        "proof": "By day 10, at least 13 paid deliveries are booked in total (the run rate of ~1.8 per day from day 3 that reaches 36 deliveries by day 23, the last delivery day that still settles inside 30 days), with batch-1 receipts settled",
+        "stop": [
+          "SEND_A_MESSAGE or ISSUE_AN_INVOICE not connected by day 1: do not start; nothing is spent or owed",
+          "Fewer than 13 paid deliveries booked by day 10: stop outreach and book no further deliveries. Batch-1 deliveries already ordered (at most 13) are completed and collected; MedCourier is owed $95 per delivery ($1,235 at 13), paid from those $180 receipts after they settle, so the stop leaves a small positive balance and no exposure",
+          "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked; nothing is spent or owed"
+        ],
+        "continue": [
+          "13 or more paid deliveries booked by day 10: run batches 2 and 3 to reach 36 deliveries by day 20-23"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Stop/continue leave cases with no decision (exactly 2 pharmacies; 3+ pharmacies with under 10 deliveries).",
+          "resolution": "Accepted. The decision is now one threshold on one measured quantity: 13 or more paid deliveries booked by day 10 continues, fewer stops, so every outcome has a decision."
+        },
+        {
+          "finding": "'Nothing has been spent' is false once batch 1 runs on day 3 ($950 owed).",
+          "resolution": "Accepted. The stop now states that batch-1 deliveries already ordered are completed and collected, MedCourier is owed $95 each (up to $1,235) and is paid from those receipts after they settle; only the MedCourier-terms stop happens before any spend."
+        },
+        {
+          "finding": "Per-pharmacy volume unknown; continue should be a run rate reaching 36 by about day 23.",
+          "resolution": "Accepted. Proof and continue are now a run rate (about 1.8 paid deliveries a day, 13 by day 10) that reaches 36 by day 23; batch 3 runs on day 20 and settles on day 27. The quantity is marked UNKNOWN with the county-total reading spelled out."
+        },
+        {
+          "finding": "REACH/OFFER/SELL are BRAIN-performed while SEND_A_MESSAGE is NOT_CONNECTED.",
+          "resolution": "Accepted. Moving the work to the owner is refused because the goal gives the owner no hours, so the steps stay with Brain behind an explicit precondition step: SEND_A_MESSAGE and ISSUE_AN_INVOICE must be connected before day 1, or the plan stops with nothing spent."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_671431f6a1fd4868b3b4",
+          "missing": [
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_671431f6a1fd4868b3b4",
+          "deals": 36,
+          "price": 180,
+          "directCost": 95,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CONVERSION"
+      ],
+      "constraints": [],
+      "revisionId": "rev_1cbab7ba9e0a_fc5085",
+      "digest": "1cbab7ba9e0a3df037a21f48",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_ff08332de628433b8753/author-2",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T00:24:45.231Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_1cbab7ba9e0a_fc5085",
+      "digest": "1cbab7ba9e0a3df037a21f48",
+      "contractDigest": "dd7545ee536fb124e1aed1a5",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 342000,
+        "committedOpenCents": 0,
+        "preProofCents": 123500,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 3,
+        "collectedCents": 648000,
+        "collectedInWindowCents": 648000,
+        "refundsCents": 0,
+        "netCents": 306000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Cold-chain prescription delivery for independent pharmacies\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Cold-chain prescription delivery for independent pharmacies\" (reaches the target in 91.8% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 7480× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Cold-chain prescription delivery for independent pharmacies\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_671431f6a1fd4868b3b4"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Cold-chain prescription delivery for independent pharmacies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Cold-chain prescription delivery for independent pharmacies\"",
+            "owner": "PERSON",
+            "cost": 95
+          },
+          {
+            "label": "Collect payment for \"Cold-chain prescription delivery for independent pharmacies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "title": "Cold-chain prescription delivery for independent pharmacies",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 3000,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Independent pharmacy owners",
+              "reachableChannel": "Published business email addresses",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T00:11:16.148Z",
+              "offerScope": "Cold-chain prescription delivery for independent pharmacies",
+              "priceCents": 18000,
+              "currency": "USD",
+              "fulfillmentOwner": "MedCourier LLC (quoted)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "independent pharmacies",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Cold-chain prescription delivery for independent pharmacies to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "22 paid pre-orders from 200 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$95",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "MedCourier LLC (quoted) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent pharmacy owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$180",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T00:18:12.735Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_5336c3b13ea7_53604e",
+        "revisionDigest": "5336c3b13ea7fa06fce124c9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56757907d2d54d7ab974/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "CONDITIONAL is the right stance and economics check ($180-$95=$85; 36 deliveries net $3,060; trace matches; last settlement day 24; MedCourier is the recorded fulfiller; visitor pre-order rate correctly not transferred). But the proof/stop/continue rule does not partition the outcomes, and the stop statement is inaccurate.",
+        "findings": [
+          "Stop is 'fewer than 2 pharmacies' and continue is '3 or more pharmacies and 10+ deliveries': exactly 2 pharmacies, or 3+ pharmacies with fewer than 10 deliveries, has no decision.",
+          "Stop says 'nothing has been spent' but batch 1 (10 deliveries, $950 owed to MedCourier) runs on day 3, before the day-10 test.",
+          "Per-pharmacy volume is unknown (card's 20/week may be the county total, making 36 deliveries ~55-60% of all county volume in the window); continue threshold should be stated as a run-rate that reaches 36 by the last delivery day that still settles by day 30 (~day 23).",
+          "Minor: REACH/OFFER/SELL are BRAIN-performed with SEND_A_MESSAGE NOT_CONNECTED."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:23:19.279Z"
+      },
+      {
+        "revisionId": "rev_1cbab7ba9e0a_fc5085",
+        "revisionDigest": "1cbab7ba9e0a3df037a21f48",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56757907d2d54d7ab974/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "All four prior findings resolved. One measured threshold (>=13 paid deliveries by day 10) partitions every outcome; the run rate ~1.8/day from day 3 reaches 36 by day 23, the last delivery day that settles inside 30. Batches 13+12+11=36; net $6,480-$3,420=$3,060 >= $3,000; last receipt settles day 27; MedCourier (recorded fulfiller) paid after settlement, max exposure 0; trace matches. Stop now states batch-1 obligations correctly; the NOT_CONNECTED send/invoice capabilities are an explicit day-0 precondition with a no-spend stop. Close rate and per-pharmacy volume stay UNKNOWN and are measured by the live test, so CONDITIONAL is correct.",
+        "findings": [
+          "Minor: the ledger books all 13 batch-1 deliveries on day 3, while the proof counts them as accruing up to day 10; this simplifies timing but changes no figure.",
+          "Minor: the answer says the goal gives the owner no hours; owner hours are unstated, not zero. This does not affect the plan."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:25:53.345Z"
+      }
+    ],
+    "final": {
+      "revisionId": "rev_1cbab7ba9e0a_fc5085",
+      "digest": "1cbab7ba9e0a3df037a21f48",
+      "contractDigest": "dd7545ee536fb124e1aed1a5",
+      "plan": {
+        "goalId": "wst_d86d1a9c0c60463b9d2c",
+        "contractDigest": "dd7545ee536fb124e1aed1a5",
+        "parentRevisionId": "rev_5336c3b13ea7_53604e",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Subcontracted cold-chain prescription delivery for independent pharmacies via MedCourier",
+          "opportunityIds": [
+            "cop_671431f6a1fd4868b3b4"
+          ],
+          "why": "Price $180 and MedCourier's quoted cost $95 are evidenced, leaving $85 per delivery; 36 deliveries net $3,060. Buyers (35 county pharmacies) are reachable by published email, there is a posted buying signal, cash arrives within 7 days and MedCourier is paid only after each receipt settles, so no up-front capital is needed. The close rate among these pharmacy owners is not measured (the 22/200 pre-order figure is from site visitors, not this buyer list), so the plan is conditional on a live test. The goal gives the owner no hours, so Brain sends the outreach and invoices; its SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED today and must be connected before day 1, which is a stated precondition rather than an assumption."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 17 deliveries for $3,060 gross",
+            "why": "Reaches $3,000 only as gross receipts; after paying MedCourier it nets $1,445, so the plan targets net settled cash instead."
+          }
+        ],
+        "steps": [
+          {
+            "id": "connect",
+            "kind": "OTHER",
+            "label": "Precondition: connect Brain's SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities (both NOT_CONNECTED now) before outreach starts",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_chan"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Brain emails the 35 independent pharmacy owners in the county at their published business addresses through the connected messaging capability",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "connect",
+            "evidence": [
+              "s_chan",
+              "s_vol",
+              "s_sig"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Brain sends the offer: cold-chain prescription delivery at $180 per delivery, fulfilled by MedCourier, paid per delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_ful"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Brain takes paid delivery orders from pharmacies that accept and books them with MedCourier",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 18000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Proof check on day 10: cumulative paid deliveries booked against the run rate needed for 36 by day 23",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver1",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 1: 13 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 123500,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect1",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 1 (13 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "deliver1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver2",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 2: 12 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 114000,
+            "day": 10,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect2",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 2 (12 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver3",
+            "kind": "DELIVER",
+            "label": "MedCourier performs batch 3: 11 temperature-controlled deliveries",
+            "performer": "MedCourier LLC (quoted)",
+            "costCents": 104500,
+            "day": 20,
+            "dependsOn": "test",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "MedCourier LLC (quoted)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect3",
+            "kind": "COLLECT",
+            "label": "Brain invoices and collects batch 3 (11 x $180)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "deliver3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 3,
+            "kind": "RECEIPT",
+            "amountCents": 234000,
+            "label": "Batch 1: 13 deliveries x $180",
+            "settlesDay": 10,
+            "stepId": "collect1"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 123500,
+            "label": "Pay MedCourier for batch 1 after its receipt settles (13 x $95)",
+            "stepId": "deliver1"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 216000,
+            "label": "Batch 2: 12 deliveries x $180",
+            "settlesDay": 17,
+            "stepId": "collect2"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 114000,
+            "label": "Pay MedCourier for batch 2 after its receipt settles (12 x $95)",
+            "stepId": "deliver2"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 198000,
+            "label": "Batch 3: 11 deliveries x $180",
+            "settlesDay": 27,
+            "stepId": "collect3"
+          },
+          {
+            "day": 27,
+            "kind": "SPEND",
+            "amountCents": 104500,
+            "label": "Pay MedCourier for batch 3 after its receipt settles (11 x $95)",
+            "stepId": "deliver3"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price per delivery",
+            "status": "EVIDENCED",
+            "value": 18000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "fulfiller cost per delivery",
+            "status": "EVIDENCED",
+            "value": 9500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable pharmacies",
+            "status": "EVIDENCED",
+            "value": 35,
+            "unit": "pharmacies",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deliveries needed",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deliveries",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "$3,000 / $85 margin, rounded up"
+          },
+          {
+            "name": "close rate of emailed pharmacy owners",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "fraction",
+            "sources": [],
+            "needs": "live outreach test: orders / pharmacies emailed by day 10 (the 22/200 visitor pre-order rate is a different population and is not transferred)"
+          },
+          {
+            "name": "paid deliveries booked per day across all pharmacies",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "deliveries",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "measured by the day-10 test; 1.8/day needed. Per-pharmacy volume is unknown: the card's '20 deliveries a week' may be the county total, making 36 deliveries ~55-60% of county volume in the window"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#priceCents",
+            "dated": "2026-11-24",
+            "claim": "Price is $180 per delivery",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost is $95 per delivery (MedCourier quote)",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#fulfillmentOwner",
+            "dated": "2026-11-24",
+            "claim": "MedCourier LLC quoted to perform the deliveries",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_chan",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners reachable at published business email addresses",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_sig",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Pharmacy owners posted asking for this work",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "35 independent pharmacies in the county ship 20 temperature-controlled deliveries a week",
+            "population": "Independent pharmacies in the county",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 paid pre-orders from 200 unique visitors",
+            "population": "Site visitors, not the emailed pharmacy-owner list",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_671431f6a1fd4868b3b4#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "First cash 7 days after sale",
+            "population": "Independent pharmacy owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 10, at least 13 paid deliveries are booked in total (the run rate of ~1.8 per day from day 3 that reaches 36 deliveries by day 23, the last delivery day that still settles inside 30 days), with batch-1 receipts settled",
+          "stop": [
+            "SEND_A_MESSAGE or ISSUE_AN_INVOICE not connected by day 1: do not start; nothing is spent or owed",
+            "Fewer than 13 paid deliveries booked by day 10: stop outreach and book no further deliveries. Batch-1 deliveries already ordered (at most 13) are completed and collected; MedCourier is owed $95 per delivery ($1,235 at 13), paid from those $180 receipts after they settle, so the stop leaves a small positive balance and no exposure",
+            "MedCourier will not accept payment after the pharmacy's receipt settles: stop before any delivery is booked; nothing is spent or owed"
+          ],
+          "continue": [
+            "13 or more paid deliveries booked by day 10: run batches 2 and 3 to reach 36 deliveries by day 20-23"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Stop/continue leave cases with no decision (exactly 2 pharmacies; 3+ pharmacies with under 10 deliveries).",
+            "resolution": "Accepted. The decision is now one threshold on one measured quantity: 13 or more paid deliveries booked by day 10 continues, fewer stops, so every outcome has a decision."
+          },
+          {
+            "finding": "'Nothing has been spent' is false once batch 1 runs on day 3 ($950 owed).",
+            "resolution": "Accepted. The stop now states that batch-1 deliveries already ordered are completed and collected, MedCourier is owed $95 each (up to $1,235) and is paid from those receipts after they settle; only the MedCourier-terms stop happens before any spend."
+          },
+          {
+            "finding": "Per-pharmacy volume unknown; continue should be a run rate reaching 36 by about day 23.",
+            "resolution": "Accepted. Proof and continue are now a run rate (about 1.8 paid deliveries a day, 13 by day 10) that reaches 36 by day 23; batch 3 runs on day 20 and settles on day 27. The quantity is marked UNKNOWN with the county-total reading spelled out."
+          },
+          {
+            "finding": "REACH/OFFER/SELL are BRAIN-performed while SEND_A_MESSAGE is NOT_CONNECTED.",
+            "resolution": "Accepted. Moving the work to the owner is refused because the goal gives the owner no hours, so the steps stay with Brain behind an explicit precondition step: SEND_A_MESSAGE and ISSUE_AN_INVOICE must be connected before day 1, or the plan stops with nothing spent."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_671431f6a1fd4868b3b4",
+            "deals": 36,
+            "price": 180,
+            "directCost": 95,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "revisionId": "rev_1cbab7ba9e0a_fc5085",
+        "digest": "1cbab7ba9e0a3df037a21f48",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T00:24:45.231Z"
+      },
+      "review": {
+        "revisionId": "rev_1cbab7ba9e0a_fc5085",
+        "revisionDigest": "1cbab7ba9e0a3df037a21f48",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff08332de628433b8753/author-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56757907d2d54d7ab974/reviewer-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "All four prior findings resolved. One measured threshold (>=13 paid deliveries by day 10) partitions every outcome; the run rate ~1.8/day from day 3 reaches 36 by day 23, the last delivery day that settles inside 30. Batches 13+12+11=36; net $6,480-$3,420=$3,060 >= $3,000; last receipt settles day 27; MedCourier (recorded fulfiller) paid after settlement, max exposure 0; trace matches. Stop now states batch-1 obligations correctly; the NOT_CONNECTED send/invoice capabilities are an explicit day-0 precondition with a no-spend stop. Close rate and per-pharmacy volume stay UNKNOWN and are measured by the live test, so CONDITIONAL is correct.",
+        "findings": [
+          "Minor: the ledger books all 13 batch-1 deliveries on day 3, while the proof counts them as accruing up to day 10; this simplifies timing but changes no figure.",
+          "Minor: the answer says the goal gives the owner no hours; owner hours are unstated, not zero. This does not affect the plan."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T00:25:53.345Z"
+      },
+      "at": "2026-11-27T00:27:02.106Z"
+    },
+    "staleFinal": null
+  }
+}

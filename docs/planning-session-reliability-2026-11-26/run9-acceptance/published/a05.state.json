@@ -1,0 +1,1380 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_04cadbefe96e46bf8baf",
+      "words": "Collect $1,200 of settled cash within 10 days with at most $300 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 120000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 10,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 30000,
+        "proofCondition": "$1,200 of settled cash received within 10 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "967c6f9cef1f6f0217f77de7"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_04cadbefe96e46bf8baf",
+        "contractDigest": "967c6f9cef1f6f0217f77de7",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the three signed kennel vaccination-expiry trackers at $480 each",
+          "opportunityIds": [
+            "cop_6a6c191452d341bd9de0"
+          ],
+          "why": "Three kennels have already signed written order forms at $480 each ($1,440 >= $1,200). Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), $40 direct cost per deal, cash usable 4 days after delivery. Deliveries are staggered (two on day 0, one on day 4) so the $150-per-deal exposure never exceeds the $300 capital limit, and the last receipt settles on day 8 of 10."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to additional kennels",
+            "why": "Not needed: the three signed orders already cover the target; new sales would add conversion risk and capital exposure."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Confirm the three signed order forms and send invoices at $480 each",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 48000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 1",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 0,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 2",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 0,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $480 from kennels 1 and 2 (usable day 4)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "d1",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d3",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 3 after kennel 1-2 capital is released",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 4,
+            "dependsOn": "c1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Collect $480 from kennel 3 (usable day 8)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "d3",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 1",
+            "stepId": "d1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 2",
+            "stepId": "d2"
+          },
+          {
+            "day": 0,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 1 payment",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 0,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 2 payment",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 3",
+            "stepId": "d3"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 3 payment",
+            "settlesDay": 8,
+            "stepId": "c2"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "orders",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per order",
+            "status": "EVIDENCED",
+            "value": 480,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 40,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital tied up per deal",
+            "status": "EVIDENCED",
+            "value": 150,
+            "unit": "USD",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#price",
+            "dated": "2026-11-20",
+            "claim": "Three kennels signed order forms at $480 each (2026-11-20).",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#agreements",
+            "dated": "2026-11-20",
+            "claim": "Three WRITTEN_ACCEPTANCE agreements in state AGREED at $480 each for this deliverable.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#directCosts",
+            "dated": "2026-11-20",
+            "claim": "Direct cost $40 per deal.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#delivery",
+            "dated": "2026-11-20",
+            "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#timeToFirstCash",
+            "dated": "2026-11-20",
+            "claim": "4 days to usable cash.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $150.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6a6c191452d341bd9de0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_6a6c191452d341bd9de0",
+            "deals": 3,
+            "price": 480,
+            "directCost": 40,
+            "capital": 150
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5b1f3db07003_d73c33",
+        "digest": "5b1f3db070039436274b81ff",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d48ee973c2ca451789bf/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:22.443Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_04cadbefe96e46bf8baf",
+      "contractDigest": "967c6f9cef1f6f0217f77de7",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the three signed kennel vaccination-expiry trackers at $480 each",
+        "opportunityIds": [
+          "cop_6a6c191452d341bd9de0"
+        ],
+        "why": "Three kennels have already signed written order forms at $480 each ($1,440 >= $1,200). Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), $40 direct cost per deal, cash usable 4 days after delivery. Deliveries are staggered (two on day 0, one on day 4) so the $150-per-deal exposure never exceeds the $300 capital limit, and the last receipt settles on day 8 of 10."
+      },
+      "alternatives": [
+        {
+          "title": "Sell to additional kennels",
+          "why": "Not needed: the three signed orders already cover the target; new sales would add conversion risk and capital exposure."
+        }
+      ],
+      "steps": [
+        {
+          "id": "o1",
+          "kind": "OFFER",
+          "label": "Confirm the three signed order forms and send invoices at $480 each",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "priceCents": 48000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Produce and deliver tracker for kennel 1",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 0,
+          "dependsOn": "o1",
+          "evidence": [
+            "s3",
+            "s4"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d2",
+          "kind": "DELIVER",
+          "label": "Produce and deliver tracker for kennel 2",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 0,
+          "dependsOn": "o1",
+          "evidence": [
+            "s3",
+            "s4"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "Collect $480 from kennels 1 and 2 (usable day 4)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "d1",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d3",
+          "kind": "DELIVER",
+          "label": "Produce and deliver tracker for kennel 3 after kennel 1-2 capital is released",
+          "performer": "BRAIN",
+          "costCents": 4000,
+          "day": 4,
+          "dependsOn": "c1",
+          "evidence": [
+            "s3",
+            "s4"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c2",
+          "kind": "COLLECT",
+          "label": "Collect $480 from kennel 3 (usable day 8)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "d3",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 0,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost kennel 1",
+          "stepId": "d1"
+        },
+        {
+          "day": 0,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost kennel 2",
+          "stepId": "d2"
+        },
+        {
+          "day": 0,
+          "kind": "RECEIPT",
+          "amountCents": 48000,
+          "label": "Kennel 1 payment",
+          "settlesDay": 4,
+          "stepId": "c1"
+        },
+        {
+          "day": 0,
+          "kind": "RECEIPT",
+          "amountCents": 48000,
+          "label": "Kennel 2 payment",
+          "settlesDay": 4,
+          "stepId": "c1"
+        },
+        {
+          "day": 4,
+          "kind": "SPEND",
+          "amountCents": 4000,
+          "label": "Direct cost kennel 3",
+          "stepId": "d3"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 48000,
+          "label": "Kennel 3 payment",
+          "settlesDay": 8,
+          "stepId": "c2"
+        }
+      ],
+      "proofDay": 8,
+      "quantities": [
+        {
+          "name": "signed orders",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "orders",
+          "sources": [
+            "s1",
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per order",
+          "status": "EVIDENCED",
+          "value": 480,
+          "unit": "USD",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per deal",
+          "status": "EVIDENCED",
+          "value": 40,
+          "unit": "USD",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "capital tied up per deal",
+          "status": "EVIDENCED",
+          "value": 150,
+          "unit": "USD",
+          "sources": [
+            "s6"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#price",
+          "dated": "2026-11-20",
+          "claim": "Three kennels signed order forms at $480 each (2026-11-20).",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#agreements",
+          "dated": "2026-11-20",
+          "claim": "Three WRITTEN_ACCEPTANCE agreements in state AGREED at $480 each for this deliverable.",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#directCosts",
+          "dated": "2026-11-20",
+          "claim": "Direct cost $40 per deal.",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#delivery",
+          "dated": "2026-11-20",
+          "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#timeToFirstCash",
+          "dated": "2026-11-20",
+          "claim": "4 days to usable cash.",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#exposure",
+          "dated": "2026-11-20",
+          "claim": "Exposure $150.",
+          "population": "Boarding kennel owners",
+          "matchesBuyer": true,
+          "opportunityId": "cop_6a6c191452d341bd9de0"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_6a6c191452d341bd9de0",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_6a6c191452d341bd9de0",
+          "deals": 3,
+          "price": 480,
+          "directCost": 40,
+          "capital": 150
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_5b1f3db07003_d73c33",
+      "digest": "5b1f3db070039436274b81ff",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_d48ee973c2ca451789bf/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T10:57:22.443Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_5b1f3db07003_d73c33",
+      "digest": "5b1f3db070039436274b81ff",
+      "contractDigest": "967c6f9cef1f6f0217f77de7",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 12000,
+        "committedOpenCents": 0,
+        "preProofCents": 12000,
+        "maxExposureCents": 8000,
+        "minCashCents": 22000,
+        "minCashDay": 0,
+        "collectedCents": 144000,
+        "collectedInWindowCents": 144000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 132000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Vaccination-record expiry tracker set up for dog boarding ke\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Vaccination-record expiry tracker set up for dog boarding ke\" (1 of 1 leg(s) have no reachable channel, offer, fulfiller or settled cash yet); Brain keeps constructing, combining and comparing strategies.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_6a6c191452d341bd9de0"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Vaccination-record expiry tracker set up for dog boarding kennels\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Vaccination-record expiry tracker set up for dog boarding kennels\"",
+            "owner": "PERSON",
+            "cost": 40
+          },
+          {
+            "label": "Collect payment for \"Vaccination-record expiry tracker set up for dog boarding kennels\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_6a6c191452d341bd9de0",
+            "title": "Vaccination-record expiry tracker set up for dog boarding kennels",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1200,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Boarding kennel owners",
+              "reachableChannel": "Signed order forms returned by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T10:53:17.497Z",
+              "offerScope": "Vaccination-record expiry tracker set up for dog boarding kennels",
+              "priceCents": 48000,
+              "currency": "USD",
+              "peakFundingCents": 15000,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "dog boarding kennels",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 48000,
+                "currency": "USD",
+                "deliverable": "Vaccination-record expiry tracker set up for dog boarding kennels",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 48000,
+                "currency": "USD",
+                "deliverable": "Vaccination-record expiry tracker set up for dog boarding kennels",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 48000,
+                "currency": "USD",
+                "deliverable": "Vaccination-record expiry tracker set up for dog boarding kennels",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed order forms returned by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1440 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1440 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 40, tied up 150"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 10 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Vaccination-record expiry tracker set up for dog boarding kennels to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$40",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$150",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Boarding kennel owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three kennels signed order forms at $480 each (2026-11-20).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_81edc4b174924b408743"
+        ],
+        "scope": {
+          "targetCents": 120000,
+          "daysLeft": 10,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T10:54:53.556Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_5b1f3db07003_d73c33",
+        "revisionDigest": "5b1f3db070039436274b81ff",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d48ee973c2ca451789bf/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d579d90325ee47c48e70/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right. Recomputed: 3 recorded WRITTEN_ACCEPTANCE agreements (state AGREED) at $480 from boarding-kennel owners for this exact deliverable = $1,440 >= $1,200 target; this is the buyer's own purchase price, not a benchmark. Direct cost $40 x 3 = $120 < price; net $1,320. Exposure $150/deal (card exposure fact): two concurrent deals = $300, exactly at the $300 capital ceiling, third deal only after day-4 release, so peak never exceeds $300. Settlement 4 days: last receipt usable day 8 of 10. Delivery performer is BRAIN, matching the card's delivery fact (a spreadsheet Brain produces) and the proved PRODUCE_SPREADSHEET capability. No owner-hours limit in the contract. All eight chain links are established from this offer's own records; no new deals or market volume are needed, so the parked buyerVolume question does not bear on this plan.",
+        "findings": [
+          "Collection runs through ISSUE_AN_INVOICE, which is NOT_CONNECTED, and SEND_A_MESSAGE is NOT_CONNECTED: the invoicing/sending connection must be in place on day 0 or the day-4/day-8 settlement slips; with only 2 days of slack this is the main execution risk.",
+          "Ledger detail: step c1 collects from kennels 1 and 2 but depends only on d1 (should also depend on d2).",
+          "Ledger records only the $40 spends; the $150-per-deal tie-up that justifies the staggering is not represented in the cash lines (trace maxExposure $80), so the $300 ceiling fit rests on the card's exposure fact rather than on the ledger.",
+          "Agreements are dated 2026-11-20 while the buying signal is dated 2026-11-24; harmless, but agreed is not settled: the window depends on all three kennels paying on invoice, with $240 of headroom (one non-payer breaks the target)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:06:46.829Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_5b1f3db07003_d73c33",
+      "digest": "5b1f3db070039436274b81ff",
+      "contractDigest": "967c6f9cef1f6f0217f77de7",
+      "plan": {
+        "goalId": "wst_04cadbefe96e46bf8baf",
+        "contractDigest": "967c6f9cef1f6f0217f77de7",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the three signed kennel vaccination-expiry trackers at $480 each",
+          "opportunityIds": [
+            "cop_6a6c191452d341bd9de0"
+          ],
+          "why": "Three kennels have already signed written order forms at $480 each ($1,440 >= $1,200). Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), $40 direct cost per deal, cash usable 4 days after delivery. Deliveries are staggered (two on day 0, one on day 4) so the $150-per-deal exposure never exceeds the $300 capital limit, and the last receipt settles on day 8 of 10."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to additional kennels",
+            "why": "Not needed: the three signed orders already cover the target; new sales would add conversion risk and capital exposure."
+          }
+        ],
+        "steps": [
+          {
+            "id": "o1",
+            "kind": "OFFER",
+            "label": "Confirm the three signed order forms and send invoices at $480 each",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 48000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 1",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 0,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 2",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 0,
+            "dependsOn": "o1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Collect $480 from kennels 1 and 2 (usable day 4)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "d1",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d3",
+            "kind": "DELIVER",
+            "label": "Produce and deliver tracker for kennel 3 after kennel 1-2 capital is released",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 4,
+            "dependsOn": "c1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Collect $480 from kennel 3 (usable day 8)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "d3",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 1",
+            "stepId": "d1"
+          },
+          {
+            "day": 0,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 2",
+            "stepId": "d2"
+          },
+          {
+            "day": 0,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 1 payment",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 0,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 2 payment",
+            "settlesDay": 4,
+            "stepId": "c1"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "Direct cost kennel 3",
+            "stepId": "d3"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 48000,
+            "label": "Kennel 3 payment",
+            "settlesDay": 8,
+            "stepId": "c2"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "orders",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per order",
+            "status": "EVIDENCED",
+            "value": 480,
+            "unit": "USD",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per deal",
+            "status": "EVIDENCED",
+            "value": 40,
+            "unit": "USD",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital tied up per deal",
+            "status": "EVIDENCED",
+            "value": 150,
+            "unit": "USD",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#price",
+            "dated": "2026-11-20",
+            "claim": "Three kennels signed order forms at $480 each (2026-11-20).",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#agreements",
+            "dated": "2026-11-20",
+            "claim": "Three WRITTEN_ACCEPTANCE agreements in state AGREED at $480 each for this deliverable.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#directCosts",
+            "dated": "2026-11-20",
+            "claim": "Direct cost $40 per deal.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#delivery",
+            "dated": "2026-11-20",
+            "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET).",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#timeToFirstCash",
+            "dated": "2026-11-20",
+            "claim": "4 days to usable cash.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_6a6c191452d341bd9de0#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $150.",
+            "population": "Boarding kennel owners",
+            "matchesBuyer": true,
+            "opportunityId": "cop_6a6c191452d341bd9de0"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6a6c191452d341bd9de0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_6a6c191452d341bd9de0",
+            "deals": 3,
+            "price": 480,
+            "directCost": 40,
+            "capital": 150
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5b1f3db07003_d73c33",
+        "digest": "5b1f3db070039436274b81ff",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d48ee973c2ca451789bf/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T10:57:22.443Z"
+      },
+      "review": {
+        "revisionId": "rev_5b1f3db07003_d73c33",
+        "revisionDigest": "5b1f3db070039436274b81ff",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d48ee973c2ca451789bf/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d579d90325ee47c48e70/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right. Recomputed: 3 recorded WRITTEN_ACCEPTANCE agreements (state AGREED) at $480 from boarding-kennel owners for this exact deliverable = $1,440 >= $1,200 target; this is the buyer's own purchase price, not a benchmark. Direct cost $40 x 3 = $120 < price; net $1,320. Exposure $150/deal (card exposure fact): two concurrent deals = $300, exactly at the $300 capital ceiling, third deal only after day-4 release, so peak never exceeds $300. Settlement 4 days: last receipt usable day 8 of 10. Delivery performer is BRAIN, matching the card's delivery fact (a spreadsheet Brain produces) and the proved PRODUCE_SPREADSHEET capability. No owner-hours limit in the contract. All eight chain links are established from this offer's own records; no new deals or market volume are needed, so the parked buyerVolume question does not bear on this plan.",
+        "findings": [
+          "Collection runs through ISSUE_AN_INVOICE, which is NOT_CONNECTED, and SEND_A_MESSAGE is NOT_CONNECTED: the invoicing/sending connection must be in place on day 0 or the day-4/day-8 settlement slips; with only 2 days of slack this is the main execution risk.",
+          "Ledger detail: step c1 collects from kennels 1 and 2 but depends only on d1 (should also depend on d2).",
+          "Ledger records only the $40 spends; the $150-per-deal tie-up that justifies the staggering is not represented in the cash lines (trace maxExposure $80), so the $300 ceiling fit rests on the card's exposure fact rather than on the ledger.",
+          "Agreements are dated 2026-11-20 while the buying signal is dated 2026-11-24; harmless, but agreed is not settled: the window depends on all three kennels paying on invoice, with $240 of headroom (one non-payer breaks the target)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T11:06:46.829Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $1,200 of settled cash within 10 days with at most $300 of capital.",
+        "terms": "4359ab3d62eda367",
+        "openings": {
+          "cop_6a6c191452d341bd9de0": "8b92a589ee88dd66"
+        }
+      },
+      "at": "2026-11-27T11:09:24.756Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

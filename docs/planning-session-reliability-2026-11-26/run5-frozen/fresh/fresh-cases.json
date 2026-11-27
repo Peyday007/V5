@@ -1,0 +1,736 @@
+[
+ {
+  "id": "fx-15-varroa-counts",
+  "heldOut": true,
+  "description": "Needs ceil(2,000/180)=12 sales. Measured 16 paid of 140 contacts (11.4%) means ~105 contacts for 12 sales, inside the 410 registered beekeepers who each file mite records every spring; Brain produces at $5 of cost ($175 margin), cash in 3 days of a 30-day window, no capital. Every link evidenced: executable.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "commercial beekeeping",
+   "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "varroa",
+    "title": "Varroa mite-load analysis reports from sticky-board photos for commercial beekeepers",
+    "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+    "industry": "commercial beekeeping",
+    "payer": "Commercial beekeepers registered with the state apiary program",
+    "channel": "Email to beekeepers listed in the state apiary registry",
+    "signalDaysAgo": 5,
+    "offer": "A per-yard mite-load analysis and treatment-threshold report from the beekeeper's own sticky-board photos",
+    "price": 180,
+    "priceBasis": "EVIDENCE",
+    "cost": 5,
+    "capital": 0,
+    "daysToCash": 3,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "410 commercial beekeepers are listed in the state apiary registry; each must file mite-treatment records with the program every spring.",
+    "conversion": {
+     "paid": 16,
+     "of": 140,
+     "unit": "CONTACTS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0
+  }
+ },
+ {
+  "id": "fx-16-lab-code-crosswalk",
+  "heldOut": true,
+  "description": "Needs ceil(1,500/95)=16 sales. Measured 22 paid pre-orders from 400 visitors (5.5%) means ~291 visitors for 16 sales; the trade newsletter reaches the 2,100 member labs, each of which re-codes its invoices every January. Cost $2 a sale, cash in 2 days of 21, no capital. Executable.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "industry": "dental laboratories",
+   "mechanism": "INFORMATION_ASYMMETRY",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $1,500 of settled cash within 21 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "labCodes",
+    "title": "Annual procedure-code change crosswalk for dental laboratory invoicing",
+    "mechanism": "INFORMATION_ASYMMETRY",
+    "industry": "dental laboratories",
+    "payer": "Dental laboratory owners",
+    "channel": "Paid placement in the national dental-laboratory association's weekly newsletter, linking to a checkout page",
+    "signalDaysAgo": 2,
+    "offer": "A crosswalk of next year's procedure-code changes mapped to each lab's own product list",
+    "price": 95,
+    "priceBasis": "EVIDENCE",
+    "cost": 2,
+    "capital": 0,
+    "daysToCash": 2,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "2,100 dental laboratories are members of the national association and receive its newsletter; each updates its invoice codes once a year, in January.",
+    "conversion": {
+     "paid": 22,
+     "of": 400,
+     "unit": "VISITORS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0
+  }
+ },
+ {
+  "id": "fx-17-marina-shrinkwrap",
+  "heldOut": true,
+  "description": "Three marinas signed $3,200 winter shrink-wrap contracts ($9,600) against $8,000 in 40 days; the named wrapper quoted $1,400 a marina ($1,800 margin each), paid in 14 days, no capital. The signed agreements alone cover the target: executable.",
+  "dimensions": {
+   "capital": "none",
+   "target": "medium",
+   "deadline": "long",
+   "industry": "recreational marinas",
+   "mechanism": "EXISTING_BUYING_SIGNAL",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $8,000 of settled cash within 40 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "marina",
+    "title": "Fleet winter shrink-wrapping of moored boats for recreational marinas",
+    "mechanism": "EXISTING_BUYING_SIGNAL",
+    "industry": "recreational marinas",
+    "payer": "Recreational marina operators",
+    "channel": "Direct email to the three marinas' harbour masters, who posted the requests for quote",
+    "signalDaysAgo": 6,
+    "offer": "Shrink-wrapping and venting of every boat wintering in the marina's wet slips",
+    "price": 3200,
+    "priceBasis": "EVIDENCE",
+    "cost": 1400,
+    "capital": 0,
+    "daysToCash": 14,
+    "hours": 2,
+    "performer": "SUBCONTRACTOR",
+    "subcontractor": "Harbor Wrap Marine Services (quoted $1,400 a marina)",
+    "volume": "48 recreational marinas are licensed by the state waterways division; each winterises its moored fleet once a year, every autumn.",
+    "agreements": [
+     3200,
+     3200,
+     3200
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0
+  }
+ },
+ {
+  "id": "fx-18-vet-drug-inventory",
+  "heldOut": true,
+  "description": "Needs ceil(3,000/340)=9 wins. Measured 9 wins from 30 quotes (30%) means 30 quotes for 9 wins, against 520 DEA-registered clinics that must each file under the new state inventory rule this year. Brain produces at $6 of cost, cash in 6 days of 30, no capital. Executable.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "veterinary clinics",
+   "mechanism": "TEMPORARY_EXPLOIT",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "vetDrugs",
+    "title": "Controlled-substance biennial inventory reconciliation for veterinary clinics",
+    "mechanism": "TEMPORARY_EXPLOIT",
+    "industry": "veterinary clinics",
+    "payer": "Veterinary clinic practice managers",
+    "channel": "Quote requests from clinics on the state veterinary board's DEA-registrant list",
+    "signalDaysAgo": 3,
+    "offer": "A reconciled controlled-substance inventory and discrepancy report in the state board's new filing format",
+    "price": 340,
+    "priceBasis": "EVIDENCE",
+    "cost": 6,
+    "capital": 0,
+    "daysToCash": 6,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "520 veterinary clinics hold DEA registrations on the state board's list; each must file one inventory in the new format during this calendar year.",
+    "conversion": {
+     "paid": 9,
+     "of": 30,
+     "unit": "QUOTES"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0
+  }
+ },
+ {
+  "id": "fx-19-brewery-labels",
+  "heldOut": true,
+  "description": "Six breweries signed $450 label registrations ($2,700) against $2,500 in 30 days; the owner performs each in 1.5 hours, so ceil(2,500/450)=6 registrations take 9 owner hours, inside the 3 hours a week x 30/7 weeks = ~12.9 allowed. No cost, cash in 10 days, no capital. Executable.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "craft breweries",
+   "mechanism": "JIGSAW_COMBINATION",
+   "autonomy": "owner-hours-limited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital and no more than 3 hours a week of owner time.",
+  "openings": [
+   {
+    "key": "brewLabels",
+    "title": "Federal label approval plus state brand registration bundles for craft breweries",
+    "mechanism": "JIGSAW_COMBINATION",
+    "industry": "craft breweries",
+    "payer": "Craft brewery owners",
+    "channel": "Email to the six signed breweries' head brewers",
+    "signalDaysAgo": 4,
+    "offer": "A federal label approval filing combined with the state brand registration for one new beer label",
+    "price": 450,
+    "priceBasis": "EVIDENCE",
+    "cost": 0,
+    "capital": 0,
+    "daysToCash": 10,
+    "hours": 1.5,
+    "performer": "OWNER",
+    "volume": "380 craft breweries hold state manufacturer licences; each registers about four new labels a year.",
+    "agreements": [
+     450,
+     450,
+     450,
+     450,
+     450,
+     450
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0,
+   "ownerHoursMax": 12
+  }
+ },
+ {
+  "id": "fx-20-preneed-reconciliation",
+  "heldOut": true,
+  "description": "$2,400 at the card's $600 would need 4 sales, but the $600 is only what one funeral director said on a call; no invoice, price list or paid commitment shows a funeral home pays it, and no sale has been made at any price. The price link is decisive: no plan.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "funeral homes",
+   "mechanism": "PRODUCTIZED_SERVICE",
+   "autonomy": "unlimited",
+   "missingEvidence": "OFFER_AND_PRICE",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $2,400 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "preneed",
+    "title": "Annual preneed trust reconciliation reports for independent funeral homes",
+    "mechanism": "PRODUCTIZED_SERVICE",
+    "industry": "funeral homes",
+    "payer": "Independent funeral home owners",
+    "channel": "Email to funeral homes licensed by the state funeral service board",
+    "signalDaysAgo": 8,
+    "offer": "The annual preneed trust reconciliation the state board requires, prepared from the home's contract ledger",
+    "price": 600,
+    "priceBasis": "PERSON",
+    "priceEvidence": "One funeral director said on a call that he would pay $600 for it",
+    "cost": 4,
+    "capital": 0,
+    "daysToCash": 5,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "290 funeral homes are licensed by the state funeral service board; each files one preneed trust reconciliation a year."
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "OFFER_AND_PRICE"
+    ],
+    "opening": "preneed"
+   }
+  }
+ },
+ {
+  "id": "fx-21-commissary-permits",
+  "heldOut": true,
+  "description": "$2,400 at $120 needs 20 sales, and a measured 12 paid of 150 visitors (8%) means 250 visitors; but how many food trucks the commissaries serve is only Brain's own guess, so nothing shows 20 buyers exist. Market volume is decisive: no plan.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "food-truck commissary kitchens",
+   "mechanism": "SUPPLY_DEMAND_MISMATCH",
+   "autonomy": "unlimited",
+   "missingEvidence": "MARKET_VOLUME",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $2,400 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "commissary",
+    "title": "Mobile food-unit health-permit renewal packets sold through commissary kitchens",
+    "mechanism": "SUPPLY_DEMAND_MISMATCH",
+    "industry": "food-truck commissary kitchens",
+    "payer": "Food-truck operators based at commissary kitchens",
+    "channel": "Checkout page linked from flyers at commissary kitchens",
+    "signalDaysAgo": 4,
+    "offer": "A completed mobile food-unit permit renewal packet with the commissary agreement attached",
+    "price": 120,
+    "priceBasis": "EVIDENCE",
+    "cost": 3,
+    "capital": 0,
+    "daysToCash": 2,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "Probably a few hundred food trucks use commissary kitchens in the metro area.",
+    "volumeBasis": "ESTIMATE",
+    "conversion": {
+     "paid": 12,
+     "of": 150,
+     "unit": "VISITORS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "MARKET_VOLUME"
+    ],
+    "opening": "commissary"
+   }
+  }
+ },
+ {
+  "id": "fx-22-grocery-leak-tests",
+  "heldOut": true,
+  "description": "$4,000 at $800 needs 5 leak inspections, and a measured 5 agreements of 40 contacts (12.5%) means 40 contacts of 175 stores; but the inspection needs a certified technician on site, nobody is named to do it and no technician has quoted a price, so neither who fulfils it nor its cost is established. Fulfilment and economics decide: no plan.",
+  "dimensions": {
+   "capital": "none",
+   "target": "medium",
+   "deadline": "long",
+   "industry": "independent grocery stores",
+   "mechanism": "SUBCONTRACTED_FULFILMENT",
+   "autonomy": "unlimited",
+   "missingEvidence": "FULFILMENT",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "refrigerant",
+    "title": "Refrigerant leak-rate inspections and records for independent grocery stores",
+    "mechanism": "SUBCONTRACTED_FULFILMENT",
+    "industry": "independent grocery stores",
+    "payer": "Independent grocery store owners",
+    "channel": "Email to stores listed in the state independent grocers' association directory",
+    "signalDaysAgo": 5,
+    "offer": "An on-site refrigerant leak-rate inspection with the federal recordkeeping file completed",
+    "price": 800,
+    "priceBasis": "EVIDENCE",
+    "cost": null,
+    "capital": 0,
+    "daysToCash": 10,
+    "hours": 2,
+    "performer": "SUBCONTRACTOR",
+    "volume": "175 independent grocery stores are listed in the state association directory; each commercial refrigeration system needs a leak-rate inspection every year.",
+    "conversion": {
+     "paid": 5,
+     "of": 40,
+     "unit": "CONTACTS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "FULFILMENT",
+     "ECONOMICS"
+    ],
+    "opening": "refrigerant"
+   }
+  }
+ },
+ {
+  "id": "fx-23-compounding-monitoring",
+  "heldOut": true,
+  "description": "The card prices the environmental-monitoring pack at $520, but a sourced competitor price list states $52. $3,500 needs ceil(3,500/520)=7 sales at the card's price or ceil(3,500/52)=68 at the sourced one, more than the 10-of-90 measured rate reaches in 140 pharmacies (~16 sales). On a contradicted price no plan is established.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "compounding pharmacies",
+   "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+   "autonomy": "unlimited",
+   "missingEvidence": "OFFER_AND_PRICE",
+   "contradictoryEvidence": true,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "compounding",
+    "title": "Sterile-compounding environmental-monitoring report packs for independent pharmacies",
+    "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+    "industry": "compounding pharmacies",
+    "payer": "Independent compounding pharmacy owners",
+    "channel": "Email to pharmacies holding sterile-compounding permits on the state pharmacy board list",
+    "signalDaysAgo": 3,
+    "offer": "A quarterly environmental-monitoring trend report formatted for the board's sterile-compounding inspection",
+    "price": 520,
+    "priceBasis": "EVIDENCE",
+    "priceContradiction": 52,
+    "cost": 8,
+    "capital": 0,
+    "daysToCash": 4,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "140 independent pharmacies hold sterile-compounding permits on the state pharmacy board list; each needs one monitoring report a quarter.",
+    "conversion": {
+     "paid": 10,
+     "of": 90,
+     "unit": "CONTACTS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "OFFER_AND_PRICE",
+     "ECONOMICS"
+    ],
+    "opening": "compounding"
+   }
+  }
+ },
+ {
+  "id": "fx-24-water-coop-reports",
+  "heldOut": true,
+  "description": "Four rural water co-ops signed $900 consumer confidence reports ($3,600) against $3,000 in 30 days, but nobody has established when a co-op pays: each disburses only after a board vote whose schedule is unknown. Whether any cash settles inside 30 days is the decisive gap: no plan.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "rural water cooperatives",
+   "mechanism": "EXPLICIT_PAID_REQUEST",
+   "autonomy": "unlimited",
+   "missingEvidence": "SETTLES_IN_TIME",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "waterCoop",
+    "title": "Annual consumer confidence report drafting for rural water cooperatives",
+    "mechanism": "EXPLICIT_PAID_REQUEST",
+    "industry": "rural water cooperatives",
+    "payer": "Rural water cooperative general managers",
+    "channel": "Email to the four co-ops that posted the drafting request",
+    "signalDaysAgo": 7,
+    "offer": "The annual consumer confidence report drafted from the co-op's own sampling results",
+    "price": 900,
+    "priceBasis": "EVIDENCE",
+    "cost": 10,
+    "capital": 0,
+    "daysToCash": null,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "85 rural water cooperatives are on the state drinking-water program's system list; each must publish one consumer confidence report a year.",
+    "agreements": [
+     900,
+     900,
+     900,
+     900
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "SETTLES_IN_TIME"
+    ],
+    "opening": "waterCoop"
+   }
+  }
+ },
+ {
+  "id": "fx-25-charter-decals",
+  "heldOut": true,
+  "description": "Only 30 licensed charter operators exist and each renews its safety decal once a year, so the most this opening can collect in the 60 days is 30 x $250 = $7,500, short of the $12,000 target even if every operator bought. Infeasible on the target.",
+  "dimensions": {
+   "capital": "none",
+   "target": "out-of-reach",
+   "deadline": "long",
+   "industry": "fishing charter operators",
+   "mechanism": "OTHER",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $12,000 of settled cash within 60 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "charter",
+    "title": "Annual safety-decal examination preparation packs for fishing charter operators",
+    "mechanism": "OTHER",
+    "industry": "fishing charter operators",
+    "payer": "Fishing charter boat operators",
+    "channel": "Email to operators on the county's charter licence register",
+    "signalDaysAgo": 3,
+    "offer": "A pre-examination checklist and documentation pack for the vessel's annual safety decal",
+    "price": 250,
+    "priceBasis": "EVIDENCE",
+    "cost": 4,
+    "capital": 0,
+    "daysToCash": 3,
+    "hours": 1,
+    "performer": "BRAIN",
+    "volume": "30 fishing charter operators are on the county's charter licence register; each renews its vessel safety decal once a year.",
+    "conversion": {
+     "paid": 12,
+     "of": 30,
+     "unit": "CONTACTS"
+    }
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "INFEASIBLE",
+    "constraints": [
+     "TARGET"
+    ],
+    "links": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "payerDealsMax": {
+    "charter": 30
+   }
+  }
+ },
+ {
+  "id": "fx-26-retainer-material",
+  "heldOut": true,
+  "description": "Three orthodontic practices signed $2,000 orders for thermoforming retainer material, but each order requires buying a $1,400 case lot from the distributor before it ships; one order alone ties up $1,400 against the $500 capital limit. Infeasible on capital.",
+  "dimensions": {
+   "capital": "small",
+   "target": "small",
+   "deadline": "long",
+   "industry": "orthodontic practices",
+   "mechanism": "RESALE_OR_ASSET",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $1,500 of settled cash within 30 days with at most $500 of capital.",
+  "openings": [
+   {
+    "key": "retainer",
+    "title": "Case-lot resale of thermoforming retainer material to orthodontic practices",
+    "mechanism": "RESALE_OR_ASSET",
+    "industry": "orthodontic practices",
+    "payer": "Orthodontic practice managers",
+    "channel": "Direct email to the three signed practices",
+    "signalDaysAgo": 2,
+    "offer": "One case lot of thermoforming retainer sheets delivered to the practice",
+    "price": 2000,
+    "priceBasis": "EVIDENCE",
+    "cost": 1400,
+    "capital": 1400,
+    "daysToCash": 12,
+    "hours": 1,
+    "performer": "SUBCONTRACTOR",
+    "subcontractor": "Coastal Dental Supply (quoted $1,400 a case lot, payment with order)",
+    "volume": "95 orthodontic practices are members of the state orthodontic society; each reorders retainer material about every quarter.",
+    "agreements": [
+     2000,
+     2000,
+     2000
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "INFEASIBLE",
+    "constraints": [
+     "CAPITAL"
+    ],
+    "links": [
+     "ECONOMICS"
+    ]
+   },
+   "capitalMax": 500
+  }
+ },
+ {
+  "id": "fx-27-lab-protocol-amendments",
+  "heldOut": true,
+  "description": "Five university labs signed $1,200 animal-protocol amendment drafts ($6,000) against $4,000 in 21 days, but the universities' accounts payable pays 60 days after invoice: no cash can settle before day 60, after the day-21 deadline. Infeasible on the deadline.",
+  "dimensions": {
+   "capital": "none",
+   "target": "medium",
+   "deadline": "short",
+   "industry": "university research labs",
+   "mechanism": "CAPABILITY_ARBITRAGE",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false
+  },
+  "objective": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+  "openings": [
+   {
+    "key": "labProtocols",
+    "title": "Animal-care protocol amendment drafting for university research labs",
+    "mechanism": "CAPABILITY_ARBITRAGE",
+    "industry": "university research labs",
+    "payer": "University principal investigators, paid through university accounts payable",
+    "channel": "Email to the five signed labs' managers",
+    "signalDaysAgo": 5,
+    "offer": "A drafted protocol amendment ready for the institutional animal-care committee",
+    "price": 1200,
+    "priceBasis": "EVIDENCE",
+    "cost": 15,
+    "capital": 0,
+    "daysToCash": 60,
+    "hours": 1,
+    "performer": "BRAIN",
+    "agreements": [
+     1200,
+     1200,
+     1200,
+     1200,
+     1200
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "INFEASIBLE",
+    "constraints": [
+     "DEADLINE"
+    ],
+    "links": [
+     "SETTLES_IN_TIME"
+    ]
+   }
+  }
+ },
+ {
+  "id": "fx-28-laundromat-readers",
+  "heldOut": true,
+  "description": "First read: six laundromats signed $600 card-reader commissioning jobs ($3,600) against $3,000 in 30 days, the owner does each in 3 hours with no hours limit, $40 cost, cash in 7 days: executable. The owner then limits himself to 1 hour a week (30/7 weeks = ~4.3 hours); ceil(3,000/600)=5 jobs need 15 owner hours and only the owner can do them. Infeasible on owner hours after the change.",
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "long",
+   "industry": "self-service laundromats",
+   "mechanism": "PRODUCTIZED_SERVICE",
+   "autonomy": "owner-hours-limited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": true
+  },
+  "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+  "changes": [
+   {
+    "change": {
+     "kind": "OBJECTIVE",
+     "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital and no more than 1 hour a week of owner time."
+    }
+   }
+  ],
+  "expectInitial": {
+   "verdict": "EXECUTABLE_PLAN",
+   "capitalMax": 0
+  },
+  "openings": [
+   {
+    "key": "laundromat",
+    "title": "Card-reader retrofit commissioning for self-service laundromats",
+    "mechanism": "PRODUCTIZED_SERVICE",
+    "industry": "self-service laundromats",
+    "payer": "Laundromat owners",
+    "channel": "Phone and email to the six signed laundromat owners",
+    "signalDaysAgo": 4,
+    "offer": "On-site commissioning of the owner-supplied card readers on every washer and dryer",
+    "price": 600,
+    "priceBasis": "EVIDENCE",
+    "cost": 40,
+    "capital": 0,
+    "daysToCash": 7,
+    "hours": 3,
+    "performer": "OWNER",
+    "volume": "120 self-service laundromats hold city business licences; each retrofits card readers once.",
+    "agreements": [
+     600,
+     600,
+     600,
+     600,
+     600,
+     600
+    ]
+   }
+  ],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "INFEASIBLE",
+    "constraints": [
+     "OWNER_HOURS"
+    ],
+    "links": [
+     "FULFILMENT"
+    ]
+   },
+   "ownerHoursMax": 4
+  }
+ }
+]

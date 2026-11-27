@@ -1,0 +1,28 @@
+{
+  "id": "fx-28-laundromat-readers",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": false,
+  "revisions": 5,
+  "reviews": 1,
+  "observed": null,
+  "pass": false,
+  "failures": [
+    "NOT_PUBLISHED"
+  ],
+  "critical": [],
+  "detail": "nothing published; current revision rev_ba9050646311_922259 (CONDITIONAL) 1 problem(s), last review REVISE",
+  "usable": {
+    "pass": false,
+    "detail": "nothing published"
+  },
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "NOT_OBSERVED"
+    ],
+    "gaps": [],
+    "detail": "nothing published"
+  }
+}

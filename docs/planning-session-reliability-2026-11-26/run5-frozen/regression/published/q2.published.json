@@ -1,0 +1,437 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_b25e3a1a98c5_56715b",
+      "digest": "b25e3a1a98c5a9bc1530385d",
+      "contractDigest": "5dd186c7fa01b6288bc54c18",
+      "plan": {
+        "goalId": "wst_cbca3387bf464f9cbca7",
+        "contractDigest": "5dd186c7fa01b6288bc54c18",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List a Brain-produced allergen-labelled meal-plan workbook at $29 and measure how much of the category's demand the listing captures",
+          "opportunityIds": [
+            "cop_a6950f9e5fb5486bb976"
+          ],
+          "why": "Price ($29 comparable listings), product (Brain proves PRODUCE_SPREADSHEET), $3 cost, $0 exposure, 3-day settlement and a 4% paid conversion (60/1500) on this offer's own page are evidenced. What is not: the market volume Brain counts (about 192 orders a month) is the whole category's 2,300 sales a year shared across 40 sellers, about 5 a month per seller on average. The plan needs 36 sales (36 x $29 = $1,044), i.e. about 19% of the category in 30 days, or about 900 visitors at the measured 4%. Only a live listing measures what share and traffic a new listing gets, so the plan starts with that test and stops if it does not show the run rate."
+        },
+        "alternatives": [
+          {
+            "title": "No alternative opening",
+            "why": "This world holds a single opening."
+          },
+          {
+            "title": "Bundle a seasonal multi-week pack at a higher price",
+            "why": "No evidenced price exists for a bundle; would be a new estimate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Publish the listing on the digital-download marketplace, tagged for its allergen meal-plan search",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "s7"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the workbook at $29, the comparable listing price",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Measure listing visitors and paid sales over days 2-9: proof is at least 9 paid sales (the 36-in-28-days run rate)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "offer",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Continue selling to reach 36 paid sales by day 26",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 26,
+            "dependsOn": "test",
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces the allergen-labelled workbook spreadsheet; the marketplace delivers the download to each buyer",
+            "performer": "BRAIN",
+            "costCents": 10800,
+            "day": 26,
+            "dependsOn": "sell",
+            "evidence": [
+              "s4",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Marketplace pays out; usable 3 days after each sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 29,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 26100,
+            "label": "9 test-week sales x $29",
+            "settlesDay": 12,
+            "stepId": "collect"
+          },
+          {
+            "day": 26,
+            "kind": "RECEIPT",
+            "amountCents": 78300,
+            "label": "27 further sales x $29",
+            "settlesDay": 29,
+            "stepId": "collect"
+          },
+          {
+            "day": 29,
+            "kind": "SPEND",
+            "amountCents": 10800,
+            "label": "Direct cost 36 x $3, deducted from payouts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 9,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29,
+            "unit": "USD per workbook",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "pageConversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "paid orders per unique visitor",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "categoryVolume",
+            "status": "EVIDENCED",
+            "value": 192,
+            "unit": "category sales per month across 40 sellers",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "listingShare",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of category sales (or visitors) this new listing captures in 30 days",
+            "sources": [
+              "s3"
+            ],
+            "needs": "A live listing's first-week visitors and paid sales; needs about 19% of category sales (36 of ~192) or ~900 visitors at 4%"
+          },
+          {
+            "name": "deals",
+            "status": "ASSUMED",
+            "value": 36,
+            "unit": "paid sales in the window",
+            "sources": [
+              "s1"
+            ],
+            "needs": "Depends on listingShare"
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "USD per sale",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#price",
+            "dated": "2026-11-24",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29 on the marketplace (listing prices, 2026-11)",
+            "population": "Marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "60 paid pre-orders from 1500 unique visitors on this offer's own page",
+            "population": "Visitors to this offer's page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers (category total, not this listing)",
+            "population": "All sellers in the category",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Fulfilment by Brain",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$3 direct cost",
+            "population": "This offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "This offer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s7",
+            "url": "https://brain.local/card/cop_a6950f9e5fb5486bb976#payer",
+            "dated": "2026-11-24",
+            "claim": "Marketplace shoppers planning allergen-free meals, reached through the listing and its search",
+            "population": "Marketplace shoppers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 9 the live listing has at least 9 paid sales at $29 (or at least 225 unique visitors converting at about 4%), the run rate that reaches 36 sales by day 26.",
+          "stop": [
+            "Fewer than 4 paid sales by day 9: the listing's share cannot carry 36 sales in the window; stop and record the measured share as the market-volume answer.",
+            "Payouts not usable within 3 days of sale."
+          ],
+          "continue": [
+            "9 or more paid sales by day 9: keep the listing live and continue to 36.",
+            "4-8 sales by day 9: continue one more week and re-measure against the 36-by-day-26 line."
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a6950f9e5fb5486bb976",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_a6950f9e5fb5486bb976",
+            "deals": 36,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_a6950f9e5fb5486bb976",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts all ~192 monthly category sales as available to this plan, but the buyerVolume fact says the 2,300 annual sales are spread across 40 sellers (about 5 a month each). A new listing needing 36 sales is asking for ~19% of the category in 30 days; nothing on the card establishes that share or the listing's traffic, so the volume available to THIS listing is unknown until a live listing measures it."
+          }
+        ],
+        "revisionId": "rev_b25e3a1a98c5_56715b",
+        "digest": "b25e3a1a98c5a9bc1530385d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50b49464bcfc442aa2f3/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:18:09.106Z"
+      },
+      "review": {
+        "revisionId": "rev_b25e3a1a98c5_56715b",
+        "revisionDigest": "b25e3a1a98c5a9bc1530385d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_50b49464bcfc442aa2f3/rel7-author",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_807e27e39fb24ff3a06c/reviewer-zeta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right. The author's MARKET_VOLUME disagreement is supported: Brain's basis (~192 orders/month) is the category total across 40 sellers (buyerVolume fact; population 'all sellers', not this listing), so counting all of it as available to one listing transfers another population's figure; 36 sales is ~19% of category volume and nothing on the card establishes this listing's share or traffic. Price $29 (comparable listings for this buyer), 4% conversion measured on this offer's own page, Brain-proved PRODUCE_SPREADSHEET fulfilment, $3 cost, $0 exposure and 3-day settlement are established. Recomputed: 36 x $29 = $1,044 >= $1,000; 9 + 27 sales; last receipts day 26 settle day 29 inside 30; cost $108 deducted from payouts; min cash $0. Proof (9 sales by day 9), stop (<4) and continue rules are measurable and the test costs nothing.",
+        "findings": [
+          "Minor: the card's 60 money-committed pre-orders on this offer's page are neither counted toward the target nor explained (whether they are already settled, refundable, or outside the window); the plan should say.",
+          "Minor: the 4-8-sales continue branch re-measures but a 4-in-7-days rate projects ~14 sales by day 26, far below 36; the branch should stop at the day-16 re-measure if the run rate stays under ~1.3/day.",
+          "Minor: the workbook must be produced before the day-2 listing; the deliver step is dated day 26."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:21:26.545Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:21:58.409Z"
+    }
+  }
+}

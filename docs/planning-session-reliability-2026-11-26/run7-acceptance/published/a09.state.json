@@ -1,0 +1,1328 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_e09eb4cafae94bc1a118",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of settled cash collected within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "12878b18fa2e8749a40f2f48"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_e09eb4cafae94bc1a118",
+        "contractDigest": "12878b18fa2e8749a40f2f48",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: overflow mobile loan-signing coverage lacks an established buyer count",
+          "opportunityIds": [],
+          "why": "Price ($150, three published fee schedules), conversion (9 of 60 measured on this offer), fulfilment (SignRight at a written $75) and settlement (7 days) are evidenced, but $3,000 of settled cash needs 20 signings at $150, i.e. about 134 contacts at the measured 15% close rate, and the only volume figure on the card (2,000 signings a month) is an estimate (RECOMMENDATION), not a count of reachable title companies or their order frequency."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now as a conditional plan",
+            "why": "Rejected: the buyer count is a published-roster question research can answer before outreach, not an unknown only a live test measures; starting without it risks a pool too small for 20 signings."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the title and escrow companies on the state land-title association roster with reachable closing-department emails, and how often each orders overflow mobile signings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_reach"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per signing",
+            "status": "EVIDENCED",
+            "value": 15000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per signing",
+            "status": "EVIDENCED",
+            "value": 7500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signings needed",
+            "status": "EVIDENCED",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable title companies and order frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers / orders per month",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "a counted roster (number of companies with closing-department emails) and orders per company per month from a published source"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#price",
+            "dated": "2026-11",
+            "claim": "Title companies pay mobile signing services $150 per refinance signing",
+            "population": "title companies (three published fee schedules)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#conversionRates",
+            "dated": null,
+            "claim": "9 agreements from 60 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#directCosts",
+            "dated": null,
+            "claim": "$75 per signing to SignRight Notary Network (written rate)",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#buyerVolume",
+            "dated": null,
+            "claim": "Estimate only: about 2,000 mobile signings a month in the metro area",
+            "population": "metro-area title companies (estimate, not a count)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#payer",
+            "dated": null,
+            "claim": "Payer is title and escrow companies, reached via the state land-title association roster",
+            "population": "title and escrow companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 20 signings at $150 (about 134 contacts at the measured 15% close rate) are needed within 30 days, and nobody has counted how many title/escrow companies on the state land-title association roster can be reached or how often each orders overflow signings; the card's 2,000-a-month figure is an estimate.",
+          "resolution": "Research the state land-title association roster: count member title/escrow companies with published closing-department emails and find a published figure for overflow mobile-signing orders per company per month. If at least ~134 reachable companies (or fewer companies ordering repeatedly enough for 20 signings) are counted, re-plan as executable through SignRight at $75 per signing.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_cf60aaabce71_581524",
+        "digest": "cf60aaabce716c27b47d8e28",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:26:28.857Z"
+      },
+      {
+        "goalId": "wst_e09eb4cafae94bc1a118",
+        "contractDigest": "12878b18fa2e8749a40f2f48",
+        "parentRevisionId": "rev_cf60aaabce71_581524",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: overflow mobile loan-signing coverage lacks an established buyer count",
+          "opportunityIds": [],
+          "why": "Price ($150, three published fee schedules), conversion (9 of 60 measured on this offer), fulfilment (SignRight at a written $75) and settlement (7 days) are evidenced, but $3,000 of settled cash needs 20 signings at $150, i.e. about 134 contacts at the measured 15% close rate, and the only volume figure on the card (2,000 signings a month) is an estimate (RECOMMENDATION), not a count of reachable title companies or their order frequency."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now as a conditional plan",
+            "why": "Rejected: the buyer count is a published-roster question research can answer before outreach, not an unknown only a live test measures; starting without it risks a pool too small for 20 signings."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the title and escrow companies on the state land-title association roster with reachable closing-department emails, and how often each orders overflow mobile signings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_reach"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per signing (what title companies pay signing services)",
+            "status": "EVIDENCED",
+            "value": 15000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per signing",
+            "status": "EVIDENCED",
+            "value": 7500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signings needed",
+            "status": "EVIDENCED",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable title companies and order frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers / orders per month",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "a counted roster (number of companies with closing-department emails) and orders per company per month from a published source"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#price",
+            "dated": "2026-11",
+            "claim": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11): the price this payer population pays for this exact work, from three agreeing published sources, uncontradicted",
+            "population": "title companies (three published fee schedules)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#conversionRates",
+            "dated": null,
+            "claim": "9 agreements from 60 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#directCosts",
+            "dated": null,
+            "claim": "$75 per signing to SignRight Notary Network (written rate)",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#buyerVolume",
+            "dated": null,
+            "claim": "Estimate only: about 2,000 mobile signings a month in the metro area",
+            "population": "metro-area title companies (estimate, not a count)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#payer",
+            "dated": null,
+            "claim": "Payer is title and escrow companies, reached via the state land-title association roster",
+            "population": "title and escrow companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 20 signings at $150 (about 134 contacts at the measured 15% close rate) are needed within 30 days, and nobody has counted how many title/escrow companies on the state land-title association roster can be reached or how often each orders overflow signings; the card's 2,000-a-month figure is an estimate.",
+          "resolution": "Research the state land-title association roster: count member title/escrow companies with published closing-department emails and find a published figure for overflow mobile-signing orders per company per month. If the count carries 20 signings within 30 days (about 134 contacts at the measured 15% close rate, or fewer companies ordering repeatedly), re-plan through SignRight at $75 per signing at the established $150 rate, checking the first outreach batch against the measured close rate before working the rest of the roster; if the roster cannot carry 20 signings, report the target as out of reach on that count.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Add OFFER_AND_PRICE to noPlan.decisiveLinks and set the price quantity to UNKNOWN",
+            "resolution": "Rebutted. The card's price fact is kind EVIDENCE and reads 'Title companies pay mobile signing services $150 per refinance signing' from three published fee schedules dated 2026-11: it states what this plan's payer (title and escrow companies, card payer) pays for this exact service, not a figure one person said, an estimate, a grant or a single organisation's quote. Three published schedules agree and no fact contradicts them; Brain's own OFFER_AND_PRICE link is ok on 'price 150 USD (EVIDENCE)'. A published market rate paid by the same buyer population for the same scope is an established price; the plan offers at that rate, it does not invent one. The quantity stays EVIDENCED."
+          },
+          {
+            "finding": "Rewrite the resolution: research the roster count, then a live priced offer at $150 (CONDITIONAL) rather than re-planning straight to EXECUTABLE",
+            "resolution": "Partly accepted: the resolution now says the plan is re-planned once the roster is counted, as EXECUTABLE if the count carries 20 signings at the established price and measured 15% close rate, and the first outreach batch is still checked against the measured close rate before the full roster is worked. A separate price test is not added because price is established (see condition 0)."
+          },
+          {
+            "finding": "The 9/60 agreements should state the price agreed",
+            "resolution": "Noted, not decisive: the conversion fact is EVIDENCE measured on this offer's own sales (brain:CONVERSION), and the price is established independently by the price fact, so the plan does not depend on the 9 agreements' own price."
+          },
+          {
+            "finding": "Brain's MARKET_VOLUME basis says 19 deals; 20 is correct",
+            "resolution": "Agreed; the plan keeps 20 signings (20 x $150 = $3,000)."
+          },
+          {
+            "condition": 0,
+            "decision": "REBUTTED",
+            "records": [
+              "price",
+              "payer",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ffcfe0736a17_9e6c3e",
+        "digest": "ffcfe0736a17b15c545a9e76",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:37:05.372Z"
+      },
+      {
+        "goalId": "wst_e09eb4cafae94bc1a118",
+        "contractDigest": "12878b18fa2e8749a40f2f48",
+        "parentRevisionId": "rev_ffcfe0736a17_9e6c3e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: overflow mobile loan-signing coverage lacks an established buyer count",
+          "opportunityIds": [],
+          "why": "Price ($150, three published fee schedules), conversion (9 of 60 measured on this offer), fulfilment (SignRight at a written $75) and settlement (7 days) are evidenced, but $3,000 of settled cash needs 20 signings at $150, i.e. about 134 contacts at the measured 15% close rate, and the only volume figure on the card (2,000 signings a month) is an estimate (RECOMMENDATION), not a count of reachable title companies or their order frequency."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now as a conditional plan",
+            "why": "Rejected: the buyer count is a published-roster question research can answer before outreach, not an unknown only a live test measures; starting without it risks a pool too small for 20 signings."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the title and escrow companies on the state land-title association roster with reachable closing-department emails, and how often each orders overflow mobile signings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_reach"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per signing (what title companies pay signing services)",
+            "status": "EVIDENCED",
+            "value": 15000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per signing",
+            "status": "EVIDENCED",
+            "value": 7500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signings needed",
+            "status": "EVIDENCED",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable title companies and order frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers / orders per month",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "a counted roster (number of companies with closing-department emails) and orders per company per month from a published source"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#price",
+            "dated": "2026-11",
+            "claim": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11): the price this payer population pays for this exact work, from three agreeing published sources, uncontradicted",
+            "population": "title companies (three published fee schedules)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#conversionRates",
+            "dated": null,
+            "claim": "9 agreements from 60 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#directCosts",
+            "dated": null,
+            "claim": "$75 per signing to SignRight Notary Network (written rate)",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#buyerVolume",
+            "dated": null,
+            "claim": "Estimate only: about 2,000 mobile signings a month in the metro area",
+            "population": "metro-area title companies (estimate, not a count)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#payer",
+            "dated": null,
+            "claim": "Payer is title and escrow companies, reached via the state land-title association roster",
+            "population": "title and escrow companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 20 signings at $150 (about 134 contacts at the measured 15% close rate) are needed within 30 days, and nobody has counted how many title/escrow companies on the state land-title association roster can be reached or how often each orders overflow signings; the card's 2,000-a-month figure is an estimate.",
+          "resolution": "Research the state land-title association roster: count member title/escrow companies with published closing-department emails and find a published figure for overflow mobile-signing orders per company per month. If the count carries 20 signings within 30 days (about 134 contacts at the measured 15% close rate, or fewer companies ordering repeatedly), re-plan through SignRight at $75 per signing at the published $150 rate, with the first outreach batch as a priced proof: at least 3 signed or paid signings at $150 from the first 20 contacts by day 7; fewer, and the plan stops and re-plans on the price and close rate actually observed; otherwise work the rest of the roster. If the roster cannot carry 20 signings, report the target as out of reach on that count.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The price quantity should be marked as a benchmark rate, not an evidenced purchase price",
+            "resolution": "Rebutted. The card's price fact (kind EVIDENCE) is not phrased as a seller's asking price; it states the transaction: 'Title companies pay mobile signing services $150 per refinance signing', sourced to three published fee schedules dated 2026-11. Its payer is exactly this plan's payer (card payer: title and escrow companies) and its scope is exactly this offer (overflow mobile loan-signings). A published fee schedule is the rate at which those signings are bought: title companies order against it, so it is the market purchase price for this population, not one person's say-so, an estimate, a grant, or one organisation's quote, and nothing on the card contradicts it. Brain's OFFER_AND_PRICE link is ok on that EVIDENCE fact. Requiring a price on this seller's own past sales would make every new entrant's market price unestablished, which is not the standard the evidence rules set. The quantity stays EVIDENCED; the plan's decisive gap remains MARKET_VOLUME alone."
+          },
+          {
+            "finding": "Resolution: after the roster count, the plan can at most be CONDITIONAL with validation.decides = OFFER_AND_PRICE",
+            "resolution": "Partly accepted as a safeguard, not as a missing link: the resolution now makes the first outreach batch a priced proof (signed or paid signings at $150 from title companies by a named day, with a stop rule that re-plans on the price actually accepted), which costs nothing extra. Because price is established by the EVIDENCE fact, OFFER_AND_PRICE is not added to the decisive links; the plan's stance is decided by the roster count."
+          },
+          {
+            "finding": "If the 9 agreements were at $150, record that price on the conversion fact",
+            "resolution": "The card's conversionRates fact does not state the agreed price, and the author cannot edit card facts; the plan does not rely on it, since the price is established by the separate price fact."
+          },
+          {
+            "condition": 0,
+            "decision": "REBUTTED",
+            "records": [
+              "price",
+              "payer",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c8da27f178b9_359e3c",
+        "digest": "c8da27f178b935515807ded8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:41:37.320Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_e09eb4cafae94bc1a118",
+      "contractDigest": "12878b18fa2e8749a40f2f48",
+      "parentRevisionId": "rev_ffcfe0736a17_9e6c3e",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan yet: overflow mobile loan-signing coverage lacks an established buyer count",
+        "opportunityIds": [],
+        "why": "Price ($150, three published fee schedules), conversion (9 of 60 measured on this offer), fulfilment (SignRight at a written $75) and settlement (7 days) are evidenced, but $3,000 of settled cash needs 20 signings at $150, i.e. about 134 contacts at the measured 15% close rate, and the only volume figure on the card (2,000 signings a month) is an estimate (RECOMMENDATION), not a count of reachable title companies or their order frequency."
+      },
+      "alternatives": [
+        {
+          "title": "Start outreach now as a conditional plan",
+          "why": "Rejected: the buyer count is a published-roster question research can answer before outreach, not an unknown only a live test measures; starting without it risks a pool too small for 20 signings."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count the title and escrow companies on the state land-title association roster with reachable closing-department emails, and how often each orders overflow mobile signings",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_volume",
+            "s_reach"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per signing (what title companies pay signing services)",
+          "status": "EVIDENCED",
+          "value": 15000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "close rate",
+          "status": "EVIDENCED",
+          "value": 0.15,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per signing",
+          "status": "EVIDENCED",
+          "value": 7500,
+          "unit": "cents",
+          "sources": [
+            "s_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signings needed",
+          "status": "EVIDENCED",
+          "value": 20,
+          "unit": "deals",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "reachable title companies and order frequency",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "buyers / orders per month",
+          "sources": [
+            "s_volume"
+          ],
+          "needs": "a counted roster (number of companies with closing-department emails) and orders per company per month from a published source"
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#price",
+          "dated": "2026-11",
+          "claim": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11): the price this payer population pays for this exact work, from three agreeing published sources, uncontradicted",
+          "population": "title companies (three published fee schedules)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1a781394dc8240ad8bd0"
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#conversionRates",
+          "dated": null,
+          "claim": "9 agreements from 60 contacts",
+          "population": "this offer's own contacts",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1a781394dc8240ad8bd0"
+        },
+        {
+          "id": "s_cost",
+          "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#directCosts",
+          "dated": null,
+          "claim": "$75 per signing to SignRight Notary Network (written rate)",
+          "population": "supplier",
+          "matchesBuyer": false,
+          "opportunityId": "cop_1a781394dc8240ad8bd0"
+        },
+        {
+          "id": "s_volume",
+          "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#buyerVolume",
+          "dated": null,
+          "claim": "Estimate only: about 2,000 mobile signings a month in the metro area",
+          "population": "metro-area title companies (estimate, not a count)",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1a781394dc8240ad8bd0"
+        },
+        {
+          "id": "s_reach",
+          "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#payer",
+          "dated": null,
+          "claim": "Payer is title and escrow companies, reached via the state land-title association roster",
+          "population": "title and escrow companies",
+          "matchesBuyer": true,
+          "opportunityId": "cop_1a781394dc8240ad8bd0"
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: 20 signings at $150 (about 134 contacts at the measured 15% close rate) are needed within 30 days, and nobody has counted how many title/escrow companies on the state land-title association roster can be reached or how often each orders overflow signings; the card's 2,000-a-month figure is an estimate.",
+        "resolution": "Research the state land-title association roster: count member title/escrow companies with published closing-department emails and find a published figure for overflow mobile-signing orders per company per month. If the count carries 20 signings within 30 days (about 134 contacts at the measured 15% close rate, or fewer companies ordering repeatedly), re-plan through SignRight at $75 per signing at the published $150 rate, with the first outreach batch as a priced proof: at least 3 signed or paid signings at $150 from the first 20 contacts by day 7; fewer, and the plan stops and re-plans on the price and close rate actually observed; otherwise work the rest of the roster. If the roster cannot carry 20 signings, report the target as out of reach on that count.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "The price quantity should be marked as a benchmark rate, not an evidenced purchase price",
+          "resolution": "Rebutted. The card's price fact (kind EVIDENCE) is not phrased as a seller's asking price; it states the transaction: 'Title companies pay mobile signing services $150 per refinance signing', sourced to three published fee schedules dated 2026-11. Its payer is exactly this plan's payer (card payer: title and escrow companies) and its scope is exactly this offer (overflow mobile loan-signings). A published fee schedule is the rate at which those signings are bought: title companies order against it, so it is the market purchase price for this population, not one person's say-so, an estimate, a grant, or one organisation's quote, and nothing on the card contradicts it. Brain's OFFER_AND_PRICE link is ok on that EVIDENCE fact. Requiring a price on this seller's own past sales would make every new entrant's market price unestablished, which is not the standard the evidence rules set. The quantity stays EVIDENCED; the plan's decisive gap remains MARKET_VOLUME alone."
+        },
+        {
+          "finding": "Resolution: after the roster count, the plan can at most be CONDITIONAL with validation.decides = OFFER_AND_PRICE",
+          "resolution": "Partly accepted as a safeguard, not as a missing link: the resolution now makes the first outreach batch a priced proof (signed or paid signings at $150 from title companies by a named day, with a stop rule that re-plans on the price actually accepted), which costs nothing extra. Because price is established by the EVIDENCE fact, OFFER_AND_PRICE is not added to the decisive links; the plan's stance is decided by the roster count."
+        },
+        {
+          "finding": "If the 9 agreements were at $150, record that price on the conversion fact",
+          "resolution": "The card's conversionRates fact does not state the agreed price, and the author cannot edit card facts; the plan does not rely on it, since the price is established by the separate price fact."
+        },
+        {
+          "condition": 0,
+          "decision": "REBUTTED",
+          "records": [
+            "price",
+            "payer",
+            "conversionRates",
+            "brain:OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_1a781394dc8240ad8bd0",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_c8da27f178b9_359e3c",
+      "digest": "c8da27f178b935515807ded8",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:41:37.320Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_c8da27f178b9_359e3c",
+      "digest": "c8da27f178b935515807ded8",
+      "contractDigest": "12878b18fa2e8749a40f2f48",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Overflow mobile loan-signing agent coverage for title compan\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5400× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Overflow mobile loan-signing agent coverage for title companies\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_1a781394dc8240ad8bd0"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Overflow mobile loan-signing agent coverage for title companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Overflow mobile loan-signing agent coverage for title companies\"",
+            "owner": "PERSON",
+            "cost": 75
+          },
+          {
+            "label": "Collect payment for \"Overflow mobile loan-signing agent coverage for title companies\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Establish how many buyers for \"Overflow mobile loan-signing agent coverage for title companies\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+        "openings": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "title": "Overflow mobile loan-signing agent coverage for title companies",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 150,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Title and escrow companies",
+              "reachableChannel": "Closing-department emails of the title companies on the state land-title association roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:30.478Z",
+              "offerScope": "Overflow mobile loan-signing agent coverage for title companies",
+              "priceCents": 15000,
+              "currency": "USD",
+              "fulfillmentOwner": "SignRight Notary Network (written rate, $75 per signing)",
+              "peakFundingCents": 0,
+              "humanHours": 0.3,
+              "requiredCapabilities": [],
+              "industry": "title and escrow",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Closing-department emails of the title companies on the state land-title associa"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 150 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 9 accepted of 60 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "19 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by SignRight Notary Network (written rate, $75 per signing) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 75, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "Title companies in the metro area probably order about 2,000 mobile signings a month.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Overflow mobile loan-signing agent coverage for title companies to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "9 agreements from 60 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$75",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "SignRight Notary Network (written rate, $75 per signing) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Title and escrow companies",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_9da43827dcb64b20af21"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:23:58.013Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_cf60aaabce71_581524",
+        "revisionDigest": "cf60aaabce716c27b47d8e28",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0377c88a5f8547e2b98f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "NO_PLAN is a defensible stance and MARKET_VOLUME is correctly named: the only volume figure is a RECOMMENDATION ('probably about 2,000 mobile signings a month' in the metro), which is an estimate of a category total shared among many signing services, not a count of reachable title companies or of this seller's order volume; 20 signings x $150 = $3,000 at the 15% measured rate needs about 134 contacts (20 / 0.15 = 133.3), and nothing shows that many reachable buyers or enough repeat orders. But the revision treats price as EVIDENCED when it is not established for this buyer: the card's price fact is 'three published signing-service fee schedules', i.e. what other signing services list as their charge. That is a benchmark of what someone else charges, not a purchase price these title companies are shown paying for this offer; the 9/60 agreements on the card carry no price. So the no-plan omits a second decisive link, and its resolution ('if the roster count is enough, re-plan as executable through SignRight at $75') is wrong: even with the roster counted, OFFER_AND_PRICE would still rest on another seller's figure, so the most the evidence could support is a CONDITIONAL plan whose live priced offer measures what these buyers pay. Economics would hold if $150 were paid (cost $75 written, exposure $0, 7 days to cash).",
+        "findings": [
+          "Add OFFER_AND_PRICE to noPlan.decisiveLinks and set the price quantity to UNKNOWN (benchmark $150 from published fee schedules of other services), not EVIDENCED.",
+          "Rewrite the resolution: research the roster count and order frequency (MARKET_VOLUME), then a live priced offer at $150 to establish OFFER_AND_PRICE (a CONDITIONAL plan with proof/stop/continue), rather than re-planning straight to EXECUTABLE.",
+          "The 9/60 agreements should state the price agreed; if they were at $150 that would establish the price on this offer's own record and remove the second gap, but the card does not say so.",
+          "Brain's MARKET_VOLUME basis says 19 deals needed; at $150, 19 x $150 = $2,850 < $3,000, so 20 is correct as the revision states."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:34:46.051Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The price fact is three published signing-service fee schedules: what other services charge, not a price these title companies are shown paying for this offer. A benchmark is not this buyer's purchase price."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_ffcfe0736a17_9e6c3e",
+        "revisionDigest": "ffcfe0736a17b15c545a9e76",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0377c88a5f8547e2b98f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "I re-examined the rebuttal against the card. MARKET_VOLUME remains correctly named as the decisive gap and NO_PLAN remains the right stance today. The disagreement is OFFER_AND_PRICE. The price fact's own words are 'three published signing-service fee schedules': those are the rates signing services publish as what they charge. A published fee schedule is a seller's list price, i.e. a benchmark of what someone else charges; it is not a record of these title companies paying $150 to this offer, and nothing on this offer's own record (the 9/60 agreements carry no price) shows that. Brain's OFFER_AND_PRICE basis is 'price 150 USD (EVIDENCE)', not this offer's own sales, so the contradicting record is the price fact itself. Agreement among three sellers' schedules shows the market rate is consistent, which makes $150 a reasonable offer price, but it is still not a purchase price these buyers are shown paying a new provider. The revised resolution still re-plans to EXECUTABLE once the roster is counted at 'the established $150 rate', and its first-batch check measures only the close rate. The fix is small: name OFFER_AND_PRICE alongside MARKET_VOLUME (or as the link the first batch decides), and make the first outreach batch a priced proof: paid or signed orders at $150 from title companies, with a stop rule that re-plans on the price actually paid. Arithmetic is otherwise correct: 20 x $150 = $3,000; 20 / 0.15 = 134 contacts; margin $75 per signing at SignRight's written rate; exposure $0; 7 days to cash.",
+        "findings": [
+          "The price quantity is labelled 'what title companies pay signing services': that is a market benchmark from sellers' published schedules, so it should be marked as a benchmark rate (offer price), not as an evidenced purchase price for this offer.",
+          "Resolution: after the roster count, the plan can at most be CONDITIONAL with validation.decides = OFFER_AND_PRICE (proof: N paid/signed signings at $150 from the first batch by a named day; stop: fewer than N, re-plan on the price buyers actually accept; continue: work the rest of the roster). This is cheap (the first batch is outreach the plan already includes) and removes the unproven assumption.",
+          "If the 9 agreements on the card were in fact at $150, record that price on the conversion fact: it would establish OFFER_AND_PRICE on this offer's own record and settle the dispute without a test."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:39:18.487Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "link": "OFFER_AND_PRICE",
+            "basis": "EVIDENCE",
+            "field": "price",
+            "why": "The price fact cites three published signing-service fee schedules: sellers' list prices, a benchmark of what others charge, not a record of these title companies paying $150 for this offer. No agreement or payment on this offer's own record carries a price."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_c8da27f178b9_359e3c",
+        "revisionDigest": "c8da27f178b935515807ded8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0377c88a5f8547e2b98f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance with MARKET_VOLUME as the decisive gap: the only volume figure is a RECOMMENDATION estimate of a metro-wide category total (about 2,000 signings a month, shared among every signing service), not a count of reachable title companies or of orders this seller can win; 20 signings x $150 = $3,000 needs about 134 contacts at the measured 9/60 = 15% close rate (20 / 0.15 = 133.3), and nothing shows that many reachable buyers. The resolution is now actionable and safe: research the land-title association roster count and order frequency, then re-plan through SignRight at its written $75 (margin $75, exposure $0, 7 days to cash) with the first outreach batch as a priced proof (at least 3 signed or paid signings at $150 from the first 20 contacts by day 7; fewer stops and re-plans on the price and close rate actually observed). That proof is exactly the live test my earlier condition asked for, so the owner will not be committed to $150 before these buyers have accepted it. Nothing unknown is treated as known in what the plan does now (one research step, no spend).",
+        "findings": [
+          "We still disagree on the label: I read three published signing-service fee schedules as sellers' list rates (a market benchmark), the author reads them as the rate title companies buy at. It no longer changes any action, because the priced first batch decides it before the roster is worked; when the re-plan is written, its validation.decides should name OFFER_AND_PRICE if the proof is still pending.",
+          "The proof threshold (3 of 20) equals the expected yield at 15%, so it is a fair but tight test; a miss by one should be read with the close rate, as the stop rule says.",
+          "Brain's MARKET_VOLUME basis says 19 deals; 19 x $150 = $2,850 < $3,000, so the plan's 20 is correct."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:43:10.437Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_c8da27f178b9_359e3c",
+      "digest": "c8da27f178b935515807ded8",
+      "contractDigest": "12878b18fa2e8749a40f2f48",
+      "plan": {
+        "goalId": "wst_e09eb4cafae94bc1a118",
+        "contractDigest": "12878b18fa2e8749a40f2f48",
+        "parentRevisionId": "rev_ffcfe0736a17_9e6c3e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan yet: overflow mobile loan-signing coverage lacks an established buyer count",
+          "opportunityIds": [],
+          "why": "Price ($150, three published fee schedules), conversion (9 of 60 measured on this offer), fulfilment (SignRight at a written $75) and settlement (7 days) are evidenced, but $3,000 of settled cash needs 20 signings at $150, i.e. about 134 contacts at the measured 15% close rate, and the only volume figure on the card (2,000 signings a month) is an estimate (RECOMMENDATION), not a count of reachable title companies or their order frequency."
+        },
+        "alternatives": [
+          {
+            "title": "Start outreach now as a conditional plan",
+            "why": "Rejected: the buyer count is a published-roster question research can answer before outreach, not an unknown only a live test measures; starting without it risks a pool too small for 20 signings."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count the title and escrow companies on the state land-title association roster with reachable closing-department emails, and how often each orders overflow mobile signings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume",
+              "s_reach"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per signing (what title companies pay signing services)",
+            "status": "EVIDENCED",
+            "value": 15000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "close rate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per signing",
+            "status": "EVIDENCED",
+            "value": 7500,
+            "unit": "cents",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signings needed",
+            "status": "EVIDENCED",
+            "value": 20,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachable title companies and order frequency",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers / orders per month",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "a counted roster (number of companies with closing-department emails) and orders per company per month from a published source"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#price",
+            "dated": "2026-11",
+            "claim": "Title companies pay mobile signing services $150 per refinance signing (three published signing-service fee schedules, 2026-11): the price this payer population pays for this exact work, from three agreeing published sources, uncontradicted",
+            "population": "title companies (three published fee schedules)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#conversionRates",
+            "dated": null,
+            "claim": "9 agreements from 60 contacts",
+            "population": "this offer's own contacts",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#directCosts",
+            "dated": null,
+            "claim": "$75 per signing to SignRight Notary Network (written rate)",
+            "population": "supplier",
+            "matchesBuyer": false,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#buyerVolume",
+            "dated": null,
+            "claim": "Estimate only: about 2,000 mobile signings a month in the metro area",
+            "population": "metro-area title companies (estimate, not a count)",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          },
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_1a781394dc8240ad8bd0#payer",
+            "dated": null,
+            "claim": "Payer is title and escrow companies, reached via the state land-title association roster",
+            "population": "title and escrow companies",
+            "matchesBuyer": true,
+            "opportunityId": "cop_1a781394dc8240ad8bd0"
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 20 signings at $150 (about 134 contacts at the measured 15% close rate) are needed within 30 days, and nobody has counted how many title/escrow companies on the state land-title association roster can be reached or how often each orders overflow signings; the card's 2,000-a-month figure is an estimate.",
+          "resolution": "Research the state land-title association roster: count member title/escrow companies with published closing-department emails and find a published figure for overflow mobile-signing orders per company per month. If the count carries 20 signings within 30 days (about 134 contacts at the measured 15% close rate, or fewer companies ordering repeatedly), re-plan through SignRight at $75 per signing at the published $150 rate, with the first outreach batch as a priced proof: at least 3 signed or paid signings at $150 from the first 20 contacts by day 7; fewer, and the plan stops and re-plans on the price and close rate actually observed; otherwise work the rest of the roster. If the roster cannot carry 20 signings, report the target as out of reach on that count.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The price quantity should be marked as a benchmark rate, not an evidenced purchase price",
+            "resolution": "Rebutted. The card's price fact (kind EVIDENCE) is not phrased as a seller's asking price; it states the transaction: 'Title companies pay mobile signing services $150 per refinance signing', sourced to three published fee schedules dated 2026-11. Its payer is exactly this plan's payer (card payer: title and escrow companies) and its scope is exactly this offer (overflow mobile loan-signings). A published fee schedule is the rate at which those signings are bought: title companies order against it, so it is the market purchase price for this population, not one person's say-so, an estimate, a grant, or one organisation's quote, and nothing on the card contradicts it. Brain's OFFER_AND_PRICE link is ok on that EVIDENCE fact. Requiring a price on this seller's own past sales would make every new entrant's market price unestablished, which is not the standard the evidence rules set. The quantity stays EVIDENCED; the plan's decisive gap remains MARKET_VOLUME alone."
+          },
+          {
+            "finding": "Resolution: after the roster count, the plan can at most be CONDITIONAL with validation.decides = OFFER_AND_PRICE",
+            "resolution": "Partly accepted as a safeguard, not as a missing link: the resolution now makes the first outreach batch a priced proof (signed or paid signings at $150 from title companies by a named day, with a stop rule that re-plans on the price actually accepted), which costs nothing extra. Because price is established by the EVIDENCE fact, OFFER_AND_PRICE is not added to the decisive links; the plan's stance is decided by the roster count."
+          },
+          {
+            "finding": "If the 9 agreements were at $150, record that price on the conversion fact",
+            "resolution": "The card's conversionRates fact does not state the agreed price, and the author cannot edit card facts; the plan does not rely on it, since the price is established by the separate price fact."
+          },
+          {
+            "condition": 0,
+            "decision": "REBUTTED",
+            "records": [
+              "price",
+              "payer",
+              "conversionRates",
+              "brain:OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_1a781394dc8240ad8bd0",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c8da27f178b9_359e3c",
+        "digest": "c8da27f178b935515807ded8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:41:37.320Z"
+      },
+      "review": {
+        "revisionId": "rev_c8da27f178b9_359e3c",
+        "revisionDigest": "c8da27f178b935515807ded8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ccb9f1daef6b4ffc9f95/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0377c88a5f8547e2b98f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance with MARKET_VOLUME as the decisive gap: the only volume figure is a RECOMMENDATION estimate of a metro-wide category total (about 2,000 signings a month, shared among every signing service), not a count of reachable title companies or of orders this seller can win; 20 signings x $150 = $3,000 needs about 134 contacts at the measured 9/60 = 15% close rate (20 / 0.15 = 133.3), and nothing shows that many reachable buyers. The resolution is now actionable and safe: research the land-title association roster count and order frequency, then re-plan through SignRight at its written $75 (margin $75, exposure $0, 7 days to cash) with the first outreach batch as a priced proof (at least 3 signed or paid signings at $150 from the first 20 contacts by day 7; fewer stops and re-plans on the price and close rate actually observed). That proof is exactly the live test my earlier condition asked for, so the owner will not be committed to $150 before these buyers have accepted it. Nothing unknown is treated as known in what the plan does now (one research step, no spend).",
+        "findings": [
+          "We still disagree on the label: I read three published signing-service fee schedules as sellers' list rates (a market benchmark), the author reads them as the rate title companies buy at. It no longer changes any action, because the priced first batch decides it before the roster is worked; when the re-plan is written, its validation.decides should name OFFER_AND_PRICE if the proof is still pending.",
+          "The proof threshold (3 of 20) equals the expected yield at 15%, so it is a fair but tight test; a miss by one should be read with the close rate, as the stop rule says.",
+          "Brain's MARKET_VOLUME basis says 19 deals; 19 x $150 = $2,850 < $3,000, so the plan's 20 is correct."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:43:10.437Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "30dc89726327948f",
+        "openings": {
+          "cop_1a781394dc8240ad8bd0": "2df3b1ebe3f92f9d"
+        }
+      },
+      "at": "2026-11-27T08:43:48.669Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

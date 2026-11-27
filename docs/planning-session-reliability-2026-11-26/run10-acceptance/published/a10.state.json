@@ -1,0 +1,694 @@
+{
+ "contract": {
+  "goalId": "wst_02d06da60bb947d69564",
+  "words": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 350000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 30,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "3500 USD of settled cash collected within 30 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "37215c1f5da9ba81f0b15f8c"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_02d06da60bb947d69564",
+   "contractDigest": "37215c1f5da9ba81f0b15f8c",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the number of reachable buyers is counted",
+    "opportunityIds": [],
+    "why": "The renewal workbook has an evidenced $290 price, 12% measured conversion (6/50), Brain fulfilment and 3-day settlement, but $3,500 needs 13 sales (~109 contacts) and the only buyer count is Brain's own estimate (~400 agencies), which is not evidence."
+   },
+   "alternatives": [
+    {
+     "title": "Start selling now as a conditional test",
+     "why": "The missing link is a countable fact (a published register), not a quantity only a live test measures; it should be researched, not assumed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Count independent P&C agencies reachable through a published register or association directory in the region, with source, and how often each buys a renewal workbook",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 290,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "agencies",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": "A counted, sourced register of reachable agencies (at least ~109 needed for 13 sales at 12%)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#price",
+     "dated": "2026-11",
+     "claim": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings)",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#conversionRates",
+     "dated": "2026-11",
+     "claim": "6 agreements from 50 contacts",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Brain estimates roughly 400 agencies would buy (RECOMMENDATION, not evidence)",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "MARKET_VOLUME: 13 sales at $290 are needed (~109 contacts at 12%), but no source counts how many reachable independent P&C agencies exist or how often one buys; the 400 figure is Brain's estimate only.",
+    "resolution": "Research a published count (state insurance department licensed-agency register or independent-agent association directory for the region) with its number and source, plus purchase frequency; if at least ~110 reachable agencies are evidenced, resubmit as EXECUTABLE.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_966f612cde334f2dbcf9",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_3a92b0600794_e05e27",
+   "digest": "3a92b06007949948539b24f1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_15594884b8374c19a04e/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:04.272Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_02d06da60bb947d69564",
+  "contractDigest": "37215c1f5da9ba81f0b15f8c",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan until the number of reachable buyers is counted",
+   "opportunityIds": [],
+   "why": "The renewal workbook has an evidenced $290 price, 12% measured conversion (6/50), Brain fulfilment and 3-day settlement, but $3,500 needs 13 sales (~109 contacts) and the only buyer count is Brain's own estimate (~400 agencies), which is not evidence."
+  },
+  "alternatives": [
+   {
+    "title": "Start selling now as a conditional test",
+    "why": "The missing link is a countable fact (a published register), not a quantity only a live test measures; it should be researched, not assumed."
+   }
+  ],
+  "steps": [
+   {
+    "id": "research",
+    "kind": "RESEARCH",
+    "label": "Count independent P&C agencies reachable through a published register or association directory in the region, with source, and how often each buys a renewal workbook",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "buyerVolume"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "price",
+    "status": "EVIDENCED",
+    "value": 290,
+    "unit": "USD",
+    "sources": [
+     "price"
+    ],
+    "needs": null
+   },
+   {
+    "name": "conversion",
+    "status": "EVIDENCED",
+    "value": 0.12,
+    "unit": "agreements per contact",
+    "sources": [
+     "conversionRates"
+    ],
+    "needs": null
+   },
+   {
+    "name": "reachable buyers",
+    "status": "UNKNOWN",
+    "value": null,
+    "unit": "agencies",
+    "sources": [
+     "buyerVolume"
+    ],
+    "needs": "A counted, sourced register of reachable agencies (at least ~109 needed for 13 sales at 12%)"
+   }
+  ],
+  "sources": [
+   {
+    "id": "price",
+    "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#price",
+    "dated": "2026-11",
+    "claim": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings)",
+    "population": "Agency principals at independent property-and-casualty agencies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_966f612cde334f2dbcf9"
+   },
+   {
+    "id": "conversionRates",
+    "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#conversionRates",
+    "dated": "2026-11",
+    "claim": "6 agreements from 50 contacts",
+    "population": "Agency principals at independent property-and-casualty agencies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_966f612cde334f2dbcf9"
+   },
+   {
+    "id": "buyerVolume",
+    "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#buyerVolume",
+    "dated": "2026-11",
+    "claim": "Brain estimates roughly 400 agencies would buy (RECOMMENDATION, not evidence)",
+    "population": "Agency principals at independent property-and-casualty agencies",
+    "matchesBuyer": true,
+    "opportunityId": "cop_966f612cde334f2dbcf9"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "MARKET_VOLUME: 13 sales at $290 are needed (~109 contacts at 12%), but no source counts how many reachable independent P&C agencies exist or how often one buys; the 400 figure is Brain's estimate only.",
+   "resolution": "Research a published count (state insurance department licensed-agency register or independent-agent association directory for the region) with its number and source, plus purchase frequency; if at least ~110 reachable agencies are evidenced, resubmit as EXECUTABLE.",
+   "decisiveLinks": [
+    "MARKET_VOLUME"
+   ]
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_966f612cde334f2dbcf9",
+    "missing": [
+     "MARKET_VOLUME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "MARKET_VOLUME"
+  ],
+  "constraints": [],
+  "disagreements": [],
+  "revisionId": "rev_3a92b0600794_e05e27",
+  "digest": "3a92b06007949948539b24f1",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_15594884b8374c19a04e/author-C",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:04.272Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_3a92b0600794_e05e27",
+  "digest": "3a92b06007949948539b24f1",
+  "contractDigest": "37215c1f5da9ba81f0b15f8c",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "Not yet proven. The closest plan is \"Only: Policy-renewal retention workbook for independent insurance \", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 19734× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Policy-renewal retention workbook for independent insurance agencies\".",
+   "acceptance": "CANDIDATE_ONLY",
+   "considered": [
+    "cop_966f612cde334f2dbcf9"
+   ],
+   "integrity": [],
+   "steps": [
+    {
+     "label": "Sell \"Policy-renewal retention workbook for independent insurance agencies\"",
+     "owner": "BRAIN",
+     "cost": 0
+    },
+    {
+     "label": "Deliver \"Policy-renewal retention workbook for independent insurance agencies\"",
+     "owner": "PERSON",
+     "cost": 4
+    },
+    {
+     "label": "Collect payment for \"Policy-renewal retention workbook for independent insurance agencies\"",
+     "owner": "BRAIN",
+     "cost": 0
+    }
+   ],
+   "nextTest": "Establish how many buyers for \"Policy-renewal retention workbook for independent insurance agencies\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+   "openings": [
+    {
+     "opportunityId": "cop_966f612cde334f2dbcf9",
+     "title": "Policy-renewal retention workbook for independent insurance agencies",
+     "missing": [
+      "MARKET_VOLUME"
+     ],
+     "stage": "D_BUYER_VALIDATED",
+     "supportedReach": 290,
+     "potentialReach": 3500,
+     "card": {
+      "payer": "Agency principals at independent property-and-casualty agencies",
+      "reachableChannel": "Published agency emails and LinkedIn messages to agency principals",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:09:58.701Z",
+      "offerScope": "Policy-renewal retention workbook for independent insurance agencies",
+      "priceCents": 29000,
+      "currency": "USD",
+      "peakFundingCents": 0,
+      "humanHours": 0.5,
+      "requiredCapabilities": [
+       "PRODUCE_SPREADSHEET"
+      ],
+      "industry": "independent insurance agencies",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Published agency emails and LinkedIn messages to agency principals"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "price 290 USD (EVIDENCE)"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "14 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 4, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": true,
+       "basis": "3 days to usable cash against 30 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "buyerVolume",
+       "value": "Brain estimates that roughly 400 agencies in the region would buy a renewal workbook this quarter.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Policy-renewal retention workbook for independent insurance agencies to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "conversionRates",
+       "value": "6 agreements from 50 contacts",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "delivery",
+       "value": "A spreadsheet Brain produces.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$4",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Agency principals at independent property-and-casualty agencies",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "3 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_b9ade53c82804f0ca1e0"
+   ],
+   "scope": {
+    "targetCents": 350000,
+    "daysLeft": 30,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:11:37.486Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_3a92b0600794_e05e27",
+   "revisionDigest": "3a92b06007949948539b24f1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_15594884b8374c19a04e/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_1e73ad2f7b5f4a0fb342/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is the right stance and names the decisive gap. Price ($290, buyers paying for comparable workbooks), conversion (6/50 = 12% on this offer's own sales), Brain fulfilment (PRODUCE_SPREADSHEET), $4 cost, $0 exposure and 3-day settlement are evidenced. $3,500 / $290 = 12.07, so 13 sales (net $286 each: 13 x 286 = $3,718); at 12% that is about 109 contacts. The only buyer count is Brain's RECOMMENDATION (~400 agencies), which is an estimate, so MARKET_VOLUME is unestablished. It is a countable fact (a licensing register or association directory), not something only a live test measures, so CONDITIONAL would be wrong; researching the count is the correct next step.",
+   "findings": [
+    "Recomputed: 13 sales needed (12 x $290 = $3,480 < $3,500); ~109 contacts at 12%.",
+    "buyerVolume is RECOMMENDATION-only; the plan correctly treats reachable buyers as UNKNOWN.",
+    "decisiveLinks = [MARKET_VOLUME] matches Brain's single missing link and the parked buyerVolume question.",
+    "Resolution threshold (~110 evidenced reachable agencies, plus purchase frequency) is consistent with the arithmetic."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:39.845Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_3a92b0600794_e05e27",
+  "digest": "3a92b06007949948539b24f1",
+  "contractDigest": "37215c1f5da9ba81f0b15f8c",
+  "plan": {
+   "goalId": "wst_02d06da60bb947d69564",
+   "contractDigest": "37215c1f5da9ba81f0b15f8c",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the number of reachable buyers is counted",
+    "opportunityIds": [],
+    "why": "The renewal workbook has an evidenced $290 price, 12% measured conversion (6/50), Brain fulfilment and 3-day settlement, but $3,500 needs 13 sales (~109 contacts) and the only buyer count is Brain's own estimate (~400 agencies), which is not evidence."
+   },
+   "alternatives": [
+    {
+     "title": "Start selling now as a conditional test",
+     "why": "The missing link is a countable fact (a published register), not a quantity only a live test measures; it should be researched, not assumed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Count independent P&C agencies reachable through a published register or association directory in the region, with source, and how often each buys a renewal workbook",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 290,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "agreements per contact",
+     "sources": [
+      "conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "agencies",
+     "sources": [
+      "buyerVolume"
+     ],
+     "needs": "A counted, sourced register of reachable agencies (at least ~109 needed for 13 sales at 12%)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#price",
+     "dated": "2026-11",
+     "claim": "Agency principals pay $290 for comparable renewal-retention workbooks (three vendor listings)",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    },
+    {
+     "id": "conversionRates",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#conversionRates",
+     "dated": "2026-11",
+     "claim": "6 agreements from 50 contacts",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    },
+    {
+     "id": "buyerVolume",
+     "url": "https://brain.local/card/cop_966f612cde334f2dbcf9#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Brain estimates roughly 400 agencies would buy (RECOMMENDATION, not evidence)",
+     "population": "Agency principals at independent property-and-casualty agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_966f612cde334f2dbcf9"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "MARKET_VOLUME: 13 sales at $290 are needed (~109 contacts at 12%), but no source counts how many reachable independent P&C agencies exist or how often one buys; the 400 figure is Brain's estimate only.",
+    "resolution": "Research a published count (state insurance department licensed-agency register or independent-agent association directory for the region) with its number and source, plus purchase frequency; if at least ~110 reachable agencies are evidenced, resubmit as EXECUTABLE.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_966f612cde334f2dbcf9",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_3a92b0600794_e05e27",
+   "digest": "3a92b06007949948539b24f1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_15594884b8374c19a04e/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:04.272Z"
+  },
+  "review": {
+   "revisionId": "rev_3a92b0600794_e05e27",
+   "revisionDigest": "3a92b06007949948539b24f1",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_15594884b8374c19a04e/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_1e73ad2f7b5f4a0fb342/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is the right stance and names the decisive gap. Price ($290, buyers paying for comparable workbooks), conversion (6/50 = 12% on this offer's own sales), Brain fulfilment (PRODUCE_SPREADSHEET), $4 cost, $0 exposure and 3-day settlement are evidenced. $3,500 / $290 = 12.07, so 13 sales (net $286 each: 13 x 286 = $3,718); at 12% that is about 109 contacts. The only buyer count is Brain's RECOMMENDATION (~400 agencies), which is an estimate, so MARKET_VOLUME is unestablished. It is a countable fact (a licensing register or association directory), not something only a live test measures, so CONDITIONAL would be wrong; researching the count is the correct next step.",
+   "findings": [
+    "Recomputed: 13 sales needed (12 x $290 = $3,480 < $3,500); ~109 contacts at 12%.",
+    "buyerVolume is RECOMMENDATION-only; the plan correctly treats reachable buyers as UNKNOWN.",
+    "decisiveLinks = [MARKET_VOLUME] matches Brain's single missing link and the parked buyerVolume question.",
+    "Resolution threshold (~110 evidenced reachable agencies, plus purchase frequency) is consistent with the arithmetic."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:39.845Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+   "terms": "afc328ec1e09d81c",
+   "openings": {
+    "cop_966f612cde334f2dbcf9": "3b09110bbe28a178"
+   }
+  },
+  "at": "2026-11-27T12:19:49.834Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

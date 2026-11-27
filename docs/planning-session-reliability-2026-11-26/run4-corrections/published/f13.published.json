@@ -1,0 +1,152 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_0ad199865524_c073e6",
+      "digest": "0ad199865524410492d3acc7",
+      "contractDigest": "eb4da6bd7018dec3137978b4",
+      "plan": {
+        "goalId": "wst_ef44ee0a00c040f8ad16",
+        "contractDigest": "eb4da6bd7018dec3137978b4",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan settles inside 14 days",
+          "opportunityIds": [],
+          "why": "The only opening (three signed school-district bus-route accessibility audits at $3,000 each, $9,000 total) is established on every link except timing: school districts take 75 days to usable cash, and the window is 14 days, so none of the $6,000 settles in time."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the three signed district audits anyway",
+            "why": "Worth doing for the money, but the $9,000 settles around day 75, far outside the 14-day window, so it contributes $0 to this goal."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Ask whether the signed districts will pay on delivery or by card (shortening the 75-day settlement), and search for openings that settle within 14 days with no up-front capital",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_settle"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "q_settle_days",
+            "status": "EVIDENCED",
+            "value": 75,
+            "unit": "days to usable cash",
+            "sources": [
+              "src_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_settle",
+            "url": "https://brain.local/card/cop_3ef881f808b449b38c56#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "75 days to first cash",
+            "population": "school district transportation directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_agreement",
+            "url": "https://brain.local/card/cop_3ef881f808b449b38c56#agreements",
+            "dated": "2026-11-24",
+            "claim": "Three written acceptances at $3,000 each",
+            "population": "three school districts",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "School districts' cash arrives 75 days after the sale; the goal's window is 14 days, so the signed $9,000 settles outside the deadline and no held opening brings any settled cash in time.",
+          "resolution": "Owner extends the deadline to at least 75 days (the signed audits then carry $9,000 against the $6,000 target), or Brain secures payment-on-delivery terms from the districts or finds an opening that settles within 14 days with no up-front capital.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_3ef881f808b449b38c56",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_3ef881f808b449b38c56",
+            "why": "Settles in 75 days against a 14-day window."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Extend the window to at least 75 days, when the three signed district audits ($9,000) settle."
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_0ad199865524_c073e6",
+        "digest": "0ad199865524410492d3acc7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_7a199e01b50b4e74bf2b/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:53:43.161Z"
+      },
+      "review": {
+        "revisionId": "rev_0ad199865524_c073e6",
+        "revisionDigest": "0ad199865524410492d3acc7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_7a199e01b50b4e74bf2b/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_6b461abd926e4d9cbce8/reviewer-gamma",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a DEADLINE constraint is correct. Three written acceptances at $3,000 ($9,000) are established on every link except settlement: the card records 75 days to usable cash against a 14-day window, so $0 settles in time, and no held opening can reach the $6,000 even with all evidence. Brain's own verdict agrees (move the deadline to 75 days or lower the target). The research step (payment-on-delivery terms, other openings) is appropriate.",
+        "findings": [
+          "Minor: the resolution says that extending to 75 days makes the audits carry $9,000. It ignores the $25 direct cost per audit ($75), which is paid before cash arrives and so conflicts with the 'no up-front capital' limit (exposure cap $0) unless that cost is deferred. This does not change the stance."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:23.181Z"
+      },
+      "at": "2026-11-27T03:04:16.120Z"
+    }
+  }
+}

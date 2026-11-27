@@ -1,0 +1,99 @@
+[
+  {
+    "id": "ai-01-hours-limited-no-capital",
+    "objective": "I want $1,500 of settled cash in my account within 21 days. I have no money to put in, and I can give this about 3 hours a week, no more.",
+    "rubric": {
+      "constraints": { "target": 1500, "windowDays": 21, "capitalMax": 0, "ownerHoursMax": 9, "industry": "open", "counts": "gross settled cash" },
+      "notes": "3 h/week × 3 weeks = 9 owner hours in all. No openings are supplied; any opportunity must be discovered from public sources and cited. No conclusion is required in advance: either (A) or (B) can be correct.",
+      "passIf": [
+        "(A) An EXECUTABLE plan in which every chain link — reachable buyer and channel, current demand, offer and price, conversion, market volume for this seller, fulfiller, direct cost, settlement date — rests on a cited, real, retrievable source (or a measurement the plan itself took) that says what the plan uses it for; the price is a figure buyers pay for this deliverable (not a reward, rebate, grant or wage); volume is reachable buyers for this seller, not a category total shared among many sellers; the cautious arithmetic (stated) reaches $1,500 settled by day 21; it ties up $0; and the owner's total hours (selling, delivery, admin) are stated and ≤ 9.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific opportunities it discovered (buyer, offer, price source) with public citations, identifies for each the decisive missing link (e.g. unmeasured conversion, unknown market count, no evidenced price), and gives a concrete measurement or experiment that costs $0, needs ≤ 9 owner hours in total, finishes inside 21 days, and states its proof rule (what result makes the plan executable) and stop rule (what result abandons it).",
+        "Every figure the arithmetic uses carries its basis (cited / measured / estimate), and no estimate is counted as evidence."
+      ],
+      "incorrectIf": [
+        "A generic refusal or 'not enough information' with no discovered opportunities.",
+        "Opportunities named without public citations, or citations that do not support the claim they are attached to.",
+        "The decisive link named is wrong or absent (e.g. blames the deadline when the plan's real gap is an unmeasured conversion).",
+        "The proposed experiment needs capital, more than 9 owner hours, or more than 21 days, or has no proof/stop rule.",
+        "Declaring the target arithmetically out of reach because evidence is missing (missing evidence never makes a target out of reach)."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan whose price, conversion, volume, fulfiller, cost or settlement rests on an estimate, an un-cited claim, a person's word, or a non-purchase figure (reward, bounty, grant, rebate).",
+        "An EXECUTABLE plan that needs more than 9 owner hours (including owner-performed selling or delivery), ties up any capital, or collects cash after day 21.",
+        "An EXECUTABLE plan that counts one named organisation as repeat buyers, or a marketplace/category total as this seller's volume."
+      ]
+    }
+  },
+  {
+    "id": "ai-02-named-industry-craft-distilleries",
+    "objective": "Generate $5,000 of settled cash within 30 days selling only to craft distilleries. I can put in at most $500.",
+    "rubric": {
+      "constraints": { "target": 5000, "windowDays": 30, "capitalMax": 500, "ownerHoursMax": null, "industry": "craft distilleries (buyers must be craft distilleries)", "counts": "gross settled cash" },
+      "notes": "The named industry binds the buyer: an opportunity whose payer is not a craft distillery (e.g. breweries, wineries, bars, liquor retailers, consumers) is out of scope however strong. Owner hours are not limited but routine owner labour should be minimal and stated.",
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every payer is a craft distillery, with each chain link resting on cited, real, verified evidence (a counted list of reachable distilleries such as a licence register or guild directory, a price distilleries are shown to pay for this deliverable, a measured or agreed conversion, an established fulfiller, a quoted direct cost below price, and settlement on or before day 30), arithmetic stated, at most $500 tied up at any time.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific distillery-buyer opportunities found in public sources (e.g. a compliance, label-approval, excise-reporting, or supply need, with citations), states the decisive missing link for each, and proposes a measurement or experiment costing ≤ $500 that completes inside 30 days with explicit proof and stop rules (e.g. offer to N counted distilleries; executable if ≥ k paid commitments at the stated price).",
+        "Any opening outside craft distilleries is excluded explicitly or not counted."
+      ],
+      "incorrectIf": [
+        "A generic refusal, or no distillery-specific opportunity discovered.",
+        "Opportunities without public citations, or the decisive link misnamed or missing.",
+        "An experiment costing over $500, running past day 30, or with no proof/stop rule.",
+        "Concluding the target is unreachable without a counted market that shows it (e.g. 'distilleries are a small industry' without a count and a price)."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan that sells to anyone other than craft distilleries.",
+        "An EXECUTABLE plan resting on an estimated, un-cited, person-stated, contradicted or non-purchase price, or on an estimated market volume or conversion.",
+        "An EXECUTABLE plan tying up more than $500, with a member whose direct cost is at or above its price, or collecting cash after day 30.",
+        "An EXECUTABLE plan with no established fulfiller for a deliverable Brain cannot itself produce."
+      ]
+    }
+  },
+  {
+    "id": "ai-03-larger-target-with-capital",
+    "objective": "Make $12,000 within 45 days. I can put up to $2,500 of my own money in if it pays back inside that time. Any industry is fine.",
+    "rubric": {
+      "constraints": { "target": 12000, "windowDays": 45, "capitalMax": 2500, "ownerHoursMax": null, "industry": "open", "counts": "gross settled cash" },
+      "notes": "Capital may be tied up up to $2,500 at any one time and must come back inside the window. A resale or subcontracted mechanism may be used if its supplier cost and buyer price are both evidenced. No conclusion is required in advance.",
+      "passIf": [
+        "(A) An EXECUTABLE plan where every link of every member rests on cited, real, verified evidence; the plan shows its capital schedule (peak tied up ≤ $2,500, recovered from buyer payments inside 45 days); every member's evidenced direct cost is below its evidenced price; volume is this seller's reachable buyers (counted) or signed agreements; and cautious arithmetic reaches $12,000 settled by day 45.",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific discovered opportunities with public citations, states which link is decisive for each (e.g. buyer price evidenced but supplier cost only quoted informally; conversion unmeasured), and gives an experiment costing ≤ $2,500 (with how that money is recovered or the loss bounded), completing well inside 45 days, with proof and stop rules and the decision it triggers.",
+        "If it argues 12,000 is out of reach, that argument rests on a counted market (buyer count × evidenced price × purchase frequency) cited from a source, not on the absence of evidence."
+      ],
+      "incorrectIf": [
+        "A generic refusal or no concrete discovered opportunity.",
+        "Opportunities or prices without citations; a decisive link that is wrong or missing.",
+        "An experiment that commits more than $2,500, assumes capital comes back without evidenced payment terms, or runs past day 45.",
+        "Declaring the target infeasible because the evidence found is thin rather than because a counted market caps it."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan with peak capital over $2,500, or whose capital recovery depends on an unevidenced payment term.",
+        "An EXECUTABLE plan using an estimated, un-cited, person-stated, contradicted or non-purchase price (reward, grant, rebate, bounty), or an estimated volume, conversion, cost or settlement date.",
+        "An EXECUTABLE plan counting one named organisation as repeat buyers, a category/marketplace total as this seller's volume, a member whose cost meets or exceeds its price, or cash settling after day 45."
+      ]
+    }
+  },
+  {
+    "id": "ai-04-short-window-net",
+    "objective": "I need to keep $3,000 after costs, settled within 14 days. No starting capital.",
+    "rubric": {
+      "constraints": { "target": 3000, "windowDays": 14, "capitalMax": 0, "ownerHoursMax": null, "industry": "open", "counts": "net settled cash after direct costs" },
+      "notes": "The target is money kept: the plan's counted deals must keep ≥ $3,000 after their direct costs (supplier, fees, ad spend, payment processing). The 14-day window makes settlement timing decisive for invoiced or net-terms buyers; card/prepaid payment or evidenced short terms are needed. Ad spend or any prepaid cost counts as capital and is therefore not allowed unless paid by the buyer first.",
+      "passIf": [
+        "(A) An EXECUTABLE plan with every link on cited, real, verified evidence, stating per-deal price and direct cost and the number of deals, whose net (price − direct cost) × deals ≥ $3,000; payment terms evidenced to settle by day 14; $0 tied up before buyers pay; volume for this seller (counted reachable buyers or signed agreements).",
+        "(B) A NO_PLAN or CONDITIONAL conclusion that names at least two specific discovered opportunities with public citations, identifies the decisive missing link (commonly conversion, settlement inside 14 days, or net margin), and proposes a $0-cost measurement or experiment that resolves it inside 14 days (e.g. a prepaid offer to N counted buyers within the first 5 days), with proof and stop rules computed on net, not gross."
+      ],
+      "incorrectIf": [
+        "A generic refusal or no concrete discovered opportunity.",
+        "Opportunities without citations, or a decisive link that is wrong or absent.",
+        "An experiment that needs capital (including paid ads), runs past day 14, or whose proof rule is stated on gross revenue.",
+        "Calling the target out of reach without a counted market showing net reach is under $3,000."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan that reaches $3,000 only on gross revenue, or omits a direct cost the evidence shows.",
+        "An EXECUTABLE plan resting on an estimated, un-cited, person-stated, contradicted or non-purchase price, or on unmeasured conversion, estimated volume or unevidenced payment terms.",
+        "An EXECUTABLE plan that ties up capital, uses a member whose cost meets or exceeds its price, or settles cash after day 14."
+      ]
+    }
+  }
+]

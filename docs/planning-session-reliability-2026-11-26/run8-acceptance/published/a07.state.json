@@ -1,0 +1,1473 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_bbb6ff02ab1a4397886e",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "8f2e5164be2c256e0e117744"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_bbb6ff02ab1a4397886e",
+        "contractDigest": "8f2e5164be2c256e0e117744",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Price test: offer the key-control package at $550 to roster locksmiths, scale only if buyers pay it",
+          "opportunityIds": [
+            "cop_ac7d9626993e43f59090"
+          ],
+          "why": "Every link but price is established on the card: 310 licensed locksmith shops with business emails (EVIDENCE), demand signal 2026-11-24, conversion measured on this offer (14 of 100), Brain produces the spreadsheet, $5 cost, $0 exposure, 5 days to cash. The $550 price is only what the owner says (PERSON fact), so whether buyers pay $550 is unknown and only a live offer can measure it. 6 sales at $550 = $3,300 covers $3,000; plan carries 7 for margin; needs at most ~50 contacts at the measured rate from 310 available."
+        },
+        "alternatives": [
+          {
+            "title": "NO_PLAN until the price is researched",
+            "why": "Rejected: the price can be measured directly at zero cost and zero capital by offering it to the roster; a live offer is the decisive measurement."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 100 roster locksmith shops the key-control package offer",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the package at $550 with a signed order form",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s4"
+            ],
+            "priceCents": 55000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Price test: count signed orders at $550 by day 7",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "offer",
+            "evidence": [
+              "s2"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each key-control register and audit package",
+            "performer": "BRAIN",
+            "costCents": 3500,
+            "day": 7,
+            "dependsOn": "test",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $550 per signed order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 1 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 8,
+            "stepId": "collect"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 2 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 9,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 3 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 4 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 11,
+            "stepId": "collect"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 5 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 12,
+            "stepId": "collect"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 6 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 13,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 7 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 14,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 3500,
+            "label": "Direct cost $5 x 7 packages, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "shops",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.14,
+            "unit": "agreements per contact",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": "signed orders at $550 in the live offer"
+          },
+          {
+            "name": "direct cost per package",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 licensed locksmith businesses listed with business emails on the licensing board roster",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "14 agreements from 100 contacts",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#price",
+            "dated": "2026-11-24",
+            "claim": "The owner says locksmith shops would pay $550 (PERSON, not evidence)",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5; exposure $0",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          }
+        ],
+        "validation": {
+          "proof": "By day 7, at least 3 roster shops sign order forms at $550 from the first 100 contacts",
+          "stop": [
+            "Fewer than 2 signed orders at $550 from 100 contacts by day 7: stop; the $550 price is not what buyers pay",
+            "Any buyer pays only below $500: stop and re-price before continuing"
+          ],
+          "continue": [
+            "3 or more signed at $550 by day 7: deliver, collect, and contact the remaining roster shops until 7 orders are signed"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac7d9626993e43f59090",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_ac7d9626993e43f59090",
+            "deals": 7,
+            "price": 550,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c7ce7de2279b_a34bd4",
+        "digest": "c7ce7de2279b8cfeec54c57b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3af1ffcbd57649c389b5/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:39:53.842Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_bbb6ff02ab1a4397886e",
+      "contractDigest": "8f2e5164be2c256e0e117744",
+      "parentRevisionId": null,
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Price test: offer the key-control package at $550 to roster locksmiths, scale only if buyers pay it",
+        "opportunityIds": [
+          "cop_ac7d9626993e43f59090"
+        ],
+        "why": "Every link but price is established on the card: 310 licensed locksmith shops with business emails (EVIDENCE), demand signal 2026-11-24, conversion measured on this offer (14 of 100), Brain produces the spreadsheet, $5 cost, $0 exposure, 5 days to cash. The $550 price is only what the owner says (PERSON fact), so whether buyers pay $550 is unknown and only a live offer can measure it. 6 sales at $550 = $3,300 covers $3,000; plan carries 7 for margin; needs at most ~50 contacts at the measured rate from 310 available."
+      },
+      "alternatives": [
+        {
+          "title": "NO_PLAN until the price is researched",
+          "why": "Rejected: the price can be measured directly at zero cost and zero capital by offering it to the roster; a live offer is the decisive measurement."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email 100 roster locksmith shops the key-control package offer",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "Offer the package at $550 with a signed order form",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "s4"
+          ],
+          "priceCents": 55000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "test",
+          "kind": "TEST",
+          "label": "Price test: count signed orders at $550 by day 7",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "offer",
+          "evidence": [
+            "s2"
+          ],
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers each key-control register and audit package",
+          "performer": "BRAIN",
+          "costCents": 3500,
+          "day": 7,
+          "dependsOn": "test",
+          "evidence": [
+            "s3",
+            "s5"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect $550 per signed order",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 12,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s6"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 8,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 1 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 8,
+          "stepId": "collect"
+        },
+        {
+          "day": 9,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 2 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 9,
+          "stepId": "collect"
+        },
+        {
+          "day": 10,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 3 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 10,
+          "stepId": "collect"
+        },
+        {
+          "day": 11,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 4 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 11,
+          "stepId": "collect"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 5 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 12,
+          "stepId": "collect"
+        },
+        {
+          "day": 13,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 6 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 13,
+          "stepId": "collect"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 55000,
+          "label": "Package sale 7 at $550 (UNKNOWN whether buyers pay $550)",
+          "settlesDay": 14,
+          "stepId": "collect"
+        },
+        {
+          "day": 14,
+          "kind": "SPEND",
+          "amountCents": 3500,
+          "label": "Direct cost $5 x 7 packages, paid from receipts",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 7,
+      "quantities": [
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 310,
+          "unit": "shops",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.14,
+          "unit": "agreements per contact",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price buyers pay",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [
+            "s4"
+          ],
+          "needs": "signed orders at $550 in the live offer"
+        },
+        {
+          "name": "direct cost per package",
+          "status": "EVIDENCED",
+          "value": 500,
+          "unit": "cents",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "s6"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "310 licensed locksmith businesses listed with business emails on the licensing board roster",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "14 agreements from 100 contacts",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#price",
+          "dated": "2026-11-24",
+          "claim": "The owner says locksmith shops would pay $550 (PERSON, not evidence)",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $5; exposure $0",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_ac7d9626993e43f59090#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days to first cash",
+          "population": "commercial locksmith shops",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac7d9626993e43f59090"
+        }
+      ],
+      "validation": {
+        "proof": "By day 7, at least 3 roster shops sign order forms at $550 from the first 100 contacts",
+        "stop": [
+          "Fewer than 2 signed orders at $550 from 100 contacts by day 7: stop; the $550 price is not what buyers pay",
+          "Any buyer pays only below $500: stop and re-price before continuing"
+        ],
+        "continue": [
+          "3 or more signed at $550 by day 7: deliver, collect, and contact the remaining roster shops until 7 orders are signed"
+        ],
+        "decides": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_ac7d9626993e43f59090",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_ac7d9626993e43f59090",
+          "deals": 7,
+          "price": 550,
+          "directCost": 5,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_c7ce7de2279b_a34bd4",
+      "digest": "c7ce7de2279b8cfeec54c57b",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_3af1ffcbd57649c389b5/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:39:53.842Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_c7ce7de2279b_a34bd4",
+      "digest": "c7ce7de2279b8cfeec54c57b",
+      "contractDigest": "8f2e5164be2c256e0e117744",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 3500,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 55000,
+        "minCashDay": 8,
+        "collectedCents": 385000,
+        "collectedInWindowCents": 385000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 381500
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 67035× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Key-control register and master-key audit package for commer\" needs [figure withheld] and keeps [figure withheld], 545× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Commercial locksmith shop owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_ac7d9626993e43f59090"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Key-control register and master-key audit package for commercial locksmith shops\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Key-control register and master-key audit package for commercial locksmith shops\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Commercial locksmith shop owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Commercial locksmith shop owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 9.986471060375111
+          },
+          {
+            "label": "Collect payment for \"Key-control register and master-key audit package for commercial locksmith shops\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_ac7d9626993e43f59090",
+            "title": "Key-control register and master-key audit package for commercial locksmith shops",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Commercial locksmith shop owners",
+              "reachableChannel": "Business emails on the state locksmith licensing board roster",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:42.730Z",
+              "offerScope": "Key-control register and master-key audit package for commercial locksmith shops",
+              "priceCents": 55000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "commercial locksmithing",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Business emails on the state locksmith licensing board roster"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 550 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 14 accepted of 100 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "7 deal(s) needed, 310 available in the window (310 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "310 locksmith businesses hold state locksmith licences and are listed with business emails on the licensing board roster; each manages master-key systems for commercial clients.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Key-control register and master-key audit package for commercial locksmith shops to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "14 agreements from 100 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Commercial locksmith shop owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The owner says locksmith shops would pay $550 for the key-control package.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_e66ff2d123fc41e38f76"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:21.422Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_c7ce7de2279b_a34bd4",
+        "revisionDigest": "c7ce7de2279b8cfeec54c57b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3af1ffcbd57649c389b5/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d3c3291c2edb4ddf9ae6/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance. Every link except OFFER_AND_PRICE is established on the card (310 roster shops, EVIDENCE; signal 2026-11-24; Brain-produced spreadsheet; $5 cost; $0 exposure; 5 days to cash). The $550 price is only the owner's word (PERSON fact), so it is not a purchase price, and the plan correctly marks it UNKNOWN rather than treating it as known. That unknown is one only a live offer measures, the test costs $0 and needs $0 capital, and it is startable now. Validation names proof (>=3 signed at $550 from the first 100 contacts by day 7), stop and continue, and decides OFFER_AND_PRICE, which is exactly the decisive missing link. Arithmetic: 6 x $550 = $3,300 >= $3,000; plan carries 7 = $3,850; net after 7 x $5 = $3,815. Even at a far lower rate than the recorded 14/100, the 310-shop roster supplies the 7 orders. Brain's NOT_VIABLE reading reflects the missing price evidence, which is a gap the test closes, not a limit the evidence shows cannot be met.",
+        "findings": [
+          "Ledger settlement: receipts on days 8-14 are shown settling the same day, while the card records 5 days to first cash and the collect step is day 12. Each receipt should settle ~5 days after its delivery (last ~day 19); still inside 30, so the outcome holds, but the ledger should match the evidence and steps.",
+          "Validation gap: exactly 2 signed orders at $550 by day 7 is neither proof (>=3) nor stop (<2); state what happens at 2 (e.g. extend to the next 100 contacts).",
+          "The 14/100 conversion is not tied to any recorded price, so it cannot be assumed at $550; the plan's proof threshold (3%) is appropriately far below it, and the test measures conversion at $550 directly.",
+          "Card records 1 human hour per package (~7 h) not shown in the plan; no hours ceiling, so it fits.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 0."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:41:30.018Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_c7ce7de2279b_a34bd4",
+      "digest": "c7ce7de2279b8cfeec54c57b",
+      "contractDigest": "8f2e5164be2c256e0e117744",
+      "plan": {
+        "goalId": "wst_bbb6ff02ab1a4397886e",
+        "contractDigest": "8f2e5164be2c256e0e117744",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Price test: offer the key-control package at $550 to roster locksmiths, scale only if buyers pay it",
+          "opportunityIds": [
+            "cop_ac7d9626993e43f59090"
+          ],
+          "why": "Every link but price is established on the card: 310 licensed locksmith shops with business emails (EVIDENCE), demand signal 2026-11-24, conversion measured on this offer (14 of 100), Brain produces the spreadsheet, $5 cost, $0 exposure, 5 days to cash. The $550 price is only what the owner says (PERSON fact), so whether buyers pay $550 is unknown and only a live offer can measure it. 6 sales at $550 = $3,300 covers $3,000; plan carries 7 for margin; needs at most ~50 contacts at the measured rate from 310 available."
+        },
+        "alternatives": [
+          {
+            "title": "NO_PLAN until the price is researched",
+            "why": "Rejected: the price can be measured directly at zero cost and zero capital by offering it to the roster; a live offer is the decisive measurement."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email 100 roster locksmith shops the key-control package offer",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the package at $550 with a signed order form",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "s4"
+            ],
+            "priceCents": 55000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Price test: count signed orders at $550 by day 7",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "offer",
+            "evidence": [
+              "s2"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each key-control register and audit package",
+            "performer": "BRAIN",
+            "costCents": 3500,
+            "day": 7,
+            "dependsOn": "test",
+            "evidence": [
+              "s3",
+              "s5"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect $550 per signed order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 1 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 8,
+            "stepId": "collect"
+          },
+          {
+            "day": 9,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 2 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 9,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 3 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 11,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 4 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 11,
+            "stepId": "collect"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 5 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 12,
+            "stepId": "collect"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 6 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 13,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 55000,
+            "label": "Package sale 7 at $550 (UNKNOWN whether buyers pay $550)",
+            "settlesDay": 14,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 3500,
+            "label": "Direct cost $5 x 7 packages, paid from receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "shops",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.14,
+            "unit": "agreements per contact",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": "signed orders at $550 in the live offer"
+          },
+          {
+            "name": "direct cost per package",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "cents",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 licensed locksmith businesses listed with business emails on the licensing board roster",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "14 agreements from 100 contacts",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#price",
+            "dated": "2026-11-24",
+            "claim": "The owner says locksmith shops would pay $550 (PERSON, not evidence)",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $5; exposure $0",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_ac7d9626993e43f59090#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days to first cash",
+            "population": "commercial locksmith shops",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac7d9626993e43f59090"
+          }
+        ],
+        "validation": {
+          "proof": "By day 7, at least 3 roster shops sign order forms at $550 from the first 100 contacts",
+          "stop": [
+            "Fewer than 2 signed orders at $550 from 100 contacts by day 7: stop; the $550 price is not what buyers pay",
+            "Any buyer pays only below $500: stop and re-price before continuing"
+          ],
+          "continue": [
+            "3 or more signed at $550 by day 7: deliver, collect, and contact the remaining roster shops until 7 orders are signed"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac7d9626993e43f59090",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_ac7d9626993e43f59090",
+            "deals": 7,
+            "price": 550,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_c7ce7de2279b_a34bd4",
+        "digest": "c7ce7de2279b8cfeec54c57b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3af1ffcbd57649c389b5/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:39:53.842Z"
+      },
+      "review": {
+        "revisionId": "rev_c7ce7de2279b_a34bd4",
+        "revisionDigest": "c7ce7de2279b8cfeec54c57b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3af1ffcbd57649c389b5/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d3c3291c2edb4ddf9ae6/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is the right stance. Every link except OFFER_AND_PRICE is established on the card (310 roster shops, EVIDENCE; signal 2026-11-24; Brain-produced spreadsheet; $5 cost; $0 exposure; 5 days to cash). The $550 price is only the owner's word (PERSON fact), so it is not a purchase price, and the plan correctly marks it UNKNOWN rather than treating it as known. That unknown is one only a live offer measures, the test costs $0 and needs $0 capital, and it is startable now. Validation names proof (>=3 signed at $550 from the first 100 contacts by day 7), stop and continue, and decides OFFER_AND_PRICE, which is exactly the decisive missing link. Arithmetic: 6 x $550 = $3,300 >= $3,000; plan carries 7 = $3,850; net after 7 x $5 = $3,815. Even at a far lower rate than the recorded 14/100, the 310-shop roster supplies the 7 orders. Brain's NOT_VIABLE reading reflects the missing price evidence, which is a gap the test closes, not a limit the evidence shows cannot be met.",
+        "findings": [
+          "Ledger settlement: receipts on days 8-14 are shown settling the same day, while the card records 5 days to first cash and the collect step is day 12. Each receipt should settle ~5 days after its delivery (last ~day 19); still inside 30, so the outcome holds, but the ledger should match the evidence and steps.",
+          "Validation gap: exactly 2 signed orders at $550 by day 7 is neither proof (>=3) nor stop (<2); state what happens at 2 (e.g. extend to the next 100 contacts).",
+          "The 14/100 conversion is not tied to any recorded price, so it cannot be assumed at $550; the plan's proof threshold (3%) is appropriately far below it, and the test measures conversion at $550 directly.",
+          "Card records 1 human hour per package (~7 h) not shown in the plan; no hours ceiling, so it fits.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 0."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:41:30.018Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "30dc89726327948f",
+        "openings": {
+          "cop_ac7d9626993e43f59090": "9101705799b422c9"
+        }
+      },
+      "at": "2026-11-27T09:42:06.335Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

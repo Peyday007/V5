@@ -1,0 +1,325 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_6f62e70857b3_13b49c",
+      "digest": "6f62e70857b3c983c0ff464e",
+      "contractDigest": "d391f465a2f304a816e4985a",
+      "plan": {
+        "goalId": "wst_54fe3ec9e4dd433481b3",
+        "contractDigest": "d391f465a2f304a816e4985a",
+        "parentRevisionId": "rev_031d184aeff5_84d9f1",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the three agreed marina shrink-wrap jobs at $3,200 each through Harbor Wrap",
+          "opportunityIds": [
+            "cop_fd1755e2019946f383a0"
+          ],
+          "why": "Three written acceptances at $3,200 ($9,600) are recorded against the opening from the three marinas whose harbour masters posted requests for quote (signal 2026-11-21). Harbor Wrap Marine Services quoted $1,400 a marina to do the work, exposure is $0, and cash is usable 14 days after invoicing, inside the 40-day window. No new sales are needed: $9,600 collected clears the $8,000 target; net after the supplier is $5,400."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 48 licensed marinas",
+            "why": "Not needed for the target and no conversion beyond the three agreed marinas is measured."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email the three harbour masters who posted the requests for quote to schedule the work",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_reach",
+              "src_signal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Confirm the three written acceptances at $3,200 a marina",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "src_agreements",
+              "src_price"
+            ],
+            "priceCents": 320000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Harbor Wrap Marine Services shrink-wraps and vents every boat in the three marinas' wet slips at its $1,400-a-marina quote, paid from the marinas' settled payments",
+            "performer": "Harbor Wrap Marine Services",
+            "costCents": 420000,
+            "day": 5,
+            "dependsOn": "s2",
+            "evidence": [
+              "src_fulfil",
+              "src_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Harbor Wrap Marine Services",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "COLLECT",
+            "label": "Invoice the three marinas on completion and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s4",
+            "evidence": [
+              "src_settle",
+              "src_agreements"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 960000,
+            "label": "Three marinas pay $3,200 each",
+            "settlesDay": 20,
+            "stepId": "s5"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 420000,
+            "label": "Pay Harbor Wrap $1,400 x 3",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 20,
+        "quantities": [
+          {
+            "name": "agreed deals",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "marinas",
+            "sources": [
+              "src_agreements"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 3200,
+            "unit": "USD per marina",
+            "sources": [
+              "src_price",
+              "src_agreements"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost",
+            "status": "EVIDENCED",
+            "value": 1400,
+            "unit": "USD per marina",
+            "sources": [
+              "src_cost",
+              "src_fulfil"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to usable cash",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [
+              "src_settle"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_agreements",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#agreements",
+            "dated": "2026-11-21",
+            "claim": "Three WRITTEN_ACCEPTANCE agreements at $3,200 each",
+            "population": "the three marinas that requested quotes",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_price",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#price",
+            "dated": "2026-11-21",
+            "claim": "$3200",
+            "population": "recreational marina operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_signal",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#buyingSignal",
+            "dated": "2026-11-21",
+            "claim": "Posted asking for this work",
+            "population": "the three marinas",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_reach",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#reachableChannel",
+            "dated": "2026-11-21",
+            "claim": "Direct email to the three harbour masters",
+            "population": "the three marinas",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_fulfil",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#fulfillment",
+            "dated": "2026-11-21",
+            "claim": "Harbor Wrap Marine Services quoted $1,400 a marina to do the work",
+            "population": "recreational marinas",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_cost",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#directCosts",
+            "dated": "2026-11-21",
+            "claim": "$1400; exposure $0",
+            "population": "recreational marinas",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_settle",
+            "url": "https://brain.local/card/cop_fd1755e2019946f383a0#timeToFirstCash",
+            "dated": "2026-11-21",
+            "claim": "14 days",
+            "population": "recreational marinas",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_fd1755e2019946f383a0",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_fd1755e2019946f383a0",
+            "deals": 3,
+            "price": 3200,
+            "directCost": 1400,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_6f62e70857b3_13b49c",
+        "digest": "6f62e70857b3c983c0ff464e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a907281487d74f939245/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T05:30:56.898Z"
+      },
+      "review": {
+        "revisionId": "rev_6f62e70857b3_13b49c",
+        "revisionDigest": "6f62e70857b3c983c0ff464e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_a907281487d74f939245/rel8-author-a",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ceaab2808be548fc91b1/reviewer-eta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported. Three WRITTEN_ACCEPTANCE agreements at $3,200 each ($9,600) are recorded for the opening whose buyers posted requests for quote (2026-11-21), so price and conversion are this buyer's own committed figures and no new sales are needed. Delivery is by the recorded fulfiller, Harbor Wrap Marine Services, at its $1,400-a-marina quote ($4,200 < $9,600; net $5,400), exposure $0 on the card, and the supplier is paid on day 20 when the marinas' payments settle (day 6 invoice + 14 days), so cash never goes negative and $9,600 of settled cash is received by day 20 of 40, clearing the $8,000 received-cash proof condition. Recomputed ledger matches Brain's trace.",
+        "findings": [
+          "Cosmetic: step s4 is dated day 5 with its $4,200 cost while the ledger SPEND is day 20; the label explains it is paid from settled receipts, consistent with the card's $0 exposure, but the supplier's acceptance of payment after day 20 should be confirmed when scheduling.",
+          "Net kept is $5,400; the target is met on received settled cash as the contract's proof condition states, not on net."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T05:34:52.372Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T05:35:42.447Z"
+    }
+  }
+}

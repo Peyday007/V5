@@ -1,0 +1,2685 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_29525eb72f734186b34c",
+      "words": "Collect $1,500 of settled cash within 14 days. I have no capital to put in and I will not do any of the work myself. Any lawful industry is fine.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "USD 1,500 settled in the owner's account within 14 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "FORBIDDEN",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "fadf58302ccf7f8ee905a664"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_29525eb72f734186b34c",
+        "contractDigest": "fadf58302ccf7f8ee905a664",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no route is shown to be bought at its price, fulfilled without up-front money, and settled inside 14 days",
+          "opportunityIds": [],
+          "why": "All three discovered routes (resold website build, resold Google Business Profile setup, agency referral commission) lack a price any buyer of that kind is shown paying (the verified search found no price for this buyer population), lack a fulfiller who will work before the buyer's money settles (the owner has $0 to float a subcontractor and Brain has no proved deliverable of its own), and a new payment account's first payout is scheduled 7-14 days after the first payment, which leaves no room inside 14 days for selling, delivery and settlement."
+        },
+        "alternatives": [
+          {
+            "title": "Fiverr/Upwork marketplace gig",
+            "why": "Fiverr holds a standard seller's funds 14 days after order completion (Wise guide, 2023), so any order completed after day 0 settles after the deadline; refused by Brain's DEADLINE rule at 16 days."
+          },
+          {
+            "title": "Referral commission from a web agency",
+            "why": "No commission rate, close rate or payout timing is established; most referral programmes pay after the client pays, which is after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain asks 10 web/local-SEO freelancers on Fiverr/Upwork in writing whether they will deliver a $150 build with payment only after the client's payment settles, and records the replies",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Brain sends a free-tier offer email (one-page site $500, pay on approval) to 100 local businesses with no website from public map listings and records replies and any written price acceptance",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Confirm the payout schedule of the owner's payment account in writing (days from first card payment to bank)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price buyers of this kind are shown paying",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per sale",
+            "sources": [],
+            "needs": "a written price acceptance from a buyer in the population, or a dated published price for that population"
+          },
+          {
+            "name": "close rate of cold offer",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of contacted businesses",
+            "sources": [],
+            "needs": "test t1"
+          },
+          {
+            "name": "fulfiller willing to work on pay-after-settlement terms",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "freelancers",
+            "sources": [],
+            "needs": "step r1"
+          },
+          {
+            "name": "days from first payment to settled cash",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "step r2"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No route has an established price that its buyers pay, a fulfiller who works without the owner advancing money, and settlement inside 14 days; with $0 capital and no owner work, the plan cannot pay a subcontractor before buyer cash settles.",
+          "resolution": "Zero-cost experiment over days 1-7: (r1) get written pay-after-settlement terms from at least one freelancer; (t1) 100 free-tier offer emails at $500; (r2) written payout schedule. Proof: one freelancer agrees in writing AND at least 3 businesses accept $500 in writing by day 7 AND payout <= 5 days. Stop: no freelancer agrees, or fewer than 1 written acceptance by day 7, or payout > 5 days (then $1,500 cannot settle by day 14). Continue: plan the resold build route as CONDITIONAL.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "FULFILMENT",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "FULFILMENT",
+          "SETTLES_IN_TIME",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_7a0d8d073b35_7a67dc",
+        "digest": "7a0d8d073b359b13b6cca1cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:26:29.405Z"
+      },
+      {
+        "goalId": "wst_29525eb72f734186b34c",
+        "contractDigest": "fadf58302ccf7f8ee905a664",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: no route is shown to be bought at its price, fulfilled without up-front money, and settled inside 14 days",
+          "opportunityIds": [],
+          "why": "All three discovered routes (resold website build, resold Google Business Profile setup, agency referral commission) lack a price any buyer of that kind is shown paying (the verified search found no price for this buyer population), lack a fulfiller who will work before the buyer's money settles (the owner has $0 to float a subcontractor and Brain has no proved deliverable of its own), and a new payment account's first payout is scheduled 7-14 days after the first payment, which leaves no room inside 14 days for selling, delivery and settlement."
+        },
+        "alternatives": [
+          {
+            "title": "Fiverr/Upwork marketplace gig",
+            "why": "Fiverr holds a standard seller's funds 14 days after order completion (Wise guide, 2023), so any order completed after day 0 settles after the deadline; refused by Brain's DEADLINE rule at 16 days."
+          },
+          {
+            "title": "Referral commission from a web agency",
+            "why": "No commission rate, close rate or payout timing is established; most referral programmes pay after the client pays, which is after day 14."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain asks 10 web/local-SEO freelancers on Fiverr/Upwork in writing whether they will deliver a $150 build with payment only after the client's payment settles, and records the replies",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "t1",
+            "kind": "TEST",
+            "label": "Brain sends a free-tier offer email (one-page site $500, pay on approval) to 100 local businesses with no website from public map listings and records replies and any written price acceptance",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "OFFER_AND_PRICE",
+              "CONVERSION"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Confirm the payout schedule of the owner's payment account in writing (days from first card payment to bank)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price buyers of this kind are shown paying",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per sale",
+            "sources": [],
+            "needs": "a written price acceptance from a buyer in the population, or a dated published price for that population"
+          },
+          {
+            "name": "close rate of cold offer",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "share of contacted businesses",
+            "sources": [],
+            "needs": "test t1"
+          },
+          {
+            "name": "fulfiller willing to work on pay-after-settlement terms",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "freelancers",
+            "sources": [],
+            "needs": "step r1"
+          },
+          {
+            "name": "days from first payment to settled cash",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "step r2"
+          }
+        ],
+        "sources": [],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No route has an established price that its buyers pay, a fulfiller who works without the owner advancing money, and settlement inside 14 days; with $0 capital and no owner work, the plan cannot pay a subcontractor before buyer cash settles.",
+          "resolution": "Zero-cost experiment over days 1-7: (r1) get written pay-after-settlement terms from at least one freelancer; (t1) 100 free-tier offer emails at $500; (r2) written payout schedule. Proof: one freelancer agrees in writing AND at least 3 businesses accept $500 in writing by day 7 AND payout <= 5 days. Stop: no freelancer agrees, or fewer than 1 written acceptance by day 7, or payout > 5 days (then $1,500 cannot settle by day 14). Continue: plan the resold build route as CONDITIONAL.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "FULFILMENT",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "FULFILMENT",
+          "SETTLES_IN_TIME",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_7a0d8d073b35_06c0f6",
+        "digest": "7a0d8d073b359b13b6cca1cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:26:34.825Z"
+      },
+      {
+        "goalId": "wst_29525eb72f734186b34c",
+        "contractDigest": "fadf58302ccf7f8ee905a664",
+        "parentRevisionId": "rev_7a0d8d073b35_06c0f6",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid 5-page websites for local businesses without one, built by a Fiverr freelancer paid from settled cash",
+          "opportunityIds": [
+            "cop_a3cfc9d598b64d8cbb91"
+          ],
+          "why": "The only route that can fit $0 capital, no owner work and 14 days: buyers prepay in full, cash settles before any cost is incurred, and the freelancer is paid from settled funds. Price, demand, close rate, fulfiller terms and payout time are unknown and are measured by a zero-cost first phase before anything is spent; 5 x $500 = $2,500 settled by day 8 if the proof holds."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile setup resold",
+            "why": "At $250 it needs 6+ prepaid sales, also unpriced; kept as the fallback offer in the same emails if the website price is refused."
+          },
+          {
+            "title": "Agency referral commission",
+            "why": "Commission payout timing is controlled by the agency and is not shown to fall inside 14 days."
+          },
+          {
+            "title": "Fiverr/Upwork marketplace selling",
+            "why": "Fiverr holds a standard seller's funds 14 days after completion; refused by Brain's deadline rule."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing with at least 2 Fiverr web-design freelancers a fixed price <= $150 and <= 5-day delivery for a 5-page small-business site, ordered only after the buyer's money has settled",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms the payout time of the payment route (payment link / bank transfer into the owner's existing account) in writing: days from buyer payment to usable cash",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 150 local service businesses without a website (public map listings) offering a 5-page site for $500, paid in full up front, built within 5 days of settlement",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Brain answers replies and sends payment links; 5 businesses prepay $500 by day 5",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "5 prepayments settle into the owner's account (payout <= 3 days, per r2)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "o1",
+            "kind": "ORDER",
+            "label": "Brain orders 5 site builds from the confirmed freelancer, paid from the settled prepayments",
+            "performer": "BRAIN",
+            "costCents": 75000,
+            "day": 9,
+            "dependsOn": "c1",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Freelancer builds and hands over the 5 sites",
+            "performer": "Fiverr web-design freelancer (Level 1/2 seller)",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "o1",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr web-design freelancer (Level 1/2 seller)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 1 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 2 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 3 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 4 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 5 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 75000,
+            "label": "5 freelancer builds at $150, paid from settled cash",
+            "stepId": "o1"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "price local businesses without a website pay for a 5-page site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "prepayments in s2"
+          },
+          {
+            "name": "close rate of the cold offer",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid sales per email",
+            "sources": [],
+            "needs": "s1/s2: 5 prepaid of 150"
+          },
+          {
+            "name": "freelancer price per build",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 written quote <= $150"
+          },
+          {
+            "name": "payout time of the payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 written confirmation <= 3 days"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 5: Brain's sending is connected (day 2); r1 has a written freelancer quote <= $150 with <= 5-day delivery; r2 confirms payout <= 3 days; and 5 businesses have prepaid $500 each.",
+          "stop": [
+            "Brain's outbound sending is not connected by day 2",
+            "no freelancer confirms <= $150 and <= 5-day delivery by day 2",
+            "payout time of the payment route is > 3 days",
+            "fewer than 5 prepaid sales by day 5 (refund any prepayment received and stop; nothing has been spent)"
+          ],
+          "continue": [
+            "5 prepaid by day 5 with all terms confirmed: let cash settle (day 8), order the 5 builds from settled cash (day 9), deliver by day 14"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL with the zero-cost test as its first phase (r1, r2, s1, s2) and explicit proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+            "resolution": "Accepted: buyers now prepay in full by day 5, so settlement no longer waits for the build; proof requires payout <= 3 days (r2), so cash settles by day 8, well inside day 14. The build is ordered on day 9 from settled cash and does not gate settlement."
+          },
+          {
+            "finding": "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+            "resolution": "Accepted: the plan now needs 5 prepaid sales ($2,500 gross, $1,750 after $750 of builds) and stop fires at anything below 5 prepaid by day 5, so there is no undefined band."
+          },
+          {
+            "finding": "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+            "resolution": "Accepted: no net terms are needed now; the freelancer is ordered and paid only after the buyers' prepayments settle, which keeps owner exposure at $0. r1 must confirm the price and delivery in writing."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it.",
+            "resolution": "Accepted: sending is not connected. Validation now stops the plan if Brain's outbound sending cannot be connected by day 2; the owner's only role is authorizing that connection, which needs no work beyond authority he alone holds."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "deals": 5,
+            "price": 500,
+            "directCost": 150,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_440648c8be4d_1bd902",
+        "digest": "440648c8be4da6f2c913cc1c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:30:15.505Z"
+      },
+      {
+        "goalId": "wst_29525eb72f734186b34c",
+        "contractDigest": "fadf58302ccf7f8ee905a664",
+        "parentRevisionId": "rev_7a0d8d073b35_06c0f6",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid 5-page websites for local businesses without one, built by a Fiverr freelancer paid from settled cash",
+          "opportunityIds": [
+            "cop_a3cfc9d598b64d8cbb91"
+          ],
+          "why": "The only route that can fit $0 capital, no owner work and 14 days: buyers prepay in full, cash settles before any cost is incurred, and the freelancer is paid from settled funds. Price, demand, close rate, fulfiller terms and payout time are unknown and are measured by a zero-cost first phase before anything is spent; 5 x $500 = $2,500 settled by day 8 if the proof holds."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile setup resold",
+            "why": "At $250 it needs 6+ prepaid sales, also unpriced; kept as the fallback offer in the same emails if the website price is refused."
+          },
+          {
+            "title": "Agency referral commission",
+            "why": "Commission payout timing is controlled by the agency and is not shown to fall inside 14 days."
+          },
+          {
+            "title": "Fiverr/Upwork marketplace selling",
+            "why": "Fiverr holds a standard seller's funds 14 days after completion; refused by Brain's deadline rule."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing with at least 2 Fiverr web-design freelancers a fixed price <= $150 and <= 5-day delivery for a 5-page small-business site, ordered only after the buyer's money has settled",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms the payout time of the payment route (payment link / bank transfer into the owner's existing account) in writing: days from buyer payment to usable cash",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 150 local service businesses without a website (public map listings) offering a 5-page site for $500, paid in full up front, built within 5 days of settlement",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Brain answers replies and sends payment links; 5 businesses prepay $500 by day 5",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "5 prepayments settle into the owner's account (payout <= 3 days, per r2)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr freelancer builds and hands over the 5 sites (5 x $150 order paid from settled prepayments), delivered by day 14",
+            "performer": "Fiverr web-design freelancer (Level 1/2 seller)",
+            "costCents": 75000,
+            "day": 9,
+            "dependsOn": "c1",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr web-design freelancer (Level 1/2 seller)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 1 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 2 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 3 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 4 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 5 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 75000,
+            "label": "5 freelancer builds at $150, paid from settled cash",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "price local businesses without a website pay for a 5-page site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "prepayments in s2"
+          },
+          {
+            "name": "close rate of the cold offer",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid sales per email",
+            "sources": [],
+            "needs": "s1/s2: 5 prepaid of 150"
+          },
+          {
+            "name": "freelancer price per build",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 written quote <= $150"
+          },
+          {
+            "name": "payout time of the payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 written confirmation <= 3 days"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 5: Brain's sending is connected (day 2); r1 has a written freelancer quote <= $150 with <= 5-day delivery; r2 confirms payout <= 3 days; and 5 businesses have prepaid $500 each.",
+          "stop": [
+            "Brain's outbound sending is not connected by day 2",
+            "no freelancer confirms <= $150 and <= 5-day delivery by day 2",
+            "payout time of the payment route is > 3 days",
+            "fewer than 5 prepaid sales by day 5 (refund any prepayment received and stop; nothing has been spent)"
+          ],
+          "continue": [
+            "5 prepaid by day 5 with all terms confirmed: let cash settle (day 8), order the 5 builds from settled cash (day 9), deliver by day 14"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL with the zero-cost test as its first phase (r1, r2, s1, s2) and explicit proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+            "resolution": "Accepted: buyers now prepay in full by day 5, so settlement no longer waits for the build; proof requires payout <= 3 days (r2), so cash settles by day 8, well inside day 14. The build is ordered on day 9 from settled cash and does not gate settlement."
+          },
+          {
+            "finding": "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+            "resolution": "Accepted: the plan now needs 5 prepaid sales ($2,500 gross, $1,750 after $750 of builds) and stop fires at anything below 5 prepaid by day 5, so there is no undefined band."
+          },
+          {
+            "finding": "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+            "resolution": "Accepted: no net terms are needed now; the freelancer is ordered and paid only after the buyers' prepayments settle, which keeps owner exposure at $0. r1 must confirm the price and delivery in writing."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it.",
+            "resolution": "Accepted: sending is not connected. Validation now stops the plan if Brain's outbound sending cannot be connected by day 2; the owner's only role is authorizing that connection, which needs no work beyond authority he alone holds."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "deals": 5,
+            "price": 500,
+            "directCost": 150,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_451c77fb1f67_d0846a",
+        "digest": "451c77fb1f678c8de7bb26af",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:30:24.397Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_29525eb72f734186b34c",
+      "contractDigest": "fadf58302ccf7f8ee905a664",
+      "parentRevisionId": "rev_7a0d8d073b35_06c0f6",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Prepaid 5-page websites for local businesses without one, built by a Fiverr freelancer paid from settled cash",
+        "opportunityIds": [
+          "cop_a3cfc9d598b64d8cbb91"
+        ],
+        "why": "The only route that can fit $0 capital, no owner work and 14 days: buyers prepay in full, cash settles before any cost is incurred, and the freelancer is paid from settled funds. Price, demand, close rate, fulfiller terms and payout time are unknown and are measured by a zero-cost first phase before anything is spent; 5 x $500 = $2,500 settled by day 8 if the proof holds."
+      },
+      "alternatives": [
+        {
+          "title": "Google Business Profile setup resold",
+          "why": "At $250 it needs 6+ prepaid sales, also unpriced; kept as the fallback offer in the same emails if the website price is refused."
+        },
+        {
+          "title": "Agency referral commission",
+          "why": "Commission payout timing is controlled by the agency and is not shown to fall inside 14 days."
+        },
+        {
+          "title": "Fiverr/Upwork marketplace selling",
+          "why": "Fiverr holds a standard seller's funds 14 days after completion; refused by Brain's deadline rule."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Brain confirms in writing with at least 2 Fiverr web-design freelancers a fixed price <= $150 and <= 5-day delivery for a 5-page small-business site, ordered only after the buyer's money has settled",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "FULFILMENT",
+            "ECONOMICS"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "r2",
+          "kind": "RESEARCH",
+          "label": "Brain confirms the payout time of the payment route (payment link / bank transfer into the owner's existing account) in writing: days from buyer payment to usable cash",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        },
+        {
+          "id": "s1",
+          "kind": "OFFER",
+          "label": "Brain emails 150 local service businesses without a website (public map listings) offering a 5-page site for $500, paid in full up front, built within 5 days of settlement",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "r1",
+          "evidence": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE"
+          ],
+          "priceCents": 50000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "SELL",
+          "label": "Brain answers replies and sends payment links; 5 businesses prepay $500 by day 5",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "s1",
+          "evidence": [
+            "CONVERSION"
+          ],
+          "priceCents": 50000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "c1",
+          "kind": "COLLECT",
+          "label": "5 prepayments settle into the owner's account (payout <= 3 days, per r2)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 8,
+          "dependsOn": "s2",
+          "evidence": [
+            "SETTLES_IN_TIME"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "d1",
+          "kind": "DELIVER",
+          "label": "Fiverr freelancer builds and hands over the 5 sites (5 x $150 order paid from settled prepayments), delivered by day 14",
+          "performer": "Fiverr web-design freelancer (Level 1/2 seller)",
+          "costCents": 75000,
+          "day": 9,
+          "dependsOn": "c1",
+          "evidence": [
+            "FULFILMENT"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Fiverr web-design freelancer (Level 1/2 seller)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "prepayment 1 of 5 ($500)",
+          "settlesDay": 8,
+          "stepId": "s2"
+        },
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "prepayment 2 of 5 ($500)",
+          "settlesDay": 8,
+          "stepId": "s2"
+        },
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "prepayment 3 of 5 ($500)",
+          "settlesDay": 8,
+          "stepId": "s2"
+        },
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "prepayment 4 of 5 ($500)",
+          "settlesDay": 8,
+          "stepId": "s2"
+        },
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 50000,
+          "label": "prepayment 5 of 5 ($500)",
+          "settlesDay": 8,
+          "stepId": "s2"
+        },
+        {
+          "day": 9,
+          "kind": "SPEND",
+          "amountCents": 75000,
+          "label": "5 freelancer builds at $150, paid from settled cash",
+          "stepId": "d1"
+        }
+      ],
+      "proofDay": 5,
+      "quantities": [
+        {
+          "name": "price local businesses without a website pay for a 5-page site",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per site",
+          "sources": [],
+          "needs": "prepayments in s2"
+        },
+        {
+          "name": "close rate of the cold offer",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "prepaid sales per email",
+          "sources": [],
+          "needs": "s1/s2: 5 prepaid of 150"
+        },
+        {
+          "name": "freelancer price per build",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD",
+          "sources": [],
+          "needs": "r1 written quote <= $150"
+        },
+        {
+          "name": "payout time of the payment route",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "days",
+          "sources": [],
+          "needs": "r2 written confirmation <= 3 days"
+        }
+      ],
+      "sources": [],
+      "validation": {
+        "proof": "By day 5: Brain's sending is connected (day 2); r1 has a written freelancer quote <= $150 with <= 5-day delivery; r2 confirms payout <= 3 days; and 5 businesses have prepaid $500 each.",
+        "stop": [
+          "Brain's outbound sending is not connected by day 2",
+          "no freelancer confirms <= $150 and <= 5-day delivery by day 2",
+          "payout time of the payment route is > 3 days",
+          "fewer than 5 prepaid sales by day 5 (refund any prepayment received and stop; nothing has been spent)"
+        ],
+        "continue": [
+          "5 prepaid by day 5 with all terms confirmed: let cash settle (day 8), order the 5 builds from settled cash (day 9), deliver by day 14"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+          "resolution": "Accepted: restated as CONDITIONAL with the zero-cost test as its first phase (r1, r2, s1, s2) and explicit proof/stop/continue."
+        },
+        {
+          "finding": "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+          "resolution": "Accepted: buyers now prepay in full by day 5, so settlement no longer waits for the build; proof requires payout <= 3 days (r2), so cash settles by day 8, well inside day 14. The build is ordered on day 9 from settled cash and does not gate settlement."
+        },
+        {
+          "finding": "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+          "resolution": "Accepted: the plan now needs 5 prepaid sales ($2,500 gross, $1,750 after $750 of builds) and stop fires at anything below 5 prepaid by day 5, so there is no undefined band."
+        },
+        {
+          "finding": "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+          "resolution": "Accepted: no net terms are needed now; the freelancer is ordered and paid only after the buyers' prepayments settle, which keeps owner exposure at $0. r1 must confirm the price and delivery in writing."
+        },
+        {
+          "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it.",
+          "resolution": "Accepted: sending is not connected. Validation now stops the plan if Brain's outbound sending cannot be connected by day 2; the owner's only role is authorizing that connection, which needs no work beyond authority he alone holds."
+        },
+        {
+          "condition": 0,
+          "decision": "ACCEPTED",
+          "records": [
+            "revenueRange",
+            "price",
+            "brain:OFFER_AND_PRICE"
+          ]
+        },
+        {
+          "condition": 1,
+          "decision": "ACCEPTED",
+          "records": [
+            "fulfillment",
+            "directCosts",
+            "brain:FULFILMENT"
+          ]
+        },
+        {
+          "condition": 2,
+          "decision": "ACCEPTED",
+          "records": [
+            "timeToFirstCash",
+            "brain:SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        },
+        {
+          "opportunityId": "cop_b8f2f199650c449baa02",
+          "missing": [
+            "CURRENT_DEMAND",
+            "OFFER_AND_PRICE",
+            "CONVERSION",
+            "FULFILMENT",
+            "ECONOMICS",
+            "SETTLES_IN_TIME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+          "deals": 5,
+          "price": 500,
+          "directCost": 150,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_451c77fb1f67_d0846a",
+      "digest": "451c77fb1f678c8de7bb26af",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_211db05be71f42ee895d/author-E",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:30:24.397Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_451c77fb1f67_d0846a",
+      "digest": "451c77fb1f678c8de7bb26af",
+      "contractDigest": "fadf58302ccf7f8ee905a664",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 75000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 250000,
+        "collectedInWindowCents": 250000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 175000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 1500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Google Business Profile setup and optimization resold to loc\" needs [figure withheld] and keeps [figure withheld], 190× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Resold small-business website build, fulfilled by a ), so none of its figures is shown or adopted.",
+        "acceptance": "NO_CANDIDATE",
+        "considered": [
+          "cop_a3cfc9d598b64d8cbb91",
+          "cop_bcc56e1e967c4b8a83aa",
+          "cop_b8f2f199650c449baa02"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "title": "Resold small-business website build, fulfilled by a Fiverr web freelancer, sold by cold email",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 500,
+            "card": {
+              "payer": "local service businesses without a website",
+              "reachableChannel": "cold email to businesses found on public map listings",
+              "offerScope": "5-page small-business website delivered in 5 days",
+              "priceCents": 50000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr web-design freelancer (Level 1/2 seller)",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "local business web design",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email to businesses found on public map listings"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 150, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email to businesses found on public map listings",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell 5-page small-business website delivered in 5 days to local service businesses without a website, reached through cold email to businesses found on public map listings, at $500; Fiverr web-design freelancer (Level 1/2 seller) delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$150",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr web-design freelancer (Level 1/2 seller).",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "5-page small-business website delivered in 5 days",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "local service businesses without a website",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$500",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "https://colorwhistle.com/website-cost-features/movers-website-cost-usa/; https://framer.com/templates/cardfly?via=framax; small businesses without a website survey; https://docs.stripe.com/payouts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "title": "Referral partner for a white-label web agency that pays a per-client commission",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 300,
+            "card": {
+              "payer": "agency paying a referral commission for each closed client",
+              "reachableChannel": "cold email to local businesses; agency closes",
+              "offerScope": "introductions of local businesses that need a website, qualified by Brain",
+              "priceCents": 30000,
+              "currency": "USD",
+              "fulfillmentOwner": "partner web agency",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "local business web design",
+              "mechanism": "INFORMATION_ASYMMETRY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email to local businesses; agency closes"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 0, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email to local businesses; agency closes",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell introductions of local businesses that need a website, qualified by Brain to agency paying a referral commission for each closed client, reached through cold email to local businesses; agency closes, at $300; partner web agency delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "partner web agency.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "introductions of local businesses that need a website, qualified by Brain",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "agency paying a referral commission for each closed client",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$300",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "web design agency referral commission program; small businesses without a website; referral commission payout terms net 30",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "title": "Google Business Profile setup and optimization resold to local businesses",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 0,
+            "potentialReach": 250,
+            "card": {
+              "payer": "local service businesses with unclaimed or thin Google Business Profiles",
+              "reachableChannel": "cold email to businesses whose map listing is unclaimed",
+              "offerScope": "GBP claim, categories, photos, 10 posts and review-reply templates",
+              "priceCents": 25000,
+              "currency": "USD",
+              "fulfillmentOwner": "Fiverr local-SEO freelancer",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "local SEO",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: cold email to businesses whose map listing is unclaimed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": false,
+                "basis": "no buying signal recorded"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": false,
+                "basis": "nobody has established who would do the work"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 60, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": false,
+                "basis": "12 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "access",
+                "value": "cold email to businesses whose map listing is unclaimed",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell GBP claim, categories, photos, 10 posts and review-reply templates to local service businesses with unclaimed or thin Google Business Profiles, reached through cold email to businesses whose map listing is unclaimed, at $250; Fiverr local-SEO freelancer delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$60",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Fiverr local-SEO freelancer.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "GBP claim, categories, photos, 10 posts and review-reply templates",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "local service businesses with unclaimed or thin Google Business Profiles",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$250",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeSearches",
+                "value": "google business profile optimization service price; unclaimed google business profile percentage; https://docs.stripe.com/payouts",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:24:14.274Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_7a0d8d073b35_7a67dc",
+        "revisionDigest": "7a0d8d073b359b13b6cca1cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_27a0c6691bb34b13bfde/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The stance is wrong for what the revision itself says. NO_PLAN must name a decisive gap the evidence decides; this decisive gap is missing evidence (no buyer-paid price, no fulfiller on pay-after-settlement terms, payout timing unknown), each of which the revision proposes to measure with a zero-cost live test with proof, stop and continue rules. That is a CONDITIONAL plan, not a constraint: nothing on record shows that even with all evidence the $1,500 cannot fit $0 capital, no owner work and 14 days. The settlement argument ('a new payment account's first payout is 7-14 days') is not a recorded card fact (the card's timeToFirstCash is a 12-day RECOMMENDATION) and assumes a new card-payment account; payment by bank transfer to an existing account is not ruled out. And the proof as written cannot itself deliver the target in time: acceptances by day 7 + the card's 5-day delivery = day 12, payment on approval day 12, payout up to 5 days = day 17 > 14.",
+        "findings": [
+          "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+          "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+          "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+          "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+          "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:27:35.151Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "OFFER_AND_PRICE",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "revenueRange",
+            "why": "The $500 price is a RECOMMENDATION; verified research found no buyer-paid price for local service businesses without a website."
+          },
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "FULFILMENT",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "fulfillment",
+            "why": "The Fiverr freelancer is a RECOMMENDATION; no fulfiller has agreed to work before the buyer's money settles."
+          },
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "Time to first cash (12 days) is a RECOMMENDATION; payout timing of the payment route is not established and decides whether day-14 settlement is possible."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_7a0d8d073b35_06c0f6",
+        "revisionDigest": "7a0d8d073b359b13b6cca1cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_27a0c6691bb34b13bfde/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The stance is wrong for what the revision itself says. NO_PLAN must name a decisive gap the evidence decides; this decisive gap is missing evidence (no buyer-paid price, no fulfiller on pay-after-settlement terms, payout timing unknown), each of which the revision proposes to measure with a zero-cost live test with proof, stop and continue rules. That is a CONDITIONAL plan, not a constraint: nothing on record shows that even with all evidence the $1,500 cannot fit $0 capital, no owner work and 14 days. The settlement argument ('a new payment account's first payout is 7-14 days') is not a recorded card fact (the card's timeToFirstCash is a 12-day RECOMMENDATION) and assumes a new card-payment account; payment by bank transfer to an existing account is not ruled out. And the proof as written cannot itself deliver the target in time: acceptances by day 7 + the card's 5-day delivery = day 12, payment on approval day 12, payout up to 5 days = day 17 > 14.",
+        "findings": [
+          "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+          "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+          "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+          "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+          "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:28:03.995Z",
+        "conditions": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "OFFER_AND_PRICE",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "revenueRange",
+            "why": "The $500 price is a RECOMMENDATION; verified research found no buyer-paid price for local service businesses without a website."
+          },
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "FULFILMENT",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "fulfillment",
+            "why": "The Fiverr freelancer is a RECOMMENDATION; no fulfiller has agreed to work before the buyer's money settles."
+          },
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "link": "SETTLES_IN_TIME",
+            "basis": "MISSING_PREREQUISITE",
+            "field": "timeToFirstCash",
+            "why": "Time to first cash (12 days) is a RECOMMENDATION; payout timing of the payment route is not established and decides whether day-14 settlement is possible."
+          }
+        ]
+      },
+      {
+        "revisionId": "rev_451c77fb1f67_d0846a",
+        "revisionDigest": "451c77fb1f678c8de7bb26af",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_27a0c6691bb34b13bfde/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance: price, close rate, fulfiller terms and payout time are all unknown (card facts are RECOMMENDATION; verified research found no buyer-paid price for this population) and each is measured by a zero-cost first phase with explicit proof, stop and continue rules before any money moves. Limits: no capital is ever advanced (freelancer ordered on day 9 from cash settled on day 8; maxExposure 0), no owner work (every step is Brain's or the freelancer's), and the timeline fits: offer day 2, prepay by day 5, payout <= 3 days -> day 8, 5-day build -> day 14. Recomputed: 5 x $500 = $2,500 settled in window >= $1,500; minus 5 x $150 = $750 freelancer cost -> $1,750 kept, so the target holds even on a net reading. The stop rules refund any prepayment and stop at zero spend if a term fails.",
+        "findings": [
+          "Settled $2,500 by day 8; freelancer $750 from settled funds on day 9; net $1,750.",
+          "If the payment route is a card payment link, fees (~2.9% + $0.30 = $14.80 x 5 = $74) are missing from the ledger; net would be $1,676, still above target. r2 should record the fee with the payout time.",
+          "Zero slack on delivery: builds ordered day 9 with a 5-day bound end on day 14; a late or failed build after cash settled means a refund obligation. The freelancer quote in r1 should carry the delivery date and a fallback freelancer.",
+          "Stop at fewer than 5 prepaid is stricter than needed for gross settled cash (3 x $500 = $1,500); this is conservative, not a defect.",
+          "The payment route must land in an account the owner already holds, since the owner does no work; SEND_A_MESSAGE must be connected by day 2 (it is a stop rule)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:30:59.209Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_451c77fb1f67_d0846a",
+      "digest": "451c77fb1f678c8de7bb26af",
+      "contractDigest": "fadf58302ccf7f8ee905a664",
+      "plan": {
+        "goalId": "wst_29525eb72f734186b34c",
+        "contractDigest": "fadf58302ccf7f8ee905a664",
+        "parentRevisionId": "rev_7a0d8d073b35_06c0f6",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Prepaid 5-page websites for local businesses without one, built by a Fiverr freelancer paid from settled cash",
+          "opportunityIds": [
+            "cop_a3cfc9d598b64d8cbb91"
+          ],
+          "why": "The only route that can fit $0 capital, no owner work and 14 days: buyers prepay in full, cash settles before any cost is incurred, and the freelancer is paid from settled funds. Price, demand, close rate, fulfiller terms and payout time are unknown and are measured by a zero-cost first phase before anything is spent; 5 x $500 = $2,500 settled by day 8 if the proof holds."
+        },
+        "alternatives": [
+          {
+            "title": "Google Business Profile setup resold",
+            "why": "At $250 it needs 6+ prepaid sales, also unpriced; kept as the fallback offer in the same emails if the website price is refused."
+          },
+          {
+            "title": "Agency referral commission",
+            "why": "Commission payout timing is controlled by the agency and is not shown to fall inside 14 days."
+          },
+          {
+            "title": "Fiverr/Upwork marketplace selling",
+            "why": "Fiverr holds a standard seller's funds 14 days after completion; refused by Brain's deadline rule."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Brain confirms in writing with at least 2 Fiverr web-design freelancers a fixed price <= $150 and <= 5-day delivery for a 5-page small-business site, ordered only after the buyer's money has settled",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "FULFILMENT",
+              "ECONOMICS"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "RESEARCH",
+            "label": "Brain confirms the payout time of the payment route (payment link / bank transfer into the owner's existing account) in writing: days from buyer payment to usable cash",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "s1",
+            "kind": "OFFER",
+            "label": "Brain emails 150 local service businesses without a website (public map listings) offering a 5-page site for $500, paid in full up front, built within 5 days of settlement",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "r1",
+            "evidence": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Brain answers replies and sends payment links; 5 businesses prepay $500 by day 5",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s1",
+            "evidence": [
+              "CONVERSION"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "5 prepayments settle into the owner's account (payout <= 3 days, per r2)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "SETTLES_IN_TIME"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Fiverr freelancer builds and hands over the 5 sites (5 x $150 order paid from settled prepayments), delivered by day 14",
+            "performer": "Fiverr web-design freelancer (Level 1/2 seller)",
+            "costCents": 75000,
+            "day": 9,
+            "dependsOn": "c1",
+            "evidence": [
+              "FULFILMENT"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Fiverr web-design freelancer (Level 1/2 seller)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 1 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 2 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 3 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 4 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 50000,
+            "label": "prepayment 5 of 5 ($500)",
+            "settlesDay": 8,
+            "stepId": "s2"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 75000,
+            "label": "5 freelancer builds at $150, paid from settled cash",
+            "stepId": "d1"
+          }
+        ],
+        "proofDay": 5,
+        "quantities": [
+          {
+            "name": "price local businesses without a website pay for a 5-page site",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per site",
+            "sources": [],
+            "needs": "prepayments in s2"
+          },
+          {
+            "name": "close rate of the cold offer",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "prepaid sales per email",
+            "sources": [],
+            "needs": "s1/s2: 5 prepaid of 150"
+          },
+          {
+            "name": "freelancer price per build",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD",
+            "sources": [],
+            "needs": "r1 written quote <= $150"
+          },
+          {
+            "name": "payout time of the payment route",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "days",
+            "sources": [],
+            "needs": "r2 written confirmation <= 3 days"
+          }
+        ],
+        "sources": [],
+        "validation": {
+          "proof": "By day 5: Brain's sending is connected (day 2); r1 has a written freelancer quote <= $150 with <= 5-day delivery; r2 confirms payout <= 3 days; and 5 businesses have prepaid $500 each.",
+          "stop": [
+            "Brain's outbound sending is not connected by day 2",
+            "no freelancer confirms <= $150 and <= 5-day delivery by day 2",
+            "payout time of the payment route is > 3 days",
+            "fewer than 5 prepaid sales by day 5 (refund any prepayment received and stop; nothing has been spent)"
+          ],
+          "continue": [
+            "5 prepaid by day 5 with all terms confirmed: let cash settle (day 8), order the 5 builds from settled cash (day 9), deliver by day 14"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Re-state as CONDITIONAL with the same zero-cost test, or name an evidenced constraint; missing evidence is not a constraint.",
+            "resolution": "Accepted: restated as CONDITIONAL with the zero-cost test as its first phase (r1, r2, s1, s2) and explicit proof/stop/continue."
+          },
+          {
+            "finding": "Timeline: day 7 acceptance + 5-day build + payout <= 5 days = day 17; the payout threshold must be <= 2 days, or acceptances must land by ~day 5, for $1,500 to settle by day 14.",
+            "resolution": "Accepted: buyers now prepay in full by day 5, so settlement no longer waits for the build; proof requires payout <= 3 days (r2), so cash settles by day 8, well inside day 14. The build is ordered on day 9 from settled cash and does not gate settlement."
+          },
+          {
+            "finding": "Proof needs >= 3 written acceptances at $500 (3 x $500 = $1,500 exactly, zero margin for a refund or a no-pay) but stop fires only below 1; 1-2 acceptances is undefined. Either proof must require more than 3, or the stop must be below 3.",
+            "resolution": "Accepted: the plan now needs 5 prepaid sales ($2,500 gross, $1,750 after $750 of builds) and stop fires at anything below 5 prepaid by day 5, so there is no undefined band."
+          },
+          {
+            "finding": "Settled cash target is gross; the $150 freelancer fee per site paid after settlement is consistent with $0 capital only if the fulfiller agrees in writing (r1), which the proof correctly requires.",
+            "resolution": "Accepted: no net terms are needed now; the freelancer is ordered and paid only after the buyers' prepayments settle, which keeps owner exposure at $0. r1 must confirm the price and delivery in writing."
+          },
+          {
+            "finding": "SEND_A_MESSAGE is NOT_CONNECTED for t1; the plan's day-2 send depends on it.",
+            "resolution": "Accepted: sending is not connected. Validation now stops the plan if Brain's outbound sending cannot be connected by day 2; the owner's only role is authorizing that connection, which needs no work beyond authority he alone holds."
+          },
+          {
+            "condition": 0,
+            "decision": "ACCEPTED",
+            "records": [
+              "revenueRange",
+              "price",
+              "brain:OFFER_AND_PRICE"
+            ]
+          },
+          {
+            "condition": 1,
+            "decision": "ACCEPTED",
+            "records": [
+              "fulfillment",
+              "directCosts",
+              "brain:FULFILMENT"
+            ]
+          },
+          {
+            "condition": 2,
+            "decision": "ACCEPTED",
+            "records": [
+              "timeToFirstCash",
+              "brain:SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_bcc56e1e967c4b8a83aa",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          },
+          {
+            "opportunityId": "cop_b8f2f199650c449baa02",
+            "missing": [
+              "CURRENT_DEMAND",
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "FULFILMENT",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_a3cfc9d598b64d8cbb91",
+            "deals": 5,
+            "price": 500,
+            "directCost": 150,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "CURRENT_DEMAND",
+          "OFFER_AND_PRICE",
+          "CONVERSION",
+          "FULFILMENT",
+          "ECONOMICS",
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_451c77fb1f67_d0846a",
+        "digest": "451c77fb1f678c8de7bb26af",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:30:24.397Z"
+      },
+      "review": {
+        "revisionId": "rev_451c77fb1f67_d0846a",
+        "revisionDigest": "451c77fb1f678c8de7bb26af",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_211db05be71f42ee895d/author-E",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_27a0c6691bb34b13bfde/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is now the right stance: price, close rate, fulfiller terms and payout time are all unknown (card facts are RECOMMENDATION; verified research found no buyer-paid price for this population) and each is measured by a zero-cost first phase with explicit proof, stop and continue rules before any money moves. Limits: no capital is ever advanced (freelancer ordered on day 9 from cash settled on day 8; maxExposure 0), no owner work (every step is Brain's or the freelancer's), and the timeline fits: offer day 2, prepay by day 5, payout <= 3 days -> day 8, 5-day build -> day 14. Recomputed: 5 x $500 = $2,500 settled in window >= $1,500; minus 5 x $150 = $750 freelancer cost -> $1,750 kept, so the target holds even on a net reading. The stop rules refund any prepayment and stop at zero spend if a term fails.",
+        "findings": [
+          "Settled $2,500 by day 8; freelancer $750 from settled funds on day 9; net $1,750.",
+          "If the payment route is a card payment link, fees (~2.9% + $0.30 = $14.80 x 5 = $74) are missing from the ledger; net would be $1,676, still above target. r2 should record the fee with the payout time.",
+          "Zero slack on delivery: builds ordered day 9 with a 5-day bound end on day 14; a late or failed build after cash settled means a refund obligation. The freelancer quote in r1 should carry the delivery date and a fallback freelancer.",
+          "Stop at fewer than 5 prepaid is stricter than needed for gross settled cash (3 x $500 = $1,500); this is conservative, not a defect.",
+          "The payment route must land in an account the owner already holds, since the owner does no work; SEND_A_MESSAGE must be connected by day 2 (it is a stop rule)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:30:59.209Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:34:02.591Z"
+    },
+    "staleFinal": null
+  }
+}

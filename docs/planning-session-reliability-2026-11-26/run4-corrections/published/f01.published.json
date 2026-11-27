@@ -1,0 +1,344 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_59b35301b15e_e43c5e",
+      "digest": "59b35301b15e367fecdce2cf",
+      "contractDigest": "b9cbbc5f6591bdb31fccf4f5",
+      "plan": {
+        "goalId": "wst_fa62be7622374448880c",
+        "contractDigest": "b9cbbc5f6591bdb31fccf4f5",
+        "parentRevisionId": "rev_5757a07d6b40_56c198",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Brain-produced auto-belay inspection and route-setting log packs to directory-listed climbing gyms at $380",
+          "opportunityIds": [
+            "cop_7d567a1091064d63adac"
+          ],
+          "why": "Reach: gym managers listed in the national climbing-wall association directory (260 gyms). Demand: a signal dated 2026-11-23 and an insurer requirement at every annual renewal. Price $380 evidenced; conversion measured on this offer's own sales, 14 accepted of 120 contacts (11.7%). Brain produces the spreadsheet pack ($8 cost, $0 exposure) and money is usable 5 days after sale. 9 sales give $3,420 gross / $3,348 net of cost. Contacting the 140 directory gyms not yet contacted yields ~16 at the measured rate, so 9 is inside the evidence even after excluding everyone already approached."
+        },
+        "alternatives": [
+          {
+            "title": "Brain's volume reading (260 purchases available in 30 days)",
+            "why": "Too generous: annual buyers renew ~21 a month; the plan instead relies on the measured contact-to-acceptance rate over the uncontacted directory gyms, which already reflects how often a contacted gym buys."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email managers of the 140 directory-listed gyms not yet contacted",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reach",
+              "s_volume",
+              "s_signal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Offer the completed log pack at $380 and take 9 acceptances",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_price",
+              "s_conv"
+            ],
+            "priceCents": 38000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces each gym's inspection and route-setting log pack ($8 direct cost per pack, paid from settled receipts)",
+            "performer": "BRAIN",
+            "costCents": 7200,
+            "day": 8,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_deliv",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $380 per pack",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 342000,
+            "label": "9 packs x $380",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 15,
+            "kind": "SPEND",
+            "amountCents": 7200,
+            "label": "9 x $8 direct cost paid from settled receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "USD per pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.117,
+            "unit": "acceptances per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directoryGyms",
+            "status": "EVIDENCED",
+            "value": 260,
+            "unit": "gyms",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "USD per pack",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "expectedAcceptances",
+            "status": "ESTIMATE",
+            "value": 16,
+            "unit": "from 140 uncontacted gyms",
+            "sources": [
+              "s_conv",
+              "s_volume"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#reachableChannel",
+            "dated": "2026-11-23",
+            "claim": "Email to gym managers listed in the national climbing-wall association directory",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_signal",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#buyingSignal",
+            "dated": "2026-11-23",
+            "claim": "Posted asking for this work",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#price",
+            "dated": "2026-11-23",
+            "claim": "$380 per pack",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#conversionRates",
+            "dated": "2026-11-23",
+            "claim": "14 agreements from 120 contacts on this offer's own sales",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#buyerVolume",
+            "dated": "2026-11-23",
+            "claim": "260 gyms in the directory; insurer requires the logs at every annual renewal",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_deliv",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#delivery",
+            "dated": "2026-11-23",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Fulfiller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#directCosts",
+            "dated": "2026-11-23",
+            "claim": "$8 direct cost, $0 exposure",
+            "population": "Seller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_7d567a1091064d63adac#timeToFirstCash",
+            "dated": "2026-11-23",
+            "claim": "5 days to usable cash",
+            "population": "Indoor climbing gym operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_7d567a1091064d63adac",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_7d567a1091064d63adac",
+            "deals": 9,
+            "price": 380,
+            "directCost": 8,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_59b35301b15e_e43c5e",
+        "digest": "59b35301b15e367fecdce2cf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b4746e8ac4ed4f43b406/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:56:24.663Z"
+      },
+      "review": {
+        "revisionId": "rev_59b35301b15e_e43c5e",
+        "revisionDigest": "59b35301b15e367fecdce2cf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b4746e8ac4ed4f43b406/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_50f959a302c4439183e0/reviewer-epsilon",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Every link is established on the card: directory email reach to 260 gyms, a current signal plus the insurer's annual-renewal requirement, a $380 evidenced price, conversion measured on this offer's own sales (14/120 = 11.7%), Brain-produced fulfilment, $8 cost with $0 exposure, and 5-day settlement. The arithmetic checks: 9 x $380 = $3,420 gross; less 9 x $8 = $72 leaves $3,348 net; the receipt on day 10 settles on day 15. The author correctly excludes the 120 gyms already contacted. At the measured rate the 140 uncontacted gyms give about 16 acceptances against the 9 needed. The author also correctly treats Brain's 260-per-month volume reading as too generous for annual buyers. Costs are paid from settled receipts, so the $0 exposure cap is kept. The owner can act on it.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T03:00:16.565Z"
+      },
+      "at": "2026-11-27T03:04:12.049Z"
+    }
+  }
+}

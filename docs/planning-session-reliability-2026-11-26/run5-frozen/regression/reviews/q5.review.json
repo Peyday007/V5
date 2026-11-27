@@ -1,0 +1,10 @@
+{
+ "goal_id": "wst_e40a03ab0e564c55ac74",
+ "revision_id": "rev_a4a7f06de866_0dcbf0",
+ "verdict": "PASS",
+ "reasons": "NO_PLAN is right, and the decisive gap is named correctly as the price, which the card's own evidence contradicts (priceCents 120000 = $1,200 vs the sourced price fact $120); Brain's links[] also mark OFFER_AND_PRICE unestablished ('no single price on the card'). Recomputed: at $120, 140 licensees buying ~once a year x 12% measured close ~ 16.8 deals ~ $2,016 < $6,000 (Brain's MARKET_VOLUME is also unestablished at that price); at $1,200, 5 deals = $6,000 out of ~17 expected. No constraint is asserted from missing evidence. The resolution (establish the paid price and the price at which 12/100 closed) is the right next step, and refusing to sell at an unsourced $1,200 is correct.",
+ "findings": [],
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-zeta",
+ "reviewer_model": "claude-opus-5-5"
+}

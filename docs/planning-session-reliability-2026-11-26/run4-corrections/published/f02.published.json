@@ -1,0 +1,437 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_0231340b996c_8cc21a",
+      "digest": "0231340b996cd68ad237d416",
+      "contractDigest": "8047332eea5938d85b8f81cb",
+      "plan": {
+        "goalId": "wst_65b9d6b40bcb40db81ef",
+        "contractDigest": "8047332eea5938d85b8f81cb",
+        "parentRevisionId": "rev_39839528e82d_2f896d",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Offer the $650 cold-storage log audit to licensed packing houses not yet served this season, and prove fresh acceptances before relying on it",
+          "opportunityIds": [
+            "cop_c9a37e15033542e58646"
+          ],
+          "why": "Price ($650, three paid invoices), the licensee-list channel, Brain fulfilment ($10, $0 exposure) and 6-day settlement are evidenced. The card does not say whether the 60 contacts behind the 9-of-60 (15%) rate came from the 85-licensee list. If they did, 9 houses already have this season's audit and only 25 are uncontacted, which gives about 3.75 expected acceptances. So the number of fresh buyers lies somewhere from 25 to 85 and is unknown. The plan needs 5 sales ($3,250 collected, $3,200 net of cost), emails the list asking each house whether it already holds this season's audit, excludes any that do, and a day-8 test on fresh acceptances decides whether it continues. The frost-fan rebate opening stays excluded: the $1,500 is a state rebate to growers, not a price for the service, and it settles in 45 days, after the 30-day window."
+        },
+        "alternatives": [
+          {
+            "title": "Frost-fan controller rebate applications",
+            "why": "Excluded: the $1,500 is a rebate the state pays orchards, not a purchase price for our service; no close rate; 45 days to cash is beyond the window."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the 85 houses on the state licensee list, excluding any that already hold this season's audit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_reach",
+              "s_volume",
+              "s_signal"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "By day 8, count acceptances from houses without this season's audit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "reach",
+            "evidence": [
+              "s_conv",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 5 audits at $650",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 9,
+            "dependsOn": "test",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces each house's audited temperature-log spreadsheet ($10 direct cost each, paid from settled receipts)",
+            "performer": "BRAIN",
+            "costCents": 5000,
+            "day": 12,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_deliv",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $650 per audit",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 325000,
+            "label": "5 audits x $650",
+            "settlesDay": 20,
+            "stepId": "collect"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 5000,
+            "label": "5 x $10 direct cost paid from settled receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 8,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 650,
+            "unit": "USD per audit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "licensedPackingHouses",
+            "status": "EVIDENCED",
+            "value": 85,
+            "unit": "houses on the licensee list",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "measuredAcceptanceRate",
+            "status": "EVIDENCED",
+            "value": 0.15,
+            "unit": "acceptances per contact (9 of 60, on this offer's own sales)",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "USD per audit",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "freshBuyers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "licensed houses not yet contacted or served this season (25 to 85)",
+            "sources": [],
+            "needs": "whether the 60 measured contacts were from this list; answered by the day-8 test"
+          },
+          {
+            "name": "deals",
+            "status": "ASSUMED",
+            "value": 5,
+            "unit": "audits",
+            "sources": [],
+            "needs": "day-8 test"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Email to the packing houses on the state agriculture department's licensee list",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_signal",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#price",
+            "dated": "2026-11",
+            "claim": "Packing houses pay $650 for a cold-storage log audit (three paid invoices)",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 60 contacts on this offer's own sales",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "85 apple packing houses hold state cold-storage licences; each must present audited logs before every season's buyer inspection",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_deliv",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Fulfiller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$10 direct cost, $0 exposure",
+            "population": "Seller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_c9a37e15033542e58646#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "6 days to usable cash",
+            "population": "Apple packing house managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_rebate",
+            "url": "https://brain.local/card/cop_4741d553dea4406dab79#price",
+            "dated": "2026-10-14",
+            "claim": "The state energy office pays a $1,500 rebate to each orchard installing a qualifying controller",
+            "population": "Orchards receiving a state rebate",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": {
+          "proof": "At least 5 acceptances at $650 from houses without this season's audit by day 8",
+          "stop": [
+            "Fewer than 2 fresh acceptances by day 8: the fresh pool is the small (25-house) case; stop and look for other openings",
+            "2 to 4 fresh acceptances by day 8 and still fewer than 5 by day 12: stop selling, deliver and collect what was accepted, and add other openings for the remainder"
+          ],
+          "continue": [
+            "5 or more fresh acceptances by day 8: deliver and collect",
+            "2 to 4 fresh acceptances by day 8: follow up with non-responders and continue only if acceptances reach 5 by day 12"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "The plan does not say whether the 60 contacts came from the 85-licensee list.",
+            "resolution": "Accepted. The card does not say. Fresh buyers are UNKNOWN (25 to 85), MARKET_VOLUME is marked missing with a disagreement, and the stance is now CONDITIONAL on a day-8 count of fresh acceptances."
+          },
+          {
+            "finding": "The 9 houses that already accepted must be excluded.",
+            "resolution": "Accepted. The reach excludes any house already holding this season's audit, and only acceptances from houses without one count toward the proof."
+          },
+          {
+            "finding": "Evidence the contacts were outside the list, resize, or make it CONDITIONAL.",
+            "resolution": "Accepted. Resized to 5 audits ($3,250 collected, $3,200 net) and made CONDITIONAL, with proof/stop/continue rules that cover every result."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_c9a37e15033542e58646",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          },
+          {
+            "opportunityId": "cop_4741d553dea4406dab79",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "CONVERSION",
+              "ECONOMICS",
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_4741d553dea4406dab79",
+            "why": "The $1,500 is a state rebate paid to the orchard, not a price a grower pays for the application service; no close rate; 45 days to cash exceeds the 30-day window."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_c9a37e15033542e58646",
+            "deals": 5,
+            "price": 650,
+            "directCost": 10,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_4741d553dea4406dab79",
+            "link": "ECONOMICS",
+            "reason": "With no price for the service (the $1,500 is a rebate to the grower), the $5 cost cannot be shown to be below what we would be paid."
+          },
+          {
+            "opportunityId": "cop_c9a37e15033542e58646",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain's basis says 85 buyers with one purchase each, but each house buys one audit per season and the card does not say whether the 9 houses that accepted (of 60 contacted) are on this list. If they are, 9 are already served and only 25 are uncontacted, about 3.75 expected acceptances against the 5 needed, so fresh volume is not established."
+          }
+        ],
+        "revisionId": "rev_0231340b996c_8cc21a",
+        "digest": "0231340b996cd68ad237d416",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_84cf98ea73a349d98846/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T03:03:07.379Z"
+      },
+      "review": {
+        "revisionId": "rev_0231340b996c_8cc21a",
+        "revisionDigest": "0231340b996cd68ad237d416",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_84cf98ea73a349d98846/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_cc05f8e423344a73a7ab/reviewer-epsilon",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "I checked the stance in both directions. The condition is genuine, and a removal is not needed. The 15% rate (9 of 60) is this offer's own measured record and stays EVIDENCED. Brain's MARKET_VOLUME basis, though, is the population count ('85 reachable buyers, one purchase each'), and the card does not say whether the 60 contacts or the 9 buyers are on that 85-house list. The audit is bought once per season, so houses already served are used up. That differs from a recurring purchase. In the case where they overlap, 25 fresh houses x 15% gives about 3.75 acceptances against the 5 needed, so the unknown decides the outcome. Only offering it decides it, which makes CONDITIONAL right. The resize holds: 5 x $650 = $3,250 collected, $3,200 net, settled by day 20, costs paid from settled receipts, $0 exposure. The proof, stop and continue rules cover every result (<2, 2-4 with a day-12 recheck, >=5). Excluding houses that already hold this season's audit removes the double count. The rebate exclusion (a state rebate, not a price, and 45 days to cash) is correct. The owner can act on it.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T03:04:58.662Z"
+      },
+      "at": "2026-11-27T03:05:41.229Z"
+    }
+  }
+}

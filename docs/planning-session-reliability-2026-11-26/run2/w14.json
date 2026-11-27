@@ -1,0 +1,31 @@
+{
+  "id": "ho-14-objective-changed-to-recurring",
+  "step": 1,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_c73488972984_2d68d7",
+  "stance": "EXECUTABLE",
+  "checkProblems": [],
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [brewery] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "STEP_FIELD_ABSENT",
+      "PERFORMER_MISMATCH",
+      "OWNER_ROUTINE_WORK"
+    ],
+    "gaps": [
+      "step.price"
+    ],
+    "detail": "brewery is fulfilled by owner, the evidence names brain; steps do not carry step.price; 1 routine owner step(s) where the objective allows no owner hours"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "the plan cannot be carried out: PERFORMER_MISMATCH, OWNER_ROUTINE_WORK"
+  }
+}

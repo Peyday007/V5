@@ -1,0 +1,677 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_5dd564ac6d6044f1854a",
+      "words": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 350000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,500 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "46b431e6f5354d6decf6fc6e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_5dd564ac6d6044f1854a",
+        "contractDigest": "46b431e6f5354d6decf6fc6e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: nobody has counted the B&B innkeepers who could buy",
+          "opportunityIds": [],
+          "why": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the lodging-tax workbook at $175 to 20 innkeepers",
+            "why": "Price, conversion, fulfilment, economics and settlement are evidenced, but the buyer pool is only estimated."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count reachable innkeeper listings on the state tourism board lodging listings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_vol"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "buyers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "reachable innkeepers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "a count of the tourism-board listings"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 175,
+            "unit": "USD per workbook",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.117,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Brain estimates about 500 B&Bs in the region would buy each quarter (RECOMMENDATION, an estimate)",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#price",
+            "dated": "2026-11-23",
+            "claim": "14 innkeepers paid $175 each (payment records 2026-11-06 to 2026-11-23)",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#conversionRates",
+            "dated": "2026-11-23",
+            "claim": "14 agreements from 120 contacts",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established.",
+          "resolution": "Brain counts the innkeeper listings with email addresses on the state tourism board lodging listings (the card's own channel) and records it as evidence; if at least ~185 unsold listed innkeepers exist, the plan is 20 deals at $175 with Brain-produced workbooks, $3 cost, 4 days to cash.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e1f3e10c08214d29a1d9",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d86102943b91_5b82ba",
+        "digest": "d86102943b919e61d4245794",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff8934c0f88e4cefb67d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.654Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_5dd564ac6d6044f1854a",
+      "contractDigest": "46b431e6f5354d6decf6fc6e",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: nobody has counted the B&B innkeepers who could buy",
+        "opportunityIds": [],
+        "why": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the lodging-tax workbook at $175 to 20 innkeepers",
+          "why": "Price, conversion, fulfilment, economics and settlement are evidenced, but the buyer pool is only estimated."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Count reachable innkeeper listings on the state tourism board lodging listings",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_vol"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "buyers",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "reachable innkeepers",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": "a count of the tourism-board listings"
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 175,
+          "unit": "USD per workbook",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.117,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "Brain estimates about 500 B&Bs in the region would buy each quarter (RECOMMENDATION, an estimate)",
+          "population": "B&B innkeepers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#price",
+          "dated": "2026-11-23",
+          "claim": "14 innkeepers paid $175 each (payment records 2026-11-06 to 2026-11-23)",
+          "population": "B&B innkeepers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#conversionRates",
+          "dated": "2026-11-23",
+          "claim": "14 agreements from 120 contacts",
+          "population": "B&B innkeepers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established.",
+        "resolution": "Brain counts the innkeeper listings with email addresses on the state tourism board lodging listings (the card's own channel) and records it as evidence; if at least ~185 unsold listed innkeepers exist, the plan is 20 deals at $175 with Brain-produced workbooks, $3 cost, 4 days to cash.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_e1f3e10c08214d29a1d9",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_d86102943b91_5b82ba",
+      "digest": "d86102943b919e61d4245794",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_ff8934c0f88e4cefb67d/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:28:11.654Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_d86102943b91_5b82ba",
+      "digest": "d86102943b919e61d4245794",
+      "contractDigest": "46b431e6f5354d6decf6fc6e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "Not yet proven. The closest plan is \"Only: Lodging-tax and occupancy filing workbook for bed-and-breakf\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 11524× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Lodging-tax and occupancy filing workbook for bed-and-breakfast inns\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_e1f3e10c08214d29a1d9"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Lodging-tax and occupancy filing workbook for bed-and-breakfast inns\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Lodging-tax and occupancy filing workbook for bed-and-breakfast inns\"",
+            "owner": "PERSON",
+            "cost": 3
+          },
+          {
+            "label": "Collect payment for \"Lodging-tax and occupancy filing workbook for bed-and-breakfast inns\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Establish how many buyers for \"Lodging-tax and occupancy filing workbook for bed-and-breakfast inns\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+        "openings": [
+          {
+            "opportunityId": "cop_e1f3e10c08214d29a1d9",
+            "title": "Lodging-tax and occupancy filing workbook for bed-and-breakfast inns",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 175,
+            "potentialReach": 3500,
+            "card": {
+              "payer": "B&B innkeepers",
+              "reachableChannel": "Innkeeper emails on the state tourism board lodging listings",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:15.508Z",
+              "offerScope": "Lodging-tax and occupancy filing workbook for bed-and-breakfast inns",
+              "priceCents": 17500,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "bed-and-breakfast inns",
+              "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Innkeeper emails on the state tourism board lodging listings"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 175 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 14 accepted of 120 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "16 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 3, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "Brain estimates about 500 B&Bs in the region would buy a filing workbook each quarter.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Lodging-tax and occupancy filing workbook for bed-and-breakfast inns to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "14 agreements from 120 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$3",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "B&B innkeepers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Innkeepers paid $175 each for the filing workbook (14 payment records, 2026-11-06 to 2026-11-23).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_f9c344f7c899469fb899"
+        ],
+        "scope": {
+          "targetCents": 350000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:25:53.098Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_d86102943b91_5b82ba",
+        "revisionDigest": "d86102943b919e61d4245794",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff8934c0f88e4cefb67d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ff6da14723fc4d1697a5/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with MARKET_VOLUME decisive is right. The only buyer count is Brain's own RECOMMENDATION (~500 B&Bs), an estimate, so the pool is not established. Price ($175, 14 payment records from innkeepers) and conversion (14/120 = 11.7%) are evidenced on this offer; Brain produces the workbook ($3), 4 days to cash. Arithmetic: $3,500 / $175 = 20 deals (at $172 net, 21 deals for net; gross 20 meets the received-cash proof condition); at 11.7% that is ~171 fresh contacts. The 14 buyers file quarterly and the next filing falls after the 30-day window, so repeat purchases are rightly not counted. The resolution - count innkeeper listings with emails on the state tourism board listings, the card's own channel - is a published-directory count research can settle; the gap is stated as a gap, not a constraint.",
+        "findings": [
+          "The resolution threshold '~185 unsold listed innkeepers' should be ~171 uncontacted listings: the 106 contacted non-buyers should not be counted at 11.7%. Equivalently the listing must hold >= ~291 innkeepers with emails (120 already contacted + 171).",
+          "Brain's link says 16 deals needed while $3,500/$175 = 20; the plan's 20 is the correct figure for the full target."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:56.643Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_d86102943b91_5b82ba",
+      "digest": "d86102943b919e61d4245794",
+      "contractDigest": "46b431e6f5354d6decf6fc6e",
+      "plan": {
+        "goalId": "wst_5dd564ac6d6044f1854a",
+        "contractDigest": "46b431e6f5354d6decf6fc6e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: nobody has counted the B&B innkeepers who could buy",
+          "opportunityIds": [],
+          "why": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the lodging-tax workbook at $175 to 20 innkeepers",
+            "why": "Price, conversion, fulfilment, economics and settlement are evidenced, but the buyer pool is only estimated."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Count reachable innkeeper listings on the state tourism board lodging listings",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_vol"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "buyers",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "reachable innkeepers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": "a count of the tourism-board listings"
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 175,
+            "unit": "USD per workbook",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.117,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "Brain estimates about 500 B&Bs in the region would buy each quarter (RECOMMENDATION, an estimate)",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#price",
+            "dated": "2026-11-23",
+            "claim": "14 innkeepers paid $175 each (payment records 2026-11-06 to 2026-11-23)",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_e1f3e10c08214d29a1d9#conversionRates",
+            "dated": "2026-11-23",
+            "claim": "14 agreements from 120 contacts",
+            "population": "B&B innkeepers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "$3,500 at the evidenced $175 price needs 20 paid workbooks (about 170 contacts at the measured 14/120 conversion), but the only buyer-count is Brain's own estimate (~500 B&Bs, RECOMMENDATION), and the 14 who already bought file quarterly so are unlikely to buy again in the window; how many reachable innkeepers exist is not established.",
+          "resolution": "Brain counts the innkeeper listings with email addresses on the state tourism board lodging listings (the card's own channel) and records it as evidence; if at least ~185 unsold listed innkeepers exist, the plan is 20 deals at $175 with Brain-produced workbooks, $3 cost, 4 days to cash.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e1f3e10c08214d29a1d9",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d86102943b91_5b82ba",
+        "digest": "d86102943b919e61d4245794",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff8934c0f88e4cefb67d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.654Z"
+      },
+      "review": {
+        "revisionId": "rev_d86102943b91_5b82ba",
+        "revisionDigest": "d86102943b919e61d4245794",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ff8934c0f88e4cefb67d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_ff6da14723fc4d1697a5/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with MARKET_VOLUME decisive is right. The only buyer count is Brain's own RECOMMENDATION (~500 B&Bs), an estimate, so the pool is not established. Price ($175, 14 payment records from innkeepers) and conversion (14/120 = 11.7%) are evidenced on this offer; Brain produces the workbook ($3), 4 days to cash. Arithmetic: $3,500 / $175 = 20 deals (at $172 net, 21 deals for net; gross 20 meets the received-cash proof condition); at 11.7% that is ~171 fresh contacts. The 14 buyers file quarterly and the next filing falls after the 30-day window, so repeat purchases are rightly not counted. The resolution - count innkeeper listings with emails on the state tourism board listings, the card's own channel - is a published-directory count research can settle; the gap is stated as a gap, not a constraint.",
+        "findings": [
+          "The resolution threshold '~185 unsold listed innkeepers' should be ~171 uncontacted listings: the 106 contacted non-buyers should not be counted at 11.7%. Equivalently the listing must hold >= ~291 innkeepers with emails (120 already contacted + 171).",
+          "Brain's link says 16 deals needed while $3,500/$175 = 20; the plan's 20 is the correct figure for the full target."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:56.643Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:33:05.322Z"
+    },
+    "staleFinal": null
+  }
+}

@@ -98,12 +98,12 @@ describe('a plan qualifies only on every condition the owner named', () => {
 
   it('needs Hermes to have challenged and adopted this plan, after it was accepted', () => {
     const h = facts().hermes!;
-    expect(failing(facts({ hermes: null }))).toEqual(['CHALLENGED_BY_HERMES']);
-    expect(failing(facts({ hermes: { ...h, challenge: null } }))).toEqual(['CHALLENGED_BY_HERMES']);
-    expect(failing(facts({ hermes: { ...h, challenge: { ...h.challenge!, verdict: 'REVISE' } } }))).toEqual(['CHALLENGED_BY_HERMES']);
+    expect(failing(facts({ hermes: null }))).toEqual(['INDEPENDENTLY_REVIEWED']);
+    expect(failing(facts({ hermes: { ...h, challenge: null } }))).toEqual(['INDEPENDENTLY_REVIEWED']);
+    expect(failing(facts({ hermes: { ...h, challenge: { ...h.challenge!, verdict: 'REVISE' } } }))).toEqual(['INDEPENDENTLY_REVIEWED']);
     expect(planReady(facts({ hermes: { ...h, challenge: { ...h.challenge!, verdict: 'REVISE' }, answeredChallenge: 'The reply rate is measured, not assumed.' } })).ready).toBe(true);
-    expect(failing(facts({ hermes: { ...h, adopted: false, chosenAction: 'Keep constructing' } }))).toEqual(['CHALLENGED_BY_HERMES']);
-    expect(failing(facts({ hermes: { ...h, committedAt: '2026-11-13T08:00:00.000Z' } }))).toEqual(['CHALLENGED_BY_HERMES']);
+    expect(failing(facts({ hermes: { ...h, adopted: false, chosenAction: 'Keep constructing' } }))).toEqual(['INDEPENDENTLY_REVIEWED']);
+    expect(failing(facts({ hermes: { ...h, committedAt: '2026-11-13T08:00:00.000Z' } }))).toEqual(['INDEPENDENTLY_REVIEWED']);
   });
 });
 
@@ -250,7 +250,7 @@ describe('the completion response waits for the owner\'s conversation, once per 
     expect((await notifyPlanReady(goalId, reading({ status: 'CANDIDATE_ONLY' }))).status).toBe('NOT_READY');
     const before = await notifyPlanReady(goalId, reading());
     expect(before.status).toBe('NOT_READY');
-    expect(before.detail).toMatch(/CHALLENGED_BY_HERMES/);
+    expect(before.detail).toMatch(/INDEPENDENTLY_REVIEWED/);
     await hermesAdopts(goalId, 1);
     expect((await notifyPlanReady(goalId, reading())).detail).toMatch(/not to adopt/);
     expect(await tool('brain_owner_notices', { project_id: projectId }, reader)).toEqual({ notices: [] });

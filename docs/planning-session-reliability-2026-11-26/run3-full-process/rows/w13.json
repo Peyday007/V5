@@ -1,0 +1,36 @@
+{
+  "id": "ho-13-equestrian-price-contradicted",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_2b7866d984b9_a17f98",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_38ed4d12574942a98bdd/reviewer-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan; names OFFER_AND_PRICE",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

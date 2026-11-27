@@ -1,0 +1,41 @@
+{
+  "id": "ac-15-scrap-one-rfq-swept",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 2,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_efc968d1cb87_5777b4",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_bd71ca178f6745a3b30b/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "declared arithmetically infeasible (TARGET) where the blocker is missing evidence on MARKET_VOLUME",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT",
+      "RESOLUTION_ABSENT"
+    ],
+    "gaps": [],
+    "detail": "no measurement or research of MARKET_VOLUME is named"
+  },
+  "usable": {
+    "pass": false,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

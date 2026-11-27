@@ -1,0 +1,878 @@
+{
+ "contract": {
+  "goalId": "wst_49417e0937d8442cb041",
+  "words": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+  "source": {
+   "kind": "OWNER_MESSAGE",
+   "ref": "OBJECTIVE.txt",
+   "at": "2026-11-27"
+  },
+  "terms": {
+   "targetCents": 200000,
+   "currency": "USD",
+   "metric": "SETTLED_CASH",
+   "windowDays": 14,
+   "totalSpendCapCents": null,
+   "preProofSpendCapCents": null,
+   "exposureCapCents": 0,
+   "proofCondition": "2000 USD of settled cash collected within 14 days",
+   "ownerHoursPerWeek": null,
+   "ownerPhysicalWork": "UNSTATED",
+   "exclusions": [],
+   "evidenceExclusions": []
+  },
+  "explanations": {},
+  "version": 1,
+  "digest": "a523040b14cf745d0986f185"
+ },
+ "revisions": [
+  {
+   "goalId": "wst_49417e0937d8442cb041",
+   "contractDigest": "a523040b14cf745d0986f185",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the signed mushroom orders settle after the 14-day deadline",
+    "opportunityIds": [],
+    "why": "Five chefs signed $600 orders ($3,000, above the $2,000 target) and the farm fulfils at $380 billed net 60, but the orders are payable net 45 after the month's last delivery; time to first cash is 45 days against 14, so no cash settles inside the window."
+   },
+   "alternatives": [
+    {
+     "title": "Ask chefs to prepay",
+     "why": "Not established: the signed terms are net 45; any change is a new negotiation nobody has evidence for."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish whether any chef would accept payment terms settling within 14 days, or obtain the owner's agreement to a longer deadline",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "timeToFirstCash",
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 45,
+     "unit": "days",
+     "sources": [
+      "timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed order value",
+     "status": "EVIDENCED",
+     "value": 3000,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "window",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "timeToFirstCash",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "45 days to first cash",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#price",
+     "dated": "2026-11",
+     "claim": "Five chefs signed $600 orders for a month of weekly deliveries, payable net 45 after the month's last delivery",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "fulfillment",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#fulfillment",
+     "dated": "2026-11",
+     "claim": "Hollow Creek Mushroom Farm quoted $380 a month per chef, billed net 60",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "SETTLES_IN_TIME: the only opening's cash arrives 45 days out (net 45 after the month's last delivery) against a 14-day window, so $0 settles before the deadline.",
+    "resolution": "Relax the deadline to at least 45 days (about 75 days if net 45 runs from the last weekly delivery of the month), or renegotiate the chefs' terms to payment within 14 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c3d7ef4296514a7b9317",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 45 days (timeToFirstCash); because the signed orders are payable net 45 after the month's last delivery, about 75 days is the safe window.",
+     "basis": [
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "timeToFirstCash"
+      },
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_bbff277c5f6d_3c579b",
+   "digest": "bbff277c5f6ddb333c2550ed",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd921e5173e141e1a8fc/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:05.229Z"
+  },
+  {
+   "goalId": "wst_49417e0937d8442cb041",
+   "contractDigest": "a523040b14cf745d0986f185",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the signed mushroom orders settle after the 14-day deadline",
+    "opportunityIds": [],
+    "why": "Five chefs signed $600 orders ($3,000, above the $2,000 target) and the farm fulfils at $380 billed net 60, but the orders are payable net 45 after the month's last delivery; time to first cash is 45 days against 14, so no cash settles inside the window."
+   },
+   "alternatives": [
+    {
+     "title": "Ask chefs to prepay",
+     "why": "Not established: the signed terms are net 45; any change is a new negotiation nobody has evidence for."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish whether any chef would accept payment terms settling within 14 days, or obtain the owner's agreement to a longer deadline",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "timeToFirstCash",
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 45,
+     "unit": "days",
+     "sources": [
+      "timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed order value",
+     "status": "EVIDENCED",
+     "value": 3000,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "timeToFirstCash",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "45 days to first cash",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#price",
+     "dated": "2026-11",
+     "claim": "Five chefs signed $600 orders for a month of weekly deliveries, payable net 45 after the month's last delivery",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "fulfillment",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#fulfillment",
+     "dated": "2026-11",
+     "claim": "Hollow Creek Mushroom Farm quoted $380 a month per chef, billed net 60",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "SETTLES_IN_TIME: the only opening's cash arrives 45 days out (net 45 after the month's last delivery) against a 14-day window, so $0 settles before the deadline.",
+    "resolution": "Relax the deadline to at least 45 days (about 75 days if net 45 runs from the last weekly delivery of the month), or renegotiate the chefs' terms to payment within 14 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c3d7ef4296514a7b9317",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 45 days (timeToFirstCash); because the signed orders are payable net 45 after the month's last delivery, about 75 days is the safe window.",
+     "basis": [
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "timeToFirstCash"
+      },
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_d72aef788b59_a0a450",
+   "digest": "d72aef788b598f8bdee0f2ae",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd921e5173e141e1a8fc/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:19.625Z"
+  }
+ ],
+ "current": {
+  "goalId": "wst_49417e0937d8442cb041",
+  "contractDigest": "a523040b14cf745d0986f185",
+  "parentRevisionId": null,
+  "stance": "NO_PLAN",
+  "strategy": {
+   "title": "No plan: the signed mushroom orders settle after the 14-day deadline",
+   "opportunityIds": [],
+   "why": "Five chefs signed $600 orders ($3,000, above the $2,000 target) and the farm fulfils at $380 billed net 60, but the orders are payable net 45 after the month's last delivery; time to first cash is 45 days against 14, so no cash settles inside the window."
+  },
+  "alternatives": [
+   {
+    "title": "Ask chefs to prepay",
+    "why": "Not established: the signed terms are net 45; any change is a new negotiation nobody has evidence for."
+   }
+  ],
+  "steps": [
+   {
+    "id": "research",
+    "kind": "RESEARCH",
+    "label": "Establish whether any chef would accept payment terms settling within 14 days, or obtain the owner's agreement to a longer deadline",
+    "performer": "BRAIN",
+    "costCents": 0,
+    "day": 1,
+    "dependsOn": null,
+    "evidence": [
+     "timeToFirstCash",
+     "price"
+    ],
+    "executor": {
+     "operation": "RESEARCH",
+     "performedBy": "BRAIN",
+     "provider": null,
+     "capabilities": [
+      {
+       "id": "CHEAP_MODEL_READS",
+       "state": "PRESENT"
+      }
+     ],
+     "routine": false
+    }
+   }
+  ],
+  "cash": [],
+  "proofDay": null,
+  "quantities": [
+   {
+    "name": "time to usable cash",
+    "status": "EVIDENCED",
+    "value": 45,
+    "unit": "days",
+    "sources": [
+     "timeToFirstCash"
+    ],
+    "needs": null
+   },
+   {
+    "name": "signed order value",
+    "status": "EVIDENCED",
+    "value": 3000,
+    "unit": "USD",
+    "sources": [
+     "price"
+    ],
+    "needs": null
+   }
+  ],
+  "sources": [
+   {
+    "id": "timeToFirstCash",
+    "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#timeToFirstCash",
+    "dated": "2026-11",
+    "claim": "45 days to first cash",
+    "population": "Executive chefs at independent restaurants",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c3d7ef4296514a7b9317"
+   },
+   {
+    "id": "price",
+    "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#price",
+    "dated": "2026-11",
+    "claim": "Five chefs signed $600 orders for a month of weekly deliveries, payable net 45 after the month's last delivery",
+    "population": "Executive chefs at independent restaurants",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c3d7ef4296514a7b9317"
+   },
+   {
+    "id": "fulfillment",
+    "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#fulfillment",
+    "dated": "2026-11",
+    "claim": "Hollow Creek Mushroom Farm quoted $380 a month per chef, billed net 60",
+    "population": "Executive chefs at independent restaurants",
+    "matchesBuyer": true,
+    "opportunityId": "cop_c3d7ef4296514a7b9317"
+   }
+  ],
+  "validation": null,
+  "noPlan": {
+   "decisiveGap": "SETTLES_IN_TIME: the only opening's cash arrives 45 days out (net 45 after the month's last delivery) against a 14-day window, so $0 settles before the deadline.",
+   "resolution": "Relax the deadline to at least 45 days (about 75 days if net 45 runs from the last weekly delivery of the month), or renegotiate the chefs' terms to payment within 14 days.",
+   "decisiveLinks": [
+    "SETTLES_IN_TIME"
+   ]
+  },
+  "reach": null,
+  "answers": [],
+  "chain": [
+   {
+    "opportunityId": "cop_c3d7ef4296514a7b9317",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ]
+   }
+  ],
+  "excluded": [],
+  "members": [],
+  "resolves": [
+   "SETTLES_IN_TIME"
+  ],
+  "constraints": [
+   {
+    "constraint": "DEADLINE",
+    "suggestion": "Move the deadline to at least 45 days (timeToFirstCash); because the signed orders are payable net 45 after the month's last delivery, about 75 days is the safe window.",
+    "basis": [
+     {
+      "opportunityId": "cop_c3d7ef4296514a7b9317",
+      "field": "timeToFirstCash"
+     },
+     {
+      "opportunityId": "cop_c3d7ef4296514a7b9317",
+      "field": "price"
+     }
+    ]
+   }
+  ],
+  "disagreements": [],
+  "revisionId": "rev_d72aef788b59_a0a450",
+  "digest": "d72aef788b598f8bdee0f2ae",
+  "author": {
+   "kind": "APP_SESSION",
+   "id": "wkr_dd921e5173e141e1a8fc/author-C",
+   "model": "claude-opus-5-5"
+  },
+  "createdAt": "2026-11-27T12:14:19.625Z"
+ },
+ "currentCheck": {
+  "revisionId": "rev_d72aef788b59_a0a450",
+  "digest": "d72aef788b598f8bdee0f2ae",
+  "contractDigest": "a523040b14cf745d0986f185",
+  "problems": [],
+  "trace": {
+   "totalSpentCents": 0,
+   "committedOpenCents": 0,
+   "preProofCents": 0,
+   "maxExposureCents": 0,
+   "minCashCents": 0,
+   "minCashDay": null,
+   "collectedCents": 0,
+   "collectedInWindowCents": 0,
+   "refundsCents": 0,
+   "ownerFundedCents": 0,
+   "netCents": 0
+  },
+  "brain": {
+   "completed": true,
+   "error": null,
+   "verdict": "NOT_VIABLE",
+   "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $2,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+   "acceptance": "NOT_SUPPORTED",
+   "considered": [
+    "cop_c3d7ef4296514a7b9317"
+   ],
+   "integrity": [],
+   "steps": [],
+   "nextTest": null,
+   "openings": [
+    {
+     "opportunityId": "cop_c3d7ef4296514a7b9317",
+     "title": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "E_COMMITTED",
+     "supportedReach": 0,
+     "potentialReach": 0,
+     "card": {
+      "payer": "Executive chefs at independent restaurants",
+      "reachableChannel": "Direct calls to chefs introduced by the farm",
+      "buyingSignal": "Posted asking for this work",
+      "signalObservedAt": "2026-11-24T12:10:04.121Z",
+      "offerScope": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+      "priceCents": 60000,
+      "currency": "USD",
+      "fulfillmentOwner": "Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60)",
+      "peakFundingCents": 0,
+      "humanHours": 1,
+      "requiredCapabilities": [],
+      "industry": "specialty mushroom farming",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH",
+      "state": "DISCOVERED"
+     },
+     "agreements": [
+      {
+       "amountCents": 60000,
+       "currency": "USD",
+       "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 60000,
+       "currency": "USD",
+       "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 60000,
+       "currency": "USD",
+       "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 60000,
+       "currency": "USD",
+       "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      },
+      {
+       "amountCents": 60000,
+       "currency": "USD",
+       "deliverable": "Brokered weekly specialty-mushroom supply for restaurant chefs",
+       "evidenceKind": "WRITTEN_ACCEPTANCE",
+       "state": "AGREED",
+       "recordedBy": "PERSON"
+      }
+     ],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Direct calls to chefs introduced by the farm"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": true,
+       "basis": "VERIFIED: signal dated 2026-11-24"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": true,
+       "basis": "a buyer agreed to 3000 USD"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": true,
+       "basis": "buyers have agreed to 3000 USD"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": true,
+       "basis": "fulfilled by Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60) (a source says so)"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": true,
+       "basis": "cost 380, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "45 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "captureMechanism",
+       "value": "Sell Brokered weekly specialty-mushroom supply for restaurant chefs to each buyer.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "directCosts",
+       "value": "$380",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "fulfillment",
+       "value": "Hollow Creek Mushroom Farm (quoted $380 a month per chef, billed net 60) quoted to do the work.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "payer",
+       "value": "Executive chefs at independent restaurants",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "price",
+       "value": "Five executive chefs signed $600 orders for a month of weekly lion's mane and oyster mushroom deliveries, payable net 45 after the month's last delivery (signed orders, 2026-11).",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "45 days",
+       "kind": "EVIDENCE"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "questions": [
+    "cnd_dad8d055df13448083a4",
+    "cnd_ab55e7df4eb94abd8e9a"
+   ],
+   "scope": {
+    "targetCents": 200000,
+    "daysLeft": 14,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "at": "2026-11-27T12:11:57.299Z"
+  }
+ },
+ "reviews": [
+  {
+   "revisionId": "rev_d72aef788b59_a0a450",
+   "revisionDigest": "d72aef788b598f8bdee0f2ae",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd921e5173e141e1a8fc/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_1e25f8b1db0844b1bcfd/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct and the decisive gap is a true constraint, not missing evidence. Five chefs signed $600 orders ($3,000 >= $2,000 target) and the farm fulfils at $380/chef billed net 60 (cost below price, no capital tied up), but the signed orders are payable net 45 after the month's last delivery: cash arrives about 45 days at the earliest (closer to 75 counting the delivery month) against a 14-day window, so $0 settles in the window even with every link else established. The deadline suggestion (>= 45 days, ~75 safe) is supported by the timeToFirstCash and price facts.",
+   "findings": [
+    "Recomputed: 5 x $600 = $3,000 gross, 5 x $380 = $1,900 cost, $1,100 net - note that net is below the $2,000 target even if the deadline moved, since the target is settled cash and the farm's $1,900 is owed (net 60); the resolution should say the target is reached gross but $1,100 net, or that more orders are needed.",
+    "SETTLES_IN_TIME is the decisive link and the only missing one per Brain; NOT_VIABLE as stated agrees.",
+    "Prepay alternative correctly left unassumed - the signed terms say net 45."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:40.256Z",
+   "conditions": []
+  }
+ ],
+ "final": {
+  "revisionId": "rev_d72aef788b59_a0a450",
+  "digest": "d72aef788b598f8bdee0f2ae",
+  "contractDigest": "a523040b14cf745d0986f185",
+  "plan": {
+   "goalId": "wst_49417e0937d8442cb041",
+   "contractDigest": "a523040b14cf745d0986f185",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the signed mushroom orders settle after the 14-day deadline",
+    "opportunityIds": [],
+    "why": "Five chefs signed $600 orders ($3,000, above the $2,000 target) and the farm fulfils at $380 billed net 60, but the orders are payable net 45 after the month's last delivery; time to first cash is 45 days against 14, so no cash settles inside the window."
+   },
+   "alternatives": [
+    {
+     "title": "Ask chefs to prepay",
+     "why": "Not established: the signed terms are net 45; any change is a new negotiation nobody has evidence for."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish whether any chef would accept payment terms settling within 14 days, or obtain the owner's agreement to a longer deadline",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "timeToFirstCash",
+      "price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 45,
+     "unit": "days",
+     "sources": [
+      "timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed order value",
+     "status": "EVIDENCED",
+     "value": 3000,
+     "unit": "USD",
+     "sources": [
+      "price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "timeToFirstCash",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "45 days to first cash",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "price",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#price",
+     "dated": "2026-11",
+     "claim": "Five chefs signed $600 orders for a month of weekly deliveries, payable net 45 after the month's last delivery",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    },
+    {
+     "id": "fulfillment",
+     "url": "https://brain.local/card/cop_c3d7ef4296514a7b9317#fulfillment",
+     "dated": "2026-11",
+     "claim": "Hollow Creek Mushroom Farm quoted $380 a month per chef, billed net 60",
+     "population": "Executive chefs at independent restaurants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c3d7ef4296514a7b9317"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "SETTLES_IN_TIME: the only opening's cash arrives 45 days out (net 45 after the month's last delivery) against a 14-day window, so $0 settles before the deadline.",
+    "resolution": "Relax the deadline to at least 45 days (about 75 days if net 45 runs from the last weekly delivery of the month), or renegotiate the chefs' terms to payment within 14 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c3d7ef4296514a7b9317",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 45 days (timeToFirstCash); because the signed orders are payable net 45 after the month's last delivery, about 75 days is the safe window.",
+     "basis": [
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "timeToFirstCash"
+      },
+      {
+       "opportunityId": "cop_c3d7ef4296514a7b9317",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_d72aef788b59_a0a450",
+   "digest": "d72aef788b598f8bdee0f2ae",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd921e5173e141e1a8fc/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T12:14:19.625Z"
+  },
+  "review": {
+   "revisionId": "rev_d72aef788b59_a0a450",
+   "revisionDigest": "d72aef788b598f8bdee0f2ae",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd921e5173e141e1a8fc/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_1e25f8b1db0844b1bcfd/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "NO_PLAN is correct and the decisive gap is a true constraint, not missing evidence. Five chefs signed $600 orders ($3,000 >= $2,000 target) and the farm fulfils at $380/chef billed net 60 (cost below price, no capital tied up), but the signed orders are payable net 45 after the month's last delivery: cash arrives about 45 days at the earliest (closer to 75 counting the delivery month) against a 14-day window, so $0 settles in the window even with every link else established. The deadline suggestion (>= 45 days, ~75 safe) is supported by the timeToFirstCash and price facts.",
+   "findings": [
+    "Recomputed: 5 x $600 = $3,000 gross, 5 x $380 = $1,900 cost, $1,100 net - note that net is below the $2,000 target even if the deadline moved, since the target is settled cash and the farm's $1,900 is owed (net 60); the resolution should say the target is reached gross but $1,100 net, or that more orders are needed.",
+    "SETTLES_IN_TIME is the decisive link and the only missing one per Brain; NOT_VIABLE as stated agrees.",
+    "Prepay alternative correctly left unassumed - the signed terms say net 45."
+   ],
+   "resolution": null,
+   "at": "2026-11-27T12:17:40.256Z",
+   "conditions": []
+  },
+  "basis": {
+   "intent": "Collect $2,000 of settled cash within 14 days using no up-front capital.",
+   "terms": "7093e005c2b69fed",
+   "openings": {
+    "cop_c3d7ef4296514a7b9317": "7549994ea5296a78"
+   }
+  },
+  "at": "2026-11-27T12:19:50.239Z"
+ },
+ "staleFinal": null,
+ "staleBecause": []
+}

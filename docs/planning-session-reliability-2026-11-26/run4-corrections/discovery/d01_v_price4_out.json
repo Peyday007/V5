@@ -1,0 +1,84 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "phase": "VERIFIED",
+    "needId": "cnd_df9635b075a14ac6bcd8",
+    "opportunityId": "cop_e0716d82a55d4527b332",
+    "field": "revenueRange",
+    "verifier": {
+      "kind": "APP_SESSION",
+      "id": "wkr_e053549969e147889b2e/verifier-1",
+      "model": "claude-opus-5-5"
+    },
+    "researcher": {
+      "kind": "APP_SESSION",
+      "id": "wkr_247bfbc3570249c88bcf/discovery-1",
+      "model": "claude-opus-5-5"
+    },
+    "fragmentStatus": "ACCEPTED",
+    "gateReasons": [
+      "1 claim(s) failed: scope, date, geography and definitions match."
+    ],
+    "claims": [
+      {
+        "claimId": "clm_d85f9743519349bcaf4b",
+        "accepted": true,
+        "rejectionReason": null
+      },
+      {
+        "claimId": "clm_afa7c30232994a7d846a",
+        "accepted": true,
+        "rejectionReason": null
+      },
+      {
+        "claimId": "clm_92bc3abdff7643da8d43",
+        "accepted": true,
+        "rejectionReason": null
+      },
+      {
+        "claimId": "clm_150bc8867d38428ba087",
+        "accepted": false,
+        "rejectionReason": "Scope does not match on definitions (mismatch)."
+      }
+    ],
+    "answered": {
+      "claimId": "clm_d85f9743519349bcaf4b"
+    },
+    "unanswered": null,
+    "input": {
+      "field": "revenueRange",
+      "before": {
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+      },
+      "after": {
+        "value": "An accessibility services firm writing for small businesses states that a manual WCAG 2.1 AA audit for a small informational website often costs $1,500-$4,000.",
+        "kind": "EVIDENCE"
+      }
+    },
+    "missing": {
+      "before": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ],
+      "after": [
+        "CURRENT_DEMAND",
+        "OFFER_AND_PRICE",
+        "CONVERSION",
+        "FULFILMENT",
+        "ECONOMICS",
+        "SETTLES_IN_TIME"
+      ]
+    },
+    "rerun": {
+      "completed": true,
+      "verdict": "NOT_VIABLE",
+      "at": "2026-11-27T02:44:33.584Z"
+    }
+  }
+}

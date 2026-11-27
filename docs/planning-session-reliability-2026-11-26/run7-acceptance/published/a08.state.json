@@ -1,0 +1,1762 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_5362691153ff45fd81f7",
+      "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$5,000 of settled cash collected by day 30 with no up-front capital",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "008370e40717c1c45f5cb428"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_5362691153ff45fd81f7",
+        "contractDigest": "008370e40717c1c45f5cb428",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the $700 ISPM-15 batch-record workbook to 8 more certified pallet facilities from the 1,200 not yet contacted",
+          "opportunityIds": [
+            "cop_706fe47129764c4b8a1c"
+          ],
+          "why": "The price is established by payment-processor records: 26 pallet manufacturers paid $700 each through the offer's checkout link (2026-11). Conversion is measured on this same offer and price: 26 of 200 contacts (13%). The agency's list holds 1,400 certified facilities with contact emails (counted 2026-11-15), 200 already contacted, so 1,200 remain. 8 sales x $700 = $5,600 gross, $5,552 after the $6 direct cost each, covers the $5,000 target; at 13% that needs about 62 contacts, and the plan writes to 120 (expected ~15 sales). Brain produces the workbook itself (PRODUCE_SPREADSHEET proved), no capital is tied up, and cash is usable 4 days after sale, well inside 30 days."
+        },
+        "alternatives": [
+          {
+            "title": "Write to all 1,200 uncontacted facilities at once",
+            "why": "More headroom (expected ~156 sales) but unnecessary for the target; kept as the fallback if the first 120 convert below plan."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email 120 uncontacted certified facilities from the agency's public facility list",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "SELL",
+            "label": "Sell the workbook at $700 through the existing checkout link",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "s1",
+              "s3"
+            ],
+            "priceCents": 70000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Collect checkout payments from 8 buyers ($5,600)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s1",
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each buyer's ISPM-15 heat-treatment batch record workbook",
+            "performer": "BRAIN",
+            "costCents": 4800,
+            "day": 7,
+            "dependsOn": "s3",
+            "evidence": [
+              "s4",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "OTHER",
+            "label": "If fewer than 8 have paid by day 10, write to the next 200 uncontacted facilities",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s3",
+            "evidence": [
+              "s2"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 560000,
+            "label": "8 workbooks at $700 via checkout",
+            "settlesDay": 7,
+            "stepId": "s3"
+          },
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 4800,
+            "label": "Direct cost of 8 workbooks at $6",
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price paid",
+            "status": "EVIDENCED",
+            "value": 70000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.13,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "certified facilities with contact email",
+            "status": "EVIDENCED",
+            "value": 1400,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "facilities not yet contacted",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales needed",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s1",
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#price",
+            "dated": "2026-11",
+            "claim": "26 pallet manufacturers paid $700 each through the offer's checkout link (payment processor records)",
+            "population": "Certified pallet manufacturers who bought",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#buyerVolume",
+            "dated": "2026-11-15",
+            "claim": "1,400 ISPM-15 certified facilities listed with a contact email; 200 contacted; each needs one workbook",
+            "population": "National certification agency facility list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#conversionRates",
+            "dated": "2026-11",
+            "claim": "26 agreements from 200 contacts",
+            "population": "Contacted certified facilities",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per workbook",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "deals": 8,
+            "price": 700,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "link": "OFFER_AND_PRICE",
+            "reason": "The card carries a single price, priceCents 70000, and its price fact (kind EVIDENCE) is payment-processor records of 26 manufacturers paying $700 each through the checkout link in 2026-11. A paid purchase at $700 establishes the offer and price; Brain's 'no single price on the card' contradicts the card."
+          },
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts 15 reachable buyers, but the card's buyerVolume fact (EVIDENCE, counted 2026-11-15) lists 1,400 certified facilities with contact emails, of which 200 have been contacted, leaving 1,200. At the measured 26/200 = 13%, 8 sales need about 62 contacts, a small fraction of 1,200."
+          }
+        ],
+        "revisionId": "rev_4fff4896581b_51d802",
+        "digest": "4fff4896581b776ff5c234d8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:27:40.753Z"
+      },
+      {
+        "goalId": "wst_5362691153ff45fd81f7",
+        "contractDigest": "008370e40717c1c45f5cb428",
+        "parentRevisionId": "rev_4fff4896581b_51d802",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Price-test the ISPM-15 batch-record workbook at $700 on uncontacted certified facilities, then sell 8",
+          "opportunityIds": [
+            "cop_706fe47129764c4b8a1c"
+          ],
+          "why": "The opening's record changed: its price fact now reads \"$70\" while the card's priceCents is $700, so the price is contradicted and no longer established (the payment-processor record of 26 buyers at $700 is gone from the card). Everything else stands on EVIDENCE: 1,400 certified facilities with contact emails, 200 contacted, 1,200 not; 26 agreements from 200 contacts on this offer; Brain produces the spreadsheet; $6 direct cost; no capital; 4 days to usable cash. A first priced batch at $700 measures the price at no cost. If it holds, 8 x $700 = $5,600 settles by day 12 against the $5,000 target; if buyers only pay $70, the same list still holds enough facilities to re-plan (72 sales needed, about 554 contacts at 13%)."
+        },
+        "alternatives": [
+          {
+            "title": "Sell at $70 to about 554 facilities",
+            "why": "Would reach $5,040 if $70 is the real price, but that figure is contradicted by the card's $700 too, and conversion at $70 is not measured either; kept as the re-plan if the $700 test fails."
+          },
+          {
+            "title": "Research published prices for comparable ISPM-15 record workbooks",
+            "why": "Brain's open question; another seller's figure would not show these buyers paying, so the live priced batch decides the link directly."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "TEST",
+            "label": "Email 60 uncontacted certified facilities offering the workbook at $700 via checkout",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "priceCents": 70000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Count paid checkouts at $700 from the test batch (proof)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s1",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "If proof met, offer at $700 to 240 more uncontacted facilities",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "priceCents": 70000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "COLLECT",
+            "label": "Collect payments to reach 8 paid ($5,600)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s3",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each buyer's ISPM-15 heat-treatment batch record workbook",
+            "performer": "BRAIN",
+            "costCents": 4800,
+            "day": 12,
+            "dependsOn": "s4",
+            "evidence": [
+              "s4",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "Test batch: 4 paid at $700 (proof threshold)",
+            "settlesDay": 6,
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "4 more paid at $700",
+            "settlesDay": 12,
+            "stepId": "s4"
+          },
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 4800,
+            "label": "Direct cost of 8 workbooks at $6",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "Paid checkouts at $700 from the test batch; the card's price fact ($70) contradicts its priceCents ($700)"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.13,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "facilities not yet contacted",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#price",
+            "dated": "2026-11-27",
+            "claim": "Price fact now reads $70, contradicting the card's priceCents of $700",
+            "population": "This offer's card",
+            "matchesBuyer": false,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#buyerVolume",
+            "dated": "2026-11-15",
+            "claim": "1,400 ISPM-15 certified facilities listed with a contact email; 200 contacted; each needs one workbook",
+            "population": "National certification agency facility list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#conversionRates",
+            "dated": "2026-11",
+            "claim": "26 agreements from 200 contacts",
+            "population": "Contacted certified facilities",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per workbook",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 4 of the 60 test contacts pay $700 through checkout by day 6 (the measured 13% rate predicts about 8)",
+          "stop": [
+            "Fewer than 4 paid at $700 by day 6: $700 is not established; stop selling at $700 and re-plan on the price buyers actually pay (at $70, 72 sales from about 554 of the remaining facilities)",
+            "Any buyer disputes or refunds the charge"
+          ],
+          "continue": [
+            "4 or more paid at $700 by day 6: offer to 240 more uncontacted facilities and collect to 8 paid by day 12"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Brain's link evaluator appears to misread the count date and reject the price fact; after re-evaluation OFFER_AND_PRICE and MARKET_VOLUME hold.",
+            "resolution": "MARKET_VOLUME still holds (1,400 listed, 1,200 uncontacted) and stays a disagreement. OFFER_AND_PRICE no longer holds: the card's price fact changed to \"$70\" against priceCents $700, so the price is contradicted; the plan is now CONDITIONAL on a priced test."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1.",
+            "resolution": "Accepted as setup before s1; not an evidential gap."
+          },
+          {
+            "finding": "The cash entry settles on day 7 while sales are on day 3 with 4 days to cash: consistent.",
+            "resolution": "Kept consistent: test sales day 1-2 settle by day 6, second batch day 6-8 settles by day 12."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "deals": 8,
+            "price": 700,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts 15 reachable buyers, but the card's buyerVolume fact (EVIDENCE, counted 2026-11-15) lists 1,400 certified facilities with contact emails, 200 contacted, leaving 1,200; 15 is the day of the count date. At the measured 26/200 = 13%, 8 sales need about 62 contacts, and even 72 sales at $70 need about 554, both inside 1,200."
+          }
+        ],
+        "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+        "digest": "ed0b1c13fa6fb73a3d4d3fbf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:47:26.518Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_5362691153ff45fd81f7",
+      "contractDigest": "008370e40717c1c45f5cb428",
+      "parentRevisionId": "rev_4fff4896581b_51d802",
+      "stance": "CONDITIONAL",
+      "strategy": {
+        "title": "Price-test the ISPM-15 batch-record workbook at $700 on uncontacted certified facilities, then sell 8",
+        "opportunityIds": [
+          "cop_706fe47129764c4b8a1c"
+        ],
+        "why": "The opening's record changed: its price fact now reads \"$70\" while the card's priceCents is $700, so the price is contradicted and no longer established (the payment-processor record of 26 buyers at $700 is gone from the card). Everything else stands on EVIDENCE: 1,400 certified facilities with contact emails, 200 contacted, 1,200 not; 26 agreements from 200 contacts on this offer; Brain produces the spreadsheet; $6 direct cost; no capital; 4 days to usable cash. A first priced batch at $700 measures the price at no cost. If it holds, 8 x $700 = $5,600 settles by day 12 against the $5,000 target; if buyers only pay $70, the same list still holds enough facilities to re-plan (72 sales needed, about 554 contacts at 13%)."
+      },
+      "alternatives": [
+        {
+          "title": "Sell at $70 to about 554 facilities",
+          "why": "Would reach $5,040 if $70 is the real price, but that figure is contradicted by the card's $700 too, and conversion at $70 is not measured either; kept as the re-plan if the $700 test fails."
+        },
+        {
+          "title": "Research published prices for comparable ISPM-15 record workbooks",
+          "why": "Brain's open question; another seller's figure would not show these buyers paying, so the live priced batch decides the link directly."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "TEST",
+          "label": "Email 60 uncontacted certified facilities offering the workbook at $700 via checkout",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s2",
+            "s3"
+          ],
+          "priceCents": 70000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "COLLECT",
+          "label": "Count paid checkouts at $700 from the test batch (proof)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 6,
+          "dependsOn": "s1",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "SELL",
+          "label": "If proof met, offer at $700 to 240 more uncontacted facilities",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 6,
+          "dependsOn": "s2",
+          "evidence": [
+            "s2",
+            "s3"
+          ],
+          "priceCents": 70000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s4",
+          "kind": "COLLECT",
+          "label": "Collect payments to reach 8 paid ($5,600)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 12,
+          "dependsOn": "s3",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s5",
+          "kind": "DELIVER",
+          "label": "Produce and deliver each buyer's ISPM-15 heat-treatment batch record workbook",
+          "performer": "BRAIN",
+          "costCents": 4800,
+          "day": 12,
+          "dependsOn": "s4",
+          "evidence": [
+            "s4",
+            "s6"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 6,
+          "kind": "RECEIPT",
+          "amountCents": 280000,
+          "label": "Test batch: 4 paid at $700 (proof threshold)",
+          "settlesDay": 6,
+          "stepId": "s2"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 280000,
+          "label": "4 more paid at $700",
+          "settlesDay": 12,
+          "stepId": "s4"
+        },
+        {
+          "day": 12,
+          "kind": "SPEND",
+          "amountCents": 4800,
+          "label": "Direct cost of 8 workbooks at $6",
+          "stepId": "s5"
+        }
+      ],
+      "proofDay": 6,
+      "quantities": [
+        {
+          "name": "price buyers pay",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "cents",
+          "sources": [],
+          "needs": "Paid checkouts at $700 from the test batch; the card's price fact ($70) contradicts its priceCents ($700)"
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.13,
+          "unit": "agreements per contact",
+          "sources": [
+            "s3"
+          ],
+          "needs": null
+        },
+        {
+          "name": "facilities not yet contacted",
+          "status": "EVIDENCED",
+          "value": 1200,
+          "unit": "facilities",
+          "sources": [
+            "s2"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per workbook",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "cents",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#price",
+          "dated": "2026-11-27",
+          "claim": "Price fact now reads $70, contradicting the card's priceCents of $700",
+          "population": "This offer's card",
+          "matchesBuyer": false,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#buyerVolume",
+          "dated": "2026-11-15",
+          "claim": "1,400 ISPM-15 certified facilities listed with a contact email; 200 contacted; each needs one workbook",
+          "population": "National certification agency facility list",
+          "matchesBuyer": true,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#conversionRates",
+          "dated": "2026-11",
+          "claim": "26 agreements from 200 contacts",
+          "population": "Contacted certified facilities",
+          "matchesBuyer": true,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $6 per workbook",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "4 days to first usable cash",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        },
+        {
+          "id": "s6",
+          "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "This offer",
+          "matchesBuyer": true,
+          "opportunityId": "cop_706fe47129764c4b8a1c"
+        }
+      ],
+      "validation": {
+        "proof": "At least 4 of the 60 test contacts pay $700 through checkout by day 6 (the measured 13% rate predicts about 8)",
+        "stop": [
+          "Fewer than 4 paid at $700 by day 6: $700 is not established; stop selling at $700 and re-plan on the price buyers actually pay (at $70, 72 sales from about 554 of the remaining facilities)",
+          "Any buyer disputes or refunds the charge"
+        ],
+        "continue": [
+          "4 or more paid at $700 by day 6: offer to 240 more uncontacted facilities and collect to 8 paid by day 12"
+        ],
+        "decides": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Brain's link evaluator appears to misread the count date and reject the price fact; after re-evaluation OFFER_AND_PRICE and MARKET_VOLUME hold.",
+          "resolution": "MARKET_VOLUME still holds (1,400 listed, 1,200 uncontacted) and stays a disagreement. OFFER_AND_PRICE no longer holds: the card's price fact changed to \"$70\" against priceCents $700, so the price is contradicted; the plan is now CONDITIONAL on a priced test."
+        },
+        {
+          "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1.",
+          "resolution": "Accepted as setup before s1; not an evidential gap."
+        },
+        {
+          "finding": "The cash entry settles on day 7 while sales are on day 3 with 4 days to cash: consistent.",
+          "resolution": "Kept consistent: test sales day 1-2 settle by day 6, second batch day 6-8 settles by day 12."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_706fe47129764c4b8a1c",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_706fe47129764c4b8a1c",
+          "deals": 8,
+          "price": 700,
+          "directCost": 6,
+          "capital": 0
+        }
+      ],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_706fe47129764c4b8a1c",
+          "link": "MARKET_VOLUME",
+          "reason": "Brain counts 15 reachable buyers, but the card's buyerVolume fact (EVIDENCE, counted 2026-11-15) lists 1,400 certified facilities with contact emails, 200 contacted, leaving 1,200; 15 is the day of the count date. At the measured 26/200 = 13%, 8 sales need about 62 contacts, and even 72 sales at $70 need about 554, both inside 1,200."
+        }
+      ],
+      "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+      "digest": "ed0b1c13fa6fb73a3d4d3fbf",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_e333cd9726b44422957e/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T08:47:26.518Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+      "digest": "ed0b1c13fa6fb73a3d4d3fbf",
+      "contractDigest": "008370e40717c1c45f5cb428",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 4800,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 280000,
+        "minCashDay": 6,
+        "collectedCents": 560000,
+        "collectedInWindowCents": 560000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 555200
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5637× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"ISPM-15 heat-treatment batch record workbook for pallet manu\" needs [figure withheld] and keeps [figure withheld], 379× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Certified pallet and wood-packaging manufacturers\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_706fe47129764c4b8a1c"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"ISPM-15 heat-treatment batch record workbook for pallet manufacturers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"ISPM-15 heat-treatment batch record workbook for pallet manufacturers\"",
+            "owner": "PERSON",
+            "cost": 6
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Certified pallet and wood-packaging manufacturers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Certified pallet and wood-packaging manufacturers",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 11.984615461825081
+          },
+          {
+            "label": "Collect payment for \"ISPM-15 heat-treatment batch record workbook for pallet manufacturers\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "title": "ISPM-15 heat-treatment batch record workbook for pallet manufacturers",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Certified pallet and wood-packaging manufacturers",
+              "reachableChannel": "Contact emails on the national wood-packaging certification agency's public facility list",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T08:22:24.248Z",
+              "offerScope": "ISPM-15 heat-treatment batch record workbook for pallet manufacturers",
+              "priceCents": 70000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "pallet manufacturing",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Contact emails on the national wood-packaging certification agency's public faci"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 26 accepted of 200 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "20 deal(s) needed but only 15 in the window (15 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The certification agency lists 1,400 ISPM-15 certified facilities with a contact email (counted 2026-11-15); 200 have been contacted. Each needs one workbook.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell ISPM-15 heat-treatment batch record workbook for pallet manufacturers to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "26 agreements from 200 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Certified pallet and wood-packaging manufacturers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$70",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T08:45:49.119Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_4fff4896581b_51d802",
+        "revisionDigest": "4fff4896581b776ff5c234d8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1134825151a94b759f4f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Every link of the single member is established by the card's own EVIDENCE facts. Price: 26 pallet manufacturers paid $700 each through this offer's checkout link (payment processor records, 2026-11), a real purchase price from this buyer population, and the card holds one priceCents 70000. Volume: the certification agency lists 1,400 certified facilities with contact email (counted 2026-11-15), 200 contacted, 1,200 not, one workbook each. Conversion 26/200 = 13% measured on the same offer and price. Delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $6 < $700; exposure $0; 4 days to usable cash. Brain's two failed links contradict the card rather than being contradicted by it: 'no single price on the card' is false (one price, one EVIDENCE price fact), and its 'market holds only 15' figure is the day of the count date (2026-11-15), not the 1,400 the fact states; the author's recorded disagreements cite the specific facts and I agree with both. Arithmetic recomputed: 8 sales needed (7 x $700 = $4,900 < $5,000; 8 x $700 = $5,600); 120 contacts x 13% = 15.6 expected, about 2x the need, with a fallback batch of 200 by day 10 and 1,080 more in reserve; cost 8 x $6 = $48 from receipts, $0 up-front; net $5,552; sales day 3, settled day 7 of 30. EXECUTABLE is right.",
+        "findings": [
+          "Brain's link evaluator appears to read a number out of the count date (2026-11-15 -> 15 buyers) and to reject a price fact that contains several numbers; this card's links should be re-evaluated, after which OFFER_AND_PRICE and MARKET_VOLUME hold.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1, not an evidential gap.",
+          "The cash entry settles on day 7 while sales are on day 3 with 4 days to cash: consistent."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:34:18.685Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+        "revisionDigest": "ed0b1c13fa6fb73a3d4d3fbf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1134825151a94b759f4f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The opening's record changed: the price fact now reads '$70' while the card's priceCents is $700, and the payment-processor record of 26 buyers paying $700 is gone. Two figures that disagree by 10x on the same card mean the price is contradicted and not established, so EXECUTABLE is no longer supportable and CONDITIONAL with validation.decides = OFFER_AND_PRICE is the right stance; the plan does not treat the price as known (quantity UNKNOWN, source matchesBuyer false). The other links still stand on EVIDENCE: 1,400 listed facilities with contact emails, 1,200 uncontacted (Brain's 'only 15' is still the day of the 2026-11-15 count date, and the recorded disagreement is right); conversion 26/200 = 13% on this offer; Brain-produced spreadsheet; $6 cost; $0 exposure; 4 days to cash. A priced live batch is the correct decisive test: no published comparable would show these buyers paying. Arithmetic recomputed: at $700, 8 sales needed (7 x $700 = $4,900 < $5,000), 8 x $700 = $5,600, net $5,552; proof 4 of 60 by day 6 (6.7%), and at that bare rate the 240-contact second batch adds about 16, so the target is reached by day 12 with margin. At $70 the fallback needs 72 sales (72 x $70 = $5,040; 71 gives $4,970), about 554 contacts at 13%, inside the 1,140 left after the test. $0 capital throughout.",
+        "findings": [
+          "The 13% conversion was measured at an unrecorded price now that the $700 payment record is gone; if those 26 bought at $70, the rate does not predict $700 conversion. The test measures both together, which is fine, but the fallback at $70 should be treated as conversion-measured only if the 26 sales were at $70.",
+          "Time risk on the fallback: if the $700 test fails on day 6, the $70 re-plan has 24 days to contact about 554 facilities and settle 72 sales. Running a small $70 arm in parallel with the $700 test (e.g., 30 + 30 contacts) would decide the price in one round instead of two.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:49:24.325Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+      "digest": "ed0b1c13fa6fb73a3d4d3fbf",
+      "contractDigest": "008370e40717c1c45f5cb428",
+      "plan": {
+        "goalId": "wst_5362691153ff45fd81f7",
+        "contractDigest": "008370e40717c1c45f5cb428",
+        "parentRevisionId": "rev_4fff4896581b_51d802",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Price-test the ISPM-15 batch-record workbook at $700 on uncontacted certified facilities, then sell 8",
+          "opportunityIds": [
+            "cop_706fe47129764c4b8a1c"
+          ],
+          "why": "The opening's record changed: its price fact now reads \"$70\" while the card's priceCents is $700, so the price is contradicted and no longer established (the payment-processor record of 26 buyers at $700 is gone from the card). Everything else stands on EVIDENCE: 1,400 certified facilities with contact emails, 200 contacted, 1,200 not; 26 agreements from 200 contacts on this offer; Brain produces the spreadsheet; $6 direct cost; no capital; 4 days to usable cash. A first priced batch at $700 measures the price at no cost. If it holds, 8 x $700 = $5,600 settles by day 12 against the $5,000 target; if buyers only pay $70, the same list still holds enough facilities to re-plan (72 sales needed, about 554 contacts at 13%)."
+        },
+        "alternatives": [
+          {
+            "title": "Sell at $70 to about 554 facilities",
+            "why": "Would reach $5,040 if $70 is the real price, but that figure is contradicted by the card's $700 too, and conversion at $70 is not measured either; kept as the re-plan if the $700 test fails."
+          },
+          {
+            "title": "Research published prices for comparable ISPM-15 record workbooks",
+            "why": "Brain's open question; another seller's figure would not show these buyers paying, so the live priced batch decides the link directly."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "TEST",
+            "label": "Email 60 uncontacted certified facilities offering the workbook at $700 via checkout",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "priceCents": 70000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "COLLECT",
+            "label": "Count paid checkouts at $700 from the test batch (proof)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s1",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "If proof met, offer at $700 to 240 more uncontacted facilities",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2",
+              "s3"
+            ],
+            "priceCents": 70000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "COLLECT",
+            "label": "Collect payments to reach 8 paid ($5,600)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s3",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Produce and deliver each buyer's ISPM-15 heat-treatment batch record workbook",
+            "performer": "BRAIN",
+            "costCents": 4800,
+            "day": 12,
+            "dependsOn": "s4",
+            "evidence": [
+              "s4",
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "Test batch: 4 paid at $700 (proof threshold)",
+            "settlesDay": 6,
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "4 more paid at $700",
+            "settlesDay": 12,
+            "stepId": "s4"
+          },
+          {
+            "day": 12,
+            "kind": "SPEND",
+            "amountCents": 4800,
+            "label": "Direct cost of 8 workbooks at $6",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 6,
+        "quantities": [
+          {
+            "name": "price buyers pay",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "cents",
+            "sources": [],
+            "needs": "Paid checkouts at $700 from the test batch; the card's price fact ($70) contradicts its priceCents ($700)"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.13,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "facilities not yet contacted",
+            "status": "EVIDENCED",
+            "value": 1200,
+            "unit": "facilities",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#price",
+            "dated": "2026-11-27",
+            "claim": "Price fact now reads $70, contradicting the card's priceCents of $700",
+            "population": "This offer's card",
+            "matchesBuyer": false,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#buyerVolume",
+            "dated": "2026-11-15",
+            "claim": "1,400 ISPM-15 certified facilities listed with a contact email; 200 contacted; each needs one workbook",
+            "population": "National certification agency facility list",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#conversionRates",
+            "dated": "2026-11",
+            "claim": "26 agreements from 200 contacts",
+            "population": "Contacted certified facilities",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6 per workbook",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first usable cash",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_706fe47129764c4b8a1c#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "This offer",
+            "matchesBuyer": true,
+            "opportunityId": "cop_706fe47129764c4b8a1c"
+          }
+        ],
+        "validation": {
+          "proof": "At least 4 of the 60 test contacts pay $700 through checkout by day 6 (the measured 13% rate predicts about 8)",
+          "stop": [
+            "Fewer than 4 paid at $700 by day 6: $700 is not established; stop selling at $700 and re-plan on the price buyers actually pay (at $70, 72 sales from about 554 of the remaining facilities)",
+            "Any buyer disputes or refunds the charge"
+          ],
+          "continue": [
+            "4 or more paid at $700 by day 6: offer to 240 more uncontacted facilities and collect to 8 paid by day 12"
+          ],
+          "decides": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Brain's link evaluator appears to misread the count date and reject the price fact; after re-evaluation OFFER_AND_PRICE and MARKET_VOLUME hold.",
+            "resolution": "MARKET_VOLUME still holds (1,400 listed, 1,200 uncontacted) and stays a disagreement. OFFER_AND_PRICE no longer holds: the card's price fact changed to \"$70\" against priceCents $700, so the price is contradicted; the plan is now CONDITIONAL on a priced test."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1.",
+            "resolution": "Accepted as setup before s1; not an evidential gap."
+          },
+          {
+            "finding": "The cash entry settles on day 7 while sales are on day 3 with 4 days to cash: consistent.",
+            "resolution": "Kept consistent: test sales day 1-2 settle by day 6, second batch day 6-8 settles by day 12."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "deals": 8,
+            "price": 700,
+            "directCost": 6,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_706fe47129764c4b8a1c",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts 15 reachable buyers, but the card's buyerVolume fact (EVIDENCE, counted 2026-11-15) lists 1,400 certified facilities with contact emails, 200 contacted, leaving 1,200; 15 is the day of the count date. At the measured 26/200 = 13%, 8 sales need about 62 contacts, and even 72 sales at $70 need about 554, both inside 1,200."
+          }
+        ],
+        "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+        "digest": "ed0b1c13fa6fb73a3d4d3fbf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T08:47:26.518Z"
+      },
+      "review": {
+        "revisionId": "rev_ed0b1c13fa6f_95fdfd",
+        "revisionDigest": "ed0b1c13fa6fb73a3d4d3fbf",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e333cd9726b44422957e/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1134825151a94b759f4f/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The opening's record changed: the price fact now reads '$70' while the card's priceCents is $700, and the payment-processor record of 26 buyers paying $700 is gone. Two figures that disagree by 10x on the same card mean the price is contradicted and not established, so EXECUTABLE is no longer supportable and CONDITIONAL with validation.decides = OFFER_AND_PRICE is the right stance; the plan does not treat the price as known (quantity UNKNOWN, source matchesBuyer false). The other links still stand on EVIDENCE: 1,400 listed facilities with contact emails, 1,200 uncontacted (Brain's 'only 15' is still the day of the 2026-11-15 count date, and the recorded disagreement is right); conversion 26/200 = 13% on this offer; Brain-produced spreadsheet; $6 cost; $0 exposure; 4 days to cash. A priced live batch is the correct decisive test: no published comparable would show these buyers paying. Arithmetic recomputed: at $700, 8 sales needed (7 x $700 = $4,900 < $5,000), 8 x $700 = $5,600, net $5,552; proof 4 of 60 by day 6 (6.7%), and at that bare rate the 240-contact second batch adds about 16, so the target is reached by day 12 with margin. At $70 the fallback needs 72 sales (72 x $70 = $5,040; 71 gives $4,970), about 554 contacts at 13%, inside the 1,140 left after the test. $0 capital throughout.",
+        "findings": [
+          "The 13% conversion was measured at an unrecorded price now that the $700 payment record is gone; if those 26 bought at $70, the rate does not predict $700 conversion. The test measures both together, which is fine, but the fallback at $70 should be treated as conversion-measured only if the 26 sales were at $70.",
+          "Time risk on the fallback: if the $700 test fails on day 6, the $70 re-plan has 24 days to contact about 554 facilities and settle 72 sales. Running a small $70 arm in parallel with the $700 test (e.g., 30 + 30 contacts) would decide the price in one round instead of two.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: setup before s1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T08:49:24.325Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+        "terms": "6068d42e192a9a6e",
+        "openings": {
+          "cop_706fe47129764c4b8a1c": "936f00c3c6ad70d6"
+        }
+      },
+      "at": "2026-11-27T08:53:47.883Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

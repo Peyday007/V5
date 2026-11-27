@@ -1,0 +1,25 @@
+{
+  "id": "ho-08-aviation-unfunded",
+  "step": 0,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "revisionId": "rev_c4f7eb4c353c_bd55c5",
+  "stance": "NO_PLAN",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names relax CAPITAL, CAPITAL broken, ECONOMICS",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

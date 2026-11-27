@@ -1,0 +1,29 @@
+{
+  "id": "ho-14-objective-changed-to-recurring",
+  "step": 1,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "revisionId": "rev_3316c9de2662_dc6c8b",
+  "stance": "CONDITIONAL",
+  "checkProblems": [],
+  "observed": "NO_PLAN",
+  "pass": false,
+  "outcome": null,
+  "failures": [
+    "UNJUSTIFIED_REFUSAL"
+  ],
+  "critical": [],
+  "detail": "no executable plan (CONDITIONAL/null); names CONVERSION",
+  "e2e": {
+    "pass": false,
+    "failures": [
+      "VERDICT_INCORRECT"
+    ],
+    "gaps": [],
+    "detail": "verdict incorrect"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: brewery established but for the close rate selling measures"
+  }
+}

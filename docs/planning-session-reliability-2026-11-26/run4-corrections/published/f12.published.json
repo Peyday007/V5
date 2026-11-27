@@ -1,0 +1,156 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_8503d4a5e5db_4dedcb",
+      "digest": "8503d4a5e5db931cab1ac498",
+      "contractDigest": "7fe4575988b684c21d353ed7",
+      "plan": {
+        "goalId": "wst_2920e3f26f4f42388928",
+        "contractDigest": "7fe4575988b684c21d353ed7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan inside the $1,000 capital limit",
+          "opportunityIds": [],
+          "why": "The only opening held (lien-sale unit contents resold to a signed used-furniture dealer at $9,000) requires $6,000 of direct cost tied up before the dealer pays; the goal allows at most $1,000 of capital, so the opening cannot be run inside the owner's limits."
+        },
+        "alternatives": [
+          {
+            "title": "Run the lien-sale resale with $6,000 of capital",
+            "why": "Every other link is established (written acceptance at $9,000, quoted hauler, 14 days to cash), but it needs six times the capital the owner allowed."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Search for openings that reach $2,500 settled in 30 days with peak funding at or under $1,000, or ask the owner to raise the capital ceiling to $6,000",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_exposure"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "q_capital_needed",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents tied up before payment",
+            "sources": [
+              "src_exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_exposure",
+            "url": "https://brain.local/card/cop_d2a4213af6d443269c88#peakFundingCents",
+            "dated": "2026-11-24",
+            "claim": "Direct costs and exposure are $6,000 for the resale lot",
+            "population": "one used-furniture dealer",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_agreement",
+            "url": "https://brain.local/card/cop_d2a4213af6d443269c88#agreements",
+            "dated": "2026-11-24",
+            "claim": "One written acceptance at $9,000",
+            "population": "one used-furniture dealer",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The only opening needs $6,000 of capital tied up before the buyer's $9,000 settles; the goal permits at most $1,000, so no plan carries the target inside the capital limit.",
+          "resolution": "Owner raises the capital ceiling to at least $6,000 (the opening then becomes executable: $3,000 net settled in ~14 days), or Brain finds an opening needing at most $1,000 peak funding, e.g. supplier-paid-on-collection or buyer deposit terms on this lot.",
+          "decisiveLinks": [
+            "ECONOMICS"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_d2a4213af6d443269c88",
+            "missing": [
+              "ECONOMICS"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_d2a4213af6d443269c88",
+            "why": "Needs $6,000 peak funding against a $1,000 capital ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "ECONOMICS"
+        ],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Allow at least $6,000 of capital (peak funding of the lien-sale lot); with it the signed $9,000 resale settles about $3,000 net in ~14 days."
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_d2a4213af6d443269c88",
+            "link": "ECONOMICS",
+            "reason": "Brain marks economics ok (cost 6000, tied up 6000) but judged without the goal's limit: $6,000 tied up exceeds the $1,000 capital ceiling, so the economics do not hold inside this goal."
+          }
+        ],
+        "revisionId": "rev_8503d4a5e5db_4dedcb",
+        "digest": "8503d4a5e5db931cab1ac498",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f1343e94f56d4cb69b82/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:52:58.025Z"
+      },
+      "review": {
+        "revisionId": "rev_8503d4a5e5db_4dedcb",
+        "revisionDigest": "8503d4a5e5db931cab1ac498",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_f1343e94f56d4cb69b82/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_2da1bf5d85d1438fa595/reviewer-gamma",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a CAPITAL constraint is correct. The only opening (a signed $9,000 lien-sale resale fulfilled by the quoted hauler Ridgeline) needs $6,000 of direct cost tied up before the dealer pays, and the goal caps capital/exposure at $1,000. Even with every piece of evidence in hand it cannot fit the limit, which makes it a genuine constraint and not missing evidence. Brain's own verdict agrees (infeasible as stated, needs $6,000 of capital). The disagreement with Brain's ECONOMICS link (judged without the goal's limit) is justified. The resolution's figure is right: $9,000 - $6,000 = $3,000 net, which meets the $2,500 target in about 14 days if the ceiling were raised.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T02:58:22.791Z"
+      },
+      "at": "2026-11-27T03:04:15.736Z"
+    }
+  }
+}

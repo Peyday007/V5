@@ -1,0 +1,38 @@
+{
+  "id": "al-01-septic-pumpout-lists",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 4,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_999982c2c8ef_47717c",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_5e59aac10b2249ab9fd3/fleet-1",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [septicList] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

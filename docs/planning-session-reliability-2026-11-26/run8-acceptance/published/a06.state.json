@@ -1,0 +1,2073 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_acc0dfbfdae942a7a14c",
+      "words": "Collect $1,800 of settled cash within 10 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 180000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 10,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$1,800 of settled cash received within 10 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "192f33f92d241a2dbd150012"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_acc0dfbfdae942a7a14c",
+        "contractDigest": "192f33f92d241a2dbd150012",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+          "opportunityIds": [
+            "cop_ac92828af12b4df0af79"
+          ],
+          "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+        },
+        "alternatives": [
+          {
+            "title": "Look for other openings",
+            "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five signed order forms at $420 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect five $420 payments",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 1: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 2: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 3: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 4: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 5: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+            "dated": "2026-11-26",
+            "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer: ice rink program directors",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per workbook; exposure $0",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "deals": 5,
+            "price": 420,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "link": "OFFER_AND_PRICE",
+            "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+          }
+        ],
+        "revisionId": "rev_7aa7f16408ca_e528d7",
+        "digest": "7aa7f16408ca03463f6c2316",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b086560bd7034b118688/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:05.919Z"
+      },
+      {
+        "goalId": "wst_acc0dfbfdae942a7a14c",
+        "contractDigest": "192f33f92d241a2dbd150012",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+          "opportunityIds": [
+            "cop_ac92828af12b4df0af79"
+          ],
+          "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+        },
+        "alternatives": [
+          {
+            "title": "Look for other openings",
+            "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five signed order forms at $420 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect five $420 payments",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 1: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 2: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 3: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 4: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 5: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+            "dated": "2026-11-26",
+            "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer: ice rink program directors",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per workbook; exposure $0",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "deals": 5,
+            "price": 420,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "link": "EXCLUSION",
+            "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+          }
+        ],
+        "revisionId": "rev_a8584611d062_b441b2",
+        "digest": "a8584611d0624d0a872289d2",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b086560bd7034b118688/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:37:11.369Z"
+      },
+      {
+        "goalId": "wst_acc0dfbfdae942a7a14c",
+        "contractDigest": "192f33f92d241a2dbd150012",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+          "opportunityIds": [
+            "cop_ac92828af12b4df0af79"
+          ],
+          "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+        },
+        "alternatives": [
+          {
+            "title": "Look for other openings",
+            "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five signed order forms at $420 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect five $420 payments",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 1: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 2: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 3: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 4: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 5: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+            "dated": "2026-11-26",
+            "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer: ice rink program directors",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per workbook; exposure $0",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "why": "Duplicate hypothesis route this session filed for the same learn-to-skate workbook; the plan uses the evidenced original cop_ac92828af12b4df0af79 (signed orders)."
+          },
+          {
+            "opportunityId": "cop_ddea664319c346d0afb9",
+            "why": "Duplicate hypothesis route this session filed by mistake for the same workbook; superseded by the evidenced original cop_ac92828af12b4df0af79."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "deals": 5,
+            "price": 420,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "link": "EXCLUSION",
+            "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+          }
+        ],
+        "revisionId": "rev_66f9bd2a790e_47140b",
+        "digest": "66f9bd2a790e701f670dc5a7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b086560bd7034b118688/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:38:42.225Z"
+      },
+      {
+        "goalId": "wst_acc0dfbfdae942a7a14c",
+        "contractDigest": "192f33f92d241a2dbd150012",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+          "opportunityIds": [
+            "cop_8d3c7060ac6f47c1a45d"
+          ],
+          "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+        },
+        "alternatives": [
+          {
+            "title": "Look for other openings",
+            "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five signed order forms at $420 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect five $420 payments",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 1: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 2: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 3: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 4: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 5: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+            "dated": "2026-11-26",
+            "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer: ice rink program directors",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per workbook; exposure $0",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_ddea664319c346d0afb9",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "why": "Not admitted to this goal as a route; the plan carries the same sale through its admitted route cop_8d3c7060ac6f47c1a45d, whose figures are evidenced by this card's facts."
+          },
+          {
+            "opportunityId": "cop_ddea664319c346d0afb9",
+            "why": "Duplicate hypothesis route this session filed by mistake for the same workbook; superseded by the evidenced original cop_ac92828af12b4df0af79."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "deals": 5,
+            "price": 420,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "link": "EXCLUSION",
+            "reason": "Same sale as cop_ac92828af12b4df0af79, admitted as a route: its card EVIDENCE shows five rink program directors signed order forms at $420 per workbook (five WRITTEN_ACCEPTANCE agreements of 42000 cents) - a commercial purchase of a Brain-produced spreadsheet, not a grant or program transfer."
+          },
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "link": "EXCLUSION",
+            "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+          }
+        ],
+        "revisionId": "rev_e8083d90a1f4_d63493",
+        "digest": "e8083d90a1f4cf22357d6bc7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b086560bd7034b118688/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:39:22.068Z"
+      },
+      {
+        "goalId": "wst_acc0dfbfdae942a7a14c",
+        "contractDigest": "192f33f92d241a2dbd150012",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+          "opportunityIds": [
+            "cop_ac92828af12b4df0af79"
+          ],
+          "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+        },
+        "alternatives": [
+          {
+            "title": "Look for other openings",
+            "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the five signed order forms at $420 and send invoices",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "priceCents": 42000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+            "performer": "BRAIN",
+            "costCents": 2000,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect five $420 payments",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "deliver",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 1: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 2: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 3: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 4: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 42000,
+            "label": "Order form 5: $420 workbook payment",
+            "settlesDay": 4,
+            "stepId": "collect"
+          },
+          {
+            "day": 4,
+            "kind": "SPEND",
+            "amountCents": 2000,
+            "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 4,
+        "quantities": [
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "buyers",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per workbook",
+            "status": "EVIDENCED",
+            "value": 42000,
+            "unit": "cents",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost per workbook",
+            "status": "EVIDENCED",
+            "value": 400,
+            "unit": "cents",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to first cash",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+            "dated": "2026-11-26",
+            "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+            "dated": "2026-11-24",
+            "claim": "Payer: ice rink program directors",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per workbook; exposure $0",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "community ice rink program directors",
+            "matchesBuyer": true,
+            "opportunityId": "cop_ac92828af12b4df0af79"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "why": "Duplicate hypothesis route this session filed for the same learn-to-skate workbook; the plan uses the evidenced original cop_ac92828af12b4df0af79 (signed orders)."
+          },
+          {
+            "opportunityId": "cop_ddea664319c346d0afb9",
+            "why": "Duplicate hypothesis route this session filed by mistake for the same workbook; superseded by the evidenced original cop_ac92828af12b4df0af79."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "deals": 5,
+            "price": 420,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "link": "EXCLUSION",
+            "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+          }
+        ],
+        "revisionId": "rev_66f9bd2a790e_11a04a",
+        "digest": "66f9bd2a790e701f670dc5a7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b086560bd7034b118688/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:40:57.520Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_acc0dfbfdae942a7a14c",
+      "contractDigest": "192f33f92d241a2dbd150012",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the five signed learn-to-skate season workbooks and collect $2,100",
+        "opportunityIds": [
+          "cop_ac92828af12b4df0af79"
+        ],
+        "why": "Five rink program directors already signed order forms at $420 each (EVIDENCE). Brain produces the spreadsheet itself (PRODUCE_SPREADSHEET), direct cost $4 each, $0 exposure, 4 days to cash: 5 x $420 = $2,100 settles by day 4, above the $1,800 target inside 10 days with no up-front capital. Brain's exclusion ('a program, not a sale') is wrong: a rink's program director signing an order form and paying $420 for a workbook is a commercial purchase of a deliverable."
+      },
+      "alternatives": [
+        {
+          "title": "Look for other openings",
+          "why": "None needed: the signed orders already cover the target with $300 margin; no other opening is held."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the five signed order forms at $420 and send invoices",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "s1",
+            "s2"
+          ],
+          "priceCents": 42000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and sends five season roster/waiver/coach-ratio workbooks",
+          "performer": "BRAIN",
+          "costCents": 2000,
+          "day": 1,
+          "dependsOn": "sell",
+          "evidence": [
+            "s3",
+            "s4"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Collect five $420 payments",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 4,
+          "dependsOn": "deliver",
+          "evidence": [
+            "s5"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 42000,
+          "label": "Order form 1: $420 workbook payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 42000,
+          "label": "Order form 2: $420 workbook payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 42000,
+          "label": "Order form 3: $420 workbook payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 42000,
+          "label": "Order form 4: $420 workbook payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "RECEIPT",
+          "amountCents": 42000,
+          "label": "Order form 5: $420 workbook payment",
+          "settlesDay": 4,
+          "stepId": "collect"
+        },
+        {
+          "day": 4,
+          "kind": "SPEND",
+          "amountCents": 2000,
+          "label": "Direct cost $4 x 5 workbooks, paid out of the first receipts",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 4,
+      "quantities": [
+        {
+          "name": "signed buyers",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "buyers",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per workbook",
+          "status": "EVIDENCED",
+          "value": 42000,
+          "unit": "cents",
+          "sources": [
+            "s1"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost per workbook",
+          "status": "EVIDENCED",
+          "value": 400,
+          "unit": "cents",
+          "sources": [
+            "s4"
+          ],
+          "needs": null
+        },
+        {
+          "name": "time to first cash",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "days",
+          "sources": [
+            "s5"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s1",
+          "url": "https://brain.local/card/cop_ac92828af12b4df0af79#price",
+          "dated": "2026-11-26",
+          "claim": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26)",
+          "population": "community ice rink program directors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac92828af12b4df0af79"
+        },
+        {
+          "id": "s2",
+          "url": "https://brain.local/card/cop_ac92828af12b4df0af79#payer",
+          "dated": "2026-11-24",
+          "claim": "Payer: ice rink program directors",
+          "population": "community ice rink program directors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac92828af12b4df0af79"
+        },
+        {
+          "id": "s3",
+          "url": "https://brain.local/card/cop_ac92828af12b4df0af79#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces",
+          "population": "community ice rink program directors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac92828af12b4df0af79"
+        },
+        {
+          "id": "s4",
+          "url": "https://brain.local/card/cop_ac92828af12b4df0af79#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $4 per workbook; exposure $0",
+          "population": "community ice rink program directors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac92828af12b4df0af79"
+        },
+        {
+          "id": "s5",
+          "url": "https://brain.local/card/cop_ac92828af12b4df0af79#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "4 days to first cash",
+          "population": "community ice rink program directors",
+          "matchesBuyer": true,
+          "opportunityId": "cop_ac92828af12b4df0af79"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_ac92828af12b4df0af79",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+          "why": "Duplicate hypothesis route this session filed for the same learn-to-skate workbook; the plan uses the evidenced original cop_ac92828af12b4df0af79 (signed orders)."
+        },
+        {
+          "opportunityId": "cop_ddea664319c346d0afb9",
+          "why": "Duplicate hypothesis route this session filed by mistake for the same workbook; superseded by the evidenced original cop_ac92828af12b4df0af79."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_ac92828af12b4df0af79",
+          "deals": 5,
+          "price": 420,
+          "directCost": 4,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [
+        {
+          "opportunityId": "cop_ac92828af12b4df0af79",
+          "link": "EXCLUSION",
+          "reason": "Brain excluded this opening as 'not a sale' because the payer is a program. The card's EVIDENCE facts show a commercial purchase: five rink program directors signed order forms at $420 per workbook (price fact, 5 WRITTEN_ACCEPTANCE agreements at 42000 cents), the payer pays for a deliverable Brain produces. Every chain link is established: reach (signed order forms by email), demand (signal 2026-11-24), price/conversion (5 signed), volume (5 buyers), fulfilment (Brain PRODUCE_SPREADSHEET), economics ($4 cost, $0 exposure), settlement (4 days of 10)."
+        }
+      ],
+      "revisionId": "rev_66f9bd2a790e_11a04a",
+      "digest": "66f9bd2a790e701f670dc5a7",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b086560bd7034b118688/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:40:57.520Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_66f9bd2a790e_11a04a",
+      "digest": "66f9bd2a790e701f670dc5a7",
+      "contractDigest": "192f33f92d241a2dbd150012",
+      "problems": [
+        {
+          "code": "OPPORTUNITY_NOT_ADMITTED",
+          "detail": "opening cop_ac92828af12b4df0af79 was never admitted to this goal; submit it as a route first",
+          "at": "cop_ac92828af12b4df0af79"
+        }
+      ],
+      "trace": {
+        "totalSpentCents": 2000,
+        "committedOpenCents": 0,
+        "preProofCents": 2000,
+        "maxExposureCents": 0,
+        "minCashCents": 208000,
+        "minCashDay": 4,
+        "collectedCents": 210000,
+        "collectedInWindowCents": 210000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 208000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "No live opportunity is far enough along to model: each one is evidence only or has no price anywhere.",
+        "acceptance": "NO_CANDIDATE",
+        "considered": [],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Establish an offer and a price",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Qualify at least one opening: establish who pays, an offer and a price, so there is a plan to judge.",
+        "openings": [],
+        "excluded": [
+          {
+            "opportunityId": "cop_ac92828af12b4df0af79",
+            "title": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+            "reason": "not a sale: its payer is a program (\"Ice rink program directors\") and nothing in the opening shows it paying a supplier for a deliverable; a revenue goal's strategies are commercial purchases",
+            "card": {
+              "payer": "Ice rink program directors",
+              "reachableChannel": "Signed order forms returned by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:36.755Z",
+              "offerScope": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+              "priceCents": 42000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "community ice rinks",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 42000,
+                "currency": "USD",
+                "deliverable": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 42000,
+                "currency": "USD",
+                "deliverable": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 42000,
+                "currency": "USD",
+                "deliverable": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 42000,
+                "currency": "USD",
+                "deliverable": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 42000,
+                "currency": "USD",
+                "deliverable": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Ice rink program directors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Five rink program directors signed order forms at $420 per season workbook (2026-11-24 to 11-26).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_8d3c7060ac6f47c1a45d",
+            "title": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+            "reason": "not a sale: its payer is a program (\"Ice rink program directors\") and nothing in the opening shows it paying a supplier for a deliverable; a revenue goal's strategies are commercial purchases",
+            "card": {
+              "payer": "Ice rink program directors",
+              "reachableChannel": "Signed order forms returned by email",
+              "offerScope": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+              "priceCents": 42000,
+              "currency": "USD",
+              "fulfillmentOwner": "BRAIN",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "unspecified",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Signed order forms returned by email",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "5 Ice rink program directors",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks to Ice rink program directors, reached through Signed order forms returned by email, at $420; BRAIN delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "BRAIN.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Ice rink program directors",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$420",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$420",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_ddea664319c346d0afb9",
+            "title": "Learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks [performerBrain (PRODU]",
+            "reason": "not a sale: its payer is a program (\"Ice rink program directors\") and nothing in the opening shows it paying a supplier for a deliverable; a revenue goal's strategies are commercial purchases",
+            "card": {
+              "payer": "Ice rink program directors",
+              "reachableChannel": "Signed order forms returned by email",
+              "offerScope": "A spreadsheet: learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+              "priceCents": 42000,
+              "currency": "USD",
+              "fulfillmentOwner": "BRAIN",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [],
+              "industry": "unspecified",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "facts": [
+              {
+                "field": "access",
+                "value": "Signed order forms returned by email",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "buyerVolume",
+                "value": "5 Ice rink program directors",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell A spreadsheet: learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks to Ice rink program directors, reached through Signed order forms returned by email, at $420; BRAIN delivers it.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "directCosts",
+                "value": "$4",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "fulfillment",
+                "value": "BRAIN.",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "hours",
+                "value": "0 owner hours per sale",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "offer",
+                "value": "A spreadsheet: learn-to-skate season roster, waiver and coach-ratio workbook for community ice rinks",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "payer",
+                "value": "Ice rink program directors",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "price",
+                "value": "$420",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "revenueRange",
+                "value": "$420",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "routeStage",
+                "value": "ROUTE",
+                "kind": "RECOMMENDATION"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "RECOMMENDATION"
+              }
+            ]
+          }
+        ],
+        "questions": [],
+        "scope": {
+          "targetCents": 180000,
+          "daysLeft": 10,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:40:57.495Z"
+      }
+    },
+    "reviews": [],
+    "final": null,
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

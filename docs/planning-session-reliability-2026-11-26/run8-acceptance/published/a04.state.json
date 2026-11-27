@@ -1,0 +1,1223 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_eb4b32f665e4433a8923",
+      "words": "Keep $2,000 of net settled cash, after direct costs, within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "The target amount is settled in the owner's account within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "1ce29fb3483f5629973015e5"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_eb4b32f665e4433a8923",
+        "contractDigest": "1ce29fb3483f5629973015e5",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Coordinate the nine signed monthly vibrio/coliform sampling rounds through Tidewater Analytical Labs",
+          "opportunityIds": [
+            "cop_aff2c05cd41f4be1996e"
+          ],
+          "why": "Nine licensed shellfish farms signed service orders at $650 per round (Nov 2026, EVIDENCE); Tidewater Analytical Labs' written quote is $380 per round including courier, invoiced net 30, so nothing is paid before the farms pay. 9 x ($650 - $380) = $2,430 net after direct costs, settling 12 days after the round, inside the 30-day window and above the $2,000 target with $0 up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "Resale of floating oyster cage sets",
+            "why": "Excluded: Bay Gear Supply must be paid $1,020 per set before shipment (peak funding $1,020), which breaks the no-up-front-capital term; margin is only $80 per set besides."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the nine signed service orders at $650 per sampling round and schedule each round",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "aff2c0-price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Tidewater Analytical Labs collects and tests each farm's monthly vibrio and coliform samples (courier included)",
+            "performer": "Tidewater Analytical Labs",
+            "costCents": 342000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "aff2c0-fulfillment",
+              "aff2c0-directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Tidewater Analytical Labs",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice each farm $650 on delivery of its results and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "aff2c0-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 585000,
+            "label": "9 rounds x $650",
+            "settlesDay": 17,
+            "stepId": "collect"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 342000,
+            "label": "Pay Tidewater 9 x $380 on its net-30 invoice",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 17,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 65000,
+            "unit": "cents per round",
+            "sources": [
+              "aff2c0-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signedOrders",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "signed service orders",
+            "sources": [
+              "aff2c0-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 38000,
+            "unit": "cents per round",
+            "sources": [
+              "aff2c0-directCosts",
+              "aff2c0-fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "aff2c0-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "netContribution",
+            "status": "EVIDENCED",
+            "value": 243000,
+            "unit": "cents",
+            "sources": [
+              "aff2c0-price",
+              "aff2c0-directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "aff2c0-price",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#price",
+            "dated": "2026-11-24",
+            "claim": "Nine farms signed service orders at $650 per monthly sampling round (Nov 2026)",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-fulfillment",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Tidewater Analytical Labs quoted $380 per round including courier, invoiced net 30",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-directCosts",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$380 direct cost per round",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-timeToFirstCash",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to first cash",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "f00bfc-exposure",
+            "url": "https://brain.local/card/cop_f00bfcde4bf249f099e7#exposure",
+            "dated": "2026-11-24",
+            "claim": "$1,020 paid to Bay Gear Supply before shipment",
+            "population": "licensed oyster farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f00bfcde4bf249f099e7"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_aff2c05cd41f4be1996e",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_f00bfcde4bf249f099e7",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_f00bfcde4bf249f099e7",
+            "why": "Requires $1,020 per set paid to Bay Gear Supply before shipment (card exposure/peakFunding $1,020), over the $0 up-front capital cap."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_aff2c05cd41f4be1996e",
+            "deals": 9,
+            "price": 650,
+            "directCost": 380,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1202d3df9e97_896d87",
+        "digest": "1202d3df9e978e6564c92425",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0e1957352c6b433e9f18/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:38:29.157Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_eb4b32f665e4433a8923",
+      "contractDigest": "1ce29fb3483f5629973015e5",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Coordinate the nine signed monthly vibrio/coliform sampling rounds through Tidewater Analytical Labs",
+        "opportunityIds": [
+          "cop_aff2c05cd41f4be1996e"
+        ],
+        "why": "Nine licensed shellfish farms signed service orders at $650 per round (Nov 2026, EVIDENCE); Tidewater Analytical Labs' written quote is $380 per round including courier, invoiced net 30, so nothing is paid before the farms pay. 9 x ($650 - $380) = $2,430 net after direct costs, settling 12 days after the round, inside the 30-day window and above the $2,000 target with $0 up-front capital."
+      },
+      "alternatives": [
+        {
+          "title": "Resale of floating oyster cage sets",
+          "why": "Excluded: Bay Gear Supply must be paid $1,020 per set before shipment (peak funding $1,020), which breaks the no-up-front-capital term; margin is only $80 per set besides."
+        }
+      ],
+      "steps": [
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the nine signed service orders at $650 per sampling round and schedule each round",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "aff2c0-price"
+          ],
+          "priceCents": 65000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Tidewater Analytical Labs collects and tests each farm's monthly vibrio and coliform samples (courier included)",
+          "performer": "Tidewater Analytical Labs",
+          "costCents": 342000,
+          "day": 3,
+          "dependsOn": "sell",
+          "evidence": [
+            "aff2c0-fulfillment",
+            "aff2c0-directCosts"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Tidewater Analytical Labs",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice each farm $650 on delivery of its results and collect",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "deliver",
+          "evidence": [
+            "aff2c0-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 585000,
+          "label": "9 rounds x $650",
+          "settlesDay": 17,
+          "stepId": "collect"
+        },
+        {
+          "day": 28,
+          "kind": "SPEND",
+          "amountCents": 342000,
+          "label": "Pay Tidewater 9 x $380 on its net-30 invoice",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 17,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 65000,
+          "unit": "cents per round",
+          "sources": [
+            "aff2c0-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signedOrders",
+          "status": "EVIDENCED",
+          "value": 9,
+          "unit": "signed service orders",
+          "sources": [
+            "aff2c0-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "directCost",
+          "status": "EVIDENCED",
+          "value": 38000,
+          "unit": "cents per round",
+          "sources": [
+            "aff2c0-directCosts",
+            "aff2c0-fulfillment"
+          ],
+          "needs": null
+        },
+        {
+          "name": "settlementDays",
+          "status": "EVIDENCED",
+          "value": 12,
+          "unit": "days",
+          "sources": [
+            "aff2c0-timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "netContribution",
+          "status": "EVIDENCED",
+          "value": 243000,
+          "unit": "cents",
+          "sources": [
+            "aff2c0-price",
+            "aff2c0-directCosts"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "aff2c0-price",
+          "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#price",
+          "dated": "2026-11-24",
+          "claim": "Nine farms signed service orders at $650 per monthly sampling round (Nov 2026)",
+          "population": "licensed oyster and clam farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_aff2c05cd41f4be1996e"
+        },
+        {
+          "id": "aff2c0-fulfillment",
+          "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Tidewater Analytical Labs quoted $380 per round including courier, invoiced net 30",
+          "population": "licensed oyster and clam farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_aff2c05cd41f4be1996e"
+        },
+        {
+          "id": "aff2c0-directCosts",
+          "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$380 direct cost per round",
+          "population": "licensed oyster and clam farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_aff2c05cd41f4be1996e"
+        },
+        {
+          "id": "aff2c0-timeToFirstCash",
+          "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "12 days to first cash",
+          "population": "licensed oyster and clam farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_aff2c05cd41f4be1996e"
+        },
+        {
+          "id": "f00bfc-exposure",
+          "url": "https://brain.local/card/cop_f00bfcde4bf249f099e7#exposure",
+          "dated": "2026-11-24",
+          "claim": "$1,020 paid to Bay Gear Supply before shipment",
+          "population": "licensed oyster farms",
+          "matchesBuyer": true,
+          "opportunityId": "cop_f00bfcde4bf249f099e7"
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_aff2c05cd41f4be1996e",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_f00bfcde4bf249f099e7",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_f00bfcde4bf249f099e7",
+          "why": "Requires $1,020 per set paid to Bay Gear Supply before shipment (card exposure/peakFunding $1,020), over the $0 up-front capital cap."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_aff2c05cd41f4be1996e",
+          "deals": 9,
+          "price": 650,
+          "directCost": 380,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_1202d3df9e97_896d87",
+      "digest": "1202d3df9e978e6564c92425",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_0e1957352c6b433e9f18/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T09:38:29.157Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_1202d3df9e97_896d87",
+      "digest": "1202d3df9e978e6564c92425",
+      "contractDigest": "1ce29fb3483f5629973015e5",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 342000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 585000,
+        "collectedInWindowCents": 585000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 243000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Coordinated monthly vibrio and coliform water sampling for s\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2430× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Coordinated monthly vibrio and coliform water sampling for shellfish-h\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_aff2c05cd41f4be1996e"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Coordinated monthly vibrio and coliform water sampling for shellfish-harvest com\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Coordinated monthly vibrio and coliform water sampling for shellfish-harvest com\"",
+            "owner": "PERSON",
+            "cost": 380
+          },
+          {
+            "label": "Collect payment for \"Coordinated monthly vibrio and coliform water sampling for shellfish-harvest com\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_aff2c05cd41f4be1996e",
+            "title": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2000,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Licensed oyster and clam farms",
+              "reachableChannel": "Signed service orders by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:25.600Z",
+              "offerScope": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+              "priceCents": 65000,
+              "currency": "USD",
+              "fulfillmentOwner": "Tidewater Analytical Labs (written quote: $380 per round including courier, invoiced net 30)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "shellfish aquaculture",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 65000,
+                "currency": "USD",
+                "deliverable": "Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Signed service orders by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 5850 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 5850 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Tidewater Analytical Labs (written quote: $380 per round including courier, invo (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 380, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Coordinated monthly vibrio and coliform water sampling for shellfish-harvest compliance to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$380",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Tidewater Analytical Labs (written quote: $380 per round including courier, invoiced net 30) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed oyster and clam farms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Nine farms signed service orders at $650 per monthly sampling round (Nov 2026).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_f00bfcde4bf249f099e7",
+            "title": "Resale of floating oyster cage sets to shellfish farms",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 320,
+            "potentialReach": 320,
+            "card": {
+              "payer": "Licensed oyster farms",
+              "reachableChannel": "Signed purchase orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T09:31:25.600Z",
+              "offerScope": "Resale of floating oyster cage sets to shellfish farms",
+              "priceCents": 110000,
+              "currency": "USD",
+              "fulfillmentOwner": "Bay Gear Supply (quote: $1,020 per set, paid before shipment)",
+              "peakFundingCents": 102000,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "shellfish aquaculture",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Resale of floating oyster cage sets to shellfish farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Resale of floating oyster cage sets to shellfish farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Resale of floating oyster cage sets to shellfish farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 110000,
+                "currency": "USD",
+                "deliverable": "Resale of floating oyster cage sets to shellfish farms",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Resale of floating oyster cage sets to shellfish farms to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1020",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$1020",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Bay Gear Supply (quote: $1,020 per set, paid before shipment) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed oyster farms",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four farms signed purchase orders at $1,100 per cage set.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "18 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_4a909ac7f52242918527",
+          "cnd_78069f7627144feeb552"
+        ],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T09:33:10.275Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_1202d3df9e97_896d87",
+        "revisionDigest": "1202d3df9e978e6564c92425",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0e1957352c6b433e9f18/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_fa3b93d2b06d4950bd7d/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Nine written acceptances at $650 per round from nine licensed shellfish farms are on the opening (real purchase commitments by these buyers, not a benchmark). The recorded fulfiller is Tidewater Analytical Labs on a written quote of $380 per round including courier, invoiced net 30, and the plan's delivery performer is that fulfiller. Contribution recomputed: 9 x $650 = $5,850 minus 9 x $380 = $3,420 gives $2,430 >= $2,000 target, with $430 headroom (the target still holds if one farm drops: 8 x $270 = $2,160). Net-30 supplier terms with farm cash settling day 17 keep peak exposure at $0, so the no-up-front-capital term holds; the plan subtracts the supplier cost inside the window (day 28) even though it would fall due later, which is the conservative way to count contribution. Settlement 12 days (EVIDENCE) from day-5 invoicing gives day 17 inside 30. The cage-set exclusion is a real constraint: Bay Gear must be paid $1,020 before shipment, which no evidence can fit under a $0 exposure cap.",
+        "findings": [
+          "Delivery timing: the plan has Tidewater collect and test on day 3 and invoicing on day 5; no lab turnaround is recorded, but the 12-day time-to-cash evidence and 13 days of slack cover it. Confirm round dates with Tidewater on day 1.",
+          "Owner/human hours: card records 1 human hour per round (~9 h) that the plan does not show; no hours ceiling, so it fits, but it should be stated.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:40:31.646Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_1202d3df9e97_896d87",
+      "digest": "1202d3df9e978e6564c92425",
+      "contractDigest": "1ce29fb3483f5629973015e5",
+      "plan": {
+        "goalId": "wst_eb4b32f665e4433a8923",
+        "contractDigest": "1ce29fb3483f5629973015e5",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Coordinate the nine signed monthly vibrio/coliform sampling rounds through Tidewater Analytical Labs",
+          "opportunityIds": [
+            "cop_aff2c05cd41f4be1996e"
+          ],
+          "why": "Nine licensed shellfish farms signed service orders at $650 per round (Nov 2026, EVIDENCE); Tidewater Analytical Labs' written quote is $380 per round including courier, invoiced net 30, so nothing is paid before the farms pay. 9 x ($650 - $380) = $2,430 net after direct costs, settling 12 days after the round, inside the 30-day window and above the $2,000 target with $0 up-front capital."
+        },
+        "alternatives": [
+          {
+            "title": "Resale of floating oyster cage sets",
+            "why": "Excluded: Bay Gear Supply must be paid $1,020 per set before shipment (peak funding $1,020), which breaks the no-up-front-capital term; margin is only $80 per set besides."
+          }
+        ],
+        "steps": [
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the nine signed service orders at $650 per sampling round and schedule each round",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "aff2c0-price"
+            ],
+            "priceCents": 65000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Tidewater Analytical Labs collects and tests each farm's monthly vibrio and coliform samples (courier included)",
+            "performer": "Tidewater Analytical Labs",
+            "costCents": 342000,
+            "day": 3,
+            "dependsOn": "sell",
+            "evidence": [
+              "aff2c0-fulfillment",
+              "aff2c0-directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Tidewater Analytical Labs",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice each farm $650 on delivery of its results and collect",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "aff2c0-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 585000,
+            "label": "9 rounds x $650",
+            "settlesDay": 17,
+            "stepId": "collect"
+          },
+          {
+            "day": 28,
+            "kind": "SPEND",
+            "amountCents": 342000,
+            "label": "Pay Tidewater 9 x $380 on its net-30 invoice",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 17,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 65000,
+            "unit": "cents per round",
+            "sources": [
+              "aff2c0-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signedOrders",
+            "status": "EVIDENCED",
+            "value": 9,
+            "unit": "signed service orders",
+            "sources": [
+              "aff2c0-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 38000,
+            "unit": "cents per round",
+            "sources": [
+              "aff2c0-directCosts",
+              "aff2c0-fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlementDays",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "aff2c0-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "netContribution",
+            "status": "EVIDENCED",
+            "value": 243000,
+            "unit": "cents",
+            "sources": [
+              "aff2c0-price",
+              "aff2c0-directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "aff2c0-price",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#price",
+            "dated": "2026-11-24",
+            "claim": "Nine farms signed service orders at $650 per monthly sampling round (Nov 2026)",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-fulfillment",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Tidewater Analytical Labs quoted $380 per round including courier, invoiced net 30",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-directCosts",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$380 direct cost per round",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "aff2c0-timeToFirstCash",
+            "url": "https://brain.local/card/cop_aff2c05cd41f4be1996e#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to first cash",
+            "population": "licensed oyster and clam farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_aff2c05cd41f4be1996e"
+          },
+          {
+            "id": "f00bfc-exposure",
+            "url": "https://brain.local/card/cop_f00bfcde4bf249f099e7#exposure",
+            "dated": "2026-11-24",
+            "claim": "$1,020 paid to Bay Gear Supply before shipment",
+            "population": "licensed oyster farms",
+            "matchesBuyer": true,
+            "opportunityId": "cop_f00bfcde4bf249f099e7"
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_aff2c05cd41f4be1996e",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_f00bfcde4bf249f099e7",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_f00bfcde4bf249f099e7",
+            "why": "Requires $1,020 per set paid to Bay Gear Supply before shipment (card exposure/peakFunding $1,020), over the $0 up-front capital cap."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_aff2c05cd41f4be1996e",
+            "deals": 9,
+            "price": 650,
+            "directCost": 380,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1202d3df9e97_896d87",
+        "digest": "1202d3df9e978e6564c92425",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0e1957352c6b433e9f18/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T09:38:29.157Z"
+      },
+      "review": {
+        "revisionId": "rev_1202d3df9e97_896d87",
+        "revisionDigest": "1202d3df9e978e6564c92425",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_0e1957352c6b433e9f18/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_fa3b93d2b06d4950bd7d/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Nine written acceptances at $650 per round from nine licensed shellfish farms are on the opening (real purchase commitments by these buyers, not a benchmark). The recorded fulfiller is Tidewater Analytical Labs on a written quote of $380 per round including courier, invoiced net 30, and the plan's delivery performer is that fulfiller. Contribution recomputed: 9 x $650 = $5,850 minus 9 x $380 = $3,420 gives $2,430 >= $2,000 target, with $430 headroom (the target still holds if one farm drops: 8 x $270 = $2,160). Net-30 supplier terms with farm cash settling day 17 keep peak exposure at $0, so the no-up-front-capital term holds; the plan subtracts the supplier cost inside the window (day 28) even though it would fall due later, which is the conservative way to count contribution. Settlement 12 days (EVIDENCE) from day-5 invoicing gives day 17 inside 30. The cage-set exclusion is a real constraint: Bay Gear must be paid $1,020 before shipment, which no evidence can fit under a $0 exposure cap.",
+        "findings": [
+          "Delivery timing: the plan has Tidewater collect and test on day 3 and invoicing on day 5; no lab turnaround is recorded, but the 12-day time-to-cash evidence and 13 days of slack cover it. Confirm round dates with Tidewater on day 1.",
+          "Owner/human hours: card records 1 human hour per round (~9 h) that the plan does not show; no hours ceiling, so it fits, but it should be stated.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; routine connections needed before day 1."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T09:40:31.646Z",
+        "conditions": []
+      },
+      "basis": {
+        "intent": "Keep $2,000 of net settled cash, after direct costs, within 30 days using no up-front capital.",
+        "terms": "8aed60e10cea6db3",
+        "openings": {
+          "cop_aff2c05cd41f4be1996e": "9da67b8c010d5cad",
+          "cop_f00bfcde4bf249f099e7": "d966616412b3192f"
+        }
+      },
+      "at": "2026-11-27T09:41:07.698Z"
+    },
+    "staleFinal": null,
+    "staleBecause": []
+  }
+}

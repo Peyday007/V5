@@ -1,0 +1,13 @@
+{
+ "goal_id": "wst_984fd745cbb042a08d9a",
+ "revision_id": "rev_f234e12dacae_7a17a0",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-theta",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "PASS",
+ "reasons": "NO_PLAN with ECONOMICS as the decisive gap is right. Price $800, conversion of 5 in 40 measured on this offer, 175 stores with a yearly need, a quoted subcontractor as fulfiller and 10-day settlement are all evidence. The card has no direct-cost figure for the subcontractor, so the margin is unknown. That is decided by obtaining the quote, not by a live test, and it is not a ceiling. I recomputed: 6 x $800 = $4,800 against $4,000, and 6 / 0.125 = 48 contacts, well inside 175.",
+ "findings": [
+  "Overly conservative: 'capital advanced before buyer payment' is marked UNKNOWN, but the card holds exposure $0 as EVIDENCE (and $0 peak funding). Only the per-inspection cost is genuinely missing",
+  "Not stated: if the subcontractor's cost is close to $800, more than 6 sales are needed for the settled cash net of fulfilment to reach $4,000. The resolution should recompute the deal count from the quote"
+ ]
+}
