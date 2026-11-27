@@ -1,0 +1,25 @@
+{
+  "cases": 8,
+  "passed": 7,
+  "reliability": 0.875,
+  "wilson95": {
+    "low": 0.5291051942301385,
+    "high": 0.9775830911367039
+  },
+  "criticalFailures": 0,
+  "published": 8,
+  "usable": 7,
+  "e2e": 7,
+  "e2eFailures": {
+    "VERDICT_INCORRECT": 1
+  },
+  "failures": [
+    {
+      "id": "mv-04-marketplace-repeat-buyers",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+{
+  "id": "ho-11-pharmacy-courier",
+  "step": 0,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 5,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "REVISE",
+    "PASS"
+  ],
+  "revisionId": "rev_a872efa2e0aa_59dcb0",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_e3d0f9a14cb049a584ee/reviewer-epsilon",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [pharmacy] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

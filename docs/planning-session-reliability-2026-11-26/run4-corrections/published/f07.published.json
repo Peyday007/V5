@@ -1,0 +1,272 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_4c95f4cc1c7f_b16f21",
+      "digest": "4c95f4cc1c7f4ba20fa386f8",
+      "contractDigest": "528f2af76e57da31923018cc",
+      "plan": {
+        "goalId": "wst_870b0536781e4b12ae44",
+        "contractDigest": "528f2af76e57da31923018cc",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the four written load-test certification acceptances through Keystone Lifting Inspections",
+          "opportunityIds": [
+            "cop_6bbb553548184a57a39e"
+          ],
+          "why": "Four crane rental yards have accepted in writing at $2,400 each ($9,600, above the $8,000 target). Keystone Lifting Inspections LLC has quoted the work at $1,100 per yard (below price), nothing is paid out before the buyer pays (exposure $0), and cash is usable 20 days after the order against 45 left. No new sales are needed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 60 registered yards",
+            "why": "Not needed for the target; kept as upside since each crane needs an annual load test."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the four written acceptances at $2,400 and schedule the load tests",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 240000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Keystone Lifting Inspections performs and certifies the four load tests ($1,100 each)",
+            "performer": "Keystone Lifting Inspections LLC",
+            "costCents": 440000,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Keystone Lifting Inspections LLC",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $2,400 from each of the four yards",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 960000,
+            "label": "Four yards pay $2,400",
+            "settlesDay": 20,
+            "stepId": "s3"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 440000,
+            "label": "Pay Keystone $1,100 x 4 from settled receipts",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 20,
+        "quantities": [
+          {
+            "name": "agreedDeals",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "written acceptances",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2400,
+            "unit": "USD per yard",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 1100,
+            "unit": "USD per yard",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "timeToCash",
+            "status": "EVIDENCED",
+            "value": 20,
+            "unit": "days",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_6bbb553548184a57a39e#agreements",
+            "dated": "2026-11-24",
+            "claim": "Four written acceptances at $2,400",
+            "population": "Crane rental yard owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_6bbb553548184a57a39e#price",
+            "dated": "2026-11-24",
+            "claim": "Price $2,400",
+            "population": "Crane rental yard owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_6bbb553548184a57a39e#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $1,100 per yard",
+            "population": "Crane rental yard owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_6bbb553548184a57a39e#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Keystone Lifting Inspections LLC quoted to do the work",
+            "population": "Crane rental yard owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_6bbb553548184a57a39e#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "20 days to first cash",
+            "population": "Crane rental yard owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_6bbb553548184a57a39e",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_6bbb553548184a57a39e",
+            "deals": 4,
+            "price": 2400,
+            "directCost": 1100,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_4c95f4cc1c7f_b16f21",
+        "digest": "4c95f4cc1c7f4ba20fa386f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38eb5bc05951471180a7/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:53:49.538Z"
+      },
+      "review": {
+        "revisionId": "rev_4c95f4cc1c7f_b16f21",
+        "revisionDigest": "4c95f4cc1c7f4ba20fa386f8",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_38eb5bc05951471180a7/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_18d112f729a040d7b9c2/reviewer-beta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported: Brain finds no missing link. Four WRITTEN_ACCEPTANCE agreements at $2,400 from crane rental yards (the card's payer) = $9,600 >= $8,000, so no conversion or volume assumption is needed. Fulfiller Keystone Lifting Inspections is the card's recorded fulfilment owner with a $1,100 quote (< $2,400 price); exposure $0 fact, so Keystone is paid from settled receipts on day 20 and maxExposure stays 0. Settlement 20 days (EVIDENCE) vs 45 window; Brain's check shows no problems, collected in window $9,600, net $5,200. Owner hours 2 per deal, no ceiling. Fit for the owner to act on.",
+        "findings": [
+          "Brain's simulation reports the candidate reaching the target in 0% of worlds (NOT ACCEPTED); the revision records no disagreement explaining why the card's evidenced 20-day settlement should override that coverage reading",
+          "Keystone's figure is a quote, not a booked commitment; the plan should confirm it in writing at s1 before scheduling tests"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:55.092Z"
+      },
+      "at": "2026-11-27T03:04:14.088Z"
+    }
+  }
+}

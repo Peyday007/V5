@@ -1,0 +1,361 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_1c67232180ff_d1baba",
+      "digest": "1c67232180ffb5a9e112d11b",
+      "contractDigest": "ccb861353f1d7c7455563998",
+      "plan": {
+        "goalId": "wst_56aded49a071493cb6de",
+        "contractDigest": "ccb861353f1d7c7455563998",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell Brain-produced seating-chart and vendor run-sheet workbooks to wedding venue coordinators at $350",
+          "opportunityIds": [
+            "cop_cafc72b1edf0489098f3"
+          ],
+          "why": "Every chain link is evidenced on the card: 500 venues in the regional directory reachable at published business emails, a buying signal dated 2026-11-24, an evidenced $350 price, a measured 12% paid pre-order conversion on the offer's own page, delivery as a spreadsheet Brain has proved it produces at $5 direct cost, $0 exposure and 3 days to usable cash. 8 sales x $350 = $2,800 settled inside 21 days; Brain does the reach, sale, production and collection, so owner time is zero, inside the 3 h/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "Hold for more research",
+            "why": "Rejected: no link is missing; waiting only consumes the 21-day window."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email wedding venue coordinators from the regional venue directory at their published business addresses, linking the pre-order page",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the seating chart and vendor run-sheet workbook at $350, paid up front",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "s1"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Take paid pre-orders until 8 are paid",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s2"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "COLLECT",
+            "label": "Collect the 8 payments; settled within 3 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s3",
+            "evidence": [
+              "s5"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers each venue's workbook (spreadsheet), $5 direct cost each",
+            "performer": "BRAIN",
+            "costCents": 4000,
+            "day": 10,
+            "dependsOn": "s3",
+            "evidence": [
+              "s6"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 280000,
+            "label": "8 workbooks x $350 settled",
+            "settlesDay": 10,
+            "stepId": "s4"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 4000,
+            "label": "8 x $5 direct production cost",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "q_price",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD per workbook",
+            "sources": [
+              "s1"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "paid pre-orders per unique visitor",
+            "sources": [
+              "s2"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_buyers",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "wedding venues",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_cost",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD per workbook",
+            "sources": [
+              "s6"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_settle",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days to usable cash",
+            "sources": [
+              "s5"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_deals",
+            "status": "ESTIMATE",
+            "value": 8,
+            "unit": "sales",
+            "sources": [
+              "s1"
+            ],
+            "needs": "ceil($2,500 / $350) = 8, needing ~67 page visitors at 12%"
+          },
+          {
+            "name": "q_owner_hours",
+            "status": "ESTIMATE",
+            "value": 0,
+            "unit": "owner hours",
+            "sources": [],
+            "needs": "All steps are Brain-performed"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#price",
+            "dated": null,
+            "claim": "$350 per workbook",
+            "population": "wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#conversionRates",
+            "dated": null,
+            "claim": "30 paid pre-orders from 250 unique visitors",
+            "population": "visitors to this offer's inbound page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#buyerVolume",
+            "dated": null,
+            "claim": "500 wedding venues listed in the regional venue directory",
+            "population": "wedding venues",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#buyingSignal",
+            "dated": "2026-11-24",
+            "claim": "Posted asking for this work",
+            "population": "wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s5",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#timeToFirstCash",
+            "dated": null,
+            "claim": "3 days to first cash",
+            "population": "wedding venue coordinators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s6",
+            "url": "https://brain.local/card/cop_cafc72b1edf0489098f3#directCosts",
+            "dated": null,
+            "claim": "$5 direct cost",
+            "population": "Brain-produced spreadsheet",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_cafc72b1edf0489098f3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_cafc72b1edf0489098f3",
+            "deals": 8,
+            "price": 350,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1c67232180ff_d1baba",
+        "digest": "1c67232180ffb5a9e112d11b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad300f69cb2a4abcaccf/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:54:54.397Z"
+      },
+      "review": {
+        "revisionId": "rev_1c67232180ff_d1baba",
+        "revisionDigest": "1c67232180ffb5a9e112d11b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_ad300f69cb2a4abcaccf/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_aefa55d269e34c53948e/reviewer-alpha",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported. Every chain link of the single member is established on the card: 500 venues reachable at published business emails, buying signal dated 2026-11-24, $350 price as EVIDENCE for wedding venue coordinators, conversion measured on this offer's own page (30 paid / 250 visitors = 12%), delivery is a spreadsheet Brain has proved it produces at $5, $0 exposure, 3 days to cash. Recomputed: ceil(2500/350) = 8 deals, 8 x $350 = $2,800 settled by day 10 of 21; cost 8 x $5 = $40 paid from receipts, net $2,760 (Brain's trace agrees: collected 280000 in window, min cash 276000). Performer is Brain throughout; owner hours ~0 (even at the card's 1 h per deal, 8 h over 3 weeks is under 3 h/week). No capital limit is breached. Residual risk: the ~67 visitors needed from 500 emails is an unmeasured click-through, but the conversion link rests on this offer's own measured record and the 500-buyer pool is ample.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T02:58:10.612Z"
+      },
+      "at": "2026-11-27T03:04:11.651Z"
+    }
+  }
+}

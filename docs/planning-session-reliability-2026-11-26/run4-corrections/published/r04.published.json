@@ -1,0 +1,176 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_75905cbfccee_b19bf7",
+      "digest": "75905cbfccee4116a35cdaa9",
+      "contractDigest": "d24510f8fc2402377e6acfec",
+      "plan": {
+        "goalId": "wst_e92cf5b3b7894f94a334",
+        "contractDigest": "d24510f8fc2402377e6acfec",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan yet: ballast-water record packs have no established way to reach the buyers",
+          "opportunityIds": [],
+          "why": "Price ($2,500), demand, volume (90 operators registered with the port authority, one pack per vessel per year), Brain fulfilment, $50 cost and 14-day settlement are evidenced, and two sales would carry the $5,000. But no published, permitted channel to contact these operators is recorded - the register is a count, not a contact route - and the 9-of-120 pre-order figure does not say where or on whom it was measured, so no close rate is established for any channel Brain could use."
+        },
+        "alternatives": [
+          {
+            "title": "Conditional outreach test",
+            "why": "Not startable: a live test needs a channel to send through, and none is established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "research",
+            "kind": "RESEARCH",
+            "label": "Establish a published channel to the 90 registered coastal operators (the port-authority register's published contacts or the operators' own contact pages) and how many it reaches",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 2500,
+            "unit": "USD per pack",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "registeredOperators",
+            "status": "EVIDENCED",
+            "value": 90,
+            "unit": "operators",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "reachableOperators",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "operators contactable through a published channel",
+            "sources": [],
+            "needs": "access research (cnd_ab3633f52d704f998d5b)"
+          },
+          {
+            "name": "closeRate",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "buyers per prospect offered",
+            "sources": [],
+            "needs": "a channel, then a live offer"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_9e211eec5d60498d95fa#price",
+            "dated": "2026-11-24",
+            "claim": "$2500 per pack",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_9e211eec5d60498d95fa#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "90 coastal operators registered with the port authority; each needs a pack per vessel each year",
+            "population": "Coastal ship operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_9e211eec5d60498d95fa#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 paid pre-orders from 120 unique visitors (page and population not stated)",
+            "population": "Unstated visitors",
+            "matchesBuyer": false
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "No published, permitted channel to reach coastal ship operators is established; without one no offer can be sent and no close rate measured.",
+          "resolution": "Answer research need cnd_ab3633f52d704f998d5b: record the port authority register's published contact route (or the operators' own published contact pages) with its source and how many of the 90 it reaches; then send the $2,500 offer to measure the close rate - two sales settle the target within 30 days.",
+          "decisiveLinks": [
+            "REACHABLE_BUYER"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_9e211eec5d60498d95fa",
+            "missing": [
+              "REACHABLE_BUYER",
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "REACHABLE_BUYER",
+          "CONVERSION"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_75905cbfccee_b19bf7",
+        "digest": "75905cbfccee4116a35cdaa9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dc7ebef80a9c497bb4b3/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:55:13.366Z"
+      },
+      "review": {
+        "revisionId": "rev_75905cbfccee_b19bf7",
+        "revisionDigest": "75905cbfccee4116a35cdaa9",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_dc7ebef80a9c497bb4b3/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_b2911b45848d44af8367/reviewer-epsilon",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with REACHABLE_BUYER as the decisive gap matches the evidence and Brain's own judgement. The port-authority register gives a count of 90 operators but no published, permitted contact route. The 9/120 pre-order figure does not state its page or population, so no close rate exists for any usable channel. Without a channel a live test cannot start, so CONDITIONAL is correctly rejected. The resolution is concrete: answer access need cnd_ab3633f52d704f998d5b, then send the $2,500 offer, where two sales ($5,000, 14-day settlement, $50 cost each) would fit the 30-day window. No constraint is misattributed, and nothing unknown is treated as known.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T03:00:16.191Z"
+      },
+      "at": "2026-11-27T03:04:10.105Z"
+    }
+  }
+}

@@ -1,0 +1,269 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_8c2537297e66_327f33",
+      "digest": "8c2537297e66b41e4d67859b",
+      "contractDigest": "84428c85d6aebe5f054a2866",
+      "plan": {
+        "goalId": "wst_c4d936a57c724ae6b6b5",
+        "contractDigest": "84428c85d6aebe5f054a2866",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Start the five signed monthly billing-reconciliation engagements for coworking spaces",
+          "opportunityIds": [
+            "cop_a686863e5caf41ff9bfd"
+          ],
+          "why": "Five coworking operators have accepted in writing at $450 a month ($2,250/month recurring, above the $2,000/month target). The deliverable is a spreadsheet Brain has proved it can produce, direct cost is $15 per space per month, nothing is paid out before the buyer pays, and the first month's cash is usable in 14 days against 40 left. No new sales are needed."
+        },
+        "alternatives": [
+          {
+            "title": "Sell to more of the 210 registered coworking spaces",
+            "why": "Not needed for the target; upside only."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the five written monthly acceptances at $450/month and set up monthly billing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 45000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Produce the first month's member-billing and access-card reconciliation spreadsheet for each of the five spaces ($15 each)",
+            "performer": "BRAIN",
+            "costCents": 7500,
+            "day": 7,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect the first month's $450 from each space; repeat monthly",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 8,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 8,
+            "kind": "RECEIPT",
+            "amountCents": 225000,
+            "label": "First month: five spaces pay $450",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "SPEND",
+            "amountCents": 7500,
+            "label": "Direct cost $15 x 5, paid from settled receipts",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "agreedSpaces",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "written monthly acceptances",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthlyPrice",
+            "status": "EVIDENCED",
+            "value": 450,
+            "unit": "USD per space per month",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "monthlyRecurringRevenue",
+            "status": "EVIDENCED",
+            "value": 2250,
+            "unit": "USD per month",
+            "sources": [
+              "s_agree",
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "USD per space per month",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_a686863e5caf41ff9bfd#agreements",
+            "dated": "2026-11-24",
+            "claim": "Five written acceptances at $450",
+            "population": "Coworking space operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_a686863e5caf41ff9bfd#price",
+            "dated": "2026-11-24",
+            "claim": "$450 a month, billed monthly",
+            "population": "Coworking space operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_a686863e5caf41ff9bfd#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $15",
+            "population": "Coworking space operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_a686863e5caf41ff9bfd#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Coworking space operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_a686863e5caf41ff9bfd#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "14 days to first cash",
+            "population": "Coworking space operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_a686863e5caf41ff9bfd",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_a686863e5caf41ff9bfd",
+            "deals": 5,
+            "price": 450,
+            "directCost": 15,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_8c2537297e66_327f33",
+        "digest": "8c2537297e66b41e4d67859b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_4af5380c20884a0dae13/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:54:32.990Z"
+      },
+      "review": {
+        "revisionId": "rev_8c2537297e66_327f33",
+        "revisionDigest": "8c2537297e66b41e4d67859b",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_4af5380c20884a0dae13/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_1559c9ad990b4c61beaa/reviewer-beta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is supported: Brain finds no missing link. Five WRITTEN_ACCEPTANCE agreements at $450 for the monthly reconciliation service (card price '$450 a month', capture 'billed monthly') = $2,250/month recurring >= $2,000/month; no new sales needed. Fulfilment is a spreadsheet Brain has proved it produces, matching the card's recorded deliverer; $15 cost per space per month < price; exposure $0. First month's $2,250 settles day 14 inside the 40-day window, meeting the proof condition (first monthly payments settled). Brain's check: no problems, collected $2,250 in window.",
+        "findings": [
+          "The agreements are recorded as single $450 amounts; that each acceptance commits to a recurring monthly term (not one month) should be confirmed in writing at s1, since the proof condition requires signed monthly agreements",
+          "Ledger shows only the first month; retention beyond month one is not evidenced (not required for the proof, but the 'recurring' claim rests on it)"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:55.461Z"
+      },
+      "at": "2026-11-27T03:04:14.509Z"
+    }
+  }
+}

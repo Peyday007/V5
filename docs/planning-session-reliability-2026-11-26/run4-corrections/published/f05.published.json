@@ -1,0 +1,387 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_ac16e40c97fe_ab6c05",
+      "digest": "ac16e40c97feaaaa107313fe",
+      "contractDigest": "7c94d049a1e9d0f98167486a",
+      "plan": {
+        "goalId": "wst_10e2044a3e2d4b8a8242",
+        "contractDigest": "7c94d049a1e9d0f98167486a",
+        "parentRevisionId": null,
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "Sell the autoclave spore-test log spreadsheet to tattoo studios through the forum-promoted landing page",
+          "opportunityIds": [
+            "cop_98093e93900b4892b3b8"
+          ],
+          "why": "Price ($149), conversion (18 paid pre-orders from 200 unique visitors, measured on this offer's own page), Brain-produced fulfilment, $4 direct cost, $0 exposure and 3-day settlement are all evidenced. 17 sales ($2,533) carry the target. What is not established is volume: the only buyerVolume fact is an estimate ('probably'), so nobody knows whether the forum channel delivers ~190 more qualified visitors / 17 buyers inside 30 days. A zero-capital live promotion measures exactly that."
+        },
+        "alternatives": [
+          {
+            "title": "Research a published count of tattoo studios first (NO_PLAN until counted)",
+            "why": "A national studio count would not say how many the forum channel reaches in 30 days; the live promotion costs nothing and measures the reachable volume directly."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Promote the landing page in tattoo-artist forums",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_channel"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the spore-test log service at $149 on the landing page",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 14900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "TEST",
+            "label": "Measure unique visitors and paid orders through day 7 against the proof threshold",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_conv",
+              "q_volume"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "SELL",
+            "label": "Take paid orders at $149 until 17 are paid",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_conv"
+            ],
+            "priceCents": 14900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Produce each studio's spore-test log spreadsheet ($4 direct cost per deal, 17 deals)",
+            "performer": "BRAIN",
+            "costCents": 6800,
+            "day": 24,
+            "dependsOn": "s4",
+            "evidence": [
+              "s_delivery",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s6",
+            "kind": "COLLECT",
+            "label": "Collect settled payment for each order",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 27,
+            "dependsOn": "s4",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 24,
+            "kind": "RECEIPT",
+            "amountCents": 253300,
+            "label": "17 paid orders at $149",
+            "settlesDay": 27,
+            "stepId": "s6"
+          },
+          {
+            "day": 27,
+            "kind": "SPEND",
+            "amountCents": 6800,
+            "label": "Direct cost $4 x 17 deliveries, paid from settled receipts",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 149,
+            "unit": "USD per deal",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.09,
+            "unit": "paid orders per unique visitor",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "USD per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyerVolume",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "qualified visitors/buyers reachable via the forums within 30 days",
+            "sources": [],
+            "needs": "Live promotion: count unique visitors and paid orders through day 7"
+          },
+          {
+            "name": "dealsNeeded",
+            "status": "ESTIMATE",
+            "value": 17,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#price",
+            "dated": "2026-11-24",
+            "claim": "Price $149",
+            "population": "Tattoo studio owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 paid pre-orders from 200 unique visitors on this offer's own page",
+            "population": "Visitors to this offer's landing page from tattoo-artist forums",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_channel",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Landing page promoted in tattoo-artist forums",
+            "population": "Tattoo studio owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_delivery",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Tattoo studio owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $4 per deal",
+            "population": "Tattoo studio owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_98093e93900b4892b3b8#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to first cash",
+            "population": "Tattoo studio owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "By day 7 the forum promotion has produced at least 5 paid orders at $149 and a visitor rate that projects at least 17 paid orders by day 24",
+          "stop": [
+            "Fewer than 2 paid orders by day 7",
+            "Visitor rate projects fewer than 17 paid orders by day 24"
+          ],
+          "continue": [
+            "At least 5 paid orders by day 7 with conversion near 9%"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_98093e93900b4892b3b8",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_98093e93900b4892b3b8",
+            "deals": 17,
+            "price": 149,
+            "directCost": 4,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ac16e40c97fe_ab6c05",
+        "digest": "ac16e40c97feaaaa107313fe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b4b4363152a943e9ad86/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:52:03.655Z"
+      },
+      "review": {
+        "revisionId": "rev_ac16e40c97fe_ab6c05",
+        "revisionDigest": "ac16e40c97feaaaa107313fe",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b4b4363152a943e9ad86/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_2869b2ed40f74f9f9d07/reviewer-beta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is justified. Price $149 (EVIDENCE), conversion 18 money-committed pre-orders / 200 unique visitors (9%) measured on this offer's own page, Brain-produced spreadsheet fulfilment (proved capability, matches the card's recorded deliverer), $4 cost, $0 exposure, 3-day settlement are all established; Brain's only missing link is MARKET_VOLUME, whose sole fact is a RECOMMENDATION ('probably'), and the plan marks it UNKNOWN rather than assuming it. Recomputed: 17 x $149 = $2,533 >= $2,500 (16 = $2,384 would fall short); ~189 more visitors at 9%; costs $68 paid from receipts, exposure 0; receipts settle day 27 inside 30. The live zero-cost forum promotion measures the channel's reachable volume in-window, with a day-7 proof and stop rules. Safe for the owner to start.",
+        "findings": [
+          "Validation leaves a gap: 2-4 paid orders by day 7 meets neither the proof (>=5), the stop (<2) nor continue; only the projection rule decides that band",
+          "No margin: exactly 17 deals reach $2,533; a single refund or lost order misses the target, and the ledger books all 17 as one day-24 receipt",
+          "Parallel low-cost research of a published studio count (Brain's parked buyerVolume question) would de-risk the volume unknown and is not scheduled"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:54.385Z"
+      },
+      "at": "2026-11-27T03:04:13.246Z"
+    }
+  }
+}

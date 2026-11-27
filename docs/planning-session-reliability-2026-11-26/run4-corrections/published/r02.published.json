@@ -1,0 +1,410 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_9c67432fef35_dafeca",
+      "digest": "9c67432fef35f50b1ee03058",
+      "contractDigest": "f2ebc8664a5ee348cafea231",
+      "plan": {
+        "goalId": "wst_a95ea58663d34e189e2d",
+        "contractDigest": "f2ebc8664a5ee348cafea231",
+        "parentRevisionId": "rev_1eccb8436fdc_bd03d5",
+        "stance": "CONDITIONAL",
+        "strategy": {
+          "title": "List a Brain-produced allergen-labelled meal-plan workbook at $29 and prove the listing's sales pace before relying on it",
+          "opportunityIds": [
+            "cop_cf44ad32abaf4860aa88"
+          ],
+          "why": "Price ($29 comparable listings), conversion (60 paid pre-orders / 1,500 visitors on this offer's page), fulfilment (Brain produces the spreadsheet), $3 cost, $0 exposure and 3-day settlement are evidenced. Market volume for THIS listing is not: the 2,300 sales a year are the whole category across 40 sellers (~192/month in total, ~5/month per average seller), and the plan needs 39 sales in 30 days - about 20% of every category sale and ~8x an average seller. Only a live listing can measure the share and traffic it actually captures, so the plan starts with a 10-day pace test. The 60 paid pre-orders on the card are a conversion measurement (60 of 1,500 visitors, 4%), not orders in hand: no agreement or receipt is recorded against this opening and no period is given for the 1,500 visits. So none of them is counted toward the 39 sales, and they do not measure the listing's sales per 30 days, which is the unknown the test measures. At 4%, 39 sales need about 975 visitors in the window, and the test measures whether the live listing gets them."
+        },
+        "alternatives": [
+          {
+            "title": "Treat the whole category's 191 monthly sales as available (Brain's reading)",
+            "why": "Rejected: 40 sellers split that volume; one new listing is not entitled to it."
+          }
+        ],
+        "steps": [
+          {
+            "id": "list",
+            "kind": "OFFER",
+            "label": "Draft and publish the listing on the digital-download marketplace at $29",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_reach"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "produce",
+            "kind": "DELIVER",
+            "label": "Brain produces the allergen-labelled weekly meal-plan workbook spreadsheet (digital download; $3 per sale direct cost, deducted from payouts)",
+            "performer": "BRAIN",
+            "costCents": 11700,
+            "day": 1,
+            "dependsOn": "list",
+            "evidence": [
+              "s_deliv",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "test",
+            "kind": "TEST",
+            "label": "Measure listing views, conversion and sales days 2-10 against the pace needed for 39 by day 22 (17 or more)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "produce",
+            "evidence": [
+              "s_conv",
+              "s_volume"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Keep selling through the listing and its search to 39 sales by day 22",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 11,
+            "dependsOn": "test",
+            "evidence": [
+              "s_price",
+              "s_conv"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect marketplace payouts",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "sell",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 10,
+            "kind": "RECEIPT",
+            "amountCents": 49300,
+            "label": "17 test-window sales x $29",
+            "settlesDay": 13,
+            "stepId": "test"
+          },
+          {
+            "day": 13,
+            "kind": "FEE",
+            "amountCents": 5100,
+            "label": "$3 x 17 direct cost deducted from payout",
+            "stepId": "produce"
+          },
+          {
+            "day": 22,
+            "kind": "RECEIPT",
+            "amountCents": 63800,
+            "label": "22 further sales x $29 (by day 22, leaving 5 days' slack before day 30)",
+            "settlesDay": 25,
+            "stepId": "collect"
+          },
+          {
+            "day": 25,
+            "kind": "FEE",
+            "amountCents": 6600,
+            "label": "$3 x 22 direct cost deducted from payout",
+            "stepId": "produce"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29,
+            "unit": "USD per workbook",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "pageConversion",
+            "status": "EVIDENCED",
+            "value": 0.04,
+            "unit": "paid pre-orders per unique visitor",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "USD per sale",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "categoryVolume",
+            "status": "EVIDENCED",
+            "value": 192,
+            "unit": "sales per month across 40 sellers",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "listingSalesCaptured",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "sales per 30 days for this listing",
+            "sources": [
+              "s_volume"
+            ],
+            "needs": "live listing visitors and sales, days 2-10 (and to day 15 if the pace is partial)"
+          },
+          {
+            "name": "deals",
+            "status": "ASSUMED",
+            "value": 39,
+            "unit": "sales needed (gross $1,131, net $1,014)",
+            "sources": [
+              "s_price",
+              "s_cost"
+            ],
+            "needs": "pace test"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_reach",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#reachableChannel",
+            "dated": "2026-11-24",
+            "claim": "Buyers reached through the marketplace listing and its search",
+            "population": "Marketplace shoppers planning allergen-free meals",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#price",
+            "dated": "2026-11",
+            "claim": "Comparable allergen meal-plan workbooks sell for $29",
+            "population": "Marketplace shoppers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "60 paid pre-orders from 1500 unique visitors",
+            "population": "Visitors to this offer's page",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_volume",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "2,300 sales of comparable workbooks in 12 months across 40 sellers",
+            "population": "Whole category, 40 sellers",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_deliv",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces",
+            "population": "Fulfiller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$3 direct cost, $0 exposure",
+            "population": "Seller",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_cf44ad32abaf4860aa88#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days to usable cash",
+            "population": "Marketplace payouts",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": {
+          "proof": "At least 17 sales from the live listing by day 10 (the linear pace for 39 over days 2-22, about 1.95 a day)",
+          "stop": [
+            "Fewer than 8 sales by day 10: under half the pace needed; stop and look for other openings",
+            "8 to 16 sales by day 10 and fewer than 28 cumulative sales by day 15: the pace cannot reach 39 by day 22; stop and add other openings for the remainder",
+            "Refunds or listing removal"
+          ],
+          "continue": [
+            "17 or more sales by day 10: keep the listing live to day 22 and collect payouts",
+            "8 to 16 sales by day 10: keep the listing live and re-check on day 15; continue only with 28 or more cumulative sales by then"
+          ]
+        },
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Proof threshold inconsistent with the schedule: 12 by day 10 projects to about 28 by day 22.",
+            "resolution": "Accepted. The proof is now 17 or more sales by day 10, the linear pace for 39 over days 2-22. The stop threshold is raised to under 8, and the ledger shows 17 test-window sales plus 22 after."
+          },
+          {
+            "finding": "The day-15 continue rule (20 cumulative) leaves 19 sales in 7 days.",
+            "resolution": "Accepted. The day-15 check now needs 28 or more cumulative sales, which leaves 11 sales in the last 7 days, about the same pace as before."
+          },
+          {
+            "finding": "Either raise both thresholds or extend selling to about day 26.",
+            "resolution": "Accepted the first option. Both thresholds are raised and selling still ends on day 22, with the last payout settling on day 25, so the 5 days' slack is kept."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_cf44ad32abaf4860aa88",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_cf44ad32abaf4860aa88",
+            "deals": 39,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [
+          {
+            "opportunityId": "cop_cf44ad32abaf4860aa88",
+            "link": "MARKET_VOLUME",
+            "reason": "Brain counts all 191 monthly category sales as available, but the buyerVolume evidence says those 2,300 annual sales are split across 40 sellers (~5/month each); 39 sales would be ~20% of the entire category for one new listing, which no evidence establishes."
+          }
+        ],
+        "revisionId": "rev_9c67432fef35_dafeca",
+        "digest": "9c67432fef35f50b1ee03058",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2b0d38131f748929a48/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T03:06:33.743Z"
+      },
+      "review": {
+        "revisionId": "rev_9c67432fef35_dafeca",
+        "revisionDigest": "9c67432fef35f50b1ee03058",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c2b0d38131f748929a48/author5-1",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_727cbbcd3fe143448451/reviewer-epsilon",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "CONDITIONAL is right. MARKET_VOLUME rests on category-wide sales split across 40 sellers, not on this listing's own record, so its share is a genuine unknown that only a live listing measures. The thresholds now match the schedule. Proof is 17 sales in days 2-10 (1.89 a day); the remaining 22 sales in days 11-22 need 1.83 a day, so the pace is consistent. The day-15 check of 28 cumulative leaves 11 sales in 7 days (1.57 a day), which is achievable. Stop below 8, an 8-16 band rechecked on day 15, and continue at 17 or more cover every result. The ledger checks: 17 x $29 + 22 x $29 = $1,131 gross, less $117 in fees = $1,014 net, last payout settling on day 25 inside 30 days. Exposure is $0, Brain's check reports no problems, the 60/1,500 pre-orders are correctly treated as a conversion measurement rather than orders in hand, and Brain produces the spreadsheet as the recorded fulfiller.",
+        "findings": [],
+        "resolution": null,
+        "at": "2026-11-27T03:07:33.406Z"
+      },
+      "at": "2026-11-27T03:08:35.448Z"
+    }
+  }
+}

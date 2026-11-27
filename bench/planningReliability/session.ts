@@ -82,7 +82,9 @@ export function observeSession(r: PlanRevisionInput, brain: Pick<BrainRunSummary
       does: s.label,
       routine: s.executor ? s.executor.routine : performer === 'OWNER',
       capabilities: s.executor ? s.executor.capabilities : performer === 'BRAIN' ? [{ id: 'UNRECORDED', state: 'NOT_DECLARED' }] : [],
-      pays: s.kind === 'ORDER',
+      // A session's delivery step that carries the supplier's cost and is paid by a linked outflow IS the supplier
+      // payment (the session schema has no separate ORDER requirement); only an unpaid or uncosted one is not.
+      pays: s.kind === 'ORDER' || (s.kind === 'DELIVER' && (s.costCents ?? 0) > 0 && r.cash.some((e) => e.stepId === s.id && (e.kind === 'SPEND' || e.kind === 'FEE'))),
       members: memberKeys,
       absent,
       price: typeof s.priceCents === 'number' ? s.priceCents / 100 : null,

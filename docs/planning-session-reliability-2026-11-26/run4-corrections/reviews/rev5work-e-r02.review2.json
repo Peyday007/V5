@@ -1,0 +1,14 @@
+{
+ "goal_id": "wst_a95ea58663d34e189e2d",
+ "revision_id": "rev_1eccb8436fdc_bd03d5",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "The condition itself is genuine. Brain's MARKET_VOLUME basis is the whole category (about 192 sales a month across 40 sellers), not this offer's own record, so one new listing's share is truly unestablished. The 60/1,500 reconciliation is now sound, and the 5-11 band now has a rule. But the pace arithmetic behind the gates is wrong. The proof calls 12 sales in days 2-10 'the pace for 39 by day 22'. 12 sales in 9 days is 1.33 a day, and that pace gives about 28 by day 22, not 39. The remaining 27 sales in days 11-22 need 2.25 a day, about 1.7 times the proven pace. The day-15 continue rule is worse: 20 by day 15 leaves 19 sales in 7 days, 2.7 a day. Moving the end date to day 22 for slack without raising the thresholds means a test that passes still predicts a miss: about 28 x $29 = $812 gross against $1,000.",
+ "findings": [
+  "Proof threshold inconsistent with the schedule: 12 sales by day 10 projects to about 28 by day 22, not 39. To support 39 by day 22 the proof needs about 17-18 sales by day 10.",
+  "The day-15 continue rule (20 cumulative) leaves 19 sales in 7 days, about 2.7 a day, roughly twice the pace that rule accepts. Set it to about 27-28 by day 15.",
+  "Either raise both thresholds to match the day-22 schedule, or keep the 12/day-10 threshold and extend selling to about day 26, so that the last 3-day payout settles by day 29 (less slack, but a consistent rule)."
+ ]
+}

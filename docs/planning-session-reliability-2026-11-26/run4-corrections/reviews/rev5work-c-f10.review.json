@@ -1,0 +1,13 @@
+{
+ "goal_id": "wst_5a1a872a7df846ec8498",
+ "revision_id": "rev_1e9a54ea1c7a_a24e46",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-gamma",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "The opening is sound: three written acceptances at $1,600 from golf courses (inside the named industry), Brain-proved PRODUCE_SPREADSHEET fulfilment, 10 days to cash, and $4,800 >= $4,000 settling on day 15. But the cash ledger spends $60 of direct cost on day 5 before any receipt settles on day 15. Brain's own check flags CASH_SHORTFALL (cash -$60 on day 5, an interim shortfall the final profit does not cover). Meanwhile the strategy says 'no capital tied up'. The plan has to say how the $60 is funded (for example a stated $60 owner float, which the goal does not forbid) or move the cost until after collection. Until then the ledger is not executable as written.",
+ "findings": [
+  "CASH_SHORTFALL: ledger goes to -$60 on day 5 (three $20 direct costs) and receipts only settle on day 15; no opening balance or funding is stated.",
+  "Strategy text says 'no capital tied up', which contradicts the plan's own ledger ($60 outstanding from day 5 to day 15)."
+ ]
+}

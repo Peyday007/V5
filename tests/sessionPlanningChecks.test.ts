@@ -147,6 +147,31 @@ describe('capability records', () => {
   });
 });
 
+describe('the grader reads a paid, costed subcontractor delivery as the supplier payment (2026-11-27 run, f07 and ho-11)', () => {
+  const c = PUBLIC_CASES.find((one) => one.id === 'fam-08-cleaning-industry-scope')!;
+  const scope = { scope: { targetCents: 500_000, daysLeft: 45, hoursCeiling: null, industry: null, recurring: null, hoursPerWeek: null }, openings: [], excluded: [] };
+  const keyOf = (id: string) => (id === 'opp_c' ? 'cleaning' : id);
+  const crew = (cash: PlanRevisionInput['cash']) => plan({
+    strategy: { title: 's', opportunityIds: ['opp_c'], why: 'w' }, chain: [{ opportunityId: 'opp_c', missing: [] }],
+    members: [{ opportunityId: 'opp_c', deals: 2, price: 3000, directCost: 1500, capital: 0 }],
+    steps: [
+      { id: 'collect', kind: 'COLLECT', label: 'invoice both contractors', performer: 'BRAIN', costCents: 0, day: 3, dependsOn: null, evidence: ['q'], executor: exec('COLLECT_PAYMENT', 'BRAIN') },
+      { id: 'deliver', kind: 'DELIVER', label: 'BrightCrew cleans both sites', performer: 'BrightCrew Cleaning LLC', costCents: 300_000, day: 12, dependsOn: 'collect', evidence: ['q'], executor: exec('SUPPLIER_DELIVERS', 'PROVIDER', []) },
+    ],
+    cash,
+  });
+  const receipt = { day: 3, kind: 'RECEIPT' as const, amountCents: 600_000, label: 'two cleanups', settlesDay: 10 };
+  const missing = (r: PlanRevisionInput) => grade(c, observeSession(r, scope, keyOf)).e2e.gaps.concat(grade(c, observeSession(r, scope, keyOf)).e2e.failures);
+
+  it('a delivery step carrying the crew’s cost and paid by a linked outflow is the supplier payment', () => {
+    expect(missing(crew([receipt, { day: 12, kind: 'SPEND', amountCents: 300_000, label: 'pay BrightCrew', stepId: 'deliver' }]))).not.toContain('CHAIN_STEP_MISSING');
+  });
+
+  it('control: the same delivery with no outflow paying it still has no supplier payment', () => {
+    expect(missing(crew([receipt]))).toContain('CHAIN_STEP_MISSING');
+  });
+});
+
 describe('review independence', () => {
   it('treats one id, or one authenticated credential, as one executor whatever kind it declares', async () => {
     const { sameExecutor } = await import('../server/domain/planReady.ts');

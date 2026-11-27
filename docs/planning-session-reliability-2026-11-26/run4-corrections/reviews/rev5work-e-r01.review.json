@@ -1,0 +1,15 @@
+{
+ "goal_id": "wst_bc34faf63cc64de587b9",
+ "revision_id": "rev_2475d0ff3f35_c4b535",
+ "reviewer_kind": "MODEL",
+ "reviewer_id": "reviewer-epsilon",
+ "reviewer_model": "claude-opus-5-5",
+ "verdict": "REVISE",
+ "reasons": "Price, cost, fulfiller, settlement and the cash ledger check out (36 x $180 = $6,480 gross; less 36 x $95 = $3,420 leaves $3,060 net; both receipts settle by day 25). But EXECUTABLE is not earned: the plan never connects the conversion unit to the reachable buyers. Reach is an email to the county's 35 pharmacy owners; conversion is 22 pre-orders per 200 unique page visitors; the plan needs 36 paid deliveries. At 11% of 35 owners that is about 4 buying pharmacies, so each would need about 9 paid deliveries in the window. No evidence gives how many deliveries one converting pharmacy buys, or how many visitors the 35-owner email produces. Doubling Brain's sizing (18 to 36) to meet a net reading makes that gap twice as large.",
+ "findings": [
+  "Unit mismatch: conversion is per page visitor (22/200), the reach is 35 pharmacy owners, and the plan needs 36 deliveries. Visitors from the email and deliveries per converting pharmacy are never evidenced, so the 36 deals are an unsupported estimate.",
+  "At 11% of 35 owners, about 4 pharmacies convert, and each would need about 9 paid deliveries in 30 days. Purchase quantity per buyer is unknown but treated as known.",
+  "Sizing at 36 deals (twice Brain's 18) rests on that same unevidenced volume. Either show evidence that ~4 buyers take 9 or more deliveries each, or make it CONDITIONAL with a proof/stop/continue test on orders per contacted pharmacy.",
+  "The SEND_A_MESSAGE and ISSUE_AN_INVOICE capabilities are NOT_CONNECTED for the reach, sell and collect steps, so these steps cannot run as routine yet."
+ ]
+}

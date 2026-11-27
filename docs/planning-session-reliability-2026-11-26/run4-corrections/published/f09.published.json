@@ -1,0 +1,381 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_51c3ce89d6d3_f868e3",
+      "digest": "51c3ce89d6d3e2fcd294721e",
+      "contractDigest": "123dc3577efcd924cc617371",
+      "plan": {
+        "goalId": "wst_e7112415582a498fb09f",
+        "contractDigest": "123dc3577efcd924cc617371",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Owner delivers six of the eight signed instrument-inventory valuations, two per week",
+          "opportunityIds": [
+            "cop_37e5771eef75442f9feb"
+          ],
+          "why": "Eight music schools have accepted in writing at $500 ($4,000). Six deals carry the $3,000 target. The owner is the named fulfiller at 3 hours per valuation, so two valuations a week is exactly the 6-hour weekly allowance (18 of 24 window hours). Direct cost and exposure are $0, and cash is usable 7 days after delivery, so the third batch (delivered by day 20) settles by day 27, inside the 28 days. Brain does the selling, scheduling and collection."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver all eight signed valuations",
+            "why": "Needs 24 owner hours (8 per week in some week or all 24 hours with no slack) and a fourth-week batch would settle after day 28; not needed for the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm six of the eight written acceptances at $500 and schedule two valuations per week",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "s_agree",
+              "s_price"
+            ],
+            "priceCents": 50000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d1",
+            "kind": "DELIVER",
+            "label": "Owner values instrument inventories at schools 1-2 (week 1)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_hours"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "c1",
+            "kind": "COLLECT",
+            "label": "Invoice and collect schools 1-2",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 6,
+            "dependsOn": "d1",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d2",
+            "kind": "DELIVER",
+            "label": "Owner values instrument inventories at schools 3-4 (week 2)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 10,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_hours"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "c2",
+            "kind": "COLLECT",
+            "label": "Invoice and collect schools 3-4",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 13,
+            "dependsOn": "d2",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "d3",
+            "kind": "DELIVER",
+            "label": "Owner values instrument inventories at schools 5-6 (week 3)",
+            "performer": "OWNER",
+            "costCents": 0,
+            "day": 17,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_fulfil",
+              "s_hours"
+            ],
+            "ownerHours": 6,
+            "executor": {
+              "operation": "OWNER_TASK",
+              "performedBy": "OWNER",
+              "provider": null,
+              "capabilities": [],
+              "routine": true
+            }
+          },
+          {
+            "id": "c3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect schools 5-6",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 20,
+            "dependsOn": "d3",
+            "evidence": [
+              "s_ttc"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 6,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "Schools 1-2 pay $500 each",
+            "settlesDay": 13,
+            "stepId": "c1"
+          },
+          {
+            "day": 13,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "Schools 3-4 pay $500 each",
+            "settlesDay": 20,
+            "stepId": "c2"
+          },
+          {
+            "day": 20,
+            "kind": "RECEIPT",
+            "amountCents": 100000,
+            "label": "Schools 5-6 pay $500 each",
+            "settlesDay": 27,
+            "stepId": "c3"
+          }
+        ],
+        "proofDay": 13,
+        "quantities": [
+          {
+            "name": "agreedSchools",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "written acceptances",
+            "sources": [
+              "s_agree"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 500,
+            "unit": "USD per school",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHoursPerDeal",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "hours",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "ownerHoursTotal",
+            "status": "EVIDENCED",
+            "value": 18,
+            "unit": "hours in the window (6 per week)",
+            "sources": [
+              "s_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "directCost",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "USD per school",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_agree",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#agreements",
+            "dated": "2026-11-24",
+            "claim": "Eight written acceptances at $500",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#price",
+            "dated": "2026-11-24",
+            "claim": "Price $500",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_fulfil",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "The owner does the work personally",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_hours",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#humanHours",
+            "dated": "2026-11-24",
+            "claim": "3 hours of work per valuation",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $0",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_37e5771eef75442f9feb#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "7 days to first cash",
+            "population": "Music school directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_37e5771eef75442f9feb",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_37e5771eef75442f9feb",
+            "deals": 6,
+            "price": 500,
+            "directCost": 0,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_51c3ce89d6d3_f868e3",
+        "digest": "51c3ce89d6d3e2fcd294721e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c5adeca356f947aebea8/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:55:18.436Z"
+      },
+      "review": {
+        "revisionId": "rev_51c3ce89d6d3_f868e3",
+        "revisionDigest": "51c3ce89d6d3e2fcd294721e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_c5adeca356f947aebea8/author5-3",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_52d0ab8f7af64dfaac55/reviewer-gamma",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is right. Eight written acceptances at $500 from music-school directors (the buyer's own price) are on the card; 6 x $500 = $3,000 meets the target. Owner is the recorded fulfiller at 3 h per valuation: two per week = 6 h/week, exactly the ceiling, 18 h total of the 24 allowed. Direct cost and exposure $0. Deliveries on days 3/10/17 with settlement on days 13/20/27, all inside 28 days (the author waits 10 days from delivery where the card says 7, so the ledger is cautious). Cash ledger matches steps, and Brain's check has no problems ($3,000 collected in the window, min cash $0). Every chain link is established on the card.",
+        "findings": [
+          "No hours slack: each week uses the full 6 h, so if a signed school does not pay, the two spare acceptances can only be delivered by going over 6 h in a week or in week 4, which settles on day 28 or later. This is a risk to note, not a defect in the plan.",
+          "Brain cannot yet send messages or issue invoices (SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED). These have to be connected before s1/c1 can run."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:21.915Z"
+      },
+      "at": "2026-11-27T03:04:14.922Z"
+    }
+  }
+}

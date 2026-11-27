@@ -1,0 +1,172 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_36d705580d80_4c21c3",
+      "digest": "36d705580d804ad26335f1bc",
+      "contractDigest": "5b20ba2364617b4487c043e4",
+      "plan": {
+        "goalId": "wst_a1db76e857ec4f17a67d",
+        "contractDigest": "5b20ba2364617b4487c043e4",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan fits 2 owner hours a week",
+          "opportunityIds": [],
+          "why": "The only opening (heritage-tree condition surveys, ten written acceptances at $700) is fulfilled by the owner personally at 8 hours per survey. Reaching $5,000 needs 8 surveys = 64 owner hours; the goal allows about 9 owner hours over 30 days (2 h/week), enough for one survey ($700)."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver one survey inside the hours allowed",
+            "why": "Fits the 9-hour budget but brings only $700 of the $5,000 target."
+          },
+          {
+            "title": "Subcontract the surveys to an arborist",
+            "why": "No fulfiller other than the owner is recorded on the card, and no price or availability for one is evidenced."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Find a qualified arborist/surveyor who can fulfil the signed surveys below $700 each, or openings Brain itself can fulfil, so owner time stays at or under 2 h/week",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "src_hours"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "q_hours_per_deal",
+            "status": "EVIDENCED",
+            "value": 8,
+            "unit": "owner hours per survey",
+            "sources": [
+              "src_hours"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_price",
+            "status": "EVIDENCED",
+            "value": 70000,
+            "unit": "cents per survey",
+            "sources": [
+              "src_agreement"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "src_hours",
+            "url": "https://brain.local/card/cop_843d824c2437422fbdd1#humanHours",
+            "dated": "2026-11-24",
+            "claim": "8 hours of work per survey, fulfilled by the owner personally",
+            "population": "landscape architecture firms",
+            "matchesBuyer": true
+          },
+          {
+            "id": "src_agreement",
+            "url": "https://brain.local/card/cop_843d824c2437422fbdd1#agreements",
+            "dated": "2026-11-24",
+            "claim": "Ten written acceptances at $700 each",
+            "population": "landscape architecture firms",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Fulfilment is the owner personally at 8 hours per survey; the $5,000 target needs 8 surveys (64 hours) but the goal allows about 9 owner hours in the window, so the owner can fulfil only one ($700).",
+          "resolution": "Owner raises the time allowance to about 15-16 hours a week (64 hours over the window), or Brain finds a third-party fulfiller for the surveys at a cost below $700 each, or openings Brain can fulfil itself.",
+          "decisiveLinks": [
+            "FULFILMENT"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_843d824c2437422fbdd1",
+            "missing": [
+              "FULFILMENT"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_843d824c2437422fbdd1",
+            "why": "Needs 64 owner hours to reach the target against a 9-hour ceiling."
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "FULFILMENT"
+        ],
+        "constraints": [
+          {
+            "constraint": "OWNER_HOURS",
+            "suggestion": "Allow about 64 owner hours over the 30 days (~15 h/week), or permit a paid subcontractor to do the surveys."
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_843d824c2437422fbdd1",
+            "link": "FULFILMENT",
+            "reason": "Brain marks fulfilment ok because the owner fulfils personally (and only a person says so), but the owner can supply at most ~9 hours in the window against 64 needed, so fulfilment of the deals that reach the target is not available within the goal's limits."
+          }
+        ],
+        "revisionId": "rev_36d705580d80_4c21c3",
+        "digest": "36d705580d804ad26335f1bc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e38c6250d6754532baff/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:54:27.966Z"
+      },
+      "review": {
+        "revisionId": "rev_36d705580d80_4c21c3",
+        "revisionDigest": "36d705580d804ad26335f1bc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_e38c6250d6754532baff/author5-4",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_efb30862b2624415a8ca/reviewer-gamma",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with an OWNER_HOURS constraint is correct. The owner is the recorded fulfiller at 8 h per $700 survey. The target needs 8 surveys ($5,600; 7 give only $4,900), which is 64 owner hours against about 9 hours allowed (2 h/week over 30 days), so only one survey fits. Brain's own verdict agrees (the agreed deals need more owner hours than the goal has). The author does not invent a subcontractor, because none is recorded with a price. The disagreement with Brain's FULFILMENT link is reasoned correctly.",
+        "findings": [
+          "Minor: the suggested allowance of about 15-16 h/week understates what is needed. Deliveries must finish about 7 days before the deadline to settle, so 64 hours have to fit in roughly 23 days, about 19-20 h/week. This does not change the stance."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:23.542Z"
+      },
+      "at": "2026-11-27T03:04:16.495Z"
+    }
+  }
+}

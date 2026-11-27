@@ -1,0 +1,241 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "published": true,
+    "final": {
+      "revisionId": "rev_861877a70d79_290f6b",
+      "digest": "861877a70d79ddf615d91a76",
+      "contractDigest": "227debc0afe3b2eb44282e37",
+      "plan": {
+        "goalId": "wst_fb8d8a5f3a624b21b96d",
+        "contractDigest": "227debc0afe3b2eb44282e37",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the certificate-pack price is contradicted, and at the sourced price the 140-contractor market cannot carry $6,000",
+          "opportunityIds": [],
+          "why": "The card records $1,200 while its sourced price fact says $120 - a tenfold contradiction, so neither is established. At the sourced $120, $6,000 needs 50 sales; the market is 140 licensed contractors buying once a year, and at the measured 12% acceptance (12 of 100 contacts on this offer's own sales) asking all 140 yields about 17 sales = ~$2,016. Only the unestablished $1,200 figure (5 sales) would reach the target."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 5 packs at $1,200",
+            "why": "Rejected: $1,200 is contradicted by the sourced $120 price fact; the plan would rest on the figure that is not established."
+          },
+          {
+            "title": "Sell to all 140 contractors at $120",
+            "why": "Rejected: at the measured 12% conversion it settles about $2,016, short of $6,000; even 100% conversion would need 50 of 140 contractors, far above any measured rate."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Resolve the price contradiction: establish from a dated source what elevator maintenance contractors pay for an annual inspection certificate pack ($120 vs $1,200)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s1",
+              "s2"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          },
+          {
+            "id": "r2",
+            "kind": "OTHER",
+            "label": "Re-run the plan with the established price: at $1,200, 5 sales of ~17 attainable reach the target; at $120 the target is out of reach in this market",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "r1",
+            "evidence": [
+              "s3",
+              "s4"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "q_price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per pack",
+            "sources": [
+              "s1",
+              "s2"
+            ],
+            "needs": "Resolve $120 (sourced fact) vs $1,200 (card)"
+          },
+          {
+            "name": "q_conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s3"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_buyers",
+            "status": "EVIDENCED",
+            "value": 140,
+            "unit": "licensed elevator maintenance contractors, buying annually",
+            "sources": [
+              "s4"
+            ],
+            "needs": null
+          },
+          {
+            "name": "q_attainable_sales",
+            "status": "ESTIMATE",
+            "value": 17,
+            "unit": "sales in 30 days",
+            "sources": [
+              "s3",
+              "s4"
+            ],
+            "needs": "140 x 12% = 16.8"
+          },
+          {
+            "name": "q_reach_at_120",
+            "status": "ESTIMATE",
+            "value": 2016,
+            "unit": "USD settled at $120",
+            "sources": [
+              "s1",
+              "s3",
+              "s4"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s1",
+            "url": "https://brain.local/card/cop_67837a1e748040f785ef#price",
+            "dated": null,
+            "claim": "$120 price (EVIDENCE fact)",
+            "population": "elevator maintenance contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s2",
+            "url": "https://brain.local/card/cop_67837a1e748040f785ef#priceCents",
+            "dated": null,
+            "claim": "Card records 120000 cents ($1,200), contradicting the $120 fact",
+            "population": "elevator maintenance contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s3",
+            "url": "https://brain.local/card/cop_67837a1e748040f785ef#conversionRates",
+            "dated": null,
+            "claim": "12 agreements from 100 contacts",
+            "population": "contacts on this offer's own sales",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s4",
+            "url": "https://brain.local/card/cop_67837a1e748040f785ef#buyerVolume",
+            "dated": null,
+            "claim": "140 contractors hold state licences; each files certificates annually",
+            "population": "licensed elevator maintenance contractors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "OFFER_AND_PRICE and MARKET_VOLUME: the price is contradicted ($120 sourced fact vs $1,200 on the card), and at the sourced $120 the 140 annual-buying contractors at the measured 12% acceptance yield about 17 sales (~$2,016), far short of the 50 sales $6,000 needs.",
+          "resolution": "Brain researches the parked revenueRange question to establish the price contractors actually pay. If $1,200 is established, re-run as a plan of 5 sales to the 140 licensed contractors (17 attainable at 12%). If $120 stands, this opening cannot reach $6,000: lower the target to about $2,000 or add further openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_67837a1e748040f785ef",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_67837a1e748040f785ef",
+            "why": "Price contradicted ($120 vs $1,200); at the sourced $120 the market cannot carry the target"
+          }
+        ],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "If the sourced $120 price stands, this market yields about $2,016 in 30 days at the measured 12% conversion; lower the target to about $2,000 or add openings."
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_861877a70d79_290f6b",
+        "digest": "861877a70d79ddf615d91a76",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc55b5bde31946f48790/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T02:56:10.392Z"
+      },
+      "review": {
+        "revisionId": "rev_861877a70d79_290f6b",
+        "revisionDigest": "861877a70d79ddf615d91a76",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc55b5bde31946f48790/author5-2",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_2c1a15a042a648e09b5f/reviewer-beta",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance. The only opening's price is contradicted on the card itself (priceCents 120000 = $1,200 vs EVIDENCE price fact $120), and Brain also judges OFFER_AND_PRICE unestablished ('no single price on the card'). Recomputed: at $120 the target needs 50 sales; 140 annual-buying licensed contractors x the measured 12% (12/100 on this offer's own sales) = 16.8 sales = ~$2,016, so MARKET_VOLUME fails at $120; at $1,200 only 5 sales are needed and 16.8 are attainable, so the price fact alone decides the plan. The decisive gap is named correctly, the resolution (Brain researches the parked revenueRange question, then re-plans) is zero-cost, BRAIN-performed and nothing unknown is treated as known (q_price UNKNOWN). Acceptable for the owner to act on.",
+        "findings": [
+          "TARGET constraint is recorded although the binding gap is missing price evidence; it is only valid conditionally ('if $120 stands') and should not be read as a limit the evidence has decided",
+          "Minor arithmetic: '17 sales = ~$2,016' - 17 x $120 = $2,040; $2,016 is 16.8 x $120"
+        ],
+        "resolution": null,
+        "at": "2026-11-27T02:58:53.969Z"
+      },
+      "at": "2026-11-27T03:04:12.837Z"
+    }
+  }
+}
