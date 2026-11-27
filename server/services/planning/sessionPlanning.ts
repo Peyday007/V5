@@ -414,7 +414,14 @@ export async function openQuestions(goalId: string) {
   const projectId = goal.target?.projectId ?? goal.projectId;
   if (!projectId) return [];
   const returned = new Map((await events(goalId, PLANNING_EVENTS.research)).map((e) => [String(e.detail['needId']), e.detail]));
-  return (await listNeeds({ projectId, states: ['OPEN'] }))
+  // What a verifier judges: the submitted claims as Brain stored them (text, source, passage, acceptance), read from the rows.
+  const { listClaimsForFragment } = await import('../../repos/research.ts');
+  const submittedClaims = async (needId: string) => {
+    const sub = (await events(goalId, PLANNING_EVENTS.research)).filter((e) => e.detail['needId'] === needId && e.detail['phase'] === 'SUBMITTED').pop();
+    if (!sub?.detail['fragmentId']) return [];
+    return (await listClaimsForFragment(String(sub.detail['fragmentId']))).map((c) => ({ claimId: c.id, claim: c.claim, sourceUrl: c.sourceUrl, sourceTitle: c.sourceTitle, sourcePublisher: c.sourcePublisher, sourceDate: c.sourceDate, evidenceExcerpt: c.evidenceExcerpt, evidenceLocator: c.evidenceLocator, sourced: c.sourced, accepted: c.accepted, rejectionReason: c.rejectionReason ?? null }));
+  };
+  const rows = (await listNeeds({ projectId, states: ['OPEN'] }))
     .filter((n) => n.opportunityId && ids.has(n.opportunityId) && n.requestKey?.startsWith('question:'))
     .map((n) => ({
       needId: n.id,
@@ -426,6 +433,7 @@ export async function openQuestions(goalId: string) {
       parked: !n.candidateId,
       returned: returned.get(n.id) ?? null,
     }));
+  return Promise.all(rows.map(async (one) => ({ ...one, submitted: await submittedClaims(one.needId) })));
 }
 
 /** One claim the session submits for a research question, in the research gate's own terms. */

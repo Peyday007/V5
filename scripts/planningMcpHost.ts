@@ -4,8 +4,8 @@
  * for evaluating app-session planning over the connector's own transport without touching
  * production. Nothing else of the server boots: no ticks, no providers, no outbound work.
  *
- *   npx tsx scripts/planningMcpHost.ts credential --world DIR     a worker with the operator's scopes on the
- *                                                                  world's project; writes DIR/.mcp-credential
+ *   npx tsx scripts/planningMcpHost.ts credential --world DIR [--as NAME] [--out FILE]   a worker of its own with the
+ *                                                                  operator's scopes on the world's project
  *   npx tsx scripts/planningMcpHost.ts serve --world DIR --port P  serve POST /mcp until killed
  *   npx tsx scripts/planningMcpHost.ts call --port P --credential FILE --tool NAME --args FILE   one tools/call
  */
@@ -48,10 +48,11 @@ async function main(): Promise<void> {
   if (cmd === 'credential') {
     const { createWorker, grantMembership, issueWorkerCredential } = await import('../server/repos/identity.ts');
     const { OPERATOR_SCOPES } = await import('../server/domain/types.ts');
-    const worker = await createWorker({ name: `planning-session-${Date.now()}`, displayName: 'Planning session', workerType: 'MCP', description: 'App-session planning evaluation', createdByType: 'HUMAN', createdById: meta.userId } as never);
+    const worker = await createWorker({ name: `planning-${flag('as') ?? 'session'}-${Date.now()}`, displayName: 'Planning session', workerType: 'MCP', description: 'App-session planning evaluation', createdByType: 'HUMAN', createdById: meta.userId } as never);
     await grantMembership({ projectId: meta.projectId, principalType: 'WORKER', principalId: worker.id, role: null, scopes: [...OPERATOR_SCOPES], grantedByType: 'HUMAN', grantedById: meta.userId } as never);
     const issued = await issueWorkerCredential({ workerId: worker.id, issuedByType: 'HUMAN', issuedById: meta.userId });
-    fs.writeFileSync(path.join(world, '.mcp-credential'), issued.plaintext, { mode: 0o600 });
+    const out = flag('out') ?? path.join(world, '.mcp-credential');
+    fs.writeFileSync(out, issued.plaintext, { mode: 0o600 });
     process.stdout.write(`${JSON.stringify({ ok: true, workerId: worker.id, scopes: OPERATOR_SCOPES })}\n`);
     process.exit(0);
   }
