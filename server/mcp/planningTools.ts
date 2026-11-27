@@ -6,6 +6,7 @@
  * resumes a goal or writes a verified fact; a refusal names the exact scope it lacks.
  */
 import { authorize, MUTATING, READ_ONLY, optionalString, requiredString, type McpTool } from './toolkit.ts';
+import { decideProjectAccess } from '../services/identity/policy.ts';
 import { invalidInput, notFoundError } from './errors.ts';
 import { getWorkstream } from '../repos/register.ts';
 import type { Principal } from '../domain/types.ts';
@@ -184,8 +185,12 @@ const verifyResearchTool: McpTool = {
   run: async (args, { principal }) => {
     const goalId = requiredString(args, 'goal_id');
     const projectId = await goalProject(goalId);
-    await authorize(principal, projectId, 'WRITE', 'operator:act');
-    const { verifyResearch } = await import('../services/planning/sessionPlanning.ts');
+    const { verifyResearch, leasedVerificationFor } = await import('../services/planning/sessionPlanning.ts');
+    // Operator authority, or the queue's grant: a live lease on this question's PLAN_VERIFY item, not the researcher's.
+    if (!decideProjectAccess(principal, projectId, 'WRITE', 'operator:act').allowed) {
+      await authorize(principal, projectId, 'WRITE', 'queue:complete');
+      if (!(await leasedVerificationFor(principal.id, requiredString(args, 'need_id')))) throw notFoundError();
+    }
     return { projectId, value: await guarded(() => verifyResearch({ goalId, needId: requiredString(args, 'need_id'), verifier: sessionExecutor(principal, args), verdicts: (Array.isArray(args['verdicts']) ? args['verdicts'] : []) as never, sufficiency: args['sufficiency'] === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT' })) };
   },
 };
@@ -241,8 +246,13 @@ const reviewTool: McpTool = {
   run: async (args, { principal }) => {
     const goalId = requiredString(args, 'goal_id');
     const projectId = await goalProject(goalId);
-    await authorize(principal, projectId, 'WRITE', 'operator:act');
-    const { recordReview } = await import('../services/planning/sessionPlanning.ts');
+    const { recordReview, leasedReviewFor } = await import('../services/planning/sessionPlanning.ts');
+    // Operator authority on the project, or the queue's grant: a live lease on this exact revision's PLAN_REVIEW item,
+    // held by a worker that is not its author. The lease authorizes this one review and nothing else.
+    if (!decideProjectAccess(principal, projectId, 'WRITE', 'operator:act').allowed) {
+      await authorize(principal, projectId, 'WRITE', 'queue:complete');
+      if (!(await leasedReviewFor(principal.id, requiredString(args, 'revision_id')))) throw notFoundError();
+    }
     return {
       projectId,
       value: await guarded(() => recordReview({

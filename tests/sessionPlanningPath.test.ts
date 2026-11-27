@@ -205,6 +205,32 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(state.reviews.find((r) => r.revisionId === id)?.conditions).toHaveLength(1);
   }, 240_000);
 
+  it('a clean revision is dealt for review through the work queue, and only a non-author lease holder may review it', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const { createWorker } = await import('../server/repos/identity.ts');
+    const { claimWork } = await import('../server/repos/workQueue.ts');
+    const fleet = await createWorker({ name: `fleet-${Date.now()}`, displayName: 'Fleet', createdByType: 'HUMAN', createdById: world.userId } as never);
+    const first = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    const disagreements = (first.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok).map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s3' }));
+    const clean = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements }, actor: AUTHOR, today: '2026-11-26' });
+    expect(clean.problems).toEqual([]);
+    expect(clean.reviewItem?.created).toBe(true);
+    // One item per revision, however often it is asked for; a revision with problems is not dealt at all.
+    expect((await svc.requestReview(goalId, clean.revision)).created).toBe(false);
+    expect(first.problems.length > 0 ? first.reviewItem : null).toBeNull();
+    const id = clean.revision.revisionId;
+    expect(await svc.leasedReviewFor(fleet.id, id)).toBe(false);
+    // The queue deals the oldest waiting review first (earlier tests left clean revisions of their own); take this one's.
+    const batch = await claimWork({ workerId: fleet.id, limit: 10, scopes: [{ projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete'] }], workTypes: [svc.PLAN_REVIEW_WORK] });
+    expect(batch.every((one) => one.workType === svc.PLAN_REVIEW_WORK)).toBe(true);
+    expect(batch.some((one) => one.payload['revisionId'] === id)).toBe(true);
+    expect(await svc.leasedReviewFor(fleet.id, id)).toBe(true);
+    expect(await svc.leasedReviewFor(fleet.id, 'rev_other')).toBe(false);
+    expect(await svc.reviewRecordedBy(goalId, id, fleet.id)).toBe(false);
+    await svc.recordReview({ goalId, revisionId: id, reviewer: { kind: 'MODEL', id: `${fleet.id}/fleet-worker`, model: 'm' }, verdict: 'PASS', reasons: 'recomputed', findings: [] });
+    expect(await svc.reviewRecordedBy(goalId, id, fleet.id)).toBe(true);
+  }, 240_000);
+
   it('control 2: missing supplier or demand evidence stays unknown and caps the stance at CONDITIONAL', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const unknown = { name: 'buyer conversion per 100 emails', status: 'UNKNOWN' as const, value: null, unit: 'orders', sources: [], needs: 'a 200-email live test' };

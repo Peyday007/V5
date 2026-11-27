@@ -535,7 +535,54 @@ export async function answerResearch(input: {
   const claims = stored.map((c) => ({ claimId: c.id, sourced: c.sourced, validationState: c.validationState, validationDetail: c.validationDetail, accepted: c.accepted }));
   const detail = { phase: 'SUBMITTED', needId: q.needId, opportunityId: q.opportunityId, field: q.field, executor: input.actor, method: input.method, orchestrationId: orchestration.id, fragmentId: fragment!.id, missionId: mission.id, claims, wasParked: q.parked };
   await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research submitted for ${q.field} on ${q.opportunityId} by ${input.actor.kind} ${input.actor.id}: ${claims.length} claim(s), awaiting the evidence gate`, detail, actorRef: actorOf(input.actor) });
-  return detail;
+  // Verification is dealt through the work queue to a worker other than the researcher, like a plan review.
+  const verifyItem = await requestVerification(input.goalId, projectId, q.needId, attempt, principalOf(input.actor.id), claims.map((c) => c.claimId));
+  return { ...detail, verifyItem };
+}
+
+/** The queue's work type for independent verification of session research; one item per submission. */
+export const PLAN_VERIFY_WORK = 'PLAN_VERIFY';
+const verifyCorrelation = (needId: string, attempt: number) => `plan-verify:${needId}:${attempt}`;
+
+async function requestVerification(goalId: string, projectId: string, needId: string, attempt: number, researcherPrincipal: string, claimIds: string[]): Promise<{ id: string; created: boolean }> {
+  const { getDb } = await import('../../db/database.ts');
+  const correlation = verifyCorrelation(needId, attempt);
+  const existing = await getDb().get<{ id: string }>(`SELECT id FROM work_items WHERE project_id = ? AND work_type = ? AND correlation_id = ?`, [projectId, PLAN_VERIFY_WORK, correlation]);
+  if (existing) return { id: existing.id, created: false };
+  const { enqueueWork } = await import('../../repos/workQueue.ts');
+  const item = await enqueueWork({
+    projectId,
+    workType: PLAN_VERIFY_WORK,
+    payload: {
+      goalId, needId, attempt, researcherPrincipal, claimIds,
+      instructions:
+        'Independent verification of research submitted for one planning question. Read brain_planning_context for goalId (the question ' +
+        'and each submitted claim: text, source URL, excerpt, locator). Open each source yourself; answer brain_planning_verify_research ' +
+        'with need_id, one verdict per claim (supportsClaim, and scopeMatch geography/timeframe/population/definitions: MATCH, MISMATCH, ' +
+        'UNKNOWN, NOT_APPLICABLE or UNSTATED, each with its basis) and sufficiency; then brain_complete_work. The researcher may not ' +
+        'verify its own research: release the item if that is you.',
+    },
+    requiredScopes: ['project:read', 'queue:complete'],
+    correlationId: correlation,
+    createdByType: 'SYSTEM',
+    createdById: 'session-planning',
+  });
+  return { id: item.id, created: true };
+}
+
+/** Whether `principalId` holds a live lease on a verification item for `needId` and is not its researcher. */
+export async function leasedVerificationFor(principalId: string, needId: string, now: string = new Date().toISOString()): Promise<boolean> {
+  const { getDb } = await import('../../db/database.ts');
+  const rows = await getDb().all<{ payload: string }>(
+    `SELECT payload FROM work_items WHERE work_type = ? AND correlation_id LIKE ? AND state = 'LEASED' AND worker_id = ? AND lease_expires_at > ?`,
+    [PLAN_VERIFY_WORK, `plan-verify:${needId}:%`, principalId, now],
+  );
+  return rows.some((row) => ((typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { researcherPrincipal?: string }).researcherPrincipal !== principalId);
+}
+
+/** Whether a verification of `needId` by `principalId` is recorded: what completing its verification item requires. */
+export async function verificationRecordedBy(goalId: string, needId: string, principalId: string): Promise<boolean> {
+  return (await events(goalId, PLANNING_EVENTS.research)).some((e) => e.detail['phase'] === 'VERIFIED' && e.detail['needId'] === needId && principalOf(String((e.detail['verifier'] as PlanExecutor | undefined)?.id ?? '')) === principalId);
 }
 
 /**
@@ -672,7 +719,72 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   await recordWorkstreamEvent({ workstreamId: goalId, kind: PLANNING_EVENTS.revision, summary: `Revision ${revision.revisionId} (${r.stance})`, detail: { revision }, actorRef: actorOf(input.actor) });
   const trace = cashTrace(r, contract.terms);
   await recordWorkstreamEvent({ workstreamId: goalId, kind: PLANNING_EVENTS.check, summary: `Checks on ${revision.revisionId}: ${problems.length} problem(s)`, detail: { revisionId: revision.revisionId, digest, contractDigest: contract.digest, problems, trace, brain: brainRun }, actorRef: 'brain:session-planning' });
-  return { revision, problems, trace, brain: brainRun };
+  // A clean revision is dealt for independent review through Brain's own work queue, so no person shuttles it
+  // between sessions: any connected worker other than the author claims it, and its lease is its authority to review.
+  const reviewItem = problems.length === 0 ? await requestReview(goalId, revision) : null;
+  return { revision, problems, trace, brain: brainRun, reviewItem };
+}
+
+/** The queue's work type for an independent plan review; one item per revision. */
+export const PLAN_REVIEW_WORK = 'PLAN_REVIEW';
+const reviewCorrelation = (revisionId: string) => `plan-review:${revisionId}`;
+/** The principal behind an executor id (`<principal>/<session>`), or the whole id. */
+const principalOf = (id: string) => (id.includes('/') ? id.slice(0, id.indexOf('/')) : id);
+
+/**
+ * Enqueue the review of one revision (idempotent: one item per revision). The payload names the revision and its
+ * author's principal and tells the claimant what to do; nothing in it is authority — the lease is.
+ */
+export async function requestReview(goalId: string, revision: Pick<PlanRevision, 'revisionId' | 'digest' | 'author'>): Promise<{ id: string; created: boolean }> {
+  const goal = await liveGoal(goalId);
+  if (!goal.projectId) throw new PlanningRefusal(`goal ${goalId} belongs to no project`, 'planning:review');
+  const { getDb } = await import('../../db/database.ts');
+  const existing = await getDb().get<{ id: string }>(`SELECT id FROM work_items WHERE project_id = ? AND work_type = ? AND correlation_id = ?`, [goal.projectId, PLAN_REVIEW_WORK, reviewCorrelation(revision.revisionId)]);
+  if (existing) return { id: existing.id, created: false };
+  const { enqueueWork } = await import('../../repos/workQueue.ts');
+  const item = await enqueueWork({
+    projectId: goal.projectId,
+    workType: PLAN_REVIEW_WORK,
+    payload: {
+      goalId,
+      revisionId: revision.revisionId,
+      revisionDigest: revision.digest,
+      authorPrincipal: principalOf(revision.author.id),
+      instructions:
+        'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
+        'revision skeptically from the evidence, recomputing the arithmetic; record brain_planning_review with verdict PASS or REVISE, ' +
+        'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
+        'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.',
+    },
+    requiredScopes: ['project:read', 'queue:complete'],
+    correlationId: reviewCorrelation(revision.revisionId),
+    createdByType: 'SYSTEM',
+    createdById: 'session-planning',
+  });
+  return { id: item.id, created: true };
+}
+
+/**
+ * Whether `principalId` holds a live lease on the review item of `revisionId` and is not its author: the queue's
+ * grant of authority to review exactly that revision, and nothing else.
+ */
+export async function leasedReviewFor(principalId: string, revisionId: string, now: string = new Date().toISOString()): Promise<boolean> {
+  const { getDb } = await import('../../db/database.ts');
+  const row = await getDb().get<{ payload: string }>(
+    `SELECT payload FROM work_items WHERE work_type = ? AND correlation_id = ? AND state = 'LEASED' AND worker_id = ? AND lease_expires_at > ?`,
+    [PLAN_REVIEW_WORK, reviewCorrelation(revisionId), principalId, now],
+  );
+  if (!row) return false;
+  const payload = (typeof row.payload === 'string' ? JSON.parse(row.payload) : row.payload) as { authorPrincipal?: string };
+  return payload.authorPrincipal !== principalId;
+}
+
+/** Whether a review of `revisionId` by `principalId` is recorded: what completing its review item requires. */
+export async function reviewRecordedBy(goalId: string, revisionId: string, principalId: string): Promise<boolean> {
+  return (await events(goalId, PLANNING_EVENTS.review)).some((e) => {
+    const r = e.detail['review'] as PlanReview;
+    return r.revisionId === revisionId && principalOf(r.reviewer.id) === principalId;
+  });
 }
 
 // ------------------------------------------------------------------------------------- review

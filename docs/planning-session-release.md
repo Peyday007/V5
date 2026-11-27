@@ -64,41 +64,37 @@ session uses is `worker-05`. `brain_whoami`, 2026-11-27, shows it holds the rese
 **`operator:act` on none**. With it, the planning reads work, and every planning write (`contract`, `submit_revision`,
 `review`, `finalize`) is refused.
 
-**Why two workers.** Review independence compares credential principals. Two Claude sessions on the same worker are
-self-review and never certify. So the test needs **two workers on two connectors**:
-- the author, which can be `worker-05` with planning granted;
-- an independent reviewer: a second worker on its own connector.
+**Independent review and verification no longer need a second session or connector.** Review independence compares
+credential principals, so the author's own worker can never certify. When a revision's check is clean, Brain queues a
+`PLAN_REVIEW` item for it on its own work queue. When research is submitted, Brain queues a `PLAN_VERIFY` item.
+
+A connected fleet worker other than the author claims the item. Your existing research workers qualify, since they
+already hold `queue:claim` and `queue:complete`. The worker's live lease authorises that one review or verification and
+nothing else. The item cannot be completed until the review or verification is recorded.
+
+The author session just reads the verdict from `brain_planning_state`. You never switch sessions.
 
 **Steps, in order:**
 
 1. **Merge and deploy** (release steps above). This is your authorization; the instruction for this work forbids it.
-2. **Grant planning to the author worker** on the project the test goal will live in, from a terminal on the
-   production deployment:
+2. **Grant planning to the author worker** on the project the goal will live in, from a terminal on the production
+   deployment:
    `npm run admin -- access grant-planning worker-05 <project> --admin <your Brain admin email>`
-3. **Create the reviewer worker and grant it planning:**
-   - `POST /api/admin/workers` with `{ "name": "planning-reviewer", "displayName": "Planning reviewer" }`. There is no
-     CLI for creating a worker. Alternatively, reuse an existing worker from `npm run admin -- workers list` that the
-     author connector is not approved as.
-   - Then: `npm run admin -- access grant <worker> <project> --admin <email>` followed by
-     `npm run admin -- access grant-planning <worker> <project> --admin <email>`.
-4. **In your claude.ai account**, add a second custom connector at the same `https://<app>/mcp`. On Connect, sign in
-   and approve it **as the reviewer worker**. Each worker needs its own connector: reusing the existing one hands back
-   `worker-05`.
-5. **Author session.** In a new Claude app session with only the author connector enabled, give an unfamiliar objective
-   in your own words. The session should:
+   That is the only grant. Reviewers need nothing new: any other connected worker with the research set on that
+   project can take the review and verification items.
+3. **Author session.** In a Claude app session with the Brain connector, give an objective in your own words. The
+   session should:
    1. create the goal;
    2. call `brain_planning_contract` with your words verbatim;
    3. call `run_brain` and `context`;
    4. admit any routes it discovers, and research decisive questions through `brain_planning_research`;
    5. submit revisions until Brain's check is clean.
-6. **Reviewer session.** In a second session with only the reviewer connector enabled:
-   - call `brain_planning_state` for that goal;
-   - review with `brain_planning_review`, putting any condition in `conditions` with its record;
-   - verify any research claims with `brain_planning_verify_research` (a different identity from the researcher).
-7. **Back in the author session:**
+4. **Review happens on the fleet.** A connected worker claims the queued `PLAN_REVIEW` (and any `PLAN_VERIFY`) item and
+   records its verdict. Fleet workers need to know these two work types: the item's payload carries its instructions.
+5. **Back in the same author session:**
+   - read the review in `brain_planning_state`;
    - answer any conditions with a decision and the records checked;
-   - after a PASS on the exact revision, call `brain_planning_finalize`;
-   - check that `brain_planning_state` shows the same published revision id and digest from both sessions.
+   - after a PASS on the exact revision, call `brain_planning_finalize`.
 8. **Pass criteria:**
    - every call returns `isError: false`, or a stated refusal with its scope;
    - the published plan's ids and digest match across check, review and final;
@@ -109,7 +105,7 @@ self-review and never certify. So the test needs **two workers on two connectors
 with its own database:
 - set its secrets per `docs/CLOUD.md`, with no provider credentials, so it can send and spend nothing;
 - run `flyctl deploy -a northline-brain-staging` from a checkout of the SHA;
-- point the two connectors at it instead.
+- point the author connector at it instead.
 
 That is a billable Fly resource and needs your Fly account. `Deploy` targets only `northline-brain`.
 

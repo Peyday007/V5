@@ -632,6 +632,27 @@ const completeTool: McpTool = {
      * or release the lease so somebody else can. Releasing is the correct move
      * when you are out of budget, and it costs the packet nothing.
      */
+    // A plan review is done when this worker's review of that revision is recorded, not when it says so.
+    if (item.workType === 'PLAN_REVIEW') {
+      const { reviewRecordedBy } = await import('../services/planning/sessionPlanning.ts');
+      const p = item.payload as { goalId?: string; revisionId?: string };
+      if (!p.goalId || !p.revisionId || !(await reviewRecordedBy(p.goalId, p.revisionId, workerId))) {
+        throw conflictError(
+          'This is a PLAN_REVIEW item and no review of its revision by you is recorded, so completing it would end the ' +
+            'review without doing it. Record brain_planning_review first, or call brain_release_work to hand it back.',
+        );
+      }
+    }
+    if (item.workType === 'PLAN_VERIFY') {
+      const { verificationRecordedBy } = await import('../services/planning/sessionPlanning.ts');
+      const p = item.payload as { goalId?: string; needId?: string };
+      if (!p.goalId || !p.needId || !(await verificationRecordedBy(p.goalId, p.needId, workerId))) {
+        throw conflictError(
+          'This is a PLAN_VERIFY item and no verification of its research by you is recorded. Record ' +
+            'brain_planning_verify_research first, or call brain_release_work to hand it back.',
+        );
+      }
+    }
     const { researchItemRecorded } = await import('../services/research/packetRunner.ts');
     if (!(await researchItemRecorded(item))) {
       throw conflictError(
