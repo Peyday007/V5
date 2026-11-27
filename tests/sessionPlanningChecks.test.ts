@@ -5,7 +5,7 @@
  * And the grader reading the same records (bench/planningReliability/session.ts).
  */
 import { describe, expect, it } from 'vitest';
-import { cashTrace, checkRevision, contractDigest, type BrainFacts, type GoalContract, type PlanRevisionInput } from '../server/domain/sessionPlanning.ts';
+import { cashTrace, checkRevision, conditionProblems, contractDigest, type BrainFacts, type GoalContract, type PlanRevisionInput } from '../server/domain/sessionPlanning.ts';
 import { observeSession } from '../bench/planningReliability/session.ts';
 import { grade } from '../bench/planningReliability/grade.ts';
 import { PUBLIC_CASES } from '../bench/planningReliability/cases.ts';
@@ -169,6 +169,70 @@ describe('the grader reads a paid, costed subcontractor delivery as the supplier
 
   it('control: the same delivery with no outflow paying it still has no supplier payment', () => {
     expect(missing(crew([receipt]))).toContain('CHAIN_STEP_MISSING');
+  });
+});
+
+describe('a reviewer’s condition names its record, and the author answers it against the records (2026-11-27 run: r01, f02, f10)', () => {
+  const card = { o1: [{ field: 'conversionRates', kind: 'EVIDENCE' }, { field: 'buyerVolume', kind: 'EVIDENCE' }, { field: 'demandEstimate', kind: 'RECOMMENDATION' }] };
+  const rev = { strategy: { title: 's', opportunityIds: ['o1'], why: 'w' }, chain: [{ opportunityId: 'o1', missing: [] }] };
+
+  it('refuses a condition with neither a supporting record nor a genuinely missing prerequisite', () => {
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'CONVERSION', basis: 'EVIDENCE', field: 'nothingLikeThis', why: 'unit mismatch' }], rev, card)).toHaveLength(1);
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'CONVERSION', basis: 'MISSING_PREREQUISITE', field: 'conversionRates', why: 'per-visitor' }], rev, card)[0]).toContain('not missing');
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'CONVERSION', basis: 'EVIDENCE', field: 'conversionRates', why: ' ' }], rev, card)).toHaveLength(1);
+    expect(conditionProblems([{ opportunityId: 'oX', link: 'CONVERSION', basis: 'EVIDENCE', field: 'conversionRates', why: 'w' }], rev, card).join(' ')).toContain('does not weigh that opening');
+  });
+
+  it('controls: a condition citing the card fact, or a prerequisite the card does not hold as evidence, is recorded', () => {
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'MARKET_VOLUME', basis: 'EVIDENCE', field: 'buyerVolume', why: 'the count is the category across 40 sellers' }], rev, card)).toEqual([]);
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'MARKET_VOLUME', basis: 'MISSING_PREREQUISITE', field: 'contactSource', why: 'whether the 60 contacts came from the same list decides the fresh count' }], rev, card)).toEqual([]);
+    expect(conditionProblems([{ opportunityId: 'o1', link: 'MARKET_VOLUME', basis: 'MISSING_PREREQUISITE', field: 'demandEstimate', why: 'only an estimate is on the card' }], rev, card)).toEqual([]);
+  });
+
+  const cond = { opportunityId: 'o1', link: 'CONVERSION', basis: 'EVIDENCE' as const, field: 'conversionRates', why: 'measured per page visitor, while the reach is email' };
+  const facts = { o1: card.o1 };
+  const withCond = (over: Partial<BrainFacts> = {}) => brain({ facts, reviewConditions: [cond], links: { o1: [{ link: 'CONVERSION', ok: true, basis: "measured on this offer's own inbound page" }] }, ...over });
+  const chainPlan = (missing: string[], answers: PlanRevisionInput['answers'], disagreements: PlanRevisionInput['disagreements'] = []) =>
+    plan({ chain: [{ opportunityId: 'o1', missing }], answers, disagreements, ...(missing.length ? { stance: 'CONDITIONAL' as const, resolves: missing, validation: { proof: 'p', stop: ['s'], continue: ['c'] } } : {}) });
+  const unanswered = (r: PlanRevisionInput) => checkRevision(contract, r, withCond(), '2026-11-27').filter((p) => p.code === 'REVIEW_CONDITION_UNANSWERED');
+
+  it('refuses a revision that leaves a condition unanswered, decides it with no record, or decides one way and charts the other', () => {
+    expect(unanswered(chainPlan([], []))).toHaveLength(1);
+    expect(unanswered(chainPlan(['CONVERSION'], [{ finding: 'f', resolution: 'accepted', condition: 0, decision: 'ACCEPTED', records: [] }], [{ opportunityId: 'o1', link: 'CONVERSION', reason: 'reviewer said so' }]))).toHaveLength(1);
+    expect(unanswered(chainPlan([], [{ finding: 'f', resolution: 'accepted', condition: 0, decision: 'ACCEPTED', records: ['conversionRates'] }]))).toHaveLength(1);
+    expect(unanswered(chainPlan(['CONVERSION'], [{ finding: 'f', resolution: 'rebutted', condition: 0, decision: 'REBUTTED', records: ['conversionRates'] }], [{ opportunityId: 'o1', link: 'CONVERSION', reason: 'x' }]))).toHaveLength(1);
+  });
+
+  it('controls: a rebuttal against the card and Brain’s basis, and an acceptance that charts the gap, both pass', () => {
+    expect(unanswered(chainPlan([], [{ finding: 'f', resolution: 'the rate was measured on the page the email links to', condition: 0, decision: 'REBUTTED', records: ['conversionRates', 'brain:CONVERSION'] }]))).toEqual([]);
+    expect(unanswered(chainPlan(['CONVERSION'], [{ finding: 'f', resolution: 'the card gives no email rate', condition: 0, decision: 'ACCEPTED', records: ['conversionRates'] }], [{ opportunityId: 'o1', link: 'CONVERSION', reason: 'conversionRates is per visitor' }]))).toEqual([]);
+    // No review conditions: nothing to answer.
+    expect(checkRevision(contract, chainPlan([], []), brain({ facts }), '2026-11-27').map((p) => p.code)).not.toContain('REVIEW_CONDITION_UNANSWERED');
+  });
+});
+
+describe('missing evidence is a gap, never an arithmetic ceiling (2026-11-27 run: fx-04, mv-01)', () => {
+  const facts = { o1: [{ field: 'buyerVolume', kind: 'EVIDENCE' }, { field: 'timeToFirstCash', kind: 'EVIDENCE' }, { field: 'demandEstimate', kind: 'RECOMMENDATION' }] };
+  const noPlan = (missing: string[], constraints: PlanRevisionInput['constraints']) => plan({
+    stance: 'NO_PLAN', steps: [], cash: [], alternatives: [{ title: 'a', why: 'w' }],
+    noPlan: { decisiveGap: 'g', resolution: 'r', decisiveLinks: missing }, chain: [{ opportunityId: 'o1', missing }], resolves: missing, constraints,
+  });
+  const ceiling = (r: PlanRevisionInput) => checkRevision(contract, r, brain({ facts }), '2026-11-27').filter((p) => p.code === 'CONSTRAINT_FROM_MISSING_EVIDENCE').length;
+
+  it('refuses a TARGET ceiling when the price is not established (fx-04: a contradicted price)', () => {
+    expect(ceiling(noPlan(['OFFER_AND_PRICE', 'MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'lower the target', basis: [{ opportunityId: 'o1', field: 'buyerVolume' }] }]))).toBeGreaterThan(0);
+  });
+
+  it('refuses a TARGET ceiling on an uncounted market: no basis, or only an estimate cited', () => {
+    expect(ceiling(noPlan(['MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'lower the target' }]))).toBe(1);
+    expect(ceiling(noPlan(['MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'lower the target', basis: [{ opportunityId: 'o1', field: 'demandEstimate' }] }]))).toBe(1);
+  });
+
+  it('controls: a counted market with an established price, and a measured settlement delay, are real limits', () => {
+    expect(ceiling(noPlan(['MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'about $2,400', basis: [{ opportunityId: 'o1', field: 'buyerVolume' }] }]))).toBe(0);
+    expect(ceiling(noPlan(['SETTLES_IN_TIME'], [{ constraint: 'DEADLINE', suggestion: '75 days', basis: [{ opportunityId: 'o1', field: 'timeToFirstCash' }] }]))).toBe(0);
+    // A no-plan with no constraint is unaffected.
+    expect(ceiling(noPlan(['MARKET_VOLUME'], []))).toBe(0);
   });
 });
 

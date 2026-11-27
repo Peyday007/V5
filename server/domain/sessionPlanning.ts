@@ -222,8 +222,12 @@ export interface PlanRevisionInput {
   noPlan: { decisiveGap: string; resolution: string; decisiveLinks?: string[] } | null;
   /** A simulated chance of reaching the target, and whether it is calibrated against resolved outcomes. */
   reach: { value: number; calibrated: boolean; presentedAs: 'PROBABILITY' | 'COVERAGE' } | null;
-  /** Answers to the previous review's findings, when revising after REVISE. */
-  answers: { finding: string; resolution: string }[];
+  /**
+   * Answers to the previous review's findings, when revising after REVISE. A reviewer's proposed
+   * condition (`ReviewCondition`, by its index) is answered with a decision and the records it was
+   * checked against: a card fact field of that opening, or `brain:<LINK>` for Brain's link basis.
+   */
+  answers: { finding: string; resolution: string; condition?: number; decision?: 'ACCEPTED' | 'REBUTTED'; records?: string[] }[];
   /**
    * The session's own judgement of each opening it weighed: the chain links (`CHAIN_LINKS`:
    * REACHABLE_BUYER, CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, MARKET_VOLUME, FULFILMENT,
@@ -239,8 +243,12 @@ export interface PlanRevisionInput {
   resolves?: string[];
   /** Where the session's chain judgement differs from Brain's planner (BrainFacts.links): the link and the evidence-based reason. */
   disagreements?: { opportunityId: string; link: string; reason: string }[];
-  /** Constraints (DEADLINE, CAPITAL, TARGET, OWNER_HOURS) the session finds rule every plan out, with the relaxation it suggests. */
-  constraints?: { constraint: string; suggestion: string }[];
+  /**
+   * Constraints (DEADLINE, CAPITAL, TARGET, OWNER_HOURS) the session finds rule every plan out, with the relaxation it
+   * suggests. A constraint is arithmetic on established figures: `basis` cites, per opening whose binding link fails,
+   * the card's EVIDENCE fact that fixes the figure (`CONSTRAINT_INPUTS`). Missing evidence is a gap, never a ceiling.
+   */
+  constraints?: { constraint: string; suggestion: string; basis?: { opportunityId: string; field: string }[] }[];
   /** Set by the transport when the payload arrived incomplete. */
   truncated?: boolean;
 }
@@ -248,6 +256,50 @@ export interface PlanRevisionInput {
 /** The chain links a cash plan rests on (the planner's `CHAIN_LINKS`). */
 export const CHAIN_LINKS = ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'MARKET_VOLUME', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'] as const;
 export const PLAN_CONSTRAINTS = ['DEADLINE', 'CAPITAL', 'TARGET', 'OWNER_HOURS'] as const;
+
+/**
+ * What each constraint's arithmetic rests on: the link whose established figure makes it bind, and the links that must
+ * be established for the arithmetic to mean anything. A target ceiling is buyers × price: with the buyers or the price
+ * unknown, nothing caps what the opening could bring, so the gap is evidence to find, not a limit.
+ */
+export const CONSTRAINT_INPUTS: Record<(typeof PLAN_CONSTRAINTS)[number], { binds: string; needs: string[] }> = {
+  TARGET: { binds: 'MARKET_VOLUME', needs: ['OFFER_AND_PRICE'] },
+  DEADLINE: { binds: 'SETTLES_IN_TIME', needs: [] },
+  CAPITAL: { binds: 'ECONOMICS', needs: [] },
+  OWNER_HOURS: { binds: 'FULFILMENT', needs: [] },
+};
+
+/**
+ * A condition a reviewer proposes: that a chain link of an opening is not established. It names its support — a card
+ * fact of that opening that shows the link unestablished (EVIDENCE), or a prerequisite the card does not hold
+ * (MISSING_PREREQUISITE: a field no EVIDENCE fact carries) — and why it changes the decision.
+ */
+export interface ReviewCondition {
+  opportunityId: string;
+  link: string;
+  basis: 'EVIDENCE' | 'MISSING_PREREQUISITE';
+  field: string;
+  why: string;
+}
+
+export type CardFacts = Record<string, { field: string; kind: string }[]>;
+
+/** Why a proposed condition may not be recorded: each must name its supporting record or a genuinely absent prerequisite. */
+export function conditionProblems(conditions: ReviewCondition[], revision: Pick<PlanRevisionInput, 'strategy' | 'chain'>, facts: CardFacts): string[] {
+  const out: string[] = [];
+  const openings = new Set([...revision.strategy.opportunityIds, ...(revision.chain ?? []).map((c) => c.opportunityId)]);
+  conditions.forEach((c, i) => {
+    const at = `condition ${i} (${c.link} on ${c.opportunityId})`;
+    if (!(CHAIN_LINKS as readonly string[]).includes(c.link)) out.push(`${at}: "${c.link}" is not a chain link (${CHAIN_LINKS.join(', ')})`);
+    if (!openings.has(c.opportunityId)) out.push(`${at}: the revision does not weigh that opening`);
+    if (!c.why?.trim()) out.push(`${at}: state why it changes the decision`);
+    const card = facts[c.opportunityId] ?? [];
+    if (c.basis === 'EVIDENCE' && !card.some((f) => f.field === c.field)) out.push(`${at}: the card holds no fact "${c.field}"; cite the record that shows the link unestablished (${card.map((f) => f.field).join(', ') || 'none'})`);
+    else if (c.basis === 'MISSING_PREREQUISITE' && card.some((f) => f.field === c.field && f.kind === 'EVIDENCE')) out.push(`${at}: "${c.field}" is on the card as evidence, so it is not missing; cite it as EVIDENCE and say what in it leaves the link unestablished`);
+    else if (c.basis !== 'EVIDENCE' && c.basis !== 'MISSING_PREREQUISITE') out.push(`${at}: basis must be EVIDENCE or MISSING_PREREQUISITE`);
+  });
+  return out;
+}
 
 export interface PlanRevision extends PlanRevisionInput {
   revisionId: string;
@@ -292,6 +344,8 @@ export type CheckCode =
   | 'CAPABILITY_UNREAD'
   | 'CHAIN_DISAGREEMENT_UNSTATED'
   | 'RESOLUTION_UNNAMED'
+  | 'CONSTRAINT_FROM_MISSING_EVIDENCE'
+  | 'REVIEW_CONDITION_UNANSWERED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -316,6 +370,10 @@ export interface BrainFacts {
   hoursCeiling?: number | null;
   /** Per opening: Brain's planner's judgement of each chain link and the basis that decides it. */
   links?: Record<string, { link: string; ok: boolean; basis: string }[]>;
+  /** Per opening: the card's facts (field and kind) the records a constraint or an answer cites must be among. */
+  facts?: CardFacts;
+  /** The conditions the last REVISE review of this revision's parent proposed, each to be answered against the records. */
+  reviewConditions?: ReviewCondition[];
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -442,6 +500,38 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       }
     }
   }
+  // A constraint is arithmetic on established figures, never on missing evidence: its inputs are established on every
+  // opening weighed, and where its binding link fails, the card's evidence that fixes the figure is cited.
+  if (r.stance === 'NO_PLAN') {
+    for (const k of r.constraints ?? []) {
+      const inputs = CONSTRAINT_INPUTS[k.constraint as keyof typeof CONSTRAINT_INPUTS];
+      if (!inputs) continue;
+      for (const c of r.chain ?? []) {
+        for (const l of inputs.needs) if (c.missing.includes(l)) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `${k.constraint} is arithmetic on ${[inputs.binds, ...inputs.needs].join(' and ')}, but ${c.opportunityId}'s ${l} is not established; an unknown sets no ceiling. Name it as a decisive gap (noPlan.decisiveLinks) to research, not as a limit`, c.opportunityId);
+        if (!c.missing.includes(inputs.binds)) continue;
+        const card = brain?.facts?.[c.opportunityId];
+        const cited = (k.basis ?? []).filter((b) => b.opportunityId === c.opportunityId);
+        const evidenced = cited.some((b) => (card ?? []).some((f) => f.field === b.field && f.kind === 'EVIDENCE'));
+        if (!evidenced) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `${k.constraint} needs the established figure that makes ${c.opportunityId}'s ${inputs.binds} fall short: cite the card's EVIDENCE fact in the constraint's \`basis\`${cited.length ? ` ("${cited.map((b) => b.field).join(', ')}" is not one)` : ''}. Without one, ${inputs.binds} is unknown, a gap to research rather than a limit`, c.opportunityId);
+      }
+    }
+  }
+
+  // A reviewer's proposed condition is answered against the records before it is accepted or rebutted.
+  (brain?.reviewConditions ?? []).forEach((k, i) => {
+    const a = r.answers.find((x) => x.condition === i);
+    const at = `reviewer condition ${i} (${k.link} on ${k.opportunityId}: ${k.why})`;
+    if (!a || (a.decision !== 'ACCEPTED' && a.decision !== 'REBUTTED')) {
+      add('REVIEW_CONDITION_UNANSWERED', `${at} has no answer with a decision; answer it with \`condition: ${i}\`, \`decision\` ACCEPTED or REBUTTED, and the \`records\` you checked it against`, k.opportunityId);
+      return;
+    }
+    const known = new Set((brain?.facts?.[k.opportunityId] ?? []).map((f) => f.field));
+    if (!(a.records ?? []).some((x) => known.has(x) || x === `brain:${k.link}`)) add('REVIEW_CONDITION_UNANSWERED', `${at} is ${a.decision.toLowerCase()} without a record it was checked against: name a card fact field of ${k.opportunityId} (${[...known].join(', ') || 'none'}) or brain:${k.link}`, k.opportunityId);
+    const marked = (r.chain ?? []).find((c) => c.opportunityId === k.opportunityId)?.missing.includes(k.link) ?? false;
+    if (a.decision === 'ACCEPTED' && !marked) add('REVIEW_CONDITION_UNANSWERED', `${at} is accepted, but the chain does not mark ${k.link} missing on ${k.opportunityId}`, k.opportunityId);
+    if (a.decision === 'REBUTTED' && marked) add('REVIEW_CONDITION_UNANSWERED', `${at} is rebutted, but the chain still marks ${k.link} missing on ${k.opportunityId}`, k.opportunityId);
+  });
+
   if (r.stance === 'CONDITIONAL') {
     for (const c of r.chain ?? []) {
       if (!r.strategy.opportunityIds.includes(c.opportunityId)) continue;

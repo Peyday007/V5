@@ -221,6 +221,18 @@ const reviewTool: McpTool = {
       goal_id: { type: 'string' }, revision_id: { type: 'string' },
       reviewer_kind: { type: 'string', enum: ['APP_SESSION', 'OPERATOR', 'MODEL', 'PERSON'] }, reviewer_id: { type: 'string' }, reviewer_model: { type: 'string' },
       verdict: { type: 'string', enum: ['PASS', 'REVISE', 'UNAVAILABLE'] }, reasons: { type: 'string' }, findings: { type: 'array', items: { type: 'string' } }, resolution: { type: 'string' },
+      conditions: {
+        type: 'array',
+        description:
+          'REVISE only: each condition you propose, that a chain link of an opening is not established. basis EVIDENCE cites the card fact ' +
+          '(field) that shows it; MISSING_PREREQUISITE names a field no EVIDENCE fact on the card carries. A condition without either is refused.',
+        items: {
+          type: 'object',
+          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' } },
+          required: ['opportunityId', 'link', 'basis', 'field', 'why'],
+          additionalProperties: false,
+        },
+      },
     },
     required: ['goal_id', 'revision_id', 'reviewer_kind', 'reviewer_id', 'verdict'],
     additionalProperties: false,
@@ -243,6 +255,7 @@ const reviewTool: McpTool = {
         verdict: requiredString(args, 'verdict') as 'PASS' | 'REVISE' | 'UNAVAILABLE',
         reasons: optionalString(args, 'reasons') ?? '',
         findings: Array.isArray(args['findings']) ? (args['findings'] as unknown[]).map(String) : [],
+        conditions: Array.isArray(args['conditions']) ? (args['conditions'] as never[]) : [],
         resolution: optionalString(args, 'resolution'),
       })),
     };

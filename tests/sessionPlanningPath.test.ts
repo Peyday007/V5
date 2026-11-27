@@ -188,6 +188,23 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(f.published).toBe(true);
   }, 240_000);
 
+  it('a reviewer’s condition is refused without its record, and once recorded it is answered against the records', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const first = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    const disagreements = (first.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok).map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s3' }));
+    const base = { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements };
+    const reviewed = await svc.submitRevision({ revision: base, actor: AUTHOR, today: '2026-11-26' });
+    const id = reviewed.revision.revisionId;
+    await expect(svc.recordReview({ goalId, revisionId: id, reviewer: REVIEWER, verdict: 'REVISE', reasons: 'r', findings: ['volume unclear'], conditions: [{ opportunityId: opp, link: 'MARKET_VOLUME', basis: 'EVIDENCE', field: 'noSuchFact', why: 'the count may be the whole category' }] })).rejects.toThrow(/evidence or a missing prerequisite/);
+    await svc.recordReview({ goalId, revisionId: id, reviewer: REVIEWER, verdict: 'REVISE', reasons: 'r', findings: ['volume unclear'], conditions: [{ opportunityId: opp, link: 'MARKET_VOLUME', basis: 'MISSING_PREREQUISITE', field: 'contactSource', why: 'whether the measured contacts came from the same list decides the fresh count' }] });
+    const silent = await svc.submitRevision({ revision: { ...base, parentRevisionId: id }, actor: AUTHOR, today: '2026-11-26' });
+    expect(silent.problems.map((p) => p.code)).toContain('REVIEW_CONDITION_UNANSWERED');
+    const rebutted = await svc.submitRevision({ revision: { ...base, parentRevisionId: id, answers: [{ finding: 'volume unclear', resolution: 'the market count is the opening’s own record', condition: 0, decision: 'REBUTTED', records: ['brain:MARKET_VOLUME'] }] }, actor: AUTHOR, today: '2026-11-26' });
+    expect(rebutted.problems.map((p) => p.code)).not.toContain('REVIEW_CONDITION_UNANSWERED');
+    const state = await svc.planningState(goalId);
+    expect(state.reviews.find((r) => r.revisionId === id)?.conditions).toHaveLength(1);
+  }, 240_000);
+
   it('control 2: missing supplier or demand evidence stays unknown and caps the stance at CONDITIONAL', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const unknown = { name: 'buyer conversion per 100 emails', status: 'UNKNOWN' as const, value: null, unit: 'orders', sources: [], needs: 'a 200-email live test' };

@@ -28,11 +28,14 @@ import { getOpportunity, opportunitiesWithRecordPrefix } from '../../repos/cashP
 import { routeRecordId } from '../../domain/routeOrigin.ts';
 import {
   checkRevision,
+  conditionProblems,
   contractDigest,
   contractMismatches,
   cashTrace,
   revisionDigest,
   type BrainFacts,
+  type CardFacts,
+  type ReviewCondition,
   type CheckProblem,
   type ContractTerms,
   type GoalContract,
@@ -655,7 +658,10 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const fulfilment = await fulfilmentOf(r.strategy.opportunityIds);
   r.steps = await withExecutors(r.steps, r.strategy.opportunityIds, fulfilment);
   const links = Object.fromEntries((brainRun.openings ?? []).filter((o) => o.links?.length).map((o) => [o.opportunityId, o.links]));
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links };
+  const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
+  const facts = await cardFactsOf(weighed);
+  const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),
@@ -676,14 +682,33 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
  * author reviewing itself is recorded but never certifies; UNAVAILABLE records that no reviewer
  * answered (nothing is certified).
  */
-export async function recordReview(input: { goalId: string; revisionId: string; reviewer: PlanExecutor; verdict: PlanReview['verdict']; reasons: string; findings: string[]; resolution?: string | null }) {
+export async function recordReview(input: { goalId: string; revisionId: string; reviewer: PlanExecutor; verdict: PlanReview['verdict']; reasons: string; findings: string[]; conditions?: ReviewCondition[]; resolution?: string | null }) {
   const rev = (await revisions(input.goalId)).find((r) => r.revisionId === input.revisionId);
   if (!rev) throw new PlanningRefusal(`no revision ${input.revisionId} on this goal`, 'planning:review');
   if (!input.reviewer.id.trim()) throw new PlanningRefusal('the reviewer must be explicitly identified', 'planning:review');
   if (input.verdict !== 'UNAVAILABLE' && !input.reasons.trim()) throw new PlanningRefusal('a verdict must carry its reasons', 'planning:review');
+  const conditions = input.conditions ?? [];
+  if (conditions.length && input.verdict !== 'REVISE') throw new PlanningRefusal('only a REVISE review proposes conditions', 'planning:review');
+  // A proposed condition names its supporting record or a genuinely absent prerequisite, or it is not recorded.
+  const wrong = conditionProblems(conditions, rev, await cardFactsOf([...new Set([...rev.strategy.opportunityIds, ...(rev.chain ?? []).map((c) => c.opportunityId)])]));
+  if (wrong.length) throw new PlanningRefusal(`each proposed condition must identify its evidence or a missing prerequisite: ${wrong.join('; ')}`, 'planning:review');
   const review: PlanReview = { revisionId: rev.revisionId, revisionDigest: rev.digest, author: rev.author, reviewer: input.reviewer, verdict: input.verdict, reasons: input.reasons, findings: input.findings, resolution: input.resolution ?? null, at: new Date().toISOString() };
-  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.review, summary: `Review of ${rev.revisionId} by ${input.reviewer.kind} ${input.reviewer.id}: ${input.verdict}`, detail: { review, independent: !sameExecutor(rev.author, input.reviewer) }, actorRef: actorOf(input.reviewer) });
-  return { review, independent: !sameExecutor(rev.author, input.reviewer) };
+  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.review, summary: `Review of ${rev.revisionId} by ${input.reviewer.kind} ${input.reviewer.id}: ${input.verdict}`, detail: { review, conditions, independent: !sameExecutor(rev.author, input.reviewer) }, actorRef: actorOf(input.reviewer) });
+  return { review, conditions, independent: !sameExecutor(rev.author, input.reviewer) };
+}
+
+/** The card facts (field and kind) of each opening, read from its card. */
+async function cardFactsOf(ids: string[]): Promise<CardFacts> {
+  const out: CardFacts = {};
+  for (const id of ids) out[id] = (await cardFactsFor(id).catch(() => [])).map((f) => ({ field: f.field, kind: f.kind }));
+  return out;
+}
+
+/** The conditions the last REVISE review of a revision proposed. */
+async function conditionsOn(goalId: string, revisionId: string): Promise<ReviewCondition[]> {
+  const last = (await events(goalId, PLANNING_EVENTS.review)).filter((e) => (e.detail['review'] as PlanReview).revisionId === revisionId).pop();
+  if (!last || (last.detail['review'] as PlanReview).verdict !== 'REVISE') return [];
+  return (last.detail['conditions'] as ReviewCondition[] | undefined) ?? [];
 }
 
 // ------------------------------------------------------------------------------------- state
@@ -692,7 +717,7 @@ export async function planningState(goalId: string) {
   const contract = await currentContract(goalId);
   const revs = await revisions(goalId);
   const checks = (await events(goalId, PLANNING_EVENTS.check)).map((e) => e.detail as { revisionId: string; digest: string; contractDigest: string; problems: CheckProblem[]; trace: unknown; brain: BrainRunSummary });
-  const reviews = (await events(goalId, PLANNING_EVENTS.review)).map((e) => e.detail['review'] as PlanReview);
+  const reviews = (await events(goalId, PLANNING_EVENTS.review)).map((e) => ({ ...(e.detail['review'] as PlanReview), conditions: (e.detail['conditions'] as ReviewCondition[] | undefined) ?? [] }));
   const finals = (await events(goalId, PLANNING_EVENTS.final)).map((e) => e.detail as { revisionId: string; digest: string; contractDigest: string; plan: PlanRevision; review: PlanReview; at: string });
   const current = revs[revs.length - 1] ?? null;
   const currentCheck = current ? (checks.filter((c) => c.revisionId === current.revisionId).pop() ?? null) : null;
