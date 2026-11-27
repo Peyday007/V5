@@ -6,7 +6,7 @@
  *
  *   npx tsx scripts/planningSession.ts init --world DIR
  *   npx tsx scripts/planningSession.ts goal --world DIR --objective "…owner's words…"
- *   npx tsx scripts/planningSession.ts <contract|routes|research|revise|review> --world DIR --goal G --file payload.json --session S [--model M]
+ *   npx tsx scripts/planningSession.ts <contract|routes|research|verify-research|revise|review> --world DIR --goal G --file payload.json --session S [--model M]
  *   npx tsx scripts/planningSession.ts <context|brain|state> --world DIR --goal G [--session S]
  *   npx tsx scripts/planningSession.ts finalize --world DIR --goal G --revision R --session S
  *
@@ -78,7 +78,12 @@ async function main(): Promise<void> {
         break;
       case 'research': {
         const p = payload();
-        out(await svc.answerResearch({ goalId: need('goal'), needId: String(p['needId']), actor: actor(), answer: String(p['answer'] ?? ''), method: String(p['method'] ?? ''), sources: (p['sources'] as never) ?? [], unanswered: p['unanswered'] === true }));
+        out(await svc.answerResearch({ goalId: need('goal'), needId: String(p['needId']), actor: actor(), method: String(p['method'] ?? ''), claims: (p['claims'] as never) ?? [], unanswered: p['unanswered'] === true }));
+        break;
+      }
+      case 'verify-research': {
+        const p = payload();
+        out(await svc.verifyResearch({ goalId: need('goal'), needId: String(p['needId']), verifier: actor(), verdicts: (p['verdicts'] as never) ?? [], sufficiency: p['sufficiency'] === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT' }));
         break;
       }
       case 'revise':

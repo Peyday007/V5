@@ -113,8 +113,17 @@ export interface PlanReview {
 }
 
 /** Two executors are the same author when they share kind and identity: a self-review is never independent. */
+/**
+ * Whether two executors are the same for review independence. Identity is the id, whatever kind
+ * either declares (a session cannot become independent of itself by calling itself a MODEL), and
+ * an id an authenticated connection bound (`<principal>/<session>`) is the principal's: two
+ * sessions behind one credential are one executor.
+ */
 export function sameExecutor(a: PlanExecutor, b: PlanExecutor): boolean {
-  return a.kind === b.kind && a.id === b.id;
+  if (a.id === b.id) return true;
+  const principal = (id: string) => (id.includes('/') ? id.slice(0, id.indexOf('/')) : null);
+  const pa = principal(a.id);
+  return pa !== null && pa === principal(b.id);
 }
 
 /** Why a review does not certify the plan revision it is read against; null when it does. */

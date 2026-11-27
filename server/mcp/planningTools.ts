@@ -136,16 +136,17 @@ const brainTool: McpTool = {
 
 const researchTool: McpTool = {
   name: 'brain_planning_research',
-  title: 'Planning: return a research result',
+  title: 'Planning: submit research for an open question',
   description:
-    'Return the result of one open research question (the context lists them, parked ones marked): the answer, how it was ' +
-    'found, and each source with its URL, date, the claim it supports and the population it describes; or unanswered=true. ' +
-    'The result is recorded against the question and placed on the opening as a sourced recommendation — never as verified evidence.',
+    'Submit sourced claims answering one open research question (the context lists them, parked ones marked): each with its claim, ' +
+    'source URL, title, publisher, the date the source prints, the verbatim passage and where it is. They enter Brain\'s research ' +
+    'packet for that question unaccepted; each claim\'s source validation comes back now, and only the evidence gate, on an ' +
+    'independent verifier\'s reading (brain_planning_verify_research), can accept it. Or unanswered=true after a search that found nothing.',
   inputSchema: {
     type: 'object',
     properties: {
-      goal_id: { type: 'string' }, need_id: { type: 'string' }, answer: { type: 'string' }, method: { type: 'string' },
-      sources: { type: 'array', items: { type: 'object' } }, unanswered: { type: 'boolean' }, ...SESSION,
+      goal_id: { type: 'string' }, need_id: { type: 'string' }, method: { type: 'string' },
+      claims: { type: 'array', items: { type: 'object' } }, unanswered: { type: 'boolean' }, ...SESSION,
     },
     required: ['goal_id', 'need_id', 'method', 'session_id'],
     additionalProperties: false,
@@ -156,11 +157,36 @@ const researchTool: McpTool = {
     const projectId = await goalProject(goalId);
     await authorize(principal, projectId, 'WRITE', 'operator:act');
     const { answerResearch } = await import('../services/planning/sessionPlanning.ts');
-    const sources = Array.isArray(args['sources']) ? (args['sources'] as Record<string, unknown>[]).map((o) => ({ url: String(o['url'] ?? ''), dated: o['dated'] == null ? null : String(o['dated']), claim: String(o['claim'] ?? ''), population: String(o['population'] ?? '') })) : [];
-    return {
-      projectId,
-      value: await guarded(() => answerResearch({ goalId, needId: requiredString(args, 'need_id'), actor: sessionExecutor(principal, args), answer: optionalString(args, 'answer') ?? '', method: requiredString(args, 'method'), sources, unanswered: args['unanswered'] === true })),
-    };
+    const claims = Array.isArray(args['claims']) ? (args['claims'] as Record<string, unknown>[]).map((o) => ({
+      claim: String(o['claim'] ?? ''), sourceUrl: String(o['sourceUrl'] ?? o['url'] ?? ''), sourceTitle: o['sourceTitle'] == null ? null : String(o['sourceTitle']),
+      sourcePublisher: o['sourcePublisher'] == null ? null : String(o['sourcePublisher']), sourceDate: o['sourceDate'] == null ? null : String(o['sourceDate']),
+      evidenceExcerpt: String(o['evidenceExcerpt'] ?? ''), evidenceLocator: String(o['evidenceLocator'] ?? ''), primarySource: o['primarySource'] === true,
+    })) : [];
+    return { projectId, value: await guarded(() => answerResearch({ goalId, needId: requiredString(args, 'need_id'), actor: sessionExecutor(principal, args), method: requiredString(args, 'method'), claims, unanswered: args['unanswered'] === true })) };
+  },
+};
+
+const verifyResearchTool: McpTool = {
+  name: 'brain_planning_verify_research',
+  title: 'Planning: verify submitted research through the evidence gate',
+  description:
+    'An independent verifier (never the researcher) reads each submitted claim\'s source and answers whether it supports the claim and ' +
+    'whether its geography, timeframe, population and definitions match the question (MATCH, MISMATCH, UNKNOWN, NOT_APPLICABLE, UNSTATED), ' +
+    'plus whether the research is SUFFICIENT. Brain\'s evidence gate decides each claim; an accepted one becomes the card\'s evidence and ' +
+    'the planner reruns. Returns acceptance or each rejection reason and what changed in the planning input.',
+  inputSchema: {
+    type: 'object',
+    properties: { goal_id: { type: 'string' }, need_id: { type: 'string' }, verdicts: { type: 'array', items: { type: 'object' } }, sufficiency: { type: 'string', enum: ['SUFFICIENT', 'INSUFFICIENT'] }, ...SESSION },
+    required: ['goal_id', 'need_id', 'verdicts', 'sufficiency', 'session_id'],
+    additionalProperties: false,
+  },
+  annotations: { title: 'Planning: verify research', ...MUTATING, idempotentHint: false },
+  run: async (args, { principal }) => {
+    const goalId = requiredString(args, 'goal_id');
+    const projectId = await goalProject(goalId);
+    await authorize(principal, projectId, 'WRITE', 'operator:act');
+    const { verifyResearch } = await import('../services/planning/sessionPlanning.ts');
+    return { projectId, value: await guarded(() => verifyResearch({ goalId, needId: requiredString(args, 'need_id'), verifier: sessionExecutor(principal, args), verdicts: (Array.isArray(args['verdicts']) ? args['verdicts'] : []) as never, sufficiency: args['sufficiency'] === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT' })) };
   },
 };
 
@@ -210,7 +236,10 @@ const reviewTool: McpTool = {
       value: await guarded(() => recordReview({
         goalId,
         revisionId: requiredString(args, 'revision_id'),
-        reviewer: { kind: requiredString(args, 'reviewer_kind') as PlanExecutor['kind'], id: requiredString(args, 'reviewer_id'), model: optionalString(args, 'reviewer_model') },
+        // The reviewer is the authenticated caller: its id is bound to the principal that presented the credential,
+        // so a review cannot be recorded in another executor's name, and the author's own credential and session is
+        // recorded as self-review.
+        reviewer: { kind: requiredString(args, 'reviewer_kind') as PlanExecutor['kind'], id: `${principal.id}/${requiredString(args, 'reviewer_id')}`, model: optionalString(args, 'reviewer_model') },
         verdict: requiredString(args, 'verdict') as 'PASS' | 'REVISE' | 'UNAVAILABLE',
         reasons: optionalString(args, 'reasons') ?? '',
         findings: Array.isArray(args['findings']) ? (args['findings'] as unknown[]).map(String) : [],
@@ -250,4 +279,4 @@ const stateTool: McpTool = {
   },
 };
 
-export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, researchTool, revisionTool, reviewTool, finalizeTool, stateTool];
+export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, researchTool, verifyResearchTool, revisionTool, reviewTool, finalizeTool, stateTool];

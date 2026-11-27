@@ -38,6 +38,8 @@ import {
   type GoalContract,
   type PlanRevision,
   type PlanRevisionInput,
+  type PlanStepInput,
+  type StepExecutorRecord,
   type StoredGoalTerms,
 } from '../../domain/sessionPlanning.ts';
 import { sameExecutor, type PlanExecutor, type PlanReview } from '../../domain/planReady.ts';
@@ -346,6 +348,62 @@ async function admittedIds(goalId: string): Promise<string[]> {
   return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId)])];
 }
 
+// ---------------------------------------------------------------------------- executors and fulfilment
+
+/** Who each opening's own record says fulfils it (`recordFulfiller`), with the deliverable capability's live state. */
+async function fulfilmentOf(ids: readonly string[]): Promise<NonNullable<BrainFacts['fulfilment']>> {
+  const { recordFulfiller } = await import('../goals/arrangementSteps.ts');
+  const { readCapabilityInventory } = await import('../goals/stepExecutor.ts');
+  const inventory = await readCapabilityInventory();
+  const out: NonNullable<BrainFacts['fulfilment']> = {};
+  for (const id of ids) {
+    const o = await getOpportunity(id);
+    if (!o) continue;
+    const f = recordFulfiller(o);
+    const capability = f.by === 'BRAIN' ? f.capability : null;
+    out[id] = { by: f.by, name: f.by === 'PROVIDER' ? f.name : null, capability, capabilityState: capability ? (inventory.entries[capability]?.state ?? 'NOT_DECLARED') : null };
+  }
+  return out;
+}
+
+const OPERATION_OF: Record<string, string> = { REACH: 'REACH_BUYERS', OFFER: 'SEND_OFFER', SELL: 'SEND_OFFER', TEST: 'SEND_OFFER', COLLECT: 'COLLECT_PAYMENT', ORDER: 'PAY_SUPPLIER', RESEARCH: 'RESEARCH', OTHER: 'PLAN_DECISION' };
+
+/**
+ * Each step's executor as Brain reads it: the operation its kind and performer name, through
+ * `stepExecutor` over the live capability inventory — the planner's own owner. A Brain delivery
+ * also carries the deliverable capability the opening requires. The session's own `executor`, if
+ * it sent one, is replaced: a capability is read, never asserted.
+ */
+async function withExecutors(steps: PlanStepInput[], members: readonly string[], fulfilment: NonNullable<BrainFacts['fulfilment']>): Promise<PlanStepInput[]> {
+  const { readCapabilityInventory, stepExecutor } = await import('../goals/stepExecutor.ts');
+  const inventory = await readCapabilityInventory();
+  return steps.map((s) => {
+    const performer = s.performer === null ? null : s.performer === 'BRAIN' ? 'BRAIN' : s.performer === 'OWNER' ? 'OWNER' : 'PROVIDER';
+    const operation = performer === 'OWNER' ? 'OWNER_TASK' : s.kind === 'DELIVER' ? (performer === 'BRAIN' ? 'BRAIN_PRODUCES' : 'SUPPLIER_DELIVERS') : (OPERATION_OF[s.kind] ?? 'PLAN_DECISION');
+    const e = stepExecutor({
+      operation: operation as never,
+      provider: performer === 'PROVIDER' ? s.performer : null,
+      cost: s.costCents === null ? null : s.costCents / 100,
+      ...(performer === 'OWNER' ? { ownerTask: { why: s.label, routine: true } } : {}),
+    }, inventory);
+    const capabilities: { id: string; state: string }[] = e.capabilities.map((c) => ({ id: c.id, state: c.state }));
+    if (s.kind === 'DELIVER' && performer === 'BRAIN') {
+      for (const id of members) {
+        const f = fulfilment[id];
+        if (f?.capability && !capabilities.some((c) => c.id === f.capability)) capabilities.push({ id: f.capability, state: f.capabilityState ?? 'NOT_DECLARED' });
+      }
+    }
+    const executor: StepExecutorRecord = {
+      operation: e.operation,
+      performedBy: performer === null ? 'NOT_ESTABLISHED' : e.performedBy === 'CAPABILITY_MISSING' ? 'BRAIN' : (e.performedBy as StepExecutorRecord['performedBy']),
+      provider: e.provider,
+      capabilities,
+      routine: e.routine,
+    };
+    return { ...s, executor };
+  });
+}
+
 // ------------------------------------------------------------------------------------- research
 
 /** The research questions open on the openings this goal plans with, and what the session returned for each. */
@@ -370,51 +428,159 @@ export async function openQuestions(goalId: string) {
     }));
 }
 
+/** One claim the session submits for a research question, in the research gate's own terms. */
+export interface SessionClaimInput {
+  claim: string;
+  sourceUrl: string;
+  sourceTitle: string | null;
+  sourcePublisher: string | null;
+  /** The date the source itself prints. */
+  sourceDate: string | null;
+  /** The passage that states it, verbatim, and where on the page it is. */
+  evidenceExcerpt: string;
+  evidenceLocator: string;
+  primarySource: boolean;
+}
+
+const RESEARCH_LANE = 'answer';
+
 /**
- * The session as the research executor of one open question: its returned result — the answer,
- * the method, and dated sources with the population each describes — is recorded against the need
- * and placed on the opening's card as a RECOMMENDATION with those sources as its basis. It is a
- * sourced hypothesis by an identified executor, never EVIDENCE: Brain's evidence gate is still
- * what verifies a claim, so the question stays open on the card's terms (`readNeedCondition`
- * refuses a recommendation as an answer) while the plan may reason from the returned result.
+ * The session as the research executor of one open question, through Brain's own research path:
+ * the question gets its idea (as `startDependentWork` gives one), a research packet with one
+ * fragment scoped to the opening's buyers, and a running mission; the session's claims are
+ * recorded by `recordFragmentClaims` — sourced or not, never accepted, the gate alone decides that.
+ * Each claim's source validation comes back at once; acceptance waits for an independent
+ * verifier (`verifyResearch`).
  */
 export async function answerResearch(input: {
   goalId: string;
   needId: string;
   actor: PlanExecutor;
-  answer: string;
   method: string;
-  sources: { url: string; dated: string | null; claim: string; population: string }[];
-  /** Searched and found nothing that settles it: recorded as a result, nothing written on the card. */
+  claims: SessionClaimInput[];
+  /** Searched and found nothing that settles it: recorded as a result; no packet is opened. */
   unanswered?: boolean;
 }) {
-  await liveGoal(input.goalId);
+  const goal = await liveGoal(input.goalId);
   const q = (await openQuestions(input.goalId)).find((one) => one.needId === input.needId);
   if (!q) throw new PlanningRefusal(`no open research question ${input.needId} on this goal's openings`, 'planning:research');
   if (!input.method.trim()) throw new PlanningRefusal('a research result states how it was found', 'planning:research');
-  if (!input.unanswered) {
-    if (!input.answer.trim()) throw new PlanningRefusal('an answer is required, or mark the question unanswered', 'planning:research');
-    const bad = input.sources.filter((one) => !/^https?:\/\//.test(one.url) || !one.claim.trim() || !one.population.trim());
-    if (input.sources.length === 0 || bad.length) throw new PlanningRefusal('every source needs its URL, the claim it supports and the population it describes', 'planning:research');
-  }
-  const goal = await liveGoal(input.goalId);
   const projectId = (goal.target?.projectId ?? goal.projectId)!;
-  let placed = false;
-  if (!input.unanswered) {
-    const { recordRecommendationFact } = await import('../../repos/cashCardFacts.ts');
-    placed = await recordRecommendationFact({
-      projectId,
-      opportunityId: q.opportunityId!,
-      field: q.field,
-      value: input.answer.slice(0, 600),
-      basis: input.sources.map((one) => `${one.claim} — ${one.url}${one.dated ? ` (${one.dated})` : ''} [${one.population}]`).join('; ').slice(0, 2000),
-      assumptions: `Returned by ${input.actor.kind} ${input.actor.id}${input.actor.model ? ` (${input.actor.model})` : ''}: ${input.method}`.slice(0, 1000),
-      uncertainty: 'Not yet through the evidence gate: a sourced research result, not a verified claim.',
-    });
+  if (input.unanswered) {
+    const detail = { phase: 'UNANSWERED', needId: q.needId, opportunityId: q.opportunityId, field: q.field, executor: input.actor, method: input.method, orchestrationId: null, fragmentId: null, missionId: null, claims: [] as { claimId: string; sourced: boolean; validationState: string; validationDetail: string | null; accepted: boolean }[], wasParked: q.parked };
+    await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research without an answer for ${q.field} on ${q.opportunityId}`, detail, actorRef: actorOf(input.actor) });
+    return detail;
   }
-  const detail = { needId: q.needId, opportunityId: q.opportunityId, field: q.field, executor: input.actor, answer: input.answer, method: input.method, sources: input.sources, unanswered: !!input.unanswered, placedOnCard: placed, wasParked: q.parked };
-  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research ${input.unanswered ? 'without an answer' : 'returned'} for ${q.field} on ${q.opportunityId} by ${input.actor.kind} ${input.actor.id}`, detail, actorRef: actorOf(input.actor) });
+  if (input.claims.length === 0) throw new PlanningRefusal('submit at least one claim, or mark the question unanswered', 'planning:research');
+  const { getNeed, setNeedCandidate } = await import('../../repos/cashPortfolio.ts');
+  const { createCandidate } = await import('../../repos/russellCandidates.ts');
+  const { launchMission, linkMission, transitionMission } = await import('../../repos/russellMissions.ts');
+  const { createRun } = await import('../../repos/runs.ts');
+  const { createFragments, createOrchestration, currentFragments } = await import('../../repos/research.ts');
+  const { listLayers } = await import('../../repos/layers.ts');
+  const { recordFragmentClaims } = await import('../research/submission.ts');
+  const need = await getNeed(q.needId);
+  const opportunity = await getOpportunity(q.opportunityId!);
+  if (!need || !opportunity) throw new PlanningRefusal('the question or its opening is gone', 'planning:research');
+  const layer = (await listLayers(projectId))[0];
+  if (!layer) throw new PlanningRefusal('the project has no layer to hold research', 'planning:research');
+  // The question's idea, exactly as `startDependentWork` gives one (reused when it already has one).
+  let candidateId = need.candidateId;
+  if (!candidateId) {
+    const candidate = await createCandidate({ projectId, visibility: 'SHARED', title: need.blockedAction, statement: need.nextStep });
+    await setNeedCandidate(need.id, candidate.id);
+    candidateId = candidate.id;
+  }
+  const attempt = (await events(input.goalId, PLANNING_EVENTS.research)).filter((e) => e.detail['needId'] === q.needId && e.detail['phase'] === 'SUBMITTED').length + 1;
+  const run = await createRun({ projectId, layerId: layer.id, runType: 'FOUNDATION', status: 'PLANNED', provider: 'WORKER', prompt: need.nextStep } as never);
+  const orchestration = await createOrchestration({ projectId, layerId: layer.id, runId: (run as { id: string }).id, title: need.blockedAction.slice(0, 200), assignment: need.nextStep, provider: 'WORKER', autoApprove: false } as never);
+  await createFragments([{
+    orchestrationId: orchestration.id, projectId, layerId: layer.id, fragmentIndex: 0, fragmentKey: `session-${q.field}`, question: need.nextStep,
+    geography: 'any market', population: opportunity.payer ?? `${opportunity.industry ?? 'the opening'} buyers`, timeframe: 'current', definitions: q.field,
+    requiredEvidence: [{ id: RESEARCH_LANE, description: need.completionCondition ?? `the ${q.field}`, necessity: 'REQUIRED' }] as never,
+    acceptableSourceTypes: ['a published, dated source'], excludedSourceTypes: [], completionCriteria: ['a dated source stating it'], dependsOn: [], minIndependentSources: 1, attempt: 1,
+  }]);
+  const [fragment] = await currentFragments(orchestration.id);
+  const { mission } = await launchMission({ projectId, layerId: layer.id, visibility: 'SHARED', objective: need.nextStep.slice(0, 500), whyNow: `goal ${input.goalId} planning session`, idempotencyKey: `session-research:${q.needId}:${attempt}`, candidateId });
+  await linkMission({ missionId: mission.id, orchestrationId: orchestration.id });
+  await transitionMission({ missionId: mission.id, from: 'PLANNED', to: 'RUNNING' });
+  const stored = await recordFragmentClaims({
+    orchestration, fragment: fragment!, passId: null as never, passKey: 'BROAD_SCAN',
+    claims: input.claims.map((c) => ({
+      claim: c.claim, claimType: 'SOURCED_FACT', primarySource: c.primarySource, searchedRepositories: [], sourceUrl: c.sourceUrl, sourceTitle: c.sourceTitle,
+      sourcePublisher: c.sourcePublisher, sourceDate: c.sourceDate, evidenceExcerpt: c.evidenceExcerpt, evidenceLocator: c.evidenceLocator, retrievedAt: new Date().toISOString(),
+      confidence: 0.8, evidenceLane: RESEARCH_LANE, opportunitySignal: null, monetizationMethod: null, structuralFinding: null, structuralSubject: null,
+    })) as never,
+  });
+  const claims = stored.map((c) => ({ claimId: c.id, sourced: c.sourced, validationState: c.validationState, validationDetail: c.validationDetail, accepted: c.accepted }));
+  const detail = { phase: 'SUBMITTED', needId: q.needId, opportunityId: q.opportunityId, field: q.field, executor: input.actor, method: input.method, orchestrationId: orchestration.id, fragmentId: fragment!.id, missionId: mission.id, claims, wasParked: q.parked };
+  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research submitted for ${q.field} on ${q.opportunityId} by ${input.actor.kind} ${input.actor.id}: ${claims.length} claim(s), awaiting the evidence gate`, detail, actorRef: actorOf(input.actor) });
   return detail;
+}
+
+/**
+ * An independent verifier's reading of submitted research, through Brain's evidence gate
+ * (`gateFragment`: the support and scope answers only a reader of the source can give, then the
+ * gate's own conditions). The verifier must be a different executor from the researcher. The
+ * mission finishes; `applyResearchAnswers` carries any accepted claim onto the card as EVIDENCE
+ * and settles the question; Brain's planner reruns, so the verdict, each claim's acceptance or
+ * rejection reason, and what changed in the planning input all go back to the session.
+ */
+export async function verifyResearch(input: {
+  goalId: string;
+  needId: string;
+  verifier: PlanExecutor;
+  verdicts: { claimId: string; supportsClaim: boolean; scopeMatch: { geography: string; timeframe: string; population: string; definitions: string }; scopeBasis?: Record<string, string>; note: string }[];
+  sufficiency: 'SUFFICIENT' | 'INSUFFICIENT';
+}) {
+  await liveGoal(input.goalId);
+  const submitted = (await events(input.goalId, PLANNING_EVENTS.research)).filter((e) => e.detail['needId'] === input.needId && e.detail['phase'] === 'SUBMITTED').pop();
+  if (!submitted) throw new PlanningRefusal(`no submitted research for ${input.needId}`, 'planning:research');
+  const researcher = submitted.detail['executor'] as PlanExecutor;
+  if (sameExecutor(researcher, input.verifier)) throw new PlanningRefusal('the researcher cannot verify its own research; an independent verifier must', 'planning:research');
+  const { getFragment, listClaimsForFragment } = await import('../../repos/research.ts');
+  const { gateFragment } = await import('../research/submission.ts');
+  const { transitionMission } = await import('../../repos/russellMissions.ts');
+  const { applyResearchAnswers } = await import('../cash/answers.ts');
+  const fragment = await getFragment(String(submitted.detail['fragmentId']));
+  if (!fragment) throw new PlanningRefusal('the research fragment is gone', 'planning:research');
+  if (fragment.status === 'ACCEPTED' || fragment.status === 'BLOCKED') throw new PlanningRefusal('this research was already judged; submit new research to try again', 'planning:research');
+  const opportunityId = String(submitted.detail['opportunityId']);
+  const field = String(submitted.detail['field']);
+  const before = await brainOpening(input.goalId, opportunityId);
+  const factBefore = (await cardFactsFor(opportunityId)).find((f) => f.field === field) ?? null;
+  const gate = await gateFragment({
+    fragment,
+    verifications: input.verdicts.map((v) => ({ claimId: v.claimId, supportsClaim: v.supportsClaim, scopeMatch: v.scopeMatch as never, scopeBasis: (v.scopeBasis ?? {}) as never, note: v.note })),
+    sufficiency: input.sufficiency,
+    missingLanes: [],
+    unresolvedGaps: [],
+  });
+  await transitionMission({ missionId: String(submitted.detail['missionId']), from: 'RUNNING', to: 'DONE', terminalReason: null, waitingOn: null });
+  const goal = await liveGoal(input.goalId);
+  const applied = await applyResearchAnswers((goal.target?.projectId ?? goal.projectId)!);
+  const answered = applied.applied.find((a) => a.needId === input.needId) ?? null;
+  const unanswered = applied.unanswered.find((a) => a.needId === input.needId) ?? null;
+  const claims = (await listClaimsForFragment(fragment.id)).map((c) => ({ claimId: c.id, accepted: c.accepted, rejectionReason: c.rejectionReason ?? null }));
+  const factAfter = (await cardFactsFor(opportunityId)).find((f) => f.field === field) ?? null;
+  // The affected planning reruns on what the gate decided.
+  const rerun = await runBrain({ goalId: input.goalId, actor: input.verifier });
+  const after = rerun.openings.find((o) => o.opportunityId === opportunityId) ?? null;
+  const detail = {
+    phase: 'VERIFIED', needId: input.needId, opportunityId, field, verifier: input.verifier, researcher,
+    fragmentStatus: gate.integrity === 'PASS' && gate.sufficiency === 'SUFFICIENT' ? 'ACCEPTED' : 'BLOCKED', gateReasons: gate.reasons, claims,
+    answered: answered ? { claimId: answered.claimId } : null, unanswered: unanswered ? { state: unanswered.state, detail: unanswered.detail } : null,
+    input: { field, before: factBefore ? { value: factBefore.value, kind: factBefore.kind } : null, after: factAfter ? { value: factAfter.value, kind: factAfter.kind } : null },
+    missing: { before: before?.missing ?? null, after: after?.missing ?? null },
+    rerun: { completed: rerun.completed, verdict: rerun.verdict, at: rerun.at },
+  };
+  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.research, summary: `Research for ${field} on ${opportunityId} ${answered ? 'ACCEPTED by the evidence gate' : 'not accepted'}; planner rerun`, detail, actorRef: actorOf(input.verifier) });
+  return detail;
+}
+
+async function brainOpening(goalId: string, opportunityId: string) {
+  const run = (await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined;
+  return run?.openings?.find((o) => o.opportunityId === opportunityId) ?? null;
 }
 
 // ------------------------------------------------------------------------------------ revisions
@@ -467,7 +633,10 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const lastContribution = (await events(goalId, PLANNING_EVENTS.contribution)).pop();
   let brainRun = ((await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined) ?? null;
   if (!brainRun || (lastContribution && brainRun.at < lastContribution.createdAt)) brainRun = await runBrain({ goalId, actor: input.actor });
-  const brain: BrainFacts = { admittedOpportunityIds: await admittedIds(goalId), integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error };
+  const admitted = await admittedIds(goalId);
+  const fulfilment = await fulfilmentOf(r.strategy.opportunityIds);
+  r.steps = await withExecutors(r.steps, r.strategy.opportunityIds, fulfilment);
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

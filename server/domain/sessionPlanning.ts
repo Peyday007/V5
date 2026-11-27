@@ -140,6 +140,23 @@ export interface PlanStepInput {
   dependsOn: string | null;
   evidence: string[];
   ownerHours?: number | null;
+  /** The price the step offers or sells at (cents), when it offers one. */
+  priceCents?: number | null;
+  /**
+   * The step's executor as Brain reads it (`stepExecutor` over the live capability inventory):
+   * filled by Brain at submission, never taken from the session, so a check never runs on a
+   * capability the session merely asserted. Absent only on a revision built outside Brain.
+   */
+  executor?: StepExecutorRecord | null;
+}
+
+/** Brain's executor record for one session step: the operation, who performs it, and each capability with its state. */
+export interface StepExecutorRecord {
+  operation: string;
+  performedBy: 'BRAIN' | 'PROVIDER' | 'OWNER' | 'NOT_ESTABLISHED';
+  provider: string | null;
+  capabilities: { id: string; state: string }[];
+  routine: boolean;
 }
 
 /** One money movement of the plan's cash sequence, in cents. */
@@ -150,6 +167,12 @@ export interface CashEntryInput {
   label: string;
   /** RECEIPT only: the day the money reaches the bank. */
   settlesDay?: number | null;
+  /**
+   * The step whose cost or obligation this outflow pays (SPEND, FEE), commits (COMMIT) or
+   * releases (RELEASE). Every outflow names one, and every costed step is paid exactly by its
+   * linked outflows: nothing omitted, nothing counted twice.
+   */
+  stepId?: string | null;
 }
 
 export interface QuantityInput {
@@ -252,6 +275,13 @@ export type CheckCode =
   | 'NO_PLAN_UNJUSTIFIED'
   | 'CONDITIONAL_WITHOUT_VALIDATION'
   | 'OPPORTUNITY_NOT_ADMITTED'
+  | 'STEP_COST_UNRECONCILED'
+  | 'CASH_UNLINKED'
+  | 'OWNER_HOURS_OVER'
+  | 'PERFORMER_MISMATCH'
+  | 'FULFILMENT_UNESTABLISHED'
+  | 'CAPABILITY_NOT_HELD'
+  | 'CAPABILITY_UNREAD'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -270,6 +300,10 @@ export interface BrainFacts {
   /** Whether the planner call completed; false when it failed or timed out. */
   completed: boolean;
   error: string | null;
+  /** Per opening: who its own record says fulfils it (`recordFulfiller`), and the deliverable capability's state when Brain does. */
+  fulfilment?: Record<string, { by: 'BRAIN' | 'PROVIDER' | 'OWNER' | 'NOBODY'; name: string | null; capability: string | null; capabilityState: string | null }>;
+  /** The owner hours the stored goal allows over its window, or null when it states none. */
+  hoursCeiling?: number | null;
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -371,7 +405,9 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     if (!r.strategy.title.trim() || r.strategy.opportunityIds.length === 0) add('INCOMPLETE_OUTPUT', 'the plan names no strategy or no admitted opening');
     for (const c of CHAIN) if (!r.steps.some((s) => c.need.includes(s.kind))) add('CHAIN_STEP_MISSING', `no step for ${c.label}`);
     const supplierCost = r.steps.some((s) => s.kind === 'DELIVER' && s.performer !== null && s.performer !== 'BRAIN' && s.performer !== 'OWNER' && (s.costCents === null || s.costCents > 0));
-    if (supplierCost && !r.steps.some((s) => s.kind === 'ORDER')) add('CHAIN_STEP_MISSING', 'a subcontracted delivery has a cost but no step pays the supplier (ORDER)');
+    // The supplier is paid by an ORDER step, or by the delivery step itself when its cost is the payment (completion spec §3a).
+    const paidByDelivery = r.steps.some((s) => s.kind === 'DELIVER' && s.performer !== null && s.performer !== 'BRAIN' && s.performer !== 'OWNER' && (s.costCents ?? 0) > 0);
+    if (supplierCost && !paidByDelivery && !r.steps.some((s) => s.kind === 'ORDER')) add('CHAIN_STEP_MISSING', 'a subcontracted delivery has a cost but no step pays the supplier (an ORDER step, or the delivery step carrying the payment)');
     for (const s of r.steps) {
       if (s.performer === null) add('STEP_FIELD_ABSENT', 'nobody performs this step', s.id);
       if (s.day === null) add('STEP_FIELD_ABSENT', 'the step has no day', s.id);
@@ -383,6 +419,64 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     }
     if (r.stance === 'CONDITIONAL' && (!r.validation || !r.validation.proof.trim() || r.validation.stop.length === 0)) add('CONDITIONAL_WITHOUT_VALIDATION', 'a conditional plan must state the proof condition it tests and when it stops');
     for (const id of r.strategy.opportunityIds) if (brain && !brain.admittedOpportunityIds.includes(id)) add('OPPORTUNITY_NOT_ADMITTED', `opening ${id} was never admitted to this goal; submit it as a route first`, id);
+  }
+
+  // Every step's cost reconciled to the ledger: each costed step paid or committed exactly by the
+  // outflows linked to it, every outflow linked to a step. An omitted expense, an unlinked
+  // commitment and a cost counted twice are each refused, so the caps below read the whole cost.
+  if (r.stance !== 'NO_PLAN' || r.steps.length) {
+    const stepIds = new Set(r.steps.map((s) => s.id));
+    const linked = new Map<string, number>();
+    for (const e of r.cash) {
+      if (e.kind === 'RECEIPT' || e.kind === 'REFUND') continue;
+      if (!e.stepId) { add('CASH_UNLINKED', `outflow "${e.label}" (${e.kind} ${e.amountCents / 100}) names no step whose cost or obligation it pays`, `day ${e.day}`); continue; }
+      if (!stepIds.has(e.stepId)) { add('CASH_UNLINKED', `outflow "${e.label}" names step ${e.stepId}, which the plan does not have`, `day ${e.day}`); continue; }
+      linked.set(e.stepId, (linked.get(e.stepId) ?? 0) + (e.kind === 'RELEASE' ? -e.amountCents : e.amountCents));
+    }
+    for (const s of r.steps) {
+      const paid = linked.get(s.id) ?? 0;
+      if (s.costCents === null) continue;
+      if (s.costCents > 0 && paid === 0) add('STEP_COST_UNRECONCILED', `the step costs ${s.costCents / 100} but no cash entry pays or commits it: the expense is omitted from the ledger`, s.id);
+      else if (paid !== s.costCents) add('STEP_COST_UNRECONCILED', `the step costs ${s.costCents / 100} but its linked outflows total ${paid / 100}${paid > s.costCents ? ': counted twice' : ': part of it is omitted'}`, s.id);
+    }
+    const stepCost = r.steps.reduce((sum, s) => sum + (s.costCents ?? 0), 0);
+    if (t.totalSpendCapCents !== null && stepCost > t.totalSpendCapCents) add('TOTAL_SPEND_OVER', `the steps cost ${stepCost / 100} in all, over the ${t.totalSpendCapCents / 100} total-spend cap, whatever the cash sequence states`);
+    if (t.exposureCapCents !== null && t.exposureCapCents === 0 && stepCost > 0 && !r.cash.some((e) => e.kind === 'RECEIPT')) add('EXPOSURE_OVER', `the steps cost ${stepCost / 100} with no receipt to fund them under a zero exposure cap`);
+  }
+
+  // Owner work: every owner step states its hours, and the total fits what the goal allows.
+  // Unstated allowance is none: the owner does no routine work the objective gives no hours for.
+  {
+    const ownerSteps = r.steps.filter((s) => s.performer === 'OWNER');
+    for (const s of ownerSteps) if (typeof s.ownerHours !== 'number' || !Number.isFinite(s.ownerHours) || s.ownerHours < 0) add('STEP_FIELD_ABSENT', 'an owner step must state its owner hours', s.id);
+    const hours = ownerSteps.reduce((sum, s) => sum + (typeof s.ownerHours === 'number' ? s.ownerHours : 0), 0);
+    const weeks = t.windowDays !== null ? t.windowDays / 7 : null;
+    const allowed = t.ownerHoursPerWeek !== null && weeks !== null ? t.ownerHoursPerWeek * weeks : (brain?.hoursCeiling ?? null);
+    if (hours > 0 && (allowed === null || hours > allowed + 1e-9)) {
+      add('OWNER_HOURS_OVER', `the plan gives the owner ${hours} hours; the goal allows ${allowed === null ? 'none (no owner hours stated)' : `${Math.round(allowed * 10) / 10} over the window`}`, null);
+    }
+  }
+
+  // Fulfilment: each delivery is performed by whoever the opening's own record says fulfils it,
+  // and a Brain delivery needs the deliverable capability Brain actually holds.
+  if (r.stance !== 'NO_PLAN') {
+    const performerClass = (p: string | null) => (p === null ? null : p === 'BRAIN' ? 'BRAIN' : p === 'OWNER' ? 'OWNER' : 'PROVIDER');
+    for (const s of r.steps.filter((one) => one.kind === 'DELIVER')) {
+      for (const id of r.strategy.opportunityIds) {
+        const f = brain?.fulfilment?.[id];
+        if (!f) continue;
+        if (f.by === 'NOBODY') { add('FULFILMENT_UNESTABLISHED', `nobody is established to fulfil ${id}; a plan cannot deliver it`, s.id); continue; }
+        const mine = performerClass(s.performer);
+        if (mine !== f.by) add('PERFORMER_MISMATCH', `${id} is fulfilled by ${f.by === 'PROVIDER' ? `the provider ${f.name}` : f.by.toLowerCase()} on its own record; this step gives it to ${mine === 'PROVIDER' ? s.performer : (mine ?? 'nobody').toLowerCase()}`, s.id);
+      }
+    }
+    // Capabilities as Brain reads them: a missing record is never a pass.
+    for (const s of r.steps) {
+      if (s.performer !== 'BRAIN') continue;
+      if (!s.executor) { add('CAPABILITY_UNREAD', 'Brain has no executor record for this step, so whether it holds the capability is unread', s.id); continue; }
+      const missing = s.executor.capabilities.filter((c) => c.state === 'NOT_DECLARED');
+      if (missing.length) add('CAPABILITY_NOT_HELD', `Brain performs this step through ${missing.map((c) => c.id).join(', ')}, which it does not hold`, s.id);
+    }
   }
 
   // Money: every limit separately, commitments included, receipts never raising a limit.

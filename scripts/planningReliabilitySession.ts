@@ -40,7 +40,7 @@ interface WorldMeta { projectId: string; userId: string; goalId: string; caseId:
 
 async function main(): Promise<void> {
   if (cmd === 'summary') {
-    const rows = need('rows').split(',').map((f) => JSON.parse(fs.readFileSync(f, 'utf8')) as { id: string; heldOut: boolean; pass: boolean; failures: string[]; critical: string[]; usable?: { pass: boolean }; e2e?: { pass: boolean } });
+    const rows = need('rows').split(',').map((f) => JSON.parse(fs.readFileSync(f, 'utf8')) as { id: string; heldOut: boolean; pass: boolean; published?: boolean; failures: string[]; critical: string[]; usable?: { pass: boolean }; e2e?: { pass: boolean; failures?: string[] } });
     const { wilson } = await import('../server/services/cash/goalScenario.ts');
     const passed = rows.filter((r) => r.pass).length;
     const w = wilson(passed, rows.length);
@@ -50,8 +50,10 @@ async function main(): Promise<void> {
       reliability: rows.length ? passed / rows.length : null,
       wilson95: w,
       criticalFailures: rows.filter((r) => r.critical.length).length,
+      published: rows.filter((r) => r.published !== false).length,
       usable: rows.filter((r) => r.usable?.pass).length,
       e2e: rows.filter((r) => r.e2e?.pass).length,
+      e2eFailures: rows.flatMap((r) => r.e2e?.failures ?? []).reduce<Record<string, number>>((m, f) => ({ ...m, [f]: (m[f] ?? 0) + 1 }), {}),
       failures: rows.filter((r) => !r.pass).map((r) => ({ id: r.id, failures: r.failures, critical: r.critical })),
     });
     return;
@@ -114,18 +116,27 @@ async function main(): Promise<void> {
       const state = await planningState(meta.goalId);
       const keyOf = (id: string) => meta.keys[id] ?? id;
       const base = { id: c.id, step: k, heldOut: !!c.heldOut, expect: graded.expect.verdict };
-      if (!state.current) {
-        out({ ...base, observed: null, pass: false, failures: ['NOT_OBSERVED'], critical: [], detail: 'the session submitted no revision' });
+      // The benchmark grades the result of the whole process: the plan published after Brain's checks and an
+      // independent review of that exact revision. A case that published nothing delivered no plan.
+      const reviews = state.reviews.length;
+      const revisionsN = state.revisions.length;
+      if (!state.final) {
+        out({ ...base, published: false, revisions: revisionsN, reviews, observed: null, pass: false, failures: ['NOT_PUBLISHED'], critical: [], detail: state.current ? `nothing published; current revision ${state.current.revisionId} (${state.current.stance}) ${state.currentCheck?.problems.length ?? '?'} problem(s), last review ${state.reviews.at(-1)?.verdict ?? 'none'}` : 'the session submitted no revision', usable: { pass: false, detail: 'nothing published' }, e2e: { pass: false, failures: ['NOT_OBSERVED'], gaps: [], detail: 'nothing published' } });
         return;
       }
+      const published = state.final.plan;
       const run = (await workstreamEventsOfKind(meta.goalId, PLANNING_EVENTS.brain, '1970-01-01T00:00:00.000Z', 1))[0]?.detail['summary'] as never;
-      const o = observeSession(state.current, run ?? { scope: null, openings: [], excluded: [] }, keyOf);
+      const o = observeSession(published, run ?? { scope: null, openings: [], excluded: [] }, keyOf);
       const g = grade(graded, o);
       out({
         ...base,
-        revisionId: state.current.revisionId,
-        stance: state.current.stance,
-        checkProblems: state.currentCheck?.problems.map((p) => p.code) ?? null,
+        published: true,
+        revisions: revisionsN,
+        reviews,
+        reviewVerdicts: state.reviews.map((r) => r.verdict),
+        revisionId: published.revisionId,
+        stance: published.stance,
+        reviewer: state.final.review.reviewer,
         observed: o.stance,
         pass: g.pass,
         outcome: g.outcome,

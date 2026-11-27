@@ -71,15 +71,14 @@ function revision(goalId: string, contractDigest: string, opp: string, over: Par
     strategy: { title: 'Bookkeeping clean-ups through practice managers', opportunityIds: [opp], why: 'test' },
     alternatives: [{ title: 'do nothing', why: 'collects nothing' }],
     steps: [
-      { id: 'reach', kind: 'REACH', label: 'email practice managers', performer: 'BRAIN', costCents: 0, day: 1, dependsOn: null, evidence: ['q_conv'] },
-      { id: 'order', kind: 'ORDER', label: 'pay the contractor per job', performer: 'BRAIN', costCents: 60_000, day: 8, dependsOn: 'reach', evidence: ['q_cost'] },
-      { id: 'deliver', kind: 'DELIVER', label: 'contractor delivers the clean-up', performer: 'A quoted bookkeeping contractor', costCents: 60_000, day: 9, dependsOn: 'order', evidence: ['q_cost'] },
+      { id: 'reach', kind: 'REACH', label: 'email practice managers', performer: 'BRAIN', costCents: 5_000, day: 1, dependsOn: null, evidence: ['q_conv'] },
+      { id: 'deliver', kind: 'DELIVER', label: 'contractor delivers the clean-up, paid per job on delivery', performer: 'A quoted bookkeeping contractor', costCents: 40_000, day: 8, dependsOn: 'collect', evidence: ['q_cost'] },
       { id: 'collect', kind: 'COLLECT', label: 'collect prepayment', performer: 'BRAIN', costCents: 0, day: 5, dependsOn: 'reach', evidence: ['q_price'] },
     ],
     cash: [
-      { day: 1, kind: 'SPEND', amountCents: 5_000, label: 'list' },
+      { day: 1, kind: 'SPEND', amountCents: 5_000, label: 'list', stepId: 'reach' },
       { day: 5, kind: 'RECEIPT', amountCents: 300_000, label: 'four prepaid jobs', settlesDay: 7 },
-      { day: 8, kind: 'SPEND', amountCents: 40_000, label: 'contractor x4' },
+      { day: 8, kind: 'SPEND', amountCents: 40_000, label: 'contractor x4', stepId: 'deliver' },
     ],
     proofDay: 7,
     quantities: [
@@ -128,29 +127,47 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(facts.every((f) => f.kind !== 'EVIDENCE')).toBe(true);
   }, 60_000);
 
-  it('raises the planner’s research questions through path research, and takes the session’s sourced result as a recommendation, never as evidence', async () => {
+  it('raises the planner’s questions, and admits the session’s research only through Brain’s evidence gate: invalid stays unverified, valid becomes evidence and moves the plan', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const run = await svc.runBrain({ goalId, actor: AUTHOR });
     expect(run.completed).toBe(true);
     expect(run.openings.map((o) => o.opportunityId)).toContain(opp);
-    const questions = await svc.openQuestions(goalId);
+    const questions = (await svc.openQuestions(goalId)).filter((one) => one.opportunityId === opp);
     expect(questions.length).toBeGreaterThan(0);
     // Brain started no research for them: parked, so the session is their executor.
     expect(questions.every((q) => q.parked)).toBe(true);
     const q = questions[0]!;
-    await expect(svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, answer: 'x', method: 'search', sources: [{ url: 'https://example.test/a', dated: '2026-11-01', claim: 'c', population: '' }] })).rejects.toThrow(/population/);
-    const r = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, answer: 'Published practitioner rates put it at $600–$900 a job', method: 'two published rate cards compared', sources: [{ url: 'https://example.test/rates', dated: '2026-10-01', claim: '$600–$900 per clean-up', population: 'independent dental practices' }] });
-    expect(r.wasParked).toBe(true);
-    const after = (await svc.openQuestions(goalId)).find((one) => one.needId === q.needId)!;
-    // The result is returned and recorded; the question stays open until a gated claim answers it.
-    expect(after.returned).toMatchObject({ executor: AUTHOR, field: q.field });
-    const { readNeedCondition } = await import('../server/services/cash/conditions.ts');
-    const { getNeed } = await import('../server/repos/cashPortfolio.ts');
-    const need = await getNeed(q.needId);
-    expect((await readNeedCondition(need!))?.holds ?? false).toBe(false);
     const { cardFactsFor } = await import('../server/repos/cashCardFacts.ts');
-    expect((await cardFactsFor(q.opportunityId!)).find((f) => f.field === q.field)?.kind).not.toBe('EVIDENCE');
-  }, 120_000);
+    const factOf = async () => (await cardFactsFor(opp)).find((f) => f.field === q.field) ?? null;
+    const before = await factOf();
+    const statement = q.field === 'buyerVolume'
+      ? 'The state dental board lists 2,140 independent dental practices, each closing its books every year.'
+      : 'Independent dental practices pay $750 for a year-end bookkeeping clean-up.';
+    const match = { geography: 'MATCH', timeframe: 'MATCH', population: 'MATCH', definitions: 'MATCH' };
+
+    // Invalid evidence: a source that is not a URL. The gate refuses it whatever the verifier says, and the card is unchanged.
+    const bad = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, method: 'search', claims: [{ claim: statement, sourceUrl: 'a colleague told me', sourceTitle: null, sourcePublisher: null, sourceDate: null, evidenceExcerpt: statement, evidenceLocator: 'n/a', primarySource: false }] });
+    expect(bad.claims[0]!.sourced).toBe(false);
+    await expect(svc.verifyResearch({ goalId, needId: q.needId, verifier: AUTHOR, verdicts: [], sufficiency: 'SUFFICIENT' })).rejects.toThrow(/cannot verify its own/);
+    const refused = await svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claimId: bad.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, note: 'looks right' }], sufficiency: 'SUFFICIENT' });
+    expect(refused.claims[0]!.accepted).toBe(false);
+    expect(refused.claims[0]!.rejectionReason).toBeTruthy();
+    expect(refused.answered).toBeNull();
+    expect((await factOf())?.kind ?? null).toBe(before?.kind ?? null);
+    expect((await factOf())?.kind).not.toBe('EVIDENCE');
+
+    // A valid, sourced, dated answer the independent verifier confirms: the gate accepts it, the card holds it as EVIDENCE,
+    // the question is settled and the planner reruns on it.
+    const good = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, method: 'state board directory read', claims: [{ claim: statement, sourceUrl: 'https://example.test/dental-board/directory', sourceTitle: 'Licensed practices', sourcePublisher: 'State Dental Board', sourceDate: '2026-10-01', evidenceExcerpt: statement, evidenceLocator: 'Directory summary, paragraph 1', primarySource: true }] });
+    expect(good.claims[0]!.sourced).toBe(true);
+    const accepted = await svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claimId: good.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, scopeBasis: { geography: 'any market', population: 'Independent dental practices', timeframe: 'current', definitions: q.field }, note: 'the directory states it' }], sufficiency: 'SUFFICIENT' });
+    expect(accepted.claims[0]!.accepted).toBe(true);
+    expect(accepted.answered).not.toBeNull();
+    expect(accepted.input.after?.kind).toBe('EVIDENCE');
+    expect(accepted.input.after?.value).not.toBe(before?.value ?? null);
+    expect(accepted.rerun.completed).toBe(true);
+    expect((await svc.openQuestions(goalId)).some((one) => one.needId === q.needId)).toBe(false);
+  }, 180_000);
 
   it('control 1: a feasible, fully evidenced objective returns a complete plan that is reviewed and published', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
@@ -244,6 +261,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
         ...base, parentRevisionId: first.revision.revisionId,
         quantities: base.quantities.map((q) => (q.name === 'contractor cost per job' ? { ...q, value: 160 } : q)),
         cash: base.cash.map((e) => (e.label === 'contractor x4' ? { ...e, amountCents: 64_000 } : e)),
+        steps: base.steps.map((s) => (s.id === 'deliver' ? { ...s, costCents: 64_000 } : s)),
         strategy: { ...base.strategy, why: 'contractor now quotes $160 a job' },
       },
       actor: AUTHOR, today: '2026-11-26',
@@ -270,7 +288,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(stale.problems.map((p) => p.code)).toContain('STALE_CONTRACT');
     expect((await svc.finalizePlan({ goalId, revisionId: stale.revision.revisionId, actor: AUTHOR })).published).toBe(false);
     digest = c2.contract.digest;
-    const fresh = await svc.submitRevision({ revision: revision(goalId, digest, opp, { cash: [{ day: 1, kind: 'SPEND', amountCents: 5_000, label: 'list' }, { day: 5, kind: 'RECEIPT', amountCents: 200_000, label: 'jobs', settlesDay: 7 }, { day: 8, kind: 'SPEND', amountCents: 30_000, label: 'contractor x3' }] }), actor: AUTHOR, today: '2026-11-27' });
+    const fresh = await svc.submitRevision({ revision: revision(goalId, digest, opp, { cash: [{ day: 1, kind: 'SPEND', amountCents: 5_000, label: 'list', stepId: 'reach' }, { day: 5, kind: 'RECEIPT', amountCents: 200_000, label: 'jobs', settlesDay: 7 }, { day: 8, kind: 'SPEND', amountCents: 30_000, label: 'contractor x3', stepId: 'deliver' }], steps: revision(goalId, digest, opp).steps.map((s) => (s.id === 'deliver' ? { ...s, costCents: 30_000 } : s)) }), actor: AUTHOR, today: '2026-11-27' });
     expect(fresh.problems).toEqual([]);
   }, 240_000);
 

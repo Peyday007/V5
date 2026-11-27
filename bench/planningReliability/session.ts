@@ -6,9 +6,11 @@
  * resolve — never its prose. The goal's scope and target are Brain's own reading of the goal (the
  * planner run the session's check recorded), never the session's.
  *
- * Two differences from `observe` on a planner reading, stated rather than hidden:
- *   - a session step declares no capability records, so BRAIN_CAPABILITY_NOT_HELD can only fire on a
- *     fulfilment performer the evidence contradicts, never on an undeclared capability;
+ * Capabilities are read from the executor record Brain attaches to every step at submission
+ * (`stepExecutor` over the live inventory). A Brain step without one is observed as performing
+ * through an undeclared capability, so a missing record fails the check rather than disabling it.
+ *
+ * One difference from `observe` on a planner reading, stated rather than hidden:
  *   - a CONDITIONAL plan is observed as NO_PLAN at the verdict level (the planner's own stance calls a
  *     plan executable only once its close rate is measured), and the owner-usable level reads its
  *     members' missing links exactly as it reads the planner's.
@@ -61,7 +63,7 @@ export function observeSession(r: PlanRevisionInput, brain: Pick<BrainRunSummary
     const operation = s.kind === 'REACH' ? 'REACH_BUYERS' : s.kind === 'OFFER' || s.kind === 'SELL' ? 'SEND_OFFER' : s.kind === 'DELIVER' ? (performer === 'BRAIN' ? 'BRAIN_PRODUCES' : 'SUPPLIER_DELIVERS') : s.kind === 'COLLECT' ? 'COLLECT_PAYMENT' : s.kind === 'ORDER' ? 'PAY_SUPPLIER' : null;
     const absent: string[] = [];
     if (s.evidence.length === 0) absent.push('evidence');
-    if (stage === 'OFFER') absent.push('price');
+    if (stage === 'OFFER' && typeof s.priceCents !== 'number') absent.push('price');
     if (performer === 'OWNER' && typeof s.ownerHours !== 'number') absent.push('hours');
     return {
       order: i + 1,
@@ -78,12 +80,12 @@ export function observeSession(r: PlanRevisionInput, brain: Pick<BrainRunSummary
       performer,
       operation,
       does: s.label,
-      routine: performer === 'OWNER',
-      capabilities: [],
+      routine: s.executor ? s.executor.routine : performer === 'OWNER',
+      capabilities: s.executor ? s.executor.capabilities : performer === 'BRAIN' ? [{ id: 'UNRECORDED', state: 'NOT_DECLARED' }] : [],
       pays: s.kind === 'ORDER',
       members: memberKeys,
       absent,
-      price: null,
+      price: typeof s.priceCents === 'number' ? s.priceCents / 100 : null,
     };
   });
   const economics: ObservedExecution['economics'] = {};
