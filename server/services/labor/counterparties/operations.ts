@@ -32,7 +32,7 @@
  * geography: the candidates are whoever the rows name.
  */
 import type { Counterparty } from './ladder.ts';
-import { recordedReservationEvents } from './reservations.ts';
+import { recordedReservationEvents, type ReservationEvent } from './reservations.ts';
 import {
   coordinateSteps,
   planWorkforce,
@@ -111,6 +111,36 @@ async function opportunitiesNamingFulfillers(projectId: string, limit: number) {
 }
 
 /**
+ * How long a probe pass's readings answer a default-options reading of the
+ * same project. `r01.cp-31` reads every project through
+ * `opportunityCounterpartyProbe` and then reads every project again through
+ * `projectCounterparties`; on 2026-11-27 that second, identical pass of
+ * sequential per-opportunity queries held the shared pool until an
+ * acquisition timed out (§61). The pass is one reading of the record, so its
+ * second half reuses the first instead of re-querying it. A reading with any
+ * explicit option never uses it.
+ */
+export const PROBE_PASS_TTL_MS = 60_000;
+
+interface PassEntry { reading: ProjectCounterpartyReading; expiresAt: number }
+const probePass = new Map<string, PassEntry>();
+
+/** Forget the current probe pass (tests, and the start of every pass). */
+export function clearProbePass(): void {
+  probePass.clear();
+}
+
+function fromProbePass(projectId: string): ProjectCounterpartyReading | null {
+  const entry = probePass.get(projectId);
+  if (!entry) return null;
+  if (entry.expiresAt <= Date.now()) {
+    probePass.delete(projectId);
+    return null;
+  }
+  return entry.reading;
+}
+
+/**
  * The project's counterparties, read end to end on its own rows. Writes nothing.
  * `at` and `window` are the reading's shape; every fact, hold and authority is
  * read from the record.
@@ -119,12 +149,36 @@ export async function projectCounterparties(
   projectId: string,
   options: { at?: string; window?: { windowStart: string; windowEnd: string }; limit?: number } = {},
 ): Promise<ProjectCounterpartyReading> {
+  const defaults = options.at === undefined && options.window === undefined && options.limit === undefined;
+  if (defaults) {
+    const cached = fromProbePass(projectId);
+    if (cached) return cached;
+  }
+  return readProjectCounterparties(projectId, options);
+}
+
+async function readProjectCounterparties(
+  projectId: string,
+  options: { at?: string; window?: { windowStart: string; windowEnd: string }; limit?: number },
+): Promise<ProjectCounterpartyReading> {
   const at = options.at ?? new Date().toISOString();
   const window = options.window ?? horizon(at);
   const chosen = await opportunitiesNamingFulfillers(projectId, options.limit ?? COUNTERPARTY_OPPORTUNITY_LIMIT);
   const opportunities: OpportunityCounterparties[] = [];
   const demands: WorkforceDemand[] = [];
   const candidates = new Map<string, Counterparty>();
+  // One reading reads each counterparty's reservation ledger once (§61).
+  const ledgers = new Map<string, ReservationEvent[]>();
+  const eventsOf = async (ids: readonly string[]): Promise<ReservationEvent[]> => {
+    const unique = [...new Set(ids)].sort();
+    const missing = unique.filter((id) => !ledgers.has(id));
+    if (missing.length > 0) {
+      const read = await recordedReservationEvents(missing);
+      for (const id of missing) ledgers.set(id, []);
+      for (const e of read) ledgers.get(e.counterpartyId)?.push(e);
+    }
+    return unique.flatMap((id) => ledgers.get(id) ?? []);
+  };
   for (const o of chosen) {
     const transaction = await readOpportunityTransaction({ opportunityId: o.id, window, at });
     const commitmentId = `opportunity:${o.id}`;
@@ -132,14 +186,14 @@ export async function projectCounterparties(
       if (!candidates.has(f.counterpartyId)) candidates.set(f.counterpartyId, await sourcedCandidate(f, f.sources.some((s) => s.startsWith('fulfillment:')) ? 'supplier' : 'fulfiller'));
     }
     const ids = transaction.fulfillers.map((f) => f.counterpartyId);
-    const events = ids.length > 0 ? await recordedReservationEvents(ids) : [];
+    const events = ids.length > 0 ? await eventsOf(ids) : [];
     const steps = coordinateSteps(opportunitySteps(commitmentId, transaction.fulfillers), events, at);
     const breaches = transaction.reading ? transactionBreaches(commitmentId, transaction.reading) : [];
     if (transaction.reading) demands.push({ commitment: { id: commitmentId, capacityUnits: 1 }, businessId: projectId, window });
     opportunities.push({ opportunityId: o.id, title: o.title, state: o.state, transaction, steps, breaches });
   }
   const parties = [...candidates.values()];
-  const events = parties.length > 0 ? await recordedReservationEvents(parties.map((c) => c.id)) : [];
+  const events = parties.length > 0 ? await eventsOf(parties.map((c) => c.id)) : [];
   const workforce = demands.length > 0 ? planWorkforce(demands, parties, events, at) : [];
   const breaches = opportunities.flatMap((o) => o.breaches);
   return { projectId, at, window, opportunities, workforce, breaches, summary: summarize(opportunities, workforce) };
@@ -160,18 +214,40 @@ function summarize(opportunities: readonly OpportunityCounterparties[], workforc
 export const OPPORTUNITY_COUNTERPARTY_PROBE = 'cash.counterparties.opportunities';
 
 /**
+ * A database that could not be reached. Its outcome is unknown (§26), and an
+ * unknown is never read as a breach (§39): the probe answers UNKNOWN with the
+ * reason instead of failing a model nobody judged. Matches the pool's own
+ * refusal (`server/db/adapters/postgres.ts`).
+ */
+export const DATABASE_UNAVAILABLE = /database pool had no free connection|Connection terminated due to connection timeout|too many clients|database did not answer in time/i;
+
+/**
  * The probe body: every project's opportunities that name a fulfiller, read
  * through the model, passing only when none breaches its refusals. `project`
- * narrows it to one. Read-only.
+ * narrows it to one. Read-only. The readings it makes answer a default-options
+ * `projectCounterparties` of the same project for `PROBE_PASS_TTL_MS`, so a
+ * caller that reads the pass again does not re-query it.
  */
 export async function opportunityCounterpartyProbe(
   args: Record<string, string | number | boolean> = {},
-): Promise<{ ok: boolean; detail: string }> {
-  const { listProjects } = await import('../../../repos/projects.ts');
+): Promise<{ ok: boolean | null; detail: string }> {
   const only = typeof args.project === 'string' && args.project ? args.project : null;
-  const projects = only ? [only] : (await listProjects()).map((p) => p.id);
+  if (!only) clearProbePass();
   const readings: ProjectCounterpartyReading[] = [];
-  for (const id of projects) readings.push(await projectCounterparties(id));
+  let projects: string[] = [];
+  try {
+    const { listProjects } = await import('../../../repos/projects.ts');
+    projects = only ? [only] : (await listProjects()).map((p) => p.id);
+    for (const id of projects) {
+      const reading = await readProjectCounterparties(id, {});
+      probePass.set(id, { reading, expiresAt: Date.now() + PROBE_PASS_TTL_MS });
+      readings.push(reading);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!DATABASE_UNAVAILABLE.test(message)) throw error;
+    return { ok: null, detail: `database unavailable while reading counterparties (${readings.length} of ${projects.length || '?'} project(s) read): ${message}`.slice(0, 900) };
+  }
   const breaches = readings.flatMap((r) => r.breaches);
   if (breaches.length > 0) return { ok: false, detail: breaches.join('; ').slice(0, 900) };
   const opportunities = readings.flatMap((r) => r.opportunities);
