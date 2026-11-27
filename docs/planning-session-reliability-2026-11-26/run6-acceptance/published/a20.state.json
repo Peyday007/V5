@@ -1,0 +1,666 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_2a8d187724b64d818fbf",
+      "words": "Collect $400,000 of settled cash within 14 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 40000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 14,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "61e4c3f8783129b4e8120799"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_2a8d187724b64d818fbf",
+        "contractDigest": "61e4c3f8783129b4e8120799",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the whole dealer population cannot carry $400,000",
+          "opportunityIds": [],
+          "why": "380 association dealerships, each buying at most one $500 list a month, is at most $190,000 in the 14-day window even at 100% conversion; the measured conversion is 22/110 = 20%, i.e. about 76 deals = $38,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell recall lists to all 380 dealers",
+            "why": "Caps at $190,000, below $400,000."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "dealerships",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per list",
+            "status": "EVIDENCED",
+            "value": 50000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.2,
+            "unit": "ratio",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue in window",
+            "status": "EVIDENCED",
+            "value": 19000000,
+            "unit": "cents",
+            "sources": [
+              "s_vol",
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 franchised dealerships in the state association; each buys at most one list a month",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#price",
+            "dated": "2026-11-24",
+            "claim": "Service managers paid $500 per monthly open-recall list (22 payment records)",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 agreements from 110 contacts",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 800 deals at $500 are needed but only 380 buyers exist, each buying once in the window; the population caps revenue at $190,000.",
+          "resolution": "Lower the target to at most $190,000 (realistically ~$38,000 at the measured 20% conversion), or extend to further buyer populations/other states that Brain must first research.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55889a82e0344b7b8415",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $190,000 at most (380 buyers x $500); about $38,000 at the measured 20% conversion.",
+            "basis": [
+              {
+                "opportunityId": "cop_55889a82e0344b7b8415",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_55889a82e0344b7b8415",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_b200f8c802b4_143796",
+        "digest": "b200f8c802b4ec5ccc412eb7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3445445736b6448d8c0a/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.057Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_2a8d187724b64d818fbf",
+      "contractDigest": "61e4c3f8783129b4e8120799",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the whole dealer population cannot carry $400,000",
+        "opportunityIds": [],
+        "why": "380 association dealerships, each buying at most one $500 list a month, is at most $190,000 in the 14-day window even at 100% conversion; the measured conversion is 22/110 = 20%, i.e. about 76 deals = $38,000."
+      },
+      "alternatives": [
+        {
+          "title": "Sell recall lists to all 380 dealers",
+          "why": "Caps at $190,000, below $400,000."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "reachable buyers",
+          "status": "EVIDENCED",
+          "value": 380,
+          "unit": "dealerships",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price per list",
+          "status": "EVIDENCED",
+          "value": 50000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.2,
+          "unit": "ratio",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum revenue in window",
+          "status": "EVIDENCED",
+          "value": 19000000,
+          "unit": "cents",
+          "sources": [
+            "s_vol",
+            "s_price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_55889a82e0344b7b8415#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "380 franchised dealerships in the state association; each buys at most one list a month",
+          "population": "Dealership service managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_55889a82e0344b7b8415#price",
+          "dated": "2026-11-24",
+          "claim": "Service managers paid $500 per monthly open-recall list (22 payment records)",
+          "population": "Dealership service managers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_55889a82e0344b7b8415#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "22 agreements from 110 contacts",
+          "population": "Dealership service managers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "MARKET_VOLUME: 800 deals at $500 are needed but only 380 buyers exist, each buying once in the window; the population caps revenue at $190,000.",
+        "resolution": "Lower the target to at most $190,000 (realistically ~$38,000 at the measured 20% conversion), or extend to further buyer populations/other states that Brain must first research.",
+        "decisiveLinks": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_55889a82e0344b7b8415",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "MARKET_VOLUME"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to $190,000 at most (380 buyers x $500); about $38,000 at the measured 20% conversion.",
+          "basis": [
+            {
+              "opportunityId": "cop_55889a82e0344b7b8415",
+              "field": "buyerVolume"
+            },
+            {
+              "opportunityId": "cop_55889a82e0344b7b8415",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_b200f8c802b4_143796",
+      "digest": "b200f8c802b4ec5ccc412eb7",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_3445445736b6448d8c0a/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:17:45.057Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_b200f8c802b4_143796",
+      "digest": "b200f8c802b4ec5ccc412eb7",
+      "contractDigest": "61e4c3f8783129b4e8120799",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $190,000, so they cannot reach the $400,000 still needed. To make it supportable, target: lower the target to about $190,000, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_55889a82e0344b7b8415"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_55889a82e0344b7b8415",
+            "title": "Open-recall customer outreach lists for franchised auto dealership service departments",
+            "missing": [
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 100000,
+            "potentialReach": 100000,
+            "card": {
+              "payer": "Dealership service managers",
+              "reachableChannel": "Service-manager emails in the state automobile dealers association directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:10:05.537Z",
+              "offerScope": "Open-recall customer outreach lists for franchised auto dealership service departments",
+              "priceCents": 50000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "franchised auto dealerships",
+              "mechanism": "INFORMATION_ASYMMETRY",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Service-manager emails in the state automobile dealers association directory"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 500 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 22 accepted of 110 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "381 deal(s) needed but only 380 in the window (380 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 10, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 14 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "380 franchised dealerships are members of the state automobile dealers association; each buys at most one list a month.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Open-recall customer outreach lists for franchised auto dealership service departments to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "22 agreements from 110 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$10",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Dealership service managers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Service managers paid $500 per monthly open-recall list (22 payment records, 2026-11-03 to 2026-11-24).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 40000000,
+          "daysLeft": 14,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:23.246Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_b200f8c802b4_143796",
+        "revisionDigest": "b200f8c802b4ec5ccc412eb7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3445445736b6448d8c0a/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56f023c9fb5c4154a99b/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a MARKET_VOLUME decisive gap is right. Recomputed: $400,000 / $500 = 800 purchases needed. The card's buyerVolume (EVIDENCE) counts 380 association dealerships, each buying at most one list a month, so in a 14-day window at most 380 purchases = $190,000 gross ($186,200 net of the $10 direct cost) even at 100% conversion; at the measured 22/110 = 20% conversion, 76 deals = $38,000. Even if every remaining unknown were resolved favourably this population cannot fit the target, so it is a constraint rather than missing evidence. Price is this buyer population's own paid records, settlement (5 days) and zero exposure fit, so no other link is decisive.",
+        "findings": [
+          "800 deals needed vs 380 possible: cap $190,000 < $400,000.",
+          "At measured 20% conversion: 76 x $500 = $38,000.",
+          "Brain's link basis text reads '381 deal(s) needed' which does not match 800; the revision's figure (800) is the correct one and the conclusion holds either way.",
+          "Resolution correctly leaves open other, uncounted buyer populations (other states, non-association dealers) for research rather than ruling them out."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:19:36.557Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_b200f8c802b4_143796",
+      "digest": "b200f8c802b4ec5ccc412eb7",
+      "contractDigest": "61e4c3f8783129b4e8120799",
+      "plan": {
+        "goalId": "wst_2a8d187724b64d818fbf",
+        "contractDigest": "61e4c3f8783129b4e8120799",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the whole dealer population cannot carry $400,000",
+          "opportunityIds": [],
+          "why": "380 association dealerships, each buying at most one $500 list a month, is at most $190,000 in the 14-day window even at 100% conversion; the measured conversion is 22/110 = 20%, i.e. about 76 deals = $38,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell recall lists to all 380 dealers",
+            "why": "Caps at $190,000, below $400,000."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "reachable buyers",
+            "status": "EVIDENCED",
+            "value": 380,
+            "unit": "dealerships",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per list",
+            "status": "EVIDENCED",
+            "value": 50000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.2,
+            "unit": "ratio",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum revenue in window",
+            "status": "EVIDENCED",
+            "value": 19000000,
+            "unit": "cents",
+            "sources": [
+              "s_vol",
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "380 franchised dealerships in the state association; each buys at most one list a month",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#price",
+            "dated": "2026-11-24",
+            "claim": "Service managers paid $500 per monthly open-recall list (22 payment records)",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_55889a82e0344b7b8415#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "22 agreements from 110 contacts",
+            "population": "Dealership service managers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "MARKET_VOLUME: 800 deals at $500 are needed but only 380 buyers exist, each buying once in the window; the population caps revenue at $190,000.",
+          "resolution": "Lower the target to at most $190,000 (realistically ~$38,000 at the measured 20% conversion), or extend to further buyer populations/other states that Brain must first research.",
+          "decisiveLinks": [
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_55889a82e0344b7b8415",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $190,000 at most (380 buyers x $500); about $38,000 at the measured 20% conversion.",
+            "basis": [
+              {
+                "opportunityId": "cop_55889a82e0344b7b8415",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_55889a82e0344b7b8415",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_b200f8c802b4_143796",
+        "digest": "b200f8c802b4ec5ccc412eb7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3445445736b6448d8c0a/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:17:45.057Z"
+      },
+      "review": {
+        "revisionId": "rev_b200f8c802b4_143796",
+        "revisionDigest": "b200f8c802b4ec5ccc412eb7",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_3445445736b6448d8c0a/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_56f023c9fb5c4154a99b/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a MARKET_VOLUME decisive gap is right. Recomputed: $400,000 / $500 = 800 purchases needed. The card's buyerVolume (EVIDENCE) counts 380 association dealerships, each buying at most one list a month, so in a 14-day window at most 380 purchases = $190,000 gross ($186,200 net of the $10 direct cost) even at 100% conversion; at the measured 22/110 = 20% conversion, 76 deals = $38,000. Even if every remaining unknown were resolved favourably this population cannot fit the target, so it is a constraint rather than missing evidence. Price is this buyer population's own paid records, settlement (5 days) and zero exposure fit, so no other link is decisive.",
+        "findings": [
+          "800 deals needed vs 380 possible: cap $190,000 < $400,000.",
+          "At measured 20% conversion: 76 x $500 = $38,000.",
+          "Brain's link basis text reads '381 deal(s) needed' which does not match 800; the revision's figure (800) is the correct one and the conclusion holds either way.",
+          "Resolution correctly leaves open other, uncounted buyer populations (other states, non-association dealers) for research rather than ruling them out."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:19:36.557Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:20:09.027Z"
+    },
+    "staleFinal": null
+  }
+}

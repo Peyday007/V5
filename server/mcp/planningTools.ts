@@ -200,8 +200,10 @@ const revisionTool: McpTool = {
   title: 'Planning: submit a plan revision',
   description:
     'Submit a plan revision (stance, strategy, alternatives, steps, cash sequence, proof day, quantities with UNKNOWN as null, ' +
-    'sources with population and buyer match, validation or no-plan reasoning, reach with its calibration, answers to the last ' +
-    'review). Brain checks it against the contract and its planner and returns every concrete problem to revise.',
+    'sources with population and buyer match (and `opportunityId` for a public source about an opening the session discovered), ' +
+    'validation (for a conditional plan, `decides`: the chain link(s) whose measurement decides whether it goes on) or no-plan ' +
+    'reasoning, reach with its calibration, answers to the last review). Brain checks it against the contract and its planner and ' +
+    'returns every concrete problem to revise.',
   inputSchema: { type: 'object', properties: { revision: { type: 'object' }, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: submit revision', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
@@ -290,7 +292,7 @@ const finalizeTool: McpTool = {
 const stateTool: McpTool = {
   name: 'brain_planning_state',
   title: 'Planning: the saved planning state',
-  description: 'Replay the goal’s saved planning record: contract, revisions, the current revision and its check, reviews, and the published plan (or the stale one).',
+  description: 'Replay the goal’s saved planning record: contract, revisions, the current revision and its check, reviews, and the published plan — or, when the owner’s objective, the goal’s terms or a weighed opening’s record changed after publication, the stale one with `staleBecause` saying what changed, so the session plans the world as it now stands.',
   inputSchema: { type: 'object', properties: { goal_id: { type: 'string' } }, required: ['goal_id'], additionalProperties: false },
   annotations: { title: 'Planning: state', ...READ_ONLY },
   run: async (args, { principal }) => {

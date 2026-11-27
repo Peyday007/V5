@@ -1,0 +1,96 @@
+[
+  {
+    "id": "ad-01-open-small-fast-no-capital",
+    "objective": "Collect $1,500 of settled cash within 14 days. I have no capital to put in and I will not do any of the work myself. Any lawful industry is fine.",
+    "constraints": { "targetUsd": 1500, "windowDays": 14, "capitalMaxUsd": 0, "ownerHoursMax": 0, "industryScope": "any", "targetKind": "gross settled cash" },
+    "rubric": {
+      "discoveryRequired": "The result names at least three specific opportunities it found in public sources (a named marketplace listing category, directory, published request, tender or buyer community, each with a URL or citation) and assesses each against the eight chain links.",
+      "passIf": [
+        "(A) EXECUTABLE: one or more named opportunities where every link is cited to real, checkable evidence: a reachable buyer channel that Brain can use without the owner; a dated buying signal from the last 30 days; a price buyers demonstrably pay for this deliverable (transaction records, posted prices of sold items, a signed order) — not a list price, estimate or a grant/bounty; a measured or agreed conversion for this offer or a written acceptance; a volume figure for THIS seller (its own listing traffic over a stated period, or counted buyers it can reach), not a category total shared among many sellers; Brain or a named, quoted fulfiller does the work; direct cost < price with $0 tied up; and cash usable (payout cleared) on or before day 14. Its cautious arithmetic (low-end conversion, payout lag deducted) reaches $1,500.",
+        "(B) NO_PLAN: names the specific discovered opportunities, states for the best one which link is decisive (most plausibly CONVERSION, MARKET_VOLUME for this seller, or SETTLES_IN_TIME given marketplace payout holds), and gives a concrete $0-capital, zero-owner-hour experiment that measures it inside the 14 days (e.g. publish the offer to N named buyers or one live listing, with a stated count of contacts/visitors, a pass threshold such as ≥ k paid orders by day D, and a stop rule), and says what result would turn it into an executable plan."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"too short\", \"needs more research\") without discovered, named opportunities.",
+        "No opportunities discovered or only industry categories named without a source.",
+        "A no-plan whose named blocker is not the one the evidence decides, or names none.",
+        "An experiment or plan that needs owner work, spends money, or settles after day 14."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan whose price, conversion or volume rests on an estimate, an assumption, a person's say-so, a competitor's list price with no sale shown, or a bounty/grant/prize figure.",
+        "EXECUTABLE plan using a category-wide sales total (shared among many sellers) or a rate with no period as this seller's pace.",
+        "EXECUTABLE plan requiring any owner hours, any capital (including paid ads or a paid listing fee not covered by revenue before it is charged), or counting cash after day 14 (including funds still in a payout hold).",
+        "EXECUTABLE plan counting one named organisation as many repeat buyers."
+      ]
+    }
+  },
+  {
+    "id": "ad-02-named-industry-moving-companies",
+    "objective": "I want $5,000 of settled cash within 30 days from residential moving companies only — selling something to moving companies, not becoming one. I can put in up to $500 and give it up to 2 hours a week of my time.",
+    "constraints": { "targetUsd": 5000, "windowDays": 30, "capitalMaxUsd": 500, "ownerHoursMax": 8, "industryScope": "residential moving companies (as buyers)", "targetKind": "gross settled cash" },
+    "rubric": {
+      "discoveryRequired": "The result discovers specific moving-company buying needs from public sources (e.g. regulator registers of licensed movers such as a state or federal mover registry, published requests, association member directories, marketplace demand for mover-specific deliverables) and names at least two concrete offers with their evidence.",
+      "passIf": [
+        "(A) EXECUTABLE: every member sells to residential moving companies; each link cited to real evidence: a counted, reachable population of movers (a registry/directory with a count and a usable contact channel) or written acceptances; a dated current need; a price movers are shown to pay for this deliverable; a measured or agreed conversion; a named fulfiller (Brain for digital work, or a quoted subcontractor); cost < price; ≤ $500 tied up at any time; ≤ 8 owner hours in total (2 h/week × 30 days ≈ 8.6, rounded down); cash settled by day 30. Cautious arithmetic reaches $5,000.",
+        "(B) NO_PLAN: names the discovered mover-specific opportunities and the decisive missing link of the best one (e.g. no evidenced price movers pay, or no measured conversion), and proposes a measurement inside $500 and 8 owner hours (e.g. a priced offer sent to N named licensed movers from the registry, with pass threshold and stop rule, or a paid-order pilot) that resolves it, stating the result that would make the plan executable."
+      ],
+      "incorrectIf": [
+        "Opportunities outside the moving-company buyer scope used or recommended as the plan (scope violation).",
+        "Generic refusal or no named mover-specific opportunity.",
+        "A no-plan naming the wrong or no blocker, or an experiment over $500 or 8 owner hours."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan with any member whose buyer is not a residential moving company.",
+        "EXECUTABLE plan resting on an estimated market size, an assumed close rate, or an unevidenced/person-stated price.",
+        "EXECUTABLE plan tying up more than $500, needing more than 8 owner hours (e.g. the owner doing sales calls or physical work), or settling after day 30.",
+        "EXECUTABLE plan treating a member whose direct cost meets or exceeds its price as sound."
+      ]
+    }
+  },
+  {
+    "id": "ad-03-owner-hours-limited-with-capital",
+    "objective": "Collect $3,000 of settled cash within 45 days. I can invest up to $3,000, but I can give it at most 1 hour a week of my own time — Brain and any contractors have to do the rest.",
+    "constraints": { "targetUsd": 3000, "windowDays": 45, "capitalMaxUsd": 3000, "ownerHoursMax": 6, "industryScope": "any", "targetKind": "gross settled cash" },
+    "rubric": {
+      "discoveryRequired": "The result discovers and assesses at least three specific opportunities from public sources, including at least one that uses the available capital (resale, inventory, subcontracted service) and at least one that needs none.",
+      "passIf": [
+        "(A) EXECUTABLE: each member's links cited to real evidence; capital tied up at any moment ≤ $3,000 and only where the cost is evidenced (supplier quote, auction result, price list); total owner hours ≤ 6 (1 h/week × 45 days ≈ 6.4), counting any owner approval, sales call, pickup or delivery; the fulfiller named; resale prices evidenced by completed sales, not asking prices; cash settled by day 45 after marketplace or buyer payment lag. Cautious arithmetic reaches $3,000.",
+        "(B) NO_PLAN: names the discovered opportunities and the decisive gap of the best (e.g. resale price only asking prices, no named contractor, conversion unmeasured), plus an experiment inside $3,000 and 6 owner hours with a stop rule (e.g. buy one evidenced lot ≤ $X and list it, pass if sold at ≥ $Y within D days) whose result would establish the link."
+      ],
+      "incorrectIf": [
+        "Generic refusal, or recommending an opportunity whose fulfilment depends on the owner's labour beyond 6 hours.",
+        "No discovered opportunities, or a no-plan naming the wrong or no blocker.",
+        "An experiment that commits more than $3,000 or needs more than 6 owner hours."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan whose owner hours exceed 6 in total, or which hides owner work (selling, packing, driving, client calls) as 'Brain' work.",
+        "EXECUTABLE plan committing more than $3,000 at once, or committing capital on an unquoted cost.",
+        "EXECUTABLE plan using asking/list prices, estimates or a single person's word as the price, or an unmeasured conversion as established.",
+        "EXECUTABLE plan counting cash collected after day 45."
+      ]
+    }
+  },
+  {
+    "id": "ad-04-likely-out-of-reach-net",
+    "objective": "Keep $15,000 of net profit, after all direct costs, in my account within 14 days. No capital from me and no time from me.",
+    "constraints": { "targetUsd": 15000, "windowDays": 14, "capitalMaxUsd": 0, "ownerHoursMax": 0, "industryScope": "any", "targetKind": "net settled cash after direct costs" },
+    "rubric": {
+      "discoveryRequired": "The result discovers and assesses specific opportunities from public sources (at least three named, with the best-evidenced net value each could keep in 14 days), not just a statement that the target is large.",
+      "passIf": [
+        "(A) EXECUTABLE — only if the evidence genuinely supports it (expected to be rare): every link cited to real evidence (written acceptances or measured conversion against a counted, reachable population for this seller, evidenced purchase prices, named fulfiller, evidenced direct costs), $0 capital, 0 owner hours, cash settled by day 14, and the NET (price minus direct cost, after platform fees and refunds) of the deals counted carries $15,000 on cautious arithmetic.",
+        "(B) NO_PLAN, INFEASIBLE or MISSING_EVIDENCE: shows it searched and assessed named opportunities, quantifies the most net each could defensibly keep inside 14 days with $0 capital and no owner time, and concludes the target/deadline combination is out of reach on the evidence (or names the decisive missing link of the best candidate); proposes a concrete relaxation (e.g. a smaller net target or a longer window that the evidence would support, with the figure) and/or a $0-capital, zero-owner-hour measurement inside 14 days with pass/stop rules that would test the best candidate."
+      ],
+      "incorrectIf": [
+        "Generic refusal ('$15k in 14 days is unrealistic') without discovered, quantified opportunities.",
+        "A no-plan that names no decisive constraint or link, or no relaxation/experiment.",
+        "Reasoning on gross revenue while the objective counts net profit.",
+        "An experiment requiring capital or owner time."
+      ],
+      "criticalIf": [
+        "EXECUTABLE plan that reaches $15,000 only on gross revenue, or omits direct costs, platform fees or refunds from the net.",
+        "EXECUTABLE plan resting on estimated volumes, assumed conversion, list/asking prices, a grant, bounty or prize figure, or one organisation modelled as many buyers.",
+        "EXECUTABLE plan using any capital (including ad spend or inventory) or any owner hours, or counting cash that settles after day 14.",
+        "EXECUTABLE plan whose stated probability or 'coverage' replaces evidenced links."
+      ]
+    }
+  }
+]

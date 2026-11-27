@@ -1,0 +1,1170 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_70a41de841c84cc68426",
+      "words": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 800000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$8,000 of buyer payments settled within 45 days with no up-front capital",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "8a257245b148c210e785a9ef"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_70a41de841c84cc68426",
+        "contractDigest": "8a257245b148c210e785a9ef",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Drop-ship the six recital costume bundles the studios ordered",
+          "opportunityIds": [
+            "cop_b31ce889d70143ef8a06"
+          ],
+          "why": "Six dance studios issued purchase orders at $1,800 per bundle (2026-11-18 to 11-26): $10,800, above the $8,000 target. Curtain Call Costumes Wholesale drop-ships at $1,100 per bundle invoiced net 30 after shipment, so no up-front capital: buyers pay in 14 days, the supplier is paid on day 31 out of those receipts."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil only five orders",
+            "why": "$9,000 also clears the target, but all six purchase orders are signed and the sixth adds margin against a late payer."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the six purchase orders at $1,800 per bundle and shipping addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 180000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Curtain Call Costumes Wholesale drop-ships six costume bundles to the studios (invoiced net 30 after shipment)",
+            "performer": "Curtain Call Costumes Wholesale",
+            "costCents": 660000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Curtain Call Costumes Wholesale",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $1,800 from each of the six studios",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 1 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 2 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 3 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 4 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 5 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 6 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 660000,
+            "label": "Supplier invoice, six bundles at $1,100, net 30 after shipment",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "price per bundle",
+            "status": "EVIDENCED",
+            "value": 180000,
+            "unit": "cents",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase orders",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "studios",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per bundle",
+            "status": "EVIDENCED",
+            "value": 110000,
+            "unit": "cents",
+            "sources": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "up-front capital",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#price",
+            "dated": "2026-11-26",
+            "claim": "Six dance studios issued purchase orders at $1,800 per bundle",
+            "population": "six dance studios",
+            "matchesBuyer": true
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Curtain Call Costumes Wholesale written price list $1,100 per bundle, drop-ship, invoiced net 30 after shipment",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $1,100 per bundle",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "14 days to first cash",
+            "population": "the ordering studios",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_b31ce889d70143ef8a06",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_b31ce889d70143ef8a06",
+            "deals": 6,
+            "price": 1800,
+            "directCost": 1100,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1da3b5904f7e_70f786",
+        "digest": "1da3b5904f7e8f7defb55543",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1819fe997db4e81b608/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:44.930Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_70a41de841c84cc68426",
+      "contractDigest": "8a257245b148c210e785a9ef",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Drop-ship the six recital costume bundles the studios ordered",
+        "opportunityIds": [
+          "cop_b31ce889d70143ef8a06"
+        ],
+        "why": "Six dance studios issued purchase orders at $1,800 per bundle (2026-11-18 to 11-26): $10,800, above the $8,000 target. Curtain Call Costumes Wholesale drop-ships at $1,100 per bundle invoiced net 30 after shipment, so no up-front capital: buyers pay in 14 days, the supplier is paid on day 31 out of those receipts."
+      },
+      "alternatives": [
+        {
+          "title": "Fulfil only five orders",
+          "why": "$9,000 also clears the target, but all six purchase orders are signed and the sixth adds margin against a late payer."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm the six purchase orders at $1,800 per bundle and shipping addresses",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "price"
+          ],
+          "priceCents": 180000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "DELIVER",
+          "label": "Curtain Call Costumes Wholesale drop-ships six costume bundles to the studios (invoiced net 30 after shipment)",
+          "performer": "Curtain Call Costumes Wholesale",
+          "costCents": 660000,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "fulfillment",
+            "directCosts"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Curtain Call Costumes Wholesale",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $1,800 from each of the six studios",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 14,
+          "dependsOn": "s2",
+          "evidence": [
+            "timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 1 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 2 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 3 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 4 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 5 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 180000,
+          "label": "Studio 6 payment",
+          "settlesDay": 14,
+          "stepId": "s3"
+        },
+        {
+          "day": 31,
+          "kind": "SPEND",
+          "amountCents": 660000,
+          "label": "Supplier invoice, six bundles at $1,100, net 30 after shipment",
+          "stepId": "s2"
+        }
+      ],
+      "proofDay": 14,
+      "quantities": [
+        {
+          "name": "price per bundle",
+          "status": "EVIDENCED",
+          "value": 180000,
+          "unit": "cents",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "purchase orders",
+          "status": "EVIDENCED",
+          "value": 6,
+          "unit": "studios",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier cost per bundle",
+          "status": "EVIDENCED",
+          "value": 110000,
+          "unit": "cents",
+          "sources": [
+            "fulfillment",
+            "directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 14,
+          "unit": "days",
+          "sources": [
+            "timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "up-front capital",
+          "status": "EVIDENCED",
+          "value": 0,
+          "unit": "cents",
+          "sources": [
+            "exposure"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#price",
+          "dated": "2026-11-26",
+          "claim": "Six dance studios issued purchase orders at $1,800 per bundle",
+          "population": "six dance studios",
+          "matchesBuyer": true
+        },
+        {
+          "id": "fulfillment",
+          "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Curtain Call Costumes Wholesale written price list $1,100 per bundle, drop-ship, invoiced net 30 after shipment",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "directCosts",
+          "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $1,100 per bundle",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "exposure",
+          "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#exposure",
+          "dated": "2026-11-24",
+          "claim": "Exposure $0",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "timeToFirstCash",
+          "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "14 days to first cash",
+          "population": "the ordering studios",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_b31ce889d70143ef8a06",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_b31ce889d70143ef8a06",
+          "deals": 6,
+          "price": 1800,
+          "directCost": 1100,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_1da3b5904f7e_70f786",
+      "digest": "1da3b5904f7e8f7defb55543",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_d1819fe997db4e81b608/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:27:44.930Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_1da3b5904f7e_70f786",
+      "digest": "1da3b5904f7e8f7defb55543",
+      "contractDigest": "8a257245b148c210e785a9ef",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 660000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 420000,
+        "minCashDay": 31,
+        "collectedCents": 1080000,
+        "collectedInWindowCents": 1080000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 420000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Recital costume bundles drop-shipped to dance studios\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Recital costume bundles drop-shipped to dance studios\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5005× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 700× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Recital costume bundles drop-shipped to dance studios\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_b31ce889d70143ef8a06"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Recital costume bundles drop-shipped to dance studios\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Recital costume bundles drop-shipped to dance studios\"",
+            "owner": "PERSON",
+            "cost": 1100
+          },
+          {
+            "label": "Collect payment for \"Recital costume bundles drop-shipped to dance studios\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_b31ce889d70143ef8a06",
+            "title": "Recital costume bundles drop-shipped to dance studios",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 8000,
+            "potentialReach": 8000,
+            "card": {
+              "payer": "Dance studio owners",
+              "reachableChannel": "The studios that issued purchase orders",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:46.924Z",
+              "offerScope": "Recital costume bundles drop-shipped to dance studios",
+              "priceCents": 180000,
+              "currency": "USD",
+              "fulfillmentOwner": "Curtain Call Costumes Wholesale (drop-ship; written price list $1,100 per bundle, invoiced net 30 after shipment)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "dance studios",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 180000,
+                "currency": "USD",
+                "deliverable": "Recital costume bundles drop-shipped to dance studios",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The studios that issued purchase orders"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 10800 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 10800 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Curtain Call Costumes Wholesale (drop-ship; written price list $1,100 per bundle (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 1100, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Recital costume bundles drop-shipped to dance studios to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1100",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Curtain Call Costumes Wholesale (drop-ship; written price list $1,100 per bundle, invoiced net 30 after shipment) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Dance studio owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Six dance studios issued purchase orders at $1,800 per recital costume bundle (purchase orders, 2026-11-18 to 2026-11-26).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_e1a99476ed494f998212"
+        ],
+        "scope": {
+          "targetCents": 800000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:19.131Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_1da3b5904f7e_70f786",
+        "revisionDigest": "1da3b5904f7e8f7defb55543",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1819fe997db4e81b608/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f34e4dca550a422287ee/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is justified: every link of the single member is established on the card. Price: six WRITTEN_ACCEPTANCE agreements at $1,800 (purchase orders 2026-11-18..26) from the studios themselves, so price is what this buyer pays. Fulfilment: Curtain Call Costumes Wholesale quoted drop-ship at $1,100 per bundle, invoiced net 30 after shipment (EVIDENCE), which is the recorded fulfiller and the step-s2 performer. Arithmetic: 6 x $1,800 = $10,800 received by day 14 (>= $8,000 target, inside 45 days); 6 x $1,100 = $6,600 supplier invoice due day 31 (ship day 1 + 30), paid from receipts; min cash +$4,200 on day 31, no owner funding, exposure $0 = cap. Net kept $4,200; the proof condition counts buyer payments settled, so gross $10,800 meets it. Five orders ($9,000) would also clear it, so one late payer does not break the target.",
+        "findings": [
+          "Supplier terms risk: the no-up-front-capital property rests on net-30 terms; if any studio pays after day 31 the owner must pay the supplier before receipt. The 17-day gap (day 14 receipt vs day 31 supplier due) is the buffer; collection should be chased before day 31.",
+          "Net kept is $4,200 (10,800 - 6,600); the target is met on received buyer payments, as the proof condition states, not on margin.",
+          "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: s1 and s3 cannot run until a mailbox and invoicing are connected (setup, not evidence).",
+          "Supplier stock/lead time for day-1 drop-ship is not on the card; the quote should be confirmed for six bundles before s2."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.012Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_1da3b5904f7e_70f786",
+      "digest": "1da3b5904f7e8f7defb55543",
+      "contractDigest": "8a257245b148c210e785a9ef",
+      "plan": {
+        "goalId": "wst_70a41de841c84cc68426",
+        "contractDigest": "8a257245b148c210e785a9ef",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Drop-ship the six recital costume bundles the studios ordered",
+          "opportunityIds": [
+            "cop_b31ce889d70143ef8a06"
+          ],
+          "why": "Six dance studios issued purchase orders at $1,800 per bundle (2026-11-18 to 11-26): $10,800, above the $8,000 target. Curtain Call Costumes Wholesale drop-ships at $1,100 per bundle invoiced net 30 after shipment, so no up-front capital: buyers pay in 14 days, the supplier is paid on day 31 out of those receipts."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil only five orders",
+            "why": "$9,000 also clears the target, but all six purchase orders are signed and the sixth adds margin against a late payer."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm the six purchase orders at $1,800 per bundle and shipping addresses",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 180000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Curtain Call Costumes Wholesale drop-ships six costume bundles to the studios (invoiced net 30 after shipment)",
+            "performer": "Curtain Call Costumes Wholesale",
+            "costCents": 660000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Curtain Call Costumes Wholesale",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $1,800 from each of the six studios",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 1 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 2 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 3 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 4 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 5 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 180000,
+            "label": "Studio 6 payment",
+            "settlesDay": 14,
+            "stepId": "s3"
+          },
+          {
+            "day": 31,
+            "kind": "SPEND",
+            "amountCents": 660000,
+            "label": "Supplier invoice, six bundles at $1,100, net 30 after shipment",
+            "stepId": "s2"
+          }
+        ],
+        "proofDay": 14,
+        "quantities": [
+          {
+            "name": "price per bundle",
+            "status": "EVIDENCED",
+            "value": 180000,
+            "unit": "cents",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "purchase orders",
+            "status": "EVIDENCED",
+            "value": 6,
+            "unit": "studios",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per bundle",
+            "status": "EVIDENCED",
+            "value": 110000,
+            "unit": "cents",
+            "sources": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 14,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "up-front capital",
+            "status": "EVIDENCED",
+            "value": 0,
+            "unit": "cents",
+            "sources": [
+              "exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#price",
+            "dated": "2026-11-26",
+            "claim": "Six dance studios issued purchase orders at $1,800 per bundle",
+            "population": "six dance studios",
+            "matchesBuyer": true
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Curtain Call Costumes Wholesale written price list $1,100 per bundle, drop-ship, invoiced net 30 after shipment",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $1,100 per bundle",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#exposure",
+            "dated": "2026-11-24",
+            "claim": "Exposure $0",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_b31ce889d70143ef8a06#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "14 days to first cash",
+            "population": "the ordering studios",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_b31ce889d70143ef8a06",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_b31ce889d70143ef8a06",
+            "deals": 6,
+            "price": 1800,
+            "directCost": 1100,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_1da3b5904f7e_70f786",
+        "digest": "1da3b5904f7e8f7defb55543",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1819fe997db4e81b608/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:44.930Z"
+      },
+      "review": {
+        "revisionId": "rev_1da3b5904f7e_70f786",
+        "revisionDigest": "1da3b5904f7e8f7defb55543",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d1819fe997db4e81b608/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_f34e4dca550a422287ee/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is justified: every link of the single member is established on the card. Price: six WRITTEN_ACCEPTANCE agreements at $1,800 (purchase orders 2026-11-18..26) from the studios themselves, so price is what this buyer pays. Fulfilment: Curtain Call Costumes Wholesale quoted drop-ship at $1,100 per bundle, invoiced net 30 after shipment (EVIDENCE), which is the recorded fulfiller and the step-s2 performer. Arithmetic: 6 x $1,800 = $10,800 received by day 14 (>= $8,000 target, inside 45 days); 6 x $1,100 = $6,600 supplier invoice due day 31 (ship day 1 + 30), paid from receipts; min cash +$4,200 on day 31, no owner funding, exposure $0 = cap. Net kept $4,200; the proof condition counts buyer payments settled, so gross $10,800 meets it. Five orders ($9,000) would also clear it, so one late payer does not break the target.",
+        "findings": [
+          "Supplier terms risk: the no-up-front-capital property rests on net-30 terms; if any studio pays after day 31 the owner must pay the supplier before receipt. The 17-day gap (day 14 receipt vs day 31 supplier due) is the buffer; collection should be chased before day 31.",
+          "Net kept is $4,200 (10,800 - 6,600); the target is met on received buyer payments, as the proof condition states, not on margin.",
+          "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: s1 and s3 cannot run until a mailbox and invoicing are connected (setup, not evidence).",
+          "Supplier stock/lead time for day-1 drop-ship is not on the card; the quote should be confirmed for six bundles before s2."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.012Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:32:56.331Z"
+    },
+    "staleFinal": null
+  }
+}

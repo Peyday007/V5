@@ -1,0 +1,1142 @@
+[
+  {
+    "id": "ac-01-self-storage-lien-workbook",
+    "heldOut": true,
+    "description": "Every link evidenced. $3,000 needs 12 sales at $250. 340 operators are counted; 150 were asked and 18 paid (12%, Wilson-95 low ≈ 7.7%). The 190 not yet asked × 7.7% ≈ 14.7 sales × $250 ≈ $3,660 ≥ $3,000 even cautiously; $246 kept a sale, cash in 4 days, no capital, Brain produces it. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "self-storage facilities",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "storageLien",
+        "title": "Lien-sale notice and auction compliance workbook for self-storage operators",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "self-storage facilities",
+        "payer": "Self-storage facility operators",
+        "channel": "Facility office emails published in the state self-storage association member directory",
+        "offer": "A workbook that schedules statutory lien-sale notices and documents each auction step",
+        "price": 250,
+        "priceEvidence": "Self-storage operators paid $250 per lien-compliance workbook in this offer's first outreach (18 paid invoices, 2026-11-02 to 2026-11-20).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "340 self-storage operators are listed in the state self-storage association member directory; each must send statutory lien-sale notices for delinquent units every month.",
+        "conversion": {
+          "paid": 18,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-02-tattoo-listing-owner-hours",
+    "heldOut": true,
+    "description": "2 owner hours a week over 21 days = 6 hours. The listing's own analytics: 3,100 unique visitors in 30 days and 93 sales (3.0%, Wilson-95 low ≈ 2.45%). Selling for 18 of the 21 days (3-day payout lag) ≈ 1,860 visitors × 2.45% ≈ 45 sales × $29 ≈ $1,310 ≥ $1,200, with no owner hours (Brain/marketplace). The owner walkthrough needs 8 owner hours per deal, over the 6-hour limit on a single deal, so a correct plan may not use it. Executable on the listing alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "tattoo studios",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $1,200 of settled cash within 21 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "tattooForms",
+        "title": "Client consent and aftercare form pack for tattoo studios (existing digital-download listing)",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "tattoo studios",
+        "payer": "Tattoo studio owners shopping the digital-download marketplace",
+        "channel": "This offer's own live marketplace listing and the marketplace search",
+        "price": 29,
+        "priceEvidence": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0,
+        "performer": "BRAIN",
+        "volume": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+        "conversion": {
+          "paid": 93,
+          "of": 3100,
+          "unit": "VISITORS"
+        }
+      },
+      {
+        "key": "tattooInspection",
+        "title": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "tattoo studios",
+        "payer": "Tattoo studio owners",
+        "channel": "Studios that signed by email",
+        "price": 450,
+        "priceEvidence": "Three studios signed written orders at $450 per on-site walkthrough (signed orders, 2026-11-24).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          450,
+          450,
+          450
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 6,
+      "mustNotUse": [
+        "tattooInspection"
+      ],
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-03-collision-adas-net",
+    "heldOut": true,
+    "description": "A net (money-kept) objective. Twelve signed work orders at $350 = $4,200 gross, but each calibration costs $210 from the quoted subcontractor: $140 kept a deal × 12 = $1,680 ≥ $1,500 net. The subcontractor invoices net 15 after the work, so nothing is tied up; shops pay in 10 days. Executable only if all twelve are counted net; reading $4,200 gross against the target is the trap, but the net arithmetic still clears.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "auto body collision repair",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $1,500 of net cash after direct costs, settled within 30 days, using no up-front capital.",
+    "openings": [
+      {
+        "key": "adasCalibration",
+        "title": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "auto body collision repair",
+        "payer": "Independent collision repair shop owners",
+        "channel": "The shop owners who signed (direct phone and email)",
+        "price": 350,
+        "priceEvidence": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+        "cost": 210,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+        "agreements": [
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-04-youth-league-scope-change",
+    "heldOut": true,
+    "description": "First reading (any industry): both openings are fully evidenced; the league workbook alone clears $3,000 (280 leagues not yet asked × Wilson-95 low of 21/140 ≈ 10% ≈ 28 × $180 ≈ $5,000) and the golf audit can add more (80 courses not yet asked × Wilson-95 low of 15/100 ≈ 9.3% ≈ 7 × $400 ≈ $2,800). Then the owner restricts the objective to youth sports leagues: only the league workbook may be planned, and it alone carries $3,000 (17 sales needed of ≈ 28 cautious). Executable; the golf audit is out of scope.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "youth sports leagues",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital, in a single industry the owner names: youth sports leagues."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "youthLeague",
+        "title": "Registration-fee and scholarship reconciliation workbook for volunteer-run youth soccer leagues",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "youth sports leagues",
+        "payer": "Youth league treasurers",
+        "channel": "Treasurer emails published in the state youth soccer association league directory",
+        "price": 180,
+        "priceEvidence": "21 league treasurers paid $180 each for the reconciliation workbook in the offer's first outreach (payment records, 2026-11-05 to 2026-11-24).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "420 member leagues are listed in the state youth soccer association directory; each closes its fall-season registration books in December.",
+        "conversion": {
+          "paid": 21,
+          "of": 140,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "golfTeeSheet",
+        "title": "Tee-sheet utilisation and no-show audit for public golf courses",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "public golf courses",
+        "payer": "Public golf course general managers",
+        "channel": "Manager emails published in the state golf association course directory",
+        "price": 400,
+        "priceEvidence": "15 course managers paid $400 each for the audit (payment records, 2026-11-03 to 2026-11-21).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "180 public golf courses are listed in the state golf association directory; each reviews its tee-sheet before setting next season's rates in winter.",
+        "conversion": {
+          "paid": 15,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "golfTeeSheet"
+      ],
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-05-pest-records-settlement-fact-change",
+    "heldOut": true,
+    "description": "Four signed orders at $600 = $2,400 against $2,000 in 10 days; each ties up a $50 records-extract fee (4 × $50 = $200, inside the $200 limit). First reading: operators pay net 30, so cash lands on day 30, after the 10-day deadline: infeasible on the deadline (settlement after the deadline). Then the fact changes: the operators agree to pay by card on delivery (5 days to cash). Now $2,400 settles by day 5 inside the 10 days with $200 tied up: executable.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "pest control operators",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $2,000 of settled cash within 10 days with at most $200 of capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "DAYS_TO_CASH",
+          "opening": "pesticideRecords",
+          "days": 5
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    },
+    "openings": [
+      {
+        "key": "pesticideRecords",
+        "title": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "pest control operators",
+        "payer": "Licensed pest control operators",
+        "channel": "The operators who signed by email",
+        "price": 600,
+        "priceEvidence": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+        "cost": 50,
+        "capital": 50,
+        "daysToCash": 30,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          600,
+          600,
+          600,
+          600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 200
+    }
+  },
+  {
+    "id": "ac-06-landscaping-mower-resale",
+    "heldOut": true,
+    "description": "Three contractors signed at $9,500 per refurbished mower; the quoted refurbisher charges $6,000 a unit paid on order. Two units = $19,000 ≥ $18,000, tying up $12,000 at once, inside the $15,000 limit ($3,500 kept a unit); cash in 12 days, so even sequential units settle well inside 45 days. Executable with large capital.",
+    "dimensions": {
+      "capital": "large",
+      "target": "large",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "landscaping contractors",
+      "mechanism": "RESALE_OR_ASSET"
+    },
+    "objective": "Collect $18,000 of settled cash within 45 days with at most $15,000 of capital.",
+    "openings": [
+      {
+        "key": "mowers",
+        "title": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "landscaping contractors",
+        "payer": "Landscaping contractors",
+        "channel": "The contractors who signed purchase agreements",
+        "price": 9500,
+        "priceEvidence": "Three landscaping contractors signed purchase agreements at $9,500 per refurbished commercial zero-turn mower (signed agreements, 2026-11-22).",
+        "cost": 6000,
+        "capital": 6000,
+        "daysToCash": 12,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Midwest Turf Equipment Auctions (written quote: $6,000 per refurbished unit, delivered to the buyer, paid on order)",
+        "agreements": [
+          9500,
+          9500,
+          9500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 15000
+    }
+  },
+  {
+    "id": "ac-07-car-wash-monthly-owner-hours",
+    "heldOut": true,
+    "description": "Recurring objective with 1 owner hour a week (≈ 4 hours over 30 days). Seven operators signed at $250 a month = $1,750 a month ≥ $1,500; Brain prepares the report at $6, first month paid in 10 days. No owner-performed member, so owner hours used are 0. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "car washes",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Earn $1,500 a month in recurring revenue within 30 days with no more than 1 hour a week of owner time.",
+    "openings": [
+      {
+        "key": "washCompliance",
+        "title": "Monthly water-reclaim and discharge-permit self-monitoring report for car wash operators",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "car washes",
+        "payer": "Car wash operators",
+        "channel": "The operators who signed by email",
+        "price": 250,
+        "monthly": true,
+        "priceEvidence": "Seven car wash operators signed month-to-month agreements at $250 a month for the self-monitoring report (signed agreements, 2026-11-23).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.25,
+        "performer": "BRAIN",
+        "volume": "210 car washes hold municipal industrial-discharge permits in the metro area; each must file a discharge self-monitoring report every month.",
+        "agreements": [
+          250,
+          250,
+          250,
+          250,
+          250,
+          250,
+          250
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "ownerHoursMax": 4,
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-08-bookstore-one-sound-opening",
+    "heldOut": true,
+    "description": "Two openings. The author-event setup looks large at $800, but a second source prices it at $80: contested, so it may not be counted. The consignment workbook has five signed orders at $300 = $1,500 ≥ $1,200, paid in 5 days, Brain produces it at $5. Executable on the consignment workbook alone, inside 14 days.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "independent bookstores",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $1,200 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "consignment",
+        "title": "Consignment-sales reconciliation and payout workbook for independent bookstores",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent bookstores",
+        "payer": "Independent bookstore owners",
+        "channel": "The stores that signed by email",
+        "price": 300,
+        "priceEvidence": "Five independent bookstores signed written orders at $300 each for the consignment workbook (signed orders, 2026-11-25).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          300,
+          300,
+          300,
+          300,
+          300
+        ]
+      },
+      {
+        "key": "authorEvents",
+        "title": "Author-event ticketing and RSVP setup for independent bookstores",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent bookstores",
+        "payer": "Independent bookstore event managers",
+        "channel": "Store emails in the regional booksellers association directory",
+        "price": 800,
+        "priceContradiction": 80,
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "240 member stores are listed in the regional booksellers association directory; each hosts author events monthly.",
+        "conversion": {
+          "paid": 10,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "authorEvents"
+      ],
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-09-dance-recital-costumes",
+    "heldOut": true,
+    "description": "Six studios issued purchase orders at $1,800 = $10,800 ≥ $8,000. The wholesaler drop-ships at $1,100 a bundle invoiced net 30 after shipment (shipping by ~day 7, due ~day 37 < 45), so no capital is tied up; studios pay in 14 days. $700 kept a bundle. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "dance studios",
+      "mechanism": "RESALE_OR_ASSET"
+    },
+    "objective": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "recitalCostumes",
+        "title": "Recital costume bundles drop-shipped to dance studios",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "dance studios",
+        "payer": "Dance studio owners",
+        "channel": "The studios that issued purchase orders",
+        "price": 1800,
+        "priceEvidence": "Six dance studios issued purchase orders at $1,800 per recital costume bundle (purchase orders, 2026-11-18 to 2026-11-26).",
+        "cost": 1100,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Curtain Call Costumes Wholesale (drop-ship; written price list $1,100 per bundle, invoiced net 30 after shipment)",
+        "agreements": [
+          1800,
+          1800,
+          1800,
+          1800,
+          1800,
+          1800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ac-10-charter-price-from-other-product",
+    "heldOut": true,
+    "description": "Every link is filed, but the $1,500 is what charter management organisations pay for a student-information-system licence — another product. Nothing evidences what a school pays for a lottery audit workbook (the 12 agreements carry no price). At $1,500 three deals would reach $4,500; at no evidenced price there is no plan. Decisive gap: missing price evidence.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "charter schools",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $4,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "lotteryAudit",
+        "title": "Enrollment-lottery and waitlist audit workbook for charter schools",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "charter schools",
+        "payer": "Charter school operations directors",
+        "channel": "Operations-director emails in the state charter school association directory",
+        "price": 1500,
+        "priceEvidence": "Charter management organisations pay $1,500 a year per campus for a student-information-system software licence (vendor price sheet, 2026).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "260 charter schools are authorised by the state; each must run and document a public enrollment lottery every spring.",
+        "conversion": {
+          "paid": 12,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "lotteryAudit"
+      },
+      "notAPurchasePrice": [
+        "lotteryAudit"
+      ]
+    }
+  },
+  {
+    "id": "ac-11-pawn-price-only-said",
+    "heldOut": true,
+    "description": "3 owner hours a week over 28 days = 12 hours, and Brain performs the deals, so hours are not the problem. The $400 price is only an acquaintance's word; nothing shows a pawnbroker paying it. At $400, 6 deals of 310 would do; at no evidenced price, no plan. Decisive gap: price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "pawn shops",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,400 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "pawnHoldLog",
+        "title": "Police hold-period and transaction-reporting compliance log for pawn shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "pawn shops",
+        "payer": "Licensed pawnbrokers",
+        "channel": "Shop emails from the state pawnbroker licence register",
+        "price": 400,
+        "priceBasis": "PERSON",
+        "priceEvidence": "A pawnbroker the owner knows said shops would pay $400 for the log.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "310 pawnbrokers hold state licences; each must report transactions to police daily and keep hold-period logs for inspection.",
+        "conversion": {
+          "paid": 9,
+          "of": 90,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "ac-12-salon-price-contradicted-later",
+    "heldOut": true,
+    "description": "First reading: every link evidenced. 150 salons not yet asked × Wilson-95 low of 18/150 ≈ 7.7% ≈ 11 × $350 ≈ $3,850 ≥ $3,000: executable. Then a new source states the binder's price as $35. On a contested price no plan is established; and at $35 even all 300 salons × 12% = 36 × $35 = $1,260 < $3,000. Decisive gap: the contradicted price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "hair salons",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CONTRADICTING_EVIDENCE",
+          "opening": "salonSafety",
+          "field": "price",
+          "value": 35
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "salonSafety",
+        "title": "Chemical safety data-sheet and exposure-log binder for hair salons",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "hair salons",
+        "payer": "Hair salon owners",
+        "channel": "Salon emails from the county cosmetology establishment licence list",
+        "price": 350,
+        "priceEvidence": "18 salons paid $350 each for the binder in the offer's first outreach (payment records, 2026-11-04 to 2026-11-22).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "300 salons hold county cosmetology establishment licences; each must keep current safety data sheets and exposure logs for inspection.",
+        "conversion": {
+          "paid": 18,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ac-13-bnb-volume-estimated",
+    "heldOut": true,
+    "description": "$3,500 needs 20 sales at $175. The price and a 14/120 conversion are evidenced, but how many innkeepers exist beyond the 120 already asked is only Brain's estimate; the 14 paid so far are $2,450. Market volume is the decisive gap: an estimate is not evidence.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "bed-and-breakfast inns",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "lodgingTax",
+        "title": "Lodging-tax and occupancy filing workbook for bed-and-breakfast inns",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "bed-and-breakfast inns",
+        "payer": "B&B innkeepers",
+        "channel": "Innkeeper emails on the state tourism board lodging listings",
+        "price": 175,
+        "priceEvidence": "Innkeepers paid $175 each for the filing workbook (14 payment records, 2026-11-06 to 2026-11-23).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "Brain estimates about 500 B&Bs in the region would buy a filing workbook each quarter.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 14,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ac-14-library-grant-as-price",
+    "heldOut": true,
+    "description": "The $5,000 is a state grant awarded to libraries to fund programming — money paid to the library by the state, not what a library pays for a curriculum kit. One kit \"at $5,000\" would meet the target; at no evidenced purchase price there is no plan. Decisive gap: price (a grant is not a purchase price).",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "public libraries",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $5,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "literacyKits",
+        "title": "Digital-literacy class curriculum kits for public libraries",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "public libraries",
+        "payer": "Public library directors",
+        "channel": "Director emails in the state library directory",
+        "price": 5000,
+        "priceEvidence": "The state library agency awards public libraries $5,000 digital-literacy grants to fund adult programming (grant announcement, 2026-10-15).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "190 public library systems are listed in the state library directory; each runs adult programming.",
+        "conversion": {
+          "paid": 6,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "notAPurchasePrice": [
+        "literacyKits"
+      ]
+    }
+  },
+  {
+    "id": "ac-15-scrap-one-rfq-swept",
+    "heldOut": true,
+    "description": "One named recycler issued one $3,500 RFQ. Nothing says it buys again or that other recyclers buy, so the most this opening can bring is $3,500 against $12,000; modelling it as many repeat buyers invents the rest. Decisive gap: market volume (one organisation is not a population).",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "scrap metal recycling",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $12,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "northgateAudit",
+        "title": "Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "scrap metal recycling",
+        "payer": "Northgate Metals Recycling, Inc.",
+        "channel": "Northgate's procurement contact named on its published request for quotation",
+        "price": 3500,
+        "priceEvidence": "Northgate Metals Recycling issued a $3,500 request for quotation for a scale-ticket and seller-ID compliance audit (RFQ, 2026-11-19).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 25,
+        "hours": 2,
+        "performer": "BRAIN"
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "payerDealsMax": {
+        "northgateAudit": 1
+      }
+    }
+  },
+  {
+    "id": "ac-16-ski-binding-no-technician",
+    "heldOut": true,
+    "description": "Four shops signed at $1,200 = $4,800 ≥ $4,000, but nobody is established to perform DIN inspections (no certified technician named, and Brain cannot do physical certification). Decisive gap: fulfilment.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "FULFILMENT",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "ski rental shops",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "bindingInspection",
+        "title": "Pre-season binding release-value (DIN) inspection and certification for ski rental fleets",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "ski rental shops",
+        "payer": "Ski rental shop owners",
+        "channel": "The shops that signed work orders",
+        "price": 1200,
+        "priceEvidence": "Four ski rental shops signed work orders at $1,200 per fleet inspection (signed orders, 2026-11-21).",
+        "cost": 600,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 2,
+        "performer": "NOBODY",
+        "agreements": [
+          1200,
+          1200,
+          1200,
+          1200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "FULFILMENT"
+        ],
+        "opening": "bindingInspection"
+      }
+    }
+  },
+  {
+    "id": "ac-17-congregation-net-cost-at-price",
+    "heldOut": true,
+    "description": "Net objective. Gross reach is $5,600 (livestream) + $1,500 (giving workbook) = $7,100 ≥ $3,000, but the livestream installer's quote equals the $1,400 price, so each install keeps $0 and may not be a member. The giving workbook keeps $145 × 10 = $1,450, and its whole counted market (10 congregations) has signed. Net reachable ≈ $1,450 < $3,000. Decisive: the livestream economics (cost at price).",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "ECONOMICS",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "religious congregations",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $3,000 of net cash after direct costs, settled within 30 days, using no up-front capital.",
+    "openings": [
+      {
+        "key": "livestreamInstall",
+        "title": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "religious congregations",
+        "payer": "Congregation administrators",
+        "channel": "The congregations that signed",
+        "price": 1400,
+        "priceEvidence": "Four congregations signed installation agreements at $1,400 each (signed agreements, 2026-11-23).",
+        "cost": 1400,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Sanctuary AV Installers (written quote: $1,400 per installation)",
+        "agreements": [
+          1400,
+          1400,
+          1400,
+          1400
+        ]
+      },
+      {
+        "key": "givingWorkbook",
+        "title": "Online-giving setup and year-end contribution statement workbook for congregations",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "religious congregations",
+        "payer": "Congregation treasurers",
+        "channel": "The congregations that signed",
+        "price": 150,
+        "priceEvidence": "Ten congregations signed orders at $150 each for the year-end statement workbook (signed orders, 2026-11-23).",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The denomination's regional office lists 10 member congregations on its online-giving platform, and all 10 have signed; no other congregation uses the platform.",
+        "agreements": [
+          150,
+          150,
+          150,
+          150,
+          150,
+          150,
+          150,
+          150,
+          150,
+          150
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "ECONOMICS"
+        ],
+        "opening": "livestreamInstall"
+      },
+      "mustNotUse": [
+        "livestreamInstall"
+      ]
+    }
+  },
+  {
+    "id": "ac-18-bridal-owner-hours-exceeded",
+    "heldOut": true,
+    "description": "Eight boutiques signed at $300, but the owner drafts each pattern set personally at 5 hours a deal. $2,000 needs 7 deals = 35 owner hours; 3 hours a week over 28 days allows 12 (2 deals = $600). Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "bridal boutiques",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $2,000 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "bustlePatterns",
+        "title": "Custom bustle and alteration pattern drafting for bridal boutiques, drafted by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "bridal boutiques",
+        "payer": "Bridal boutique owners",
+        "channel": "The boutiques that signed orders",
+        "price": 300,
+        "priceEvidence": "Eight bridal boutiques signed orders at $300 per pattern set (signed orders, 2026-11-24).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 5,
+        "performer": "OWNER",
+        "agreements": [
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300,
+          300
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "ac-19-nursery-capital-cut",
+    "heldOut": true,
+    "description": "First reading: two garden centres signed at $12,000 a truckload; one truckload costs $7,000 paid on order, inside the $8,000 limit, and pays in 15 days: $12,000 ≥ $10,000 within 40 days, executable. Then the owner cuts capital to $2,000: each truckload must tie up $7,000 and nothing evidences a buyer prepaying, so no truckload fits. Infeasible on capital.",
+    "dimensions": {
+      "capital": "small",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "wholesale plant nurseries",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $10,000 of settled cash within 40 days with at most $8,000 of capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 2000
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 8000
+    },
+    "openings": [
+      {
+        "key": "shadeTrees",
+        "title": "Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "wholesale plant nurseries",
+        "payer": "Independent garden centre owners",
+        "channel": "The garden centres that signed purchase agreements",
+        "price": 12000,
+        "priceEvidence": "Two garden centres signed purchase agreements at $12,000 per truckload of container-grown shade trees, payable on delivery (signed agreements, 2026-11-20).",
+        "cost": 7000,
+        "capital": 7000,
+        "daysToCash": 15,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Willow Creek Growers (liquidation quote: $7,000 per truckload, freight included, paid on order)",
+        "agreements": [
+          12000,
+          12000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 2000
+    }
+  },
+  {
+    "id": "ac-20-dealer-recall-out-of-reach",
+    "heldOut": true,
+    "description": "$400,000 in 14 days: every association dealership buying one $500 list is 380 × $500 = $190,000, under half the target at 100% conversion. Infeasible as stated (target and deadline).",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "franchised auto dealerships",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "objective": "Collect $400,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "recallLists",
+        "title": "Open-recall customer outreach lists for franchised auto dealership service departments",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "franchised auto dealerships",
+        "payer": "Dealership service managers",
+        "channel": "Service-manager emails in the state automobile dealers association directory",
+        "price": 500,
+        "priceEvidence": "Service managers paid $500 per monthly open-recall list (22 payment records, 2026-11-03 to 2026-11-24).",
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "380 franchised dealerships are members of the state automobile dealers association; each buys at most one list a month.",
+        "conversion": {
+          "paid": 22,
+          "of": 110,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET",
+          "DEADLINE"
+        ]
+      }
+    }
+  }
+]

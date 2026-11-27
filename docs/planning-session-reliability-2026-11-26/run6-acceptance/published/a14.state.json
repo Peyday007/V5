@@ -1,0 +1,714 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_9c0e3c95da664723b6c6",
+      "words": "Collect $5,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 500000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$5,000 of settled cash received within 45 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "d04c100b8b0ab3540cfb3ef4"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_9c0e3c95da664723b6c6",
+        "contractDigest": "d04c100b8b0ab3540cfb3ef4",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $5,000 is a grant to libraries, not a price for curriculum kits",
+          "opportunityIds": [],
+          "why": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell one $5,000 kit to a grant-funded library",
+            "why": "Treats the grant amount as a purchase price, which it is not."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price public libraries pay for digital-literacy curriculum kits",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per kit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "a price a library is shown paying"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 190,
+            "unit": "library systems",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#price",
+            "dated": "2026-10-15",
+            "claim": "State library agency awards $5,000 digital-literacy grants (a grant, not a purchase price)",
+            "population": "Public libraries (grant recipients)",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "6 agreements from 60 contacts",
+            "population": "Public library directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "190 public library systems listed",
+            "population": "Public library directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000.",
+          "resolution": "Brain researches what public libraries actually pay for digital-literacy curriculum kits (library procurement records, vendor price lists, grant-funded purchase orders) or records a paid order from a directory-listed library; with an established price P, ceil($5,000/(P-$20)) deals at the measured 6/60 conversion from 190 library systems, settling in 14 days, fit the 45-day window.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_88986dd4eda6425bb716",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f6e2e19c59e3_39f66b",
+        "digest": "f6e2e19c59e3cc4bbae62843",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99b1bb2a03d344f9a221/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.655Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_9c0e3c95da664723b6c6",
+      "contractDigest": "d04c100b8b0ab3540cfb3ef4",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the $5,000 is a grant to libraries, not a price for curriculum kits",
+        "opportunityIds": [],
+        "why": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000."
+      },
+      "alternatives": [
+        {
+          "title": "Sell one $5,000 kit to a grant-funded library",
+          "why": "Treats the grant amount as a purchase price, which it is not."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Establish the price public libraries pay for digital-literacy curriculum kits",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per kit",
+          "sources": [
+            "s_price"
+          ],
+          "needs": "a price a library is shown paying"
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyers",
+          "status": "EVIDENCED",
+          "value": 190,
+          "unit": "library systems",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_88986dd4eda6425bb716#price",
+          "dated": "2026-10-15",
+          "claim": "State library agency awards $5,000 digital-literacy grants (a grant, not a purchase price)",
+          "population": "Public libraries (grant recipients)",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_88986dd4eda6425bb716#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "6 agreements from 60 contacts",
+          "population": "Public library directors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_88986dd4eda6425bb716#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "190 public library systems listed",
+          "population": "Public library directors",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000.",
+        "resolution": "Brain researches what public libraries actually pay for digital-literacy curriculum kits (library procurement records, vendor price lists, grant-funded purchase orders) or records a paid order from a directory-listed library; with an established price P, ceil($5,000/(P-$20)) deals at the measured 6/60 conversion from 190 library systems, settling in 14 days, fit the 45-day window.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_88986dd4eda6425bb716",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_f6e2e19c59e3_39f66b",
+      "digest": "f6e2e19c59e3cc4bbae62843",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_99b1bb2a03d344f9a221/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:28:11.655Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_f6e2e19c59e3_39f66b",
+      "digest": "f6e2e19c59e3cc4bbae62843",
+      "contractDigest": "d04c100b8b0ab3540cfb3ef4",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 45474× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Public library directors — Digital-literacy cla\" needs [figure withheld] and keeps [figure withheld], 4965× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Public library directors\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_88986dd4eda6425bb716"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Public library directors",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Public library directors",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_88986dd4eda6425bb716",
+            "title": "Digital-literacy class curriculum kits for public libraries",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 5000,
+            "card": {
+              "payer": "Public library directors",
+              "reachableChannel": "Director emails in the state library directory",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:22.673Z",
+              "offerScope": "Digital-literacy class curriculum kits for public libraries",
+              "priceCents": 500000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "public libraries",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Director emails in the state library directory"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 6 accepted of 60 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 20, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "14 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "190 public library systems are listed in the state library directory; each runs adult programming.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Digital-literacy class curriculum kits for public libraries to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "6 agreements from 60 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$20",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Public library directors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "The state library agency awards public libraries $5,000 digital-literacy grants to fund adult programming (grant announcement, 2026-10-15).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "14 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_ee1dc442cbfc4b498b92"
+        ],
+        "scope": {
+          "targetCents": 500000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:20.170Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_f6e2e19c59e3_39f66b",
+        "revisionDigest": "f6e2e19c59e3cc4bbae62843",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99b1bb2a03d344f9a221/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_10c0dd61f5074cad9a2e/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE decisive is right. The card's priceCents $5,000 is the state library agency's digital-literacy grant amount (announcement 2026-10-15): money awarded to libraries, not a price any library paid or agreed for a curriculum kit; a grant is not a purchase price, and Brain's link agrees ('no single price on the card'). No agreement is recorded. Other links are evidenced: 190 library systems in the state directory, 6/60 conversion, Brain-produced spreadsheet $20, $0 exposure, 14 days to cash inside 45. The gap is stated as a gap, not a constraint.",
+        "findings": [
+          "The resolution lists 'vendor price lists' - what other sellers charge is a benchmark, not what these buyers pay; library procurement records / purchase orders for comparable kits, or a paid order from a directory-listed library at a stated price, are what close OFFER_AND_PRICE. The priced-offer test is the decisive route.",
+          "Formula ceil($5,000/(P-$20)) is correct for net; for the received-cash proof condition ceil($5,000/P) suffices. At ~19 expected sales (10% of 190), any established price >= ~$265 carries the target.",
+          "Card inconsistency: 6 agreements from 60 contacts are said to be measured on this offer but no agreed price is recorded."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:57.104Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_f6e2e19c59e3_39f66b",
+      "digest": "f6e2e19c59e3cc4bbae62843",
+      "contractDigest": "d04c100b8b0ab3540cfb3ef4",
+      "plan": {
+        "goalId": "wst_9c0e3c95da664723b6c6",
+        "contractDigest": "d04c100b8b0ab3540cfb3ef4",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $5,000 is a grant to libraries, not a price for curriculum kits",
+          "opportunityIds": [],
+          "why": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000."
+        },
+        "alternatives": [
+          {
+            "title": "Sell one $5,000 kit to a grant-funded library",
+            "why": "Treats the grant amount as a purchase price, which it is not."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price public libraries pay for digital-literacy curriculum kits",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per kit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "a price a library is shown paying"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 190,
+            "unit": "library systems",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#price",
+            "dated": "2026-10-15",
+            "claim": "State library agency awards $5,000 digital-literacy grants (a grant, not a purchase price)",
+            "population": "Public libraries (grant recipients)",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "6 agreements from 60 contacts",
+            "population": "Public library directors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_88986dd4eda6425bb716#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "190 public library systems listed",
+            "population": "Public library directors",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The card's only price figure is the state library agency's $5,000 digital-literacy grant to libraries (grant announcement 2026-10-15) - money awarded to the library, not a price any library is shown paying for a curriculum kit; no agreement is recorded. With no established price, no number of deals can be shown to reach $5,000.",
+          "resolution": "Brain researches what public libraries actually pay for digital-literacy curriculum kits (library procurement records, vendor price lists, grant-funded purchase orders) or records a paid order from a directory-listed library; with an established price P, ceil($5,000/(P-$20)) deals at the measured 6/60 conversion from 190 library systems, settling in 14 days, fit the 45-day window.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_88986dd4eda6425bb716",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_f6e2e19c59e3_39f66b",
+        "digest": "f6e2e19c59e3cc4bbae62843",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99b1bb2a03d344f9a221/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.655Z"
+      },
+      "review": {
+        "revisionId": "rev_f6e2e19c59e3_39f66b",
+        "revisionDigest": "f6e2e19c59e3cc4bbae62843",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_99b1bb2a03d344f9a221/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_10c0dd61f5074cad9a2e/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE decisive is right. The card's priceCents $5,000 is the state library agency's digital-literacy grant amount (announcement 2026-10-15): money awarded to libraries, not a price any library paid or agreed for a curriculum kit; a grant is not a purchase price, and Brain's link agrees ('no single price on the card'). No agreement is recorded. Other links are evidenced: 190 library systems in the state directory, 6/60 conversion, Brain-produced spreadsheet $20, $0 exposure, 14 days to cash inside 45. The gap is stated as a gap, not a constraint.",
+        "findings": [
+          "The resolution lists 'vendor price lists' - what other sellers charge is a benchmark, not what these buyers pay; library procurement records / purchase orders for comparable kits, or a paid order from a directory-listed library at a stated price, are what close OFFER_AND_PRICE. The priced-offer test is the decisive route.",
+          "Formula ceil($5,000/(P-$20)) is correct for net; for the received-cash proof condition ceil($5,000/P) suffices. At ~19 expected sales (10% of 190), any established price >= ~$265 carries the target.",
+          "Card inconsistency: 6 agreements from 60 contacts are said to be measured on this offer but no agreed price is recorded."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:57.104Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:33:05.739Z"
+    },
+    "staleFinal": null
+  }
+}

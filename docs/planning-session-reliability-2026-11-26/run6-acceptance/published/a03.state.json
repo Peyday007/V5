@@ -1,0 +1,1628 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_8d42baab54ff44f48bdc",
+      "words": "Keep $1,500 of net cash after direct costs, settled within 30 days, using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 150000,
+        "metric": "CONTRIBUTION",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "ownerHoursPerWeek": null,
+        "proofCondition": "$1,500 of settled cash net of direct costs by day 30",
+        "currency": "USD",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "6b72406651cd96d97b20f6a8"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_8d42baab54ff44f48bdc",
+        "contractDigest": "6b72406651cd96d97b20f6a8",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the twelve signed ADAS calibration work orders through ProCal Mobile ADAS",
+          "opportunityIds": [
+            "cop_5f6fc718bdad4312a779"
+          ],
+          "why": "Twelve independent collision shops have signed written work orders at $350 per calibration (EVIDENCE, 2026-11-20 to 11-25). ProCal Mobile ADAS LLC has quoted $210 per calibration in writing, invoiced net 15 after the work, so no capital is advanced. Each job keeps $140; twelve keep $1,680 against the $1,500 target. Shops pay within 10 days of the work and ProCal is paid on day 15 after the work, so cash never goes negative and everything settles inside 30 days. No new buyers are needed, so the unanswered buyer-volume question does not bear on this plan."
+        },
+        "alternatives": [
+          {
+            "title": "Find more collision shops beyond the twelve signed",
+            "why": "Not needed for the target and buyer volume is not counted on the card; kept as a later expansion only."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Contact the twelve shop owners who signed (direct phone and email) to confirm vehicles and dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "a779-price"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the twelve signed $350 work orders and schedule each calibration",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "a779-price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "order",
+            "kind": "ORDER",
+            "label": "Book ProCal Mobile ADAS LLC for twelve calibrations at its written $210 quote, invoiced net 15 after the work",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "sell",
+            "evidence": [
+              "a779-fulfillment",
+              "a779-directCosts"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "ProCal performs the twelve post-repair ADAS calibrations at the shops ($210 each, paid net 15 after the work)",
+            "performer": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+            "costCents": 252000,
+            "day": 5,
+            "dependsOn": "order",
+            "evidence": [
+              "a779-fulfillment",
+              "a779-directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect twelve payments of $350 from the shops",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "a779-timeToFirstCash",
+              "a779-price"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 420000,
+            "label": "12 x $350 calibration invoices",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 252000,
+            "label": "ProCal invoice, 12 x $210, net 15 after the work",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "orders",
+            "sources": [
+              "a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD per calibration",
+            "sources": [
+              "a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontractor cost",
+            "status": "EVIDENCED",
+            "value": 210,
+            "unit": "USD per calibration",
+            "sources": [
+              "a779-directCosts",
+              "a779-fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "a779-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "net kept",
+            "status": "EVIDENCED",
+            "value": 1680,
+            "unit": "USD",
+            "sources": [
+              "a779-price",
+              "a779-directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "12a779-captureMechanism",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor) to each buyer.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-directCosts",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$210",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-exposure",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-fulfillment",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work) quoted to do the work.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-payer",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#payer",
+            "dated": "2026-11-24",
+            "claim": "Independent collision repair shop owners",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-price",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#price",
+            "dated": "2026-11-24",
+            "claim": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "deals": 12,
+            "price": 350,
+            "directCost": 210,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_00a24a6404e2_10e7ce",
+        "digest": "00a24a6404e29f6380780429",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc95ee0a81f443d188e7/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:20:05.689Z"
+      },
+      {
+        "goalId": "wst_8d42baab54ff44f48bdc",
+        "contractDigest": "6b72406651cd96d97b20f6a8",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the twelve signed ADAS calibration work orders through ProCal Mobile ADAS",
+          "opportunityIds": [
+            "cop_5f6fc718bdad4312a779"
+          ],
+          "why": "Twelve independent collision shops have signed written work orders at $350 per calibration (EVIDENCE, 2026-11-20 to 11-25). ProCal Mobile ADAS LLC has quoted $210 per calibration in writing, invoiced net 15 after the work, so no capital is advanced. Each job keeps $140; twelve keep $1,680 against the $1,500 target. Shops pay within 10 days of the work and ProCal is paid on day 15 after the work, so cash never goes negative and everything settles inside 30 days. No new buyers are needed, so the unanswered buyer-volume question does not bear on this plan."
+        },
+        "alternatives": [
+          {
+            "title": "Find more collision shops beyond the twelve signed",
+            "why": "Not needed for the target and buyer volume is not counted on the card; kept as a later expansion only."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Contact the twelve shop owners who signed (direct phone and email) to confirm vehicles and dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "12a779-price"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the twelve signed $350 work orders and schedule each calibration",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "12a779-price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "order",
+            "kind": "OTHER",
+            "label": "Book ProCal Mobile ADAS LLC for twelve calibrations at its written $210 quote, invoiced net 15 after the work",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "sell",
+            "evidence": [
+              "12a779-fulfillment",
+              "12a779-directCosts"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "ProCal performs the twelve post-repair ADAS calibrations at the shops ($210 each, paid net 15 after the work)",
+            "performer": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+            "costCents": 252000,
+            "day": 5,
+            "dependsOn": "order",
+            "evidence": [
+              "12a779-fulfillment",
+              "12a779-directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect twelve payments of $350 from the shops",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "12a779-timeToFirstCash",
+              "12a779-price"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 420000,
+            "label": "12 x $350 calibration invoices",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 252000,
+            "label": "ProCal invoice, 12 x $210, net 15 after the work",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "orders",
+            "sources": [
+              "12a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD per calibration",
+            "sources": [
+              "12a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontractor cost",
+            "status": "EVIDENCED",
+            "value": 210,
+            "unit": "USD per calibration",
+            "sources": [
+              "12a779-directCosts",
+              "12a779-fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "12a779-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "net kept",
+            "status": "EVIDENCED",
+            "value": 1680,
+            "unit": "USD",
+            "sources": [
+              "12a779-price",
+              "12a779-directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "12a779-captureMechanism",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor) to each buyer.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-directCosts",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$210",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-exposure",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-fulfillment",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work) quoted to do the work.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-payer",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#payer",
+            "dated": "2026-11-24",
+            "claim": "Independent collision repair shop owners",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-price",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#price",
+            "dated": "2026-11-24",
+            "claim": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "deals": 12,
+            "price": 350,
+            "directCost": 210,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b2fd128fd534_8c0bfa",
+        "digest": "b2fd128fd5349ff67c975b05",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc95ee0a81f443d188e7/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:20:13.983Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_8d42baab54ff44f48bdc",
+      "contractDigest": "6b72406651cd96d97b20f6a8",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fulfil the twelve signed ADAS calibration work orders through ProCal Mobile ADAS",
+        "opportunityIds": [
+          "cop_5f6fc718bdad4312a779"
+        ],
+        "why": "Twelve independent collision shops have signed written work orders at $350 per calibration (EVIDENCE, 2026-11-20 to 11-25). ProCal Mobile ADAS LLC has quoted $210 per calibration in writing, invoiced net 15 after the work, so no capital is advanced. Each job keeps $140; twelve keep $1,680 against the $1,500 target. Shops pay within 10 days of the work and ProCal is paid on day 15 after the work, so cash never goes negative and everything settles inside 30 days. No new buyers are needed, so the unanswered buyer-volume question does not bear on this plan."
+      },
+      "alternatives": [
+        {
+          "title": "Find more collision shops beyond the twelve signed",
+          "why": "Not needed for the target and buyer volume is not counted on the card; kept as a later expansion only."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Contact the twelve shop owners who signed (direct phone and email) to confirm vehicles and dates",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "12a779-price"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the twelve signed $350 work orders and schedule each calibration",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "reach",
+          "evidence": [
+            "12a779-price"
+          ],
+          "priceCents": 35000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "order",
+          "kind": "OTHER",
+          "label": "Book ProCal Mobile ADAS LLC for twelve calibrations at its written $210 quote, invoiced net 15 after the work",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "sell",
+          "evidence": [
+            "12a779-fulfillment",
+            "12a779-directCosts"
+          ],
+          "executor": {
+            "operation": "PLAN_DECISION",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [],
+            "routine": false
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "ProCal performs the twelve post-repair ADAS calibrations at the shops ($210 each, paid net 15 after the work)",
+          "performer": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+          "costCents": 252000,
+          "day": 5,
+          "dependsOn": "order",
+          "evidence": [
+            "12a779-fulfillment",
+            "12a779-directCosts"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice and collect twelve payments of $350 from the shops",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 5,
+          "dependsOn": "deliver",
+          "evidence": [
+            "12a779-timeToFirstCash",
+            "12a779-price"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 5,
+          "kind": "RECEIPT",
+          "amountCents": 420000,
+          "label": "12 x $350 calibration invoices",
+          "settlesDay": 15,
+          "stepId": "collect"
+        },
+        {
+          "day": 20,
+          "kind": "SPEND",
+          "amountCents": 252000,
+          "label": "ProCal invoice, 12 x $210, net 15 after the work",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 15,
+      "quantities": [
+        {
+          "name": "signed work orders",
+          "status": "EVIDENCED",
+          "value": 12,
+          "unit": "orders",
+          "sources": [
+            "12a779-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 350,
+          "unit": "USD per calibration",
+          "sources": [
+            "12a779-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "subcontractor cost",
+          "status": "EVIDENCED",
+          "value": 210,
+          "unit": "USD per calibration",
+          "sources": [
+            "12a779-directCosts",
+            "12a779-fulfillment"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to settled cash",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "days",
+          "sources": [
+            "12a779-timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "net kept",
+          "status": "EVIDENCED",
+          "value": 1680,
+          "unit": "USD",
+          "sources": [
+            "12a779-price",
+            "12a779-directCosts"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "12a779-captureMechanism",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#captureMechanism",
+          "dated": "2026-11-24",
+          "claim": "Sell Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor) to each buyer.",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-directCosts",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$210",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-exposure",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-fulfillment",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work) quoted to do the work.",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-payer",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#payer",
+          "dated": "2026-11-24",
+          "claim": "Independent collision repair shop owners",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-price",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#price",
+          "dated": "2026-11-24",
+          "claim": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "12a779-timeToFirstCash",
+          "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "10 days",
+          "population": "Independent collision repair shop owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_5f6fc718bdad4312a779",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_5f6fc718bdad4312a779",
+          "deals": 12,
+          "price": 350,
+          "directCost": 210,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_b2fd128fd534_8c0bfa",
+      "digest": "b2fd128fd5349ff67c975b05",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_cc95ee0a81f443d188e7/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:20:13.983Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_b2fd128fd534_8c0bfa",
+      "digest": "b2fd128fd5349ff67c975b05",
+      "contractDigest": "6b72406651cd96d97b20f6a8",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 252000,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 5,
+        "collectedCents": 420000,
+        "collectedInWindowCents": 420000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 168000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Post-repair ADAS camera and radar calibration for independen\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Post-repair ADAS camera and radar calibration for independen\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1680× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Post-repair ADAS camera and radar calibration for independent collisio\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_5f6fc718bdad4312a779"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Post-repair ADAS camera and radar calibration for independent collision shops (m\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Post-repair ADAS camera and radar calibration for independent collision shops (m\"",
+            "owner": "PERSON",
+            "cost": 210
+          },
+          {
+            "label": "Collect payment for \"Post-repair ADAS camera and radar calibration for independent collision shops (m\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "title": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1500,
+            "potentialReach": 1500,
+            "card": {
+              "payer": "Independent collision repair shop owners",
+              "reachableChannel": "The shop owners who signed (direct phone and email)",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:03.499Z",
+              "offerScope": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+              "priceCents": 35000,
+              "currency": "USD",
+              "fulfillmentOwner": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [],
+              "industry": "auto body collision repair",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 35000,
+                "currency": "USD",
+                "deliverable": "Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The shop owners who signed (direct phone and email)"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 4200 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 4200 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 aft (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 210, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor) to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$210",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent collision repair shop owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_26e16fd5767e4736a80a"
+        ],
+        "scope": {
+          "targetCents": 150000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:16:45.764Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_b2fd128fd534_8c0bfa",
+        "revisionDigest": "b2fd128fd5349ff67c975b05",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc95ee0a81f443d188e7/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d8ba13341e574c528bac/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Twelve written acceptances at $350 are on the card (12 agreements, WRITTEN_ACCEPTANCE, AGREED) and the price fact is EVIDENCE: twelve independent shops signed work orders 2026-11-20..11-25, so price is what these buyers pay and no new buyers or conversion are assumed; the unanswered buyerVolume question is correctly irrelevant to a plan that only fulfils signed orders. Fulfilment performer is the recorded fulfiller: ProCal Mobile ADAS LLC, written quote $210 per calibration, invoiced net 15 after the work (EVIDENCE). Arithmetic recomputed: 12 x $350 = $4,200 collected; 12 x $210 = $2,520 cost; net kept $1,680 >= $1,500 target (contribution metric). Shops pay within 10 days of the work and ProCal is due 15 days after it, so each job's receipt precedes its supplier payment: no capital is advanced and cash never goes negative (exposure cap $0 holds). With work on day 5, receipts settle by day 15 and ProCal is paid day 20, inside 30 days. Even if the calibrations spread to day 15, shop receipts land by day 25 and ProCal by day 30, still inside the window. EXECUTABLE is right: every link rests on this offer's own records.",
+        "findings": [
+          "ProCal's capacity to perform all twelve calibrations on day 5 is not stated; scheduling them across days 5-15 still settles inside 30 days, so it does not change the verdict, but the last calibration must be done by day 15 for its ProCal payment (net 15) to fall in the window.",
+          "Residual credit risk: if a shop pays late or not at all after ProCal has worked, the $210 supplier invoice is still owed; with $1,680 net vs $1,500 target the plan tolerates one non-paying shop ($1,680 - $350 + ... = net $1,330 if one shop never pays but ProCal is paid) - actually one default drops net to $1,330, below target, so collection on each order matters.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before day 1 (setup, not an evidential unknown)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:00.576Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_b2fd128fd534_8c0bfa",
+      "digest": "b2fd128fd5349ff67c975b05",
+      "contractDigest": "6b72406651cd96d97b20f6a8",
+      "plan": {
+        "goalId": "wst_8d42baab54ff44f48bdc",
+        "contractDigest": "6b72406651cd96d97b20f6a8",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil the twelve signed ADAS calibration work orders through ProCal Mobile ADAS",
+          "opportunityIds": [
+            "cop_5f6fc718bdad4312a779"
+          ],
+          "why": "Twelve independent collision shops have signed written work orders at $350 per calibration (EVIDENCE, 2026-11-20 to 11-25). ProCal Mobile ADAS LLC has quoted $210 per calibration in writing, invoiced net 15 after the work, so no capital is advanced. Each job keeps $140; twelve keep $1,680 against the $1,500 target. Shops pay within 10 days of the work and ProCal is paid on day 15 after the work, so cash never goes negative and everything settles inside 30 days. No new buyers are needed, so the unanswered buyer-volume question does not bear on this plan."
+        },
+        "alternatives": [
+          {
+            "title": "Find more collision shops beyond the twelve signed",
+            "why": "Not needed for the target and buyer volume is not counted on the card; kept as a later expansion only."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Contact the twelve shop owners who signed (direct phone and email) to confirm vehicles and dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "12a779-price"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the twelve signed $350 work orders and schedule each calibration",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "reach",
+            "evidence": [
+              "12a779-price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "order",
+            "kind": "OTHER",
+            "label": "Book ProCal Mobile ADAS LLC for twelve calibrations at its written $210 quote, invoiced net 15 after the work",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "sell",
+            "evidence": [
+              "12a779-fulfillment",
+              "12a779-directCosts"
+            ],
+            "executor": {
+              "operation": "PLAN_DECISION",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [],
+              "routine": false
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "ProCal performs the twelve post-repair ADAS calibrations at the shops ($210 each, paid net 15 after the work)",
+            "performer": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+            "costCents": 252000,
+            "day": 5,
+            "dependsOn": "order",
+            "evidence": [
+              "12a779-fulfillment",
+              "12a779-directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work)",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect twelve payments of $350 from the shops",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "deliver",
+            "evidence": [
+              "12a779-timeToFirstCash",
+              "12a779-price"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 420000,
+            "label": "12 x $350 calibration invoices",
+            "settlesDay": 15,
+            "stepId": "collect"
+          },
+          {
+            "day": 20,
+            "kind": "SPEND",
+            "amountCents": 252000,
+            "label": "ProCal invoice, 12 x $210, net 15 after the work",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "signed work orders",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "orders",
+            "sources": [
+              "12a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD per calibration",
+            "sources": [
+              "12a779-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "subcontractor cost",
+            "status": "EVIDENCED",
+            "value": 210,
+            "unit": "USD per calibration",
+            "sources": [
+              "12a779-directCosts",
+              "12a779-fulfillment"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "days",
+            "sources": [
+              "12a779-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "net kept",
+            "status": "EVIDENCED",
+            "value": 1680,
+            "unit": "USD",
+            "sources": [
+              "12a779-price",
+              "12a779-directCosts"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "12a779-captureMechanism",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Post-repair ADAS camera and radar calibration for independent collision shops (mobile subcontractor) to each buyer.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-directCosts",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$210",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-exposure",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-fulfillment",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "ProCal Mobile ADAS LLC (written quote: $210 per calibration, invoiced net 15 after the work) quoted to do the work.",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-payer",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#payer",
+            "dated": "2026-11-24",
+            "claim": "Independent collision repair shop owners",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-price",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#price",
+            "dated": "2026-11-24",
+            "claim": "Twelve independent collision shops signed written work orders at $350 per calibration (signed orders, 2026-11-20 to 2026-11-25).",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "12a779-timeToFirstCash",
+            "url": "https://brain.local/card/cop_5f6fc718bdad4312a779#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "10 days",
+            "population": "Independent collision repair shop owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_5f6fc718bdad4312a779",
+            "deals": 12,
+            "price": 350,
+            "directCost": 210,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_b2fd128fd534_8c0bfa",
+        "digest": "b2fd128fd5349ff67c975b05",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc95ee0a81f443d188e7/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:20:13.983Z"
+      },
+      "review": {
+        "revisionId": "rev_b2fd128fd534_8c0bfa",
+        "revisionDigest": "b2fd128fd5349ff67c975b05",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_cc95ee0a81f443d188e7/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_d8ba13341e574c528bac/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Twelve written acceptances at $350 are on the card (12 agreements, WRITTEN_ACCEPTANCE, AGREED) and the price fact is EVIDENCE: twelve independent shops signed work orders 2026-11-20..11-25, so price is what these buyers pay and no new buyers or conversion are assumed; the unanswered buyerVolume question is correctly irrelevant to a plan that only fulfils signed orders. Fulfilment performer is the recorded fulfiller: ProCal Mobile ADAS LLC, written quote $210 per calibration, invoiced net 15 after the work (EVIDENCE). Arithmetic recomputed: 12 x $350 = $4,200 collected; 12 x $210 = $2,520 cost; net kept $1,680 >= $1,500 target (contribution metric). Shops pay within 10 days of the work and ProCal is due 15 days after it, so each job's receipt precedes its supplier payment: no capital is advanced and cash never goes negative (exposure cap $0 holds). With work on day 5, receipts settle by day 15 and ProCal is paid day 20, inside 30 days. Even if the calibrations spread to day 15, shop receipts land by day 25 and ProCal by day 30, still inside the window. EXECUTABLE is right: every link rests on this offer's own records.",
+        "findings": [
+          "ProCal's capacity to perform all twelve calibrations on day 5 is not stated; scheduling them across days 5-15 still settles inside 30 days, so it does not change the verdict, but the last calibration must be done by day 15 for its ProCal payment (net 15) to fall in the window.",
+          "Residual credit risk: if a shop pays late or not at all after ProCal has worked, the $210 supplier invoice is still owed; with $1,680 net vs $1,500 target the plan tolerates one non-paying shop ($1,680 - $350 + ... = net $1,330 if one shop never pays but ProCal is paid) - actually one default drops net to $1,330, below target, so collection on each order matters.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected before day 1 (setup, not an evidential unknown)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:00.576Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:31:37.716Z"
+    },
+    "staleFinal": null
+  }
+}

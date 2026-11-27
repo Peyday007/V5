@@ -1,0 +1,1051 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_7bea77c8a72f4a159944",
+      "words": "Collect $18,000 of settled cash within 45 days with at most $15,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1800000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": 1500000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$18,000 of buyer payments settled in the owner's account within 45 days, with capital outstanding never above $15,000",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "2086402b692ed55bff813f91"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_7bea77c8a72f4a159944",
+        "contractDigest": "2086402b692ed55bff813f91",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil two of the three signed zero-turn mower purchase agreements",
+          "opportunityIds": [
+            "cop_aeae05790a0948d2b76f"
+          ],
+          "why": "Three landscaping contractors signed purchase agreements at $9,500 per unit (2026-11-22); Midwest Turf Equipment Auctions quoted $6,000 per refurbished unit delivered, paid on order. Two units cost $12,000 (inside the $15,000 capital ceiling) and settle $19,000 in 12 days, above the $18,000 target."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil all three agreements at once",
+            "why": "$18,000 of supplier orders exceeds the $15,000 capital ceiling; the third unit can only follow once the first receipts settle, and the target is already met with two."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm two signed purchase agreements at $9,500 per unit and delivery dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "signedBuyers"
+            ],
+            "priceCents": 950000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Order two refurbished zero-turn mowers from Midwest Turf Equipment Auctions, paid on order, delivered to the buyers",
+            "performer": "Midwest Turf Equipment Auctions",
+            "costCents": 1200000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Midwest Turf Equipment Auctions",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $9,500 from each of the two contractors",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 1200000,
+            "label": "Two units at $6,000 paid on order",
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 950000,
+            "label": "Contractor 1 payment",
+            "settlesDay": 12,
+            "stepId": "s3"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 950000,
+            "label": "Contractor 2 payment",
+            "settlesDay": 12,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "buyers",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "peak capital",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#price",
+            "dated": "2026-11-22",
+            "claim": "Three landscaping contractors signed purchase agreements at $9,500 per refurbished unit",
+            "population": "three landscaping contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Midwest Turf Equipment Auctions written quote $6,000 per refurbished unit, delivered, paid on order",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6,000 per unit",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#exposure",
+            "dated": "2026-11-24",
+            "claim": "Capital tied up $6,000 per unit",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to first cash",
+            "population": "the signed buyers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_aeae05790a0948d2b76f",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_aeae05790a0948d2b76f",
+            "deals": 2,
+            "price": 9500,
+            "directCost": 6000,
+            "capital": 6000
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5681381f7edf_e03b28",
+        "digest": "5681381f7edfb7577b82680c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d00669cc6a3446ee9542/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:45.314Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_7bea77c8a72f4a159944",
+      "contractDigest": "2086402b692ed55bff813f91",
+      "parentRevisionId": null,
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Fulfil two of the three signed zero-turn mower purchase agreements",
+        "opportunityIds": [
+          "cop_aeae05790a0948d2b76f"
+        ],
+        "why": "Three landscaping contractors signed purchase agreements at $9,500 per unit (2026-11-22); Midwest Turf Equipment Auctions quoted $6,000 per refurbished unit delivered, paid on order. Two units cost $12,000 (inside the $15,000 capital ceiling) and settle $19,000 in 12 days, above the $18,000 target."
+      },
+      "alternatives": [
+        {
+          "title": "Fulfil all three agreements at once",
+          "why": "$18,000 of supplier orders exceeds the $15,000 capital ceiling; the third unit can only follow once the first receipts settle, and the target is already met with two."
+        }
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "kind": "SELL",
+          "label": "Confirm two signed purchase agreements at $9,500 per unit and delivery dates",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 0,
+          "dependsOn": null,
+          "evidence": [
+            "price",
+            "signedBuyers"
+          ],
+          "priceCents": 950000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s2",
+          "kind": "DELIVER",
+          "label": "Order two refurbished zero-turn mowers from Midwest Turf Equipment Auctions, paid on order, delivered to the buyers",
+          "performer": "Midwest Turf Equipment Auctions",
+          "costCents": 1200000,
+          "day": 1,
+          "dependsOn": "s1",
+          "evidence": [
+            "fulfillment",
+            "directCosts"
+          ],
+          "executor": {
+            "operation": "SUPPLIER_DELIVERS",
+            "performedBy": "PROVIDER",
+            "provider": "Midwest Turf Equipment Auctions",
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "s3",
+          "kind": "COLLECT",
+          "label": "Invoice and collect $9,500 from each of the two contractors",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 12,
+          "dependsOn": "s2",
+          "evidence": [
+            "timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "SPEND",
+          "amountCents": 1200000,
+          "label": "Two units at $6,000 paid on order",
+          "stepId": "s2"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 950000,
+          "label": "Contractor 1 payment",
+          "settlesDay": 12,
+          "stepId": "s3"
+        },
+        {
+          "day": 12,
+          "kind": "RECEIPT",
+          "amountCents": 950000,
+          "label": "Contractor 2 payment",
+          "settlesDay": 12,
+          "stepId": "s3"
+        }
+      ],
+      "proofDay": 12,
+      "quantities": [
+        {
+          "name": "price per unit",
+          "status": "EVIDENCED",
+          "value": 950000,
+          "unit": "cents",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "signed buyers",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "buyers",
+          "sources": [
+            "price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier cost per unit",
+          "status": "EVIDENCED",
+          "value": 600000,
+          "unit": "cents",
+          "sources": [
+            "fulfillment",
+            "directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 12,
+          "unit": "days",
+          "sources": [
+            "timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "peak capital",
+          "status": "EVIDENCED",
+          "value": 1200000,
+          "unit": "cents",
+          "sources": [
+            "exposure"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "price",
+          "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#price",
+          "dated": "2026-11-22",
+          "claim": "Three landscaping contractors signed purchase agreements at $9,500 per refurbished unit",
+          "population": "three landscaping contractors",
+          "matchesBuyer": true
+        },
+        {
+          "id": "fulfillment",
+          "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#fulfillment",
+          "dated": "2026-11-24",
+          "claim": "Midwest Turf Equipment Auctions written quote $6,000 per refurbished unit, delivered, paid on order",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "directCosts",
+          "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#directCosts",
+          "dated": "2026-11-24",
+          "claim": "Direct cost $6,000 per unit",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "exposure",
+          "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#exposure",
+          "dated": "2026-11-24",
+          "claim": "Capital tied up $6,000 per unit",
+          "population": "supplier",
+          "matchesBuyer": true
+        },
+        {
+          "id": "timeToFirstCash",
+          "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "12 days to first cash",
+          "population": "the signed buyers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_aeae05790a0948d2b76f",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_aeae05790a0948d2b76f",
+          "deals": 2,
+          "price": 9500,
+          "directCost": 6000,
+          "capital": 6000
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_5681381f7edf_e03b28",
+      "digest": "5681381f7edfb7577b82680c",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_d00669cc6a3446ee9542/author-B",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:27:45.314Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_5681381f7edf_e03b28",
+      "digest": "5681381f7edfb7577b82680c",
+      "contractDigest": "2086402b692ed55bff813f91",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 1200000,
+        "committedOpenCents": 0,
+        "preProofCents": 1200000,
+        "maxExposureCents": 1200000,
+        "minCashCents": 300000,
+        "minCashDay": 1,
+        "collectedCents": 1900000,
+        "collectedInWindowCents": 1900000,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 700000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Refurbished commercial zero-turn mowers resold to landscapin\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Refurbished commercial zero-turn mowers resold to landscapin\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_aeae05790a0948d2b76f"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Refurbished commercial zero-turn mowers resold to landscaping contractors\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Refurbished commercial zero-turn mowers resold to landscaping contractors\"",
+            "owner": "PERSON",
+            "cost": 6000
+          },
+          {
+            "label": "Collect payment for \"Refurbished commercial zero-turn mowers resold to landscaping contractors\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_aeae05790a0948d2b76f",
+            "title": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 18000,
+            "potentialReach": 18000,
+            "card": {
+              "payer": "Landscaping contractors",
+              "reachableChannel": "The contractors who signed purchase agreements",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:25.117Z",
+              "offerScope": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+              "priceCents": 950000,
+              "currency": "USD",
+              "fulfillmentOwner": "Midwest Turf Equipment Auctions (written quote: $6,000 per refurbished unit, delivered to the buyer, paid on order)",
+              "peakFundingCents": 600000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "landscaping contractors",
+              "mechanism": "RESALE_OR_ASSET",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 950000,
+                "currency": "USD",
+                "deliverable": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 950000,
+                "currency": "USD",
+                "deliverable": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 950000,
+                "currency": "USD",
+                "deliverable": "Refurbished commercial zero-turn mowers resold to landscaping contractors",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The contractors who signed purchase agreements"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 28500 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 28500 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Midwest Turf Equipment Auctions (written quote: $6,000 per refurbished unit, del (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 6000, tied up 6000"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "12 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Refurbished commercial zero-turn mowers resold to landscaping contractors to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$6000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$6000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Midwest Turf Equipment Auctions (written quote: $6,000 per refurbished unit, delivered to the buyer, paid on order) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Landscaping contractors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three landscaping contractors signed purchase agreements at $9,500 per refurbished commercial zero-turn mower (signed agreements, 2026-11-22).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "12 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_58e4f482cf254353925a"
+        ],
+        "scope": {
+          "targetCents": 1800000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:20.896Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_5681381f7edf_e03b28",
+        "revisionDigest": "5681381f7edfb7577b82680c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d00669cc6a3446ee9542/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8a3c667e78a343f9a73d/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price is a real purchase price by these buyers: three written acceptances at $9,500 per unit on the card (signed agreements 2026-11-22). Fulfiller is the recorded one: Midwest Turf Equipment Auctions, written quote $6,000 per refurbished unit delivered to the buyer, paid on order (EVIDENCE). Arithmetic recomputed: 2 x $9,500 = $19,000 >= $18,000 target; 2 x $6,000 = $12,000 capital outstanding from day 1 to day 12, inside the $15,000 ceiling (three at once would be $18,000, correctly rejected). Receipts settle day 12, proof day 12, inside 45 days. Net $7,000. EXECUTABLE is right: no new buyers are needed, so the parked buyerVolume question does not bear on this plan.",
+        "findings": [
+          "Concentration: the target needs both contractors to pay; one default leaves $9,500. The third signed agreement can be fulfilled after the first receipts settle (order day 12, $6,000 outstanding, settled ~day 24, inside 45 days and within the capital ceiling), giving $28,500 and tolerance for one non-payer; recommend scheduling it rather than holding it as optional.",
+          "Step evidence ids ('price', 'signedBuyers', 'fulfillment') are card field names rather than source ids; the 'signedBuyers' field is not on the card (the count comes from the price fact and the three agreements).",
+          "Owner hours: card states 3 human hours per unit; the contract has no hours ceiling, so this fits."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:33:15.874Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_5681381f7edf_e03b28",
+      "digest": "5681381f7edfb7577b82680c",
+      "contractDigest": "2086402b692ed55bff813f91",
+      "plan": {
+        "goalId": "wst_7bea77c8a72f4a159944",
+        "contractDigest": "2086402b692ed55bff813f91",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Fulfil two of the three signed zero-turn mower purchase agreements",
+          "opportunityIds": [
+            "cop_aeae05790a0948d2b76f"
+          ],
+          "why": "Three landscaping contractors signed purchase agreements at $9,500 per unit (2026-11-22); Midwest Turf Equipment Auctions quoted $6,000 per refurbished unit delivered, paid on order. Two units cost $12,000 (inside the $15,000 capital ceiling) and settle $19,000 in 12 days, above the $18,000 target."
+        },
+        "alternatives": [
+          {
+            "title": "Fulfil all three agreements at once",
+            "why": "$18,000 of supplier orders exceeds the $15,000 capital ceiling; the third unit can only follow once the first receipts settle, and the target is already met with two."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm two signed purchase agreements at $9,500 per unit and delivery dates",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 0,
+            "dependsOn": null,
+            "evidence": [
+              "price",
+              "signedBuyers"
+            ],
+            "priceCents": 950000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "DELIVER",
+            "label": "Order two refurbished zero-turn mowers from Midwest Turf Equipment Auctions, paid on order, delivered to the buyers",
+            "performer": "Midwest Turf Equipment Auctions",
+            "costCents": 1200000,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Midwest Turf Equipment Auctions",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "COLLECT",
+            "label": "Invoice and collect $9,500 from each of the two contractors",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 12,
+            "dependsOn": "s2",
+            "evidence": [
+              "timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "SPEND",
+            "amountCents": 1200000,
+            "label": "Two units at $6,000 paid on order",
+            "stepId": "s2"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 950000,
+            "label": "Contractor 1 payment",
+            "settlesDay": 12,
+            "stepId": "s3"
+          },
+          {
+            "day": 12,
+            "kind": "RECEIPT",
+            "amountCents": 950000,
+            "label": "Contractor 2 payment",
+            "settlesDay": 12,
+            "stepId": "s3"
+          }
+        ],
+        "proofDay": 12,
+        "quantities": [
+          {
+            "name": "price per unit",
+            "status": "EVIDENCED",
+            "value": 950000,
+            "unit": "cents",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed buyers",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "buyers",
+            "sources": [
+              "price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per unit",
+            "status": "EVIDENCED",
+            "value": 600000,
+            "unit": "cents",
+            "sources": [
+              "fulfillment",
+              "directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 12,
+            "unit": "days",
+            "sources": [
+              "timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "peak capital",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "exposure"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "price",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#price",
+            "dated": "2026-11-22",
+            "claim": "Three landscaping contractors signed purchase agreements at $9,500 per refurbished unit",
+            "population": "three landscaping contractors",
+            "matchesBuyer": true
+          },
+          {
+            "id": "fulfillment",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#fulfillment",
+            "dated": "2026-11-24",
+            "claim": "Midwest Turf Equipment Auctions written quote $6,000 per refurbished unit, delivered, paid on order",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "directCosts",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#directCosts",
+            "dated": "2026-11-24",
+            "claim": "Direct cost $6,000 per unit",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "exposure",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#exposure",
+            "dated": "2026-11-24",
+            "claim": "Capital tied up $6,000 per unit",
+            "population": "supplier",
+            "matchesBuyer": true
+          },
+          {
+            "id": "timeToFirstCash",
+            "url": "https://brain.local/card/cop_aeae05790a0948d2b76f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "12 days to first cash",
+            "population": "the signed buyers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_aeae05790a0948d2b76f",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_aeae05790a0948d2b76f",
+            "deals": 2,
+            "price": 9500,
+            "directCost": 6000,
+            "capital": 6000
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_5681381f7edf_e03b28",
+        "digest": "5681381f7edfb7577b82680c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d00669cc6a3446ee9542/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:45.314Z"
+      },
+      "review": {
+        "revisionId": "rev_5681381f7edf_e03b28",
+        "revisionDigest": "5681381f7edfb7577b82680c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d00669cc6a3446ee9542/author-B",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_8a3c667e78a343f9a73d/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Price is a real purchase price by these buyers: three written acceptances at $9,500 per unit on the card (signed agreements 2026-11-22). Fulfiller is the recorded one: Midwest Turf Equipment Auctions, written quote $6,000 per refurbished unit delivered to the buyer, paid on order (EVIDENCE). Arithmetic recomputed: 2 x $9,500 = $19,000 >= $18,000 target; 2 x $6,000 = $12,000 capital outstanding from day 1 to day 12, inside the $15,000 ceiling (three at once would be $18,000, correctly rejected). Receipts settle day 12, proof day 12, inside 45 days. Net $7,000. EXECUTABLE is right: no new buyers are needed, so the parked buyerVolume question does not bear on this plan.",
+        "findings": [
+          "Concentration: the target needs both contractors to pay; one default leaves $9,500. The third signed agreement can be fulfilled after the first receipts settle (order day 12, $6,000 outstanding, settled ~day 24, inside 45 days and within the capital ceiling), giving $28,500 and tolerance for one non-payer; recommend scheduling it rather than holding it as optional.",
+          "Step evidence ids ('price', 'signedBuyers', 'fulfillment') are card field names rather than source ids; the 'signedBuyers' field is not on the card (the count comes from the price fact and the three agreements).",
+          "Owner hours: card states 3 human hours per unit; the contract has no hours ceiling, so this fits."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:33:15.874Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:35:27.243Z"
+    },
+    "staleFinal": null
+  }
+}

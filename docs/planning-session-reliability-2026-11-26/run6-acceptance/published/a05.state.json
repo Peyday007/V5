@@ -1,0 +1,1363 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_3a88636e813541a58f7b",
+      "words": "Collect $2,000 of settled cash within 10 days with at most $200 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 200000,
+        "metric": "SETTLED_CASH",
+        "windowDays": 10,
+        "totalSpendCapCents": 20000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "ownerHoursPerWeek": null,
+        "proofCondition": "$2,000 of settled cash collected by day 10",
+        "currency": "USD",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "80b07fa8133458d36d0205e7"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_3a88636e813541a58f7b",
+        "contractDigest": "80b07fa8133458d36d0205e7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No executable plan: the only opening settles in 30 days against a 10-day window",
+          "opportunityIds": [],
+          "why": "The pesticide record summary has four signed orders at $600 ($2,400, enough for the $2,000 target) and its $50 capital fits the $200 ceiling, but its measured time to usable cash is 30 days (EVIDENCE). Money that settles after day 10 does not count, so it collects $0 in the window. No other opening exists."
+        },
+        "alternatives": [
+          {
+            "title": "Deliver the four signed summaries anyway",
+            "why": "Would settle about day 30, after the 10-day deadline; worth doing only if the owner extends the window to at least 30 days."
+          }
+        ],
+        "steps": [
+          {
+            "id": "ask",
+            "kind": "TEST",
+            "label": "Ask the four signed operators whether they will pay on delivery (card or same-day transfer) instead of on their 30-day cycle",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "3a88f3-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 30,
+            "unit": "days",
+            "sources": [
+              "3a88f3-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD per order",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "3a88f3-captureMechanism",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Annual restricted-use pesticide application record summary for licensed pest control operators to each buyer.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-delivery",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-directCosts",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-exposure",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-payer",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#payer",
+            "dated": "2026-11-24",
+            "claim": "Licensed pest control operators",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-price",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#price",
+            "dated": "2026-11-24",
+            "claim": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "30 days",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The only opening's measured time to usable cash is 30 days (card timeToFirstCash, EVIDENCE), so none of its $2,400 of signed orders settles inside the 10-day window.",
+          "resolution": "Either extend the window to at least 30 days (the four signed $600 orders then cover the $2,000 target within the $200 capital ceiling), or get the four operators to agree in writing to pay on delivery so cash settles by day 10; Brain can ask them on day 1.",
+          "decisiveLinks": [
+            "SETTLES_IN_TIME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "missing": [
+              "SETTLES_IN_TIME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "SETTLES_IN_TIME"
+        ],
+        "constraints": [
+          {
+            "constraint": "DEADLINE",
+            "suggestion": "Extend the window from 10 to at least 30 days: the four signed $600 orders ($2,400) then settle inside it with $50 of capital.",
+            "basis": [
+              {
+                "opportunityId": "cop_e303c8557d45453a88f3",
+                "field": "timeToFirstCash"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_38293f2bb5e9_ef1e99",
+        "digest": "38293f2bb5e973170a66e240",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:20:41.628Z"
+      },
+      {
+        "goalId": "wst_3a88636e813541a58f7b",
+        "contractDigest": "80b07fa8133458d36d0205e7",
+        "parentRevisionId": "rev_38293f2bb5e9_ef1e99",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the four signed pesticide application-record summaries and collect $2,400 inside 10 days",
+          "opportunityIds": [
+            "cop_e303c8557d45453a88f3"
+          ],
+          "why": "The card now records 5 days to usable cash (EVIDENCE), replacing the 30 days that ruled the earlier plan out. Four licensed pest control operators signed written orders at $600 each ($2,400 against the $2,000 target); Brain produces the spreadsheet summary itself; direct cost is $50 per summary, funded from the owner's capital ($200 for all four, within the $200 ceiling, recovered on receipt). Delivered on day 2, the invoices settle by day 7, inside the 10-day window. No new buyers are needed."
+        },
+        "alternatives": [
+          {
+            "title": "Wait for pre-payment before producing",
+            "why": "Unnecessary: the $200 of capital the owner allows covers the direct cost, and waiting would only push settlement toward the deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the four operators who signed to confirm their record data and delivery address",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "3a88f3-price"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed $600 orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "3a88f3-price"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four annual restricted-use pesticide application record summaries ($50 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 20000,
+            "day": 2,
+            "dependsOn": "sell",
+            "evidence": [
+              "3a88f3-delivery",
+              "3a88f3-directCosts",
+              "3a88f3-exposure"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect four payments of $600, usable 5 days after delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "deliver",
+            "evidence": [
+              "3a88f3-timeToFirstCash",
+              "3a88f3-price"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "FUNDING",
+            "amountCents": 20000,
+            "label": "owner's capital advanced for direct costs (within the $200 ceiling)",
+            "stepId": "deliver"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 20000,
+            "label": "direct cost, 4 x $50",
+            "stepId": "deliver"
+          },
+          {
+            "day": 2,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "4 x $600 signed orders",
+            "settlesDay": 7,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD per order",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "USD per summary",
+            "sources": [
+              "3a88f3-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "3a88f3-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "3a88f3-captureMechanism",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Annual restricted-use pesticide application record summary for licensed pest control operators to each buyer.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-delivery",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-directCosts",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-exposure",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-payer",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#payer",
+            "dated": "2026-11-24",
+            "claim": "Licensed pest control operators",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-price",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#price",
+            "dated": "2026-11-24",
+            "claim": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "deals": 4,
+            "price": 600,
+            "directCost": 50,
+            "capital": 200
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ee7522f752a4_ea2d2b",
+        "digest": "ee7522f752a41e018bdc6887",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:41:25.836Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_3a88636e813541a58f7b",
+      "contractDigest": "80b07fa8133458d36d0205e7",
+      "parentRevisionId": "rev_38293f2bb5e9_ef1e99",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Deliver the four signed pesticide application-record summaries and collect $2,400 inside 10 days",
+        "opportunityIds": [
+          "cop_e303c8557d45453a88f3"
+        ],
+        "why": "The card now records 5 days to usable cash (EVIDENCE), replacing the 30 days that ruled the earlier plan out. Four licensed pest control operators signed written orders at $600 each ($2,400 against the $2,000 target); Brain produces the spreadsheet summary itself; direct cost is $50 per summary, funded from the owner's capital ($200 for all four, within the $200 ceiling, recovered on receipt). Delivered on day 2, the invoices settle by day 7, inside the 10-day window. No new buyers are needed."
+      },
+      "alternatives": [
+        {
+          "title": "Wait for pre-payment before producing",
+          "why": "Unnecessary: the $200 of capital the owner allows covers the direct cost, and waiting would only push settlement toward the deadline."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Email the four operators who signed to confirm their record data and delivery address",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "3a88f3-price"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Confirm the four signed $600 orders",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "3a88f3-price"
+          ],
+          "priceCents": 60000,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces and delivers the four annual restricted-use pesticide application record summaries ($50 direct cost each)",
+          "performer": "BRAIN",
+          "costCents": 20000,
+          "day": 2,
+          "dependsOn": "sell",
+          "evidence": [
+            "3a88f3-delivery",
+            "3a88f3-directCosts",
+            "3a88f3-exposure"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Invoice and collect four payments of $600, usable 5 days after delivery",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 2,
+          "dependsOn": "deliver",
+          "evidence": [
+            "3a88f3-timeToFirstCash",
+            "3a88f3-price"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 1,
+          "kind": "FUNDING",
+          "amountCents": 20000,
+          "label": "owner's capital advanced for direct costs (within the $200 ceiling)",
+          "stepId": "deliver"
+        },
+        {
+          "day": 2,
+          "kind": "SPEND",
+          "amountCents": 20000,
+          "label": "direct cost, 4 x $50",
+          "stepId": "deliver"
+        },
+        {
+          "day": 2,
+          "kind": "RECEIPT",
+          "amountCents": 240000,
+          "label": "4 x $600 signed orders",
+          "settlesDay": 7,
+          "stepId": "collect"
+        }
+      ],
+      "proofDay": 7,
+      "quantities": [
+        {
+          "name": "signed orders",
+          "status": "EVIDENCED",
+          "value": 4,
+          "unit": "orders",
+          "sources": [
+            "3a88f3-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 600,
+          "unit": "USD per order",
+          "sources": [
+            "3a88f3-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 50,
+          "unit": "USD per summary",
+          "sources": [
+            "3a88f3-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to usable cash",
+          "status": "EVIDENCED",
+          "value": 5,
+          "unit": "days",
+          "sources": [
+            "3a88f3-timeToFirstCash"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "3a88f3-captureMechanism",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#captureMechanism",
+          "dated": "2026-11-24",
+          "claim": "Sell Annual restricted-use pesticide application record summary for licensed pest control operators to each buyer.",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-delivery",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces.",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-directCosts",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$50",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-exposure",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#exposure",
+          "dated": "2026-11-24",
+          "claim": "$50",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-payer",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#payer",
+          "dated": "2026-11-24",
+          "claim": "Licensed pest control operators",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-price",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#price",
+          "dated": "2026-11-24",
+          "claim": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "3a88f3-timeToFirstCash",
+          "url": "https://brain.local/card/cop_e303c8557d45453a88f3#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "5 days",
+          "population": "Licensed pest control operators",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_e303c8557d45453a88f3",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [
+        {
+          "opportunityId": "cop_e303c8557d45453a88f3",
+          "deals": 4,
+          "price": 600,
+          "directCost": 50,
+          "capital": 200
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_ee7522f752a4_ea2d2b",
+      "digest": "ee7522f752a41e018bdc6887",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:41:25.836Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_ee7522f752a4_ea2d2b",
+      "digest": "ee7522f752a41e018bdc6887",
+      "contractDigest": "80b07fa8133458d36d0205e7",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 20000,
+        "committedOpenCents": 0,
+        "preProofCents": 20000,
+        "maxExposureCents": 20000,
+        "minCashCents": 20000,
+        "minCashDay": 2,
+        "collectedCents": 240000,
+        "collectedInWindowCents": 240000,
+        "refundsCents": 0,
+        "ownerFundedCents": 20000,
+        "netCents": 220000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Annual restricted-use pesticide application record summary f\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Annual restricted-use pesticide application record summary f\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies.",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_e303c8557d45453a88f3"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Annual restricted-use pesticide application record summary for licensed pest con\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Annual restricted-use pesticide application record summary for licensed pest con\"",
+            "owner": "PERSON",
+            "cost": 50
+          },
+          {
+            "label": "Collect payment for \"Annual restricted-use pesticide application record summary for licensed pest con\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "title": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 2000,
+            "potentialReach": 2000,
+            "card": {
+              "payer": "Licensed pest control operators",
+              "reachableChannel": "The operators who signed by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:08:17.711Z",
+              "offerScope": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+              "priceCents": 60000,
+              "currency": "USD",
+              "peakFundingCents": 5000,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "pest control operators",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 60000,
+                "currency": "USD",
+                "deliverable": "Annual restricted-use pesticide application record summary for licensed pest control operators",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The operators who signed by email"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 2400 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 2400 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 50, tied up 50"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 10 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Annual restricted-use pesticide application record summary for licensed pest control operators to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$50",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$50",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed pest control operators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 200000,
+          "daysLeft": 10,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:40:38.573Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_38293f2bb5e9_ef1e99",
+        "revisionDigest": "38293f2bb5e973170a66e240",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0d54ac61d5c247cdbac9/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is the right stance and the decisive gap is a true constraint, not missing evidence: the only opening (pesticide record summary) has 4 written acceptances at $600 = $2,400 (covers $2,000) and $50 capital (inside the $200 cap), but its time to usable cash is 30 days on the card (EVIDENCE), so even with every buyer paying, $0 settles inside the 10-day window. Brain's own check agrees (INFEASIBLE AS STATED, SETTLES_IN_TIME false: 30 days vs 10). Resolution is correctly named: extend the window to >=30 days, or obtain written agreement from the four operators to pay on delivery; the day-1 ask is a zero-cost step and does not pretend the faster settlement is known. The open buyerVolume/revenueRange questions do not bear on the decision: new buyers through this offer would face the same 30-day settlement.",
+        "findings": [
+          "If the operators agree in writing to pay on delivery, the plan should be revised to EXECUTABLE only on that new record; a verbal or assumed change to payment terms must not be treated as evidence.",
+          "No other opening exists in the record; the NO_PLAN covers the openings held, not markets nobody has counted."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:32:14.762Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_ee7522f752a4_ea2d2b",
+        "revisionDigest": "ee7522f752a41e018bdc6887",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0d54ac61d5c247cdbac9/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The decisive fact changed: the card now records timeToFirstCash 5 days (EVIDENCE), so the earlier NO_PLAN gap (30 days vs 10) is gone and SETTLES_IN_TIME holds; moving to EXECUTABLE is right. Recomputed: 4 written acceptances x $600 = $2,400 >= $2,000; direct cost 4 x $50 = $200 owner-funded day 1-2, exactly at the $200 capital ceiling (not above it); delivered day 2, receipts usable day 7, proof day 7 inside 10 days; net $2,200. Price is these operators' own signed orders; Brain is the recorded producer (PRODUCE_SPREADSHEET proved). No new buyers are needed, so the parked buyerVolume/revenueRange questions do not bear on the plan.",
+        "findings": [
+          "Zero capital headroom: $200 spent against a $200 ceiling; any cost overrun on a summary breaks the limit, so costs must be confirmed at $50 each before producing.",
+          "Concentration: all four operators must pay; one non-payer leaves $1,800 < $2,000. Settlement on day 7 leaves 3 days of slack for one late payment, not for a default.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:43:12.595Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_ee7522f752a4_ea2d2b",
+      "digest": "ee7522f752a41e018bdc6887",
+      "contractDigest": "80b07fa8133458d36d0205e7",
+      "plan": {
+        "goalId": "wst_3a88636e813541a58f7b",
+        "contractDigest": "80b07fa8133458d36d0205e7",
+        "parentRevisionId": "rev_38293f2bb5e9_ef1e99",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Deliver the four signed pesticide application-record summaries and collect $2,400 inside 10 days",
+          "opportunityIds": [
+            "cop_e303c8557d45453a88f3"
+          ],
+          "why": "The card now records 5 days to usable cash (EVIDENCE), replacing the 30 days that ruled the earlier plan out. Four licensed pest control operators signed written orders at $600 each ($2,400 against the $2,000 target); Brain produces the spreadsheet summary itself; direct cost is $50 per summary, funded from the owner's capital ($200 for all four, within the $200 ceiling, recovered on receipt). Delivered on day 2, the invoices settle by day 7, inside the 10-day window. No new buyers are needed."
+        },
+        "alternatives": [
+          {
+            "title": "Wait for pre-payment before producing",
+            "why": "Unnecessary: the $200 of capital the owner allows covers the direct cost, and waiting would only push settlement toward the deadline."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Email the four operators who signed to confirm their record data and delivery address",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "3a88f3-price"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Confirm the four signed $600 orders",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "3a88f3-price"
+            ],
+            "priceCents": 60000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers the four annual restricted-use pesticide application record summaries ($50 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 20000,
+            "day": 2,
+            "dependsOn": "sell",
+            "evidence": [
+              "3a88f3-delivery",
+              "3a88f3-directCosts",
+              "3a88f3-exposure"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Invoice and collect four payments of $600, usable 5 days after delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 2,
+            "dependsOn": "deliver",
+            "evidence": [
+              "3a88f3-timeToFirstCash",
+              "3a88f3-price"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 1,
+            "kind": "FUNDING",
+            "amountCents": 20000,
+            "label": "owner's capital advanced for direct costs (within the $200 ceiling)",
+            "stepId": "deliver"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 20000,
+            "label": "direct cost, 4 x $50",
+            "stepId": "deliver"
+          },
+          {
+            "day": 2,
+            "kind": "RECEIPT",
+            "amountCents": 240000,
+            "label": "4 x $600 signed orders",
+            "settlesDay": 7,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 7,
+        "quantities": [
+          {
+            "name": "signed orders",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "orders",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 600,
+            "unit": "USD per order",
+            "sources": [
+              "3a88f3-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 50,
+            "unit": "USD per summary",
+            "sources": [
+              "3a88f3-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to usable cash",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "days",
+            "sources": [
+              "3a88f3-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "3a88f3-captureMechanism",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Annual restricted-use pesticide application record summary for licensed pest control operators to each buyer.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-delivery",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-directCosts",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-exposure",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#exposure",
+            "dated": "2026-11-24",
+            "claim": "$50",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-payer",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#payer",
+            "dated": "2026-11-24",
+            "claim": "Licensed pest control operators",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-price",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#price",
+            "dated": "2026-11-24",
+            "claim": "Four licensed pest control operators signed written orders at $600 each for the annual application-record summary (signed orders, 2026-11-24).",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "3a88f3-timeToFirstCash",
+            "url": "https://brain.local/card/cop_e303c8557d45453a88f3#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "5 days",
+            "population": "Licensed pest control operators",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_e303c8557d45453a88f3",
+            "deals": 4,
+            "price": 600,
+            "directCost": 50,
+            "capital": 200
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_ee7522f752a4_ea2d2b",
+        "digest": "ee7522f752a41e018bdc6887",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:41:25.836Z"
+      },
+      "review": {
+        "revisionId": "rev_ee7522f752a4_ea2d2b",
+        "revisionDigest": "ee7522f752a41e018bdc6887",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_b91eb0c1a4ee40b7a2e9/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_0d54ac61d5c247cdbac9/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The decisive fact changed: the card now records timeToFirstCash 5 days (EVIDENCE), so the earlier NO_PLAN gap (30 days vs 10) is gone and SETTLES_IN_TIME holds; moving to EXECUTABLE is right. Recomputed: 4 written acceptances x $600 = $2,400 >= $2,000; direct cost 4 x $50 = $200 owner-funded day 1-2, exactly at the $200 capital ceiling (not above it); delivered day 2, receipts usable day 7, proof day 7 inside 10 days; net $2,200. Price is these operators' own signed orders; Brain is the recorded producer (PRODUCE_SPREADSHEET proved). No new buyers are needed, so the parked buyerVolume/revenueRange questions do not bear on the plan.",
+        "findings": [
+          "Zero capital headroom: $200 spent against a $200 ceiling; any cost overrun on a summary breaks the limit, so costs must be confirmed at $50 each before producing.",
+          "Concentration: all four operators must pay; one non-payer leaves $1,800 < $2,000. Settlement on day 7 leaves 3 days of slack for one late payment, not for a default.",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connect before day 1 (setup)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:43:12.595Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:43:44.609Z"
+    },
+    "staleFinal": null
+  }
+}

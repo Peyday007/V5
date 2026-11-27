@@ -1,0 +1,1973 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_d568b4ad6d434e40b8f7",
+      "words": "Collect $1,200 of settled cash within 21 days with no more than 2 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 120000,
+        "metric": "SETTLED_CASH",
+        "windowDays": 21,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "ownerHoursPerWeek": 2,
+        "proofCondition": "$1,200 of settled cash collected by day 21",
+        "currency": "USD",
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "e625abc82e47e33a414f5dd3"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_d568b4ad6d434e40b8f7",
+        "contractDigest": "e625abc82e47e33a414f5dd3",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Keep selling the tattoo-studio consent and aftercare form pack through its existing marketplace listing",
+          "opportunityIds": [
+            "cop_14245f2b206c45b388c1"
+          ],
+          "why": "The listing's own marketplace analytics show 3,100 unique visitors in the last 30 days (stable within 10% for three months) and 93 paid sales at $29 (3.0% measured on this listing's own visitors). Over 21 days that is about 2,170 visitors and about 65 expected sales; 42 sales reach $1,200. Brain produces the spreadsheet pack itself at $3 direct cost, cash is usable 3 days after sale, and the plan needs zero owner hours, inside the 2 h/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "On-site health-department walkthroughs ($450, three signed orders)",
+            "why": "Excluded: each takes 8 hours of the owner's personal on-site work; three would need 24 owner hours against a 6-hour window total (2 h/week x 3 weeks)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the existing marketplace listing live; about 2,170 unique visitors expected over 21 days at the measured 3,100 per 30 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b388c1-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "Offer the client consent and aftercare form pack at $29",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Close 45 paid orders at $29 (measured conversion 0.03)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 3,
+            "dependsOn": "offer",
+            "evidence": [
+              "b388c1-conversionRates",
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Produce and deliver 45 copies of the spreadsheet deliverable ($3 direct cost each)",
+            "performer": "BRAIN",
+            "costCents": 13500,
+            "day": 7,
+            "dependsOn": "collect",
+            "evidence": [
+              "b388c1-delivery",
+              "b388c1-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Collect 45 payments of $29, invoiced on order and paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 4,
+            "dependsOn": "sell",
+            "evidence": [
+              "b388c1-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "SPEND",
+            "amountCents": 13500,
+            "label": "direct delivery cost",
+            "stepId": "deliver"
+          },
+          {
+            "day": 4,
+            "kind": "RECEIPT",
+            "amountCents": 130500,
+            "label": "45 x $29",
+            "settlesDay": 7,
+            "stepId": "collect"
+          }
+        ],
+        "proofDay": 10,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.03,
+            "unit": "orders per contact",
+            "sources": [
+              "b388c1-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "listing visitors per 30 days",
+            "status": "EVIDENCED",
+            "value": 3100,
+            "unit": "buyers",
+            "sources": [
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "b388c1-conversionRates",
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "b388c1-timeToFirstCash"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b388c1-buyerVolume",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-captureMechanism",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Client consent and aftercare form pack for tattoo studios (existing digital-download listing) to each buyer.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-conversionRates",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "93 paid pre-orders from 3100 unique visitors",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-delivery",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-directCosts",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$3",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-exposure",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-payer",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#payer",
+            "dated": "2026-11-24",
+            "claim": "Tattoo studio owners shopping the digital-download marketplace",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-price",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#price",
+            "dated": "2026-11-24",
+            "claim": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-timeToFirstCash",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "why": "Fulfilment is the owner personally, 8 human hours per walkthrough; even one deal (8 h) exceeds the 6 owner hours the objective allows over 21 days (2 h/week), and the $1,200 target needs three (24 h)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "deals": 45,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_a8a6be31d815_5fc333",
+        "digest": "a8a6be31d815e23077d63762",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:19:42.335Z"
+      },
+      {
+        "goalId": "wst_d568b4ad6d434e40b8f7",
+        "contractDigest": "e625abc82e47e33a414f5dd3",
+        "parentRevisionId": "rev_a8a6be31d815_5fc333",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Keep selling the tattoo-studio consent and aftercare form pack through its existing marketplace listing",
+          "opportunityIds": [
+            "cop_14245f2b206c45b388c1"
+          ],
+          "why": "The listing's own marketplace analytics show 3,100 unique visitors in the last 30 days (stable within 10% for three months) and 93 paid sales at $29 (3.0% of this listing's own visitors), about 3.1 sales a day. 42 sales reach $1,200 ($1,218) and accrue by about day 14, settled by day 17; sales through day 18 (about 56 expected) all settle inside 21 days. Brain produces the spreadsheet pack at $3 direct cost paid from receipts, the marketplace handles checkout, delivery and payout, and the plan needs zero owner hours, inside the 2 h/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "On-site health-department walkthroughs ($450, three signed orders)",
+            "why": "Excluded: each takes 8 hours of the owner's personal on-site work; three would need 24 owner hours against a 6-hour window total (2 h/week x 3 weeks)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the existing marketplace listing live; about 103 unique visitors a day from the marketplace search (3,100 per 30 days, measured)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b388c1-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "List the client consent and aftercare form pack at $29 on the listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Marketplace checkout on the listing: about 3.1 sales a day at the measured 3.0%; 45 sales accrue over days 1-18 (42 by day 14)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "offer",
+            "evidence": [
+              "b388c1-conversionRates",
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces the spreadsheet pack; the marketplace delivers the download to each buyer ($3 direct cost per sale, paid from settled receipts)",
+            "performer": "BRAIN",
+            "costCents": 13500,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "b388c1-delivery",
+              "b388c1-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Marketplace pays out each sale, usable 3 days after the sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "b388c1-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 60900,
+            "label": "sales days 1-7 (21 x $29)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 60900,
+            "label": "sales days 8-14 (21 x $29)",
+            "settlesDay": 17,
+            "stepId": "collect"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 8700,
+            "label": "sales days 15-18 (3 of ~12 expected, x $29)",
+            "settlesDay": 21,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 6300,
+            "label": "direct cost, first 21 sales",
+            "stepId": "deliver"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 6300,
+            "label": "direct cost, next 21 sales",
+            "stepId": "deliver"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 900,
+            "label": "direct cost, last 3 sales",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 17,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.03,
+            "unit": "orders per contact",
+            "sources": [
+              "b388c1-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "listing visitors per 30 days",
+            "status": "EVIDENCED",
+            "value": 3100,
+            "unit": "buyers",
+            "sources": [
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "b388c1-conversionRates",
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "b388c1-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales per day",
+            "status": "EVIDENCED",
+            "value": 3.1,
+            "unit": "sales per day",
+            "sources": [
+              "b388c1-buyerVolume",
+              "b388c1-conversionRates"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b388c1-buyerVolume",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-captureMechanism",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Client consent and aftercare form pack for tattoo studios (existing digital-download listing) to each buyer.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-conversionRates",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "93 paid pre-orders from 3100 unique visitors",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-delivery",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-directCosts",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$3",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-exposure",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-payer",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#payer",
+            "dated": "2026-11-24",
+            "claim": "Tattoo studio owners shopping the digital-download marketplace",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-price",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#price",
+            "dated": "2026-11-24",
+            "claim": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-timeToFirstCash",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Ledger/steps: 'Close 45 paid orders' on day 3 and a single 45 x $29 receipt on day 4 are inconsistent with ~3.1 sales/day measured on the listing; 42 sales are expected around day 14, settled ~day 17.",
+            "resolution": "Accepted. Sales now accrue at the measured ~3.1/day in weekly tranches (21 by day 7, 42 by day 14, 45 by day 18), each settling 3 days later; proof day moved to 17, when 42 sales ($1,218) have settled."
+          },
+          {
+            "finding": "Planned 45 sales: gross $1,305, delivery cost 45 x $3 = $135 spent from receipts (no owner funding); settled cash collected $1,305 >= $1,200 target. Note net after cost is $1,170, which is fine because the metric is settled cash collected, not net.",
+            "resolution": "Agreed; the metric is settled cash collected, and each tranche's $3 costs are now spent only on the day its receipts settle."
+          },
+          {
+            "finding": "Executor detail: steps use SEND_A_MESSAGE and ISSUE_AN_INVOICE (both NOT_CONNECTED), but sales on an existing marketplace listing are collected by the marketplace; the plan should say payment and delivery run through the listing rather than outbound messages and invoices.",
+            "resolution": "Accepted. Steps now state that checkout, download delivery and payout run through the existing marketplace listing; there is no outbound messaging or invoicing."
+          },
+          {
+            "finding": "Exclusion of cop_ffaad8380e7d4436abf7 is correct on the owner-hours limit alone (8 h per walkthrough > 6 h in 21 days at 2 h/week), independent of the physical-work question (contract leaves ownerPhysicalWork UNSTATED).",
+            "resolution": "Agreed; the exclusion stays on the owner-hours limit."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "why": "Fulfilment is the owner personally, 8 human hours per walkthrough; even one deal (8 h) exceeds the 6 owner hours the objective allows over 21 days (2 h/week), and the $1,200 target needs three (24 h)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "deals": 45,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_6bf585cc5c2c_37a22a",
+        "digest": "6bf585cc5c2c4b916f2183ae",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:32:01.609Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_d568b4ad6d434e40b8f7",
+      "contractDigest": "e625abc82e47e33a414f5dd3",
+      "parentRevisionId": "rev_a8a6be31d815_5fc333",
+      "stance": "EXECUTABLE",
+      "strategy": {
+        "title": "Keep selling the tattoo-studio consent and aftercare form pack through its existing marketplace listing",
+        "opportunityIds": [
+          "cop_14245f2b206c45b388c1"
+        ],
+        "why": "The listing's own marketplace analytics show 3,100 unique visitors in the last 30 days (stable within 10% for three months) and 93 paid sales at $29 (3.0% of this listing's own visitors), about 3.1 sales a day. 42 sales reach $1,200 ($1,218) and accrue by about day 14, settled by day 17; sales through day 18 (about 56 expected) all settle inside 21 days. Brain produces the spreadsheet pack at $3 direct cost paid from receipts, the marketplace handles checkout, delivery and payout, and the plan needs zero owner hours, inside the 2 h/week limit."
+      },
+      "alternatives": [
+        {
+          "title": "On-site health-department walkthroughs ($450, three signed orders)",
+          "why": "Excluded: each takes 8 hours of the owner's personal on-site work; three would need 24 owner hours against a 6-hour window total (2 h/week x 3 weeks)."
+        }
+      ],
+      "steps": [
+        {
+          "id": "reach",
+          "kind": "REACH",
+          "label": "Keep the existing marketplace listing live; about 103 unique visitors a day from the marketplace search (3,100 per 30 days, measured)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "b388c1-buyerVolume"
+          ],
+          "executor": {
+            "operation": "REACH_BUYERS",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "DISCOVER_LOCAL_BUSINESSES",
+                "state": "UNREAD"
+              },
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "offer",
+          "kind": "OFFER",
+          "label": "List the client consent and aftercare form pack at $29 on the listing",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "reach",
+          "evidence": [
+            "b388c1-price"
+          ],
+          "priceCents": 2900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "sell",
+          "kind": "SELL",
+          "label": "Marketplace checkout on the listing: about 3.1 sales a day at the measured 3.0%; 45 sales accrue over days 1-18 (42 by day 14)",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": "offer",
+          "evidence": [
+            "b388c1-conversionRates",
+            "b388c1-price"
+          ],
+          "priceCents": 2900,
+          "executor": {
+            "operation": "SEND_OFFER",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "SEND_A_MESSAGE",
+                "state": "NOT_CONNECTED"
+              },
+              {
+                "id": "READ_REPLIES",
+                "state": "UNREAD"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "deliver",
+          "kind": "DELIVER",
+          "label": "Brain produces the spreadsheet pack; the marketplace delivers the download to each buyer ($3 direct cost per sale, paid from settled receipts)",
+          "performer": "BRAIN",
+          "costCents": 13500,
+          "day": 1,
+          "dependsOn": "sell",
+          "evidence": [
+            "b388c1-delivery",
+            "b388c1-directCosts"
+          ],
+          "executor": {
+            "operation": "BRAIN_PRODUCES",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "PRODUCE_SPREADSHEET",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": true
+          }
+        },
+        {
+          "id": "collect",
+          "kind": "COLLECT",
+          "label": "Marketplace pays out each sale, usable 3 days after the sale",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 7,
+          "dependsOn": "sell",
+          "evidence": [
+            "b388c1-timeToFirstCash"
+          ],
+          "executor": {
+            "operation": "COLLECT_PAYMENT",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "ISSUE_AN_INVOICE",
+                "state": "NOT_CONNECTED"
+              }
+            ],
+            "routine": true
+          }
+        }
+      ],
+      "cash": [
+        {
+          "day": 7,
+          "kind": "RECEIPT",
+          "amountCents": 60900,
+          "label": "sales days 1-7 (21 x $29)",
+          "settlesDay": 10,
+          "stepId": "collect"
+        },
+        {
+          "day": 14,
+          "kind": "RECEIPT",
+          "amountCents": 60900,
+          "label": "sales days 8-14 (21 x $29)",
+          "settlesDay": 17,
+          "stepId": "collect"
+        },
+        {
+          "day": 18,
+          "kind": "RECEIPT",
+          "amountCents": 8700,
+          "label": "sales days 15-18 (3 of ~12 expected, x $29)",
+          "settlesDay": 21,
+          "stepId": "collect"
+        },
+        {
+          "day": 10,
+          "kind": "SPEND",
+          "amountCents": 6300,
+          "label": "direct cost, first 21 sales",
+          "stepId": "deliver"
+        },
+        {
+          "day": 17,
+          "kind": "SPEND",
+          "amountCents": 6300,
+          "label": "direct cost, next 21 sales",
+          "stepId": "deliver"
+        },
+        {
+          "day": 21,
+          "kind": "SPEND",
+          "amountCents": 900,
+          "label": "direct cost, last 3 sales",
+          "stepId": "deliver"
+        }
+      ],
+      "proofDay": 17,
+      "quantities": [
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.03,
+          "unit": "orders per contact",
+          "sources": [
+            "b388c1-conversionRates"
+          ],
+          "needs": null
+        },
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 29,
+          "unit": "USD per deal",
+          "sources": [
+            "b388c1-price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "listing visitors per 30 days",
+          "status": "EVIDENCED",
+          "value": 3100,
+          "unit": "buyers",
+          "sources": [
+            "b388c1-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals planned",
+          "status": "EVIDENCED",
+          "value": 45,
+          "unit": "deals",
+          "sources": [
+            "b388c1-conversionRates",
+            "b388c1-buyerVolume"
+          ],
+          "needs": null
+        },
+        {
+          "name": "direct cost",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "USD per deal",
+          "sources": [
+            "b388c1-directCosts"
+          ],
+          "needs": null
+        },
+        {
+          "name": "days to settled cash",
+          "status": "EVIDENCED",
+          "value": 3,
+          "unit": "days",
+          "sources": [
+            "b388c1-timeToFirstCash"
+          ],
+          "needs": null
+        },
+        {
+          "name": "sales per day",
+          "status": "EVIDENCED",
+          "value": 3.1,
+          "unit": "sales per day",
+          "sources": [
+            "b388c1-buyerVolume",
+            "b388c1-conversionRates"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "b388c1-buyerVolume",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-captureMechanism",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#captureMechanism",
+          "dated": "2026-11-24",
+          "claim": "Sell Client consent and aftercare form pack for tattoo studios (existing digital-download listing) to each buyer.",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-conversionRates",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "93 paid pre-orders from 3100 unique visitors",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-delivery",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#delivery",
+          "dated": "2026-11-24",
+          "claim": "A spreadsheet Brain produces.",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-directCosts",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#directCosts",
+          "dated": "2026-11-24",
+          "claim": "$3",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-exposure",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#exposure",
+          "dated": "2026-11-24",
+          "claim": "$0",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-payer",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#payer",
+          "dated": "2026-11-24",
+          "claim": "Tattoo studio owners shopping the digital-download marketplace",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-price",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#price",
+          "dated": "2026-11-24",
+          "claim": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b388c1-timeToFirstCash",
+          "url": "https://brain.local/card/cop_14245f2b206c45b388c1#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "3 days",
+          "population": "Tattoo studio owners shopping the digital-download marketplace",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": null,
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Ledger/steps: 'Close 45 paid orders' on day 3 and a single 45 x $29 receipt on day 4 are inconsistent with ~3.1 sales/day measured on the listing; 42 sales are expected around day 14, settled ~day 17.",
+          "resolution": "Accepted. Sales now accrue at the measured ~3.1/day in weekly tranches (21 by day 7, 42 by day 14, 45 by day 18), each settling 3 days later; proof day moved to 17, when 42 sales ($1,218) have settled."
+        },
+        {
+          "finding": "Planned 45 sales: gross $1,305, delivery cost 45 x $3 = $135 spent from receipts (no owner funding); settled cash collected $1,305 >= $1,200 target. Note net after cost is $1,170, which is fine because the metric is settled cash collected, not net.",
+          "resolution": "Agreed; the metric is settled cash collected, and each tranche's $3 costs are now spent only on the day its receipts settle."
+        },
+        {
+          "finding": "Executor detail: steps use SEND_A_MESSAGE and ISSUE_AN_INVOICE (both NOT_CONNECTED), but sales on an existing marketplace listing are collected by the marketplace; the plan should say payment and delivery run through the listing rather than outbound messages and invoices.",
+          "resolution": "Accepted. Steps now state that checkout, download delivery and payout run through the existing marketplace listing; there is no outbound messaging or invoicing."
+        },
+        {
+          "finding": "Exclusion of cop_ffaad8380e7d4436abf7 is correct on the owner-hours limit alone (8 h per walkthrough > 6 h in 21 days at 2 h/week), independent of the physical-work question (contract leaves ownerPhysicalWork UNSTATED).",
+          "resolution": "Agreed; the exclusion stays on the owner-hours limit."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_14245f2b206c45b388c1",
+          "missing": []
+        },
+        {
+          "opportunityId": "cop_ffaad8380e7d4436abf7",
+          "missing": []
+        }
+      ],
+      "excluded": [
+        {
+          "opportunityId": "cop_ffaad8380e7d4436abf7",
+          "why": "Fulfilment is the owner personally, 8 human hours per walkthrough; even one deal (8 h) exceeds the 6 owner hours the objective allows over 21 days (2 h/week), and the $1,200 target needs three (24 h)."
+        }
+      ],
+      "members": [
+        {
+          "opportunityId": "cop_14245f2b206c45b388c1",
+          "deals": 45,
+          "price": 29,
+          "directCost": 3,
+          "capital": 0
+        }
+      ],
+      "resolves": [],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_6bf585cc5c2c_37a22a",
+      "digest": "6bf585cc5c2c4b916f2183ae",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:32:01.609Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_6bf585cc5c2c_37a22a",
+      "digest": "6bf585cc5c2c4b916f2183ae",
+      "contractDigest": "e625abc82e47e33a414f5dd3",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 13500,
+        "committedOpenCents": 0,
+        "preProofCents": 12600,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": 7,
+        "collectedCents": 130500,
+        "collectedInWindowCents": 130500,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 117000
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NEEDS_EVIDENCE",
+        "summary": "\"Only: Client consent and aftercare form pack for tattoo studios (e\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Client consent and aftercare form pack for tattoo studios (e\" (assumption-only coverage: it reaches the target in 0.1% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1774× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Client consent and aftercare form pack for tattoo studios (existing di\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_14245f2b206c45b388c1"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Client consent and aftercare form pack for tattoo studios (existing digital-down\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Client consent and aftercare form pack for tattoo studios (existing digital-down\"",
+            "owner": "PERSON",
+            "cost": 3
+          },
+          {
+            "label": "Collect payment for \"Client consent and aftercare form pack for tattoo studios (existing digital-down\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+        "openings": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "title": "Client consent and aftercare form pack for tattoo studios (existing digital-download listing)",
+            "missing": [],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 1200,
+            "potentialReach": 1200,
+            "card": {
+              "payer": "Tattoo studio owners shopping the digital-download marketplace",
+              "reachableChannel": "This offer's own live marketplace listing and the marketplace search",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:07:56.169Z",
+              "offerScope": "Client consent and aftercare form pack for tattoo studios (existing digital-download listing)",
+              "priceCents": 2900,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "tattoo studios",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: This offer's own live marketplace listing and the marketplace search"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 29 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own inbound page: 93 money-committed pre-orders from 3100 unique visitors"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "43 deal(s) needed, 3100 available in the window (3100 visitors are stated for the window, each one trial of the measured rate)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 3, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "3 days to usable cash against 21 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Client consent and aftercare form pack for tattoo studios (existing digital-download listing) to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "93 paid pre-orders from 3100 unique visitors",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$3",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Tattoo studio owners shopping the digital-download marketplace",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "3 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "title": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+            "reason": "needs the owner's physical work: the service (\"On-site\") would be performed by The owner, personally; the owner does no physical work",
+            "card": {
+              "payer": "Tattoo studio owners",
+              "reachableChannel": "Studios that signed by email",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:07:56.169Z",
+              "offerScope": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+              "priceCents": 45000,
+              "currency": "USD",
+              "fulfillmentOwner": "The owner, personally",
+              "peakFundingCents": 0,
+              "humanHours": 8,
+              "requiredCapabilities": [],
+              "industry": "tattoo studios",
+              "mechanism": "CAPABILITY_ARBITRAGE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 45000,
+                "currency": "USD",
+                "deliverable": "On-site health-department inspection walkthrough for tattoo studios, performed by the owner",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell On-site health-department inspection walkthrough for tattoo studios, performed by the owner to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "The owner does the work personally.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "payer",
+                "value": "Tattoo studio owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Three studios signed written orders at $450 per on-site walkthrough (signed orders, 2026-11-24).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "questions": [],
+        "scope": {
+          "targetCents": 120000,
+          "daysLeft": 21,
+          "hoursCeiling": 6,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 2
+        },
+        "at": "2026-11-27T07:16:30.268Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_a8a6be31d815_5fc333",
+        "revisionDigest": "a8a6be31d815e23077d63762",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_87c2f1df5e5749bcb5ab/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "Opening choice and stance are right: the form-pack listing has every link evidenced on its own record (93 sales at $29 from 3,100 unique visitors in the last 30 days = 3.0%, traffic stable within 10% for three months, Brain produces the spreadsheet, $3 cost, cash in 3 days, 0 owner hours), and the walkthrough is correctly excluded (8 owner hours each vs 6 owner hours in the window; the target needs 24). But the ledger timing contradicts the evidence the plan cites. At 3,100 visitors per 30 days the listing gets ~103 visitors/day, and at 3.0% that is ~3.1 sales/day. The plan books all 45 sales on day 3 and all 45 receipts on day 4 (settling day 7, proof day 10); 45 sales need ~1,500 visitors, i.e. ~14.5 days of traffic, not 3. By day 10 only ~31 sales (~$900) are expected, so the proof condition as scheduled would read as a failure on a plan that is actually on track. Recomputed correctly: 42 sales reach $1,200 ($1,218); sales through day 18 settle by day 21: ~1,860 visitors x 3% = ~56 expected sales (~$1,620 gross, sd ~7 sales), so the target is reached in the window with margin. Revise the cash ledger to accrue ~3 sales/day (receipts settling 3 days after each sale), put the proof day near day 17-18 (when ~42 sales have settled), and keep EXECUTABLE.",
+        "findings": [
+          "Ledger/steps: 'Close 45 paid orders' on day 3 and a single 45 x $29 receipt on day 4 are inconsistent with ~3.1 sales/day measured on the listing; 42 sales are expected around day 14, settled ~day 17.",
+          "Planned 45 sales: gross $1,305, delivery cost 45 x $3 = $135 spent from receipts (no owner funding); settled cash collected $1,305 >= $1,200 target. Note net after cost is $1,170, which is fine because the metric is settled cash collected, not net.",
+          "Executor detail: steps use SEND_A_MESSAGE and ISSUE_AN_INVOICE (both NOT_CONNECTED), but sales on an existing marketplace listing are collected by the marketplace; the plan should say payment and delivery run through the listing rather than outbound messages and invoices.",
+          "Exclusion of cop_ffaad8380e7d4436abf7 is correct on the owner-hours limit alone (8 h per walkthrough > 6 h in 21 days at 2 h/week), independent of the physical-work question (contract leaves ownerPhysicalWork UNSTATED)."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:30:29.617Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_6bf585cc5c2c_37a22a",
+        "revisionDigest": "6bf585cc5c2c4b916f2183ae",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_87c2f1df5e5749bcb5ab/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The ledger now matches the measured rate: 3,100 visitors/30 days = ~103/day x 3.0% = ~3.1 sales/day. Tranches recomputed: days 1-7 = ~21.7 expected, booked 21 x $29 = $609 settling day 10; days 8-14 booked 21 = $609 settling day 17; cumulative 42 sales = $1,218 >= $1,200 settled by day 17 (proof day 17). Days 15-18 are counted conservatively at 3 of ~12 expected ($87, settling day 21). Total collected $1,305 in window. Costs ($3 per sale, $135 total) are spent on each tranche's settlement day from receipts, so no owner funding; zero owner hours vs 2 h/week. Checkout, delivery and payout now run through the existing listing, matching the card's channel. Every link is evidenced on this listing's own analytics and sales report; EXECUTABLE is right. The walkthrough exclusion stands on the owner-hours limit (8 h each vs 6 h in the window).",
+        "findings": [
+          "Margin: by day 17 the plan needs 42 sales from ~1,750 visitors of traffic through day 14 (expected ~43); the target at day 17 is close to the expectation, but sales through day 18 (expected ~56) all settle by day 21, so the day-21 proof has ~14 sales of slack (~2 sd).",
+          "Traffic is measured stable within 10% for three months; a 10% traffic dip still leaves ~50 expected sales through day 18, above the 42 needed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:32:43.198Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_6bf585cc5c2c_37a22a",
+      "digest": "6bf585cc5c2c4b916f2183ae",
+      "contractDigest": "e625abc82e47e33a414f5dd3",
+      "plan": {
+        "goalId": "wst_d568b4ad6d434e40b8f7",
+        "contractDigest": "e625abc82e47e33a414f5dd3",
+        "parentRevisionId": "rev_a8a6be31d815_5fc333",
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Keep selling the tattoo-studio consent and aftercare form pack through its existing marketplace listing",
+          "opportunityIds": [
+            "cop_14245f2b206c45b388c1"
+          ],
+          "why": "The listing's own marketplace analytics show 3,100 unique visitors in the last 30 days (stable within 10% for three months) and 93 paid sales at $29 (3.0% of this listing's own visitors), about 3.1 sales a day. 42 sales reach $1,200 ($1,218) and accrue by about day 14, settled by day 17; sales through day 18 (about 56 expected) all settle inside 21 days. Brain produces the spreadsheet pack at $3 direct cost paid from receipts, the marketplace handles checkout, delivery and payout, and the plan needs zero owner hours, inside the 2 h/week limit."
+        },
+        "alternatives": [
+          {
+            "title": "On-site health-department walkthroughs ($450, three signed orders)",
+            "why": "Excluded: each takes 8 hours of the owner's personal on-site work; three would need 24 owner hours against a 6-hour window total (2 h/week x 3 weeks)."
+          }
+        ],
+        "steps": [
+          {
+            "id": "reach",
+            "kind": "REACH",
+            "label": "Keep the existing marketplace listing live; about 103 unique visitors a day from the marketplace search (3,100 per 30 days, measured)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "b388c1-buyerVolume"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "offer",
+            "kind": "OFFER",
+            "label": "List the client consent and aftercare form pack at $29 on the listing",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "reach",
+            "evidence": [
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "sell",
+            "kind": "SELL",
+            "label": "Marketplace checkout on the listing: about 3.1 sales a day at the measured 3.0%; 45 sales accrue over days 1-18 (42 by day 14)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "offer",
+            "evidence": [
+              "b388c1-conversionRates",
+              "b388c1-price"
+            ],
+            "priceCents": 2900,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "deliver",
+            "kind": "DELIVER",
+            "label": "Brain produces the spreadsheet pack; the marketplace delivers the download to each buyer ($3 direct cost per sale, paid from settled receipts)",
+            "performer": "BRAIN",
+            "costCents": 13500,
+            "day": 1,
+            "dependsOn": "sell",
+            "evidence": [
+              "b388c1-delivery",
+              "b388c1-directCosts"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "collect",
+            "kind": "COLLECT",
+            "label": "Marketplace pays out each sale, usable 3 days after the sale",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 7,
+            "dependsOn": "sell",
+            "evidence": [
+              "b388c1-timeToFirstCash"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 7,
+            "kind": "RECEIPT",
+            "amountCents": 60900,
+            "label": "sales days 1-7 (21 x $29)",
+            "settlesDay": 10,
+            "stepId": "collect"
+          },
+          {
+            "day": 14,
+            "kind": "RECEIPT",
+            "amountCents": 60900,
+            "label": "sales days 8-14 (21 x $29)",
+            "settlesDay": 17,
+            "stepId": "collect"
+          },
+          {
+            "day": 18,
+            "kind": "RECEIPT",
+            "amountCents": 8700,
+            "label": "sales days 15-18 (3 of ~12 expected, x $29)",
+            "settlesDay": 21,
+            "stepId": "collect"
+          },
+          {
+            "day": 10,
+            "kind": "SPEND",
+            "amountCents": 6300,
+            "label": "direct cost, first 21 sales",
+            "stepId": "deliver"
+          },
+          {
+            "day": 17,
+            "kind": "SPEND",
+            "amountCents": 6300,
+            "label": "direct cost, next 21 sales",
+            "stepId": "deliver"
+          },
+          {
+            "day": 21,
+            "kind": "SPEND",
+            "amountCents": 900,
+            "label": "direct cost, last 3 sales",
+            "stepId": "deliver"
+          }
+        ],
+        "proofDay": 17,
+        "quantities": [
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.03,
+            "unit": "orders per contact",
+            "sources": [
+              "b388c1-conversionRates"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 29,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "listing visitors per 30 days",
+            "status": "EVIDENCED",
+            "value": 3100,
+            "unit": "buyers",
+            "sources": [
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals planned",
+            "status": "EVIDENCED",
+            "value": 45,
+            "unit": "deals",
+            "sources": [
+              "b388c1-conversionRates",
+              "b388c1-buyerVolume"
+            ],
+            "needs": null
+          },
+          {
+            "name": "direct cost",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "USD per deal",
+            "sources": [
+              "b388c1-directCosts"
+            ],
+            "needs": null
+          },
+          {
+            "name": "days to settled cash",
+            "status": "EVIDENCED",
+            "value": 3,
+            "unit": "days",
+            "sources": [
+              "b388c1-timeToFirstCash"
+            ],
+            "needs": null
+          },
+          {
+            "name": "sales per day",
+            "status": "EVIDENCED",
+            "value": 3.1,
+            "unit": "sales per day",
+            "sources": [
+              "b388c1-buyerVolume",
+              "b388c1-conversionRates"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "b388c1-buyerVolume",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "This listing itself received 3,100 unique visitors in the last 30 days (2026-10-28 to 2026-11-26), per the marketplace's own listing analytics; its monthly traffic has been within 10% of that for three months.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-captureMechanism",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#captureMechanism",
+            "dated": "2026-11-24",
+            "claim": "Sell Client consent and aftercare form pack for tattoo studios (existing digital-download listing) to each buyer.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-conversionRates",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "93 paid pre-orders from 3100 unique visitors",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-delivery",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#delivery",
+            "dated": "2026-11-24",
+            "claim": "A spreadsheet Brain produces.",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-directCosts",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$3",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-exposure",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#exposure",
+            "dated": "2026-11-24",
+            "claim": "$0",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-payer",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#payer",
+            "dated": "2026-11-24",
+            "claim": "Tattoo studio owners shopping the digital-download marketplace",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-price",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#price",
+            "dated": "2026-11-24",
+            "claim": "This listing sold 93 copies at $29 each in the last 30 days (marketplace sales report, 2026-10-28 to 2026-11-26).",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b388c1-timeToFirstCash",
+            "url": "https://brain.local/card/cop_14245f2b206c45b388c1#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "3 days",
+            "population": "Tattoo studio owners shopping the digital-download marketplace",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Ledger/steps: 'Close 45 paid orders' on day 3 and a single 45 x $29 receipt on day 4 are inconsistent with ~3.1 sales/day measured on the listing; 42 sales are expected around day 14, settled ~day 17.",
+            "resolution": "Accepted. Sales now accrue at the measured ~3.1/day in weekly tranches (21 by day 7, 42 by day 14, 45 by day 18), each settling 3 days later; proof day moved to 17, when 42 sales ($1,218) have settled."
+          },
+          {
+            "finding": "Planned 45 sales: gross $1,305, delivery cost 45 x $3 = $135 spent from receipts (no owner funding); settled cash collected $1,305 >= $1,200 target. Note net after cost is $1,170, which is fine because the metric is settled cash collected, not net.",
+            "resolution": "Agreed; the metric is settled cash collected, and each tranche's $3 costs are now spent only on the day its receipts settle."
+          },
+          {
+            "finding": "Executor detail: steps use SEND_A_MESSAGE and ISSUE_AN_INVOICE (both NOT_CONNECTED), but sales on an existing marketplace listing are collected by the marketplace; the plan should say payment and delivery run through the listing rather than outbound messages and invoices.",
+            "resolution": "Accepted. Steps now state that checkout, download delivery and payout run through the existing marketplace listing; there is no outbound messaging or invoicing."
+          },
+          {
+            "finding": "Exclusion of cop_ffaad8380e7d4436abf7 is correct on the owner-hours limit alone (8 h per walkthrough > 6 h in 21 days at 2 h/week), independent of the physical-work question (contract leaves ownerPhysicalWork UNSTATED).",
+            "resolution": "Agreed; the exclusion stays on the owner-hours limit."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "missing": []
+          },
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "missing": []
+          }
+        ],
+        "excluded": [
+          {
+            "opportunityId": "cop_ffaad8380e7d4436abf7",
+            "why": "Fulfilment is the owner personally, 8 human hours per walkthrough; even one deal (8 h) exceeds the 6 owner hours the objective allows over 21 days (2 h/week), and the $1,200 target needs three (24 h)."
+          }
+        ],
+        "members": [
+          {
+            "opportunityId": "cop_14245f2b206c45b388c1",
+            "deals": 45,
+            "price": 29,
+            "directCost": 3,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_6bf585cc5c2c_37a22a",
+        "digest": "6bf585cc5c2c4b916f2183ae",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:32:01.609Z"
+      },
+      "review": {
+        "revisionId": "rev_6bf585cc5c2c_37a22a",
+        "revisionDigest": "6bf585cc5c2c4b916f2183ae",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bdee9dde74e24f59ba3e/author-A",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_87c2f1df5e5749bcb5ab/fleet-1",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The ledger now matches the measured rate: 3,100 visitors/30 days = ~103/day x 3.0% = ~3.1 sales/day. Tranches recomputed: days 1-7 = ~21.7 expected, booked 21 x $29 = $609 settling day 10; days 8-14 booked 21 = $609 settling day 17; cumulative 42 sales = $1,218 >= $1,200 settled by day 17 (proof day 17). Days 15-18 are counted conservatively at 3 of ~12 expected ($87, settling day 21). Total collected $1,305 in window. Costs ($3 per sale, $135 total) are spent on each tranche's settlement day from receipts, so no owner funding; zero owner hours vs 2 h/week. Checkout, delivery and payout now run through the existing listing, matching the card's channel. Every link is evidenced on this listing's own analytics and sales report; EXECUTABLE is right. The walkthrough exclusion stands on the owner-hours limit (8 h each vs 6 h in the window).",
+        "findings": [
+          "Margin: by day 17 the plan needs 42 sales from ~1,750 visitors of traffic through day 14 (expected ~43); the target at day 17 is close to the expectation, but sales through day 18 (expected ~56) all settle by day 21, so the day-21 proof has ~14 sales of slack (~2 sd).",
+          "Traffic is measured stable within 10% for three months; a 10% traffic dip still leaves ~50 expected sales through day 18, above the 42 needed."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:32:43.198Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:34:20.009Z"
+    },
+    "staleFinal": null
+  }
+}

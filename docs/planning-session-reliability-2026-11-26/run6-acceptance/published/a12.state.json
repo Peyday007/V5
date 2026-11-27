@@ -1,0 +1,1219 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_53ea87ae5a9748efb726",
+      "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$3,000 of settled cash received within 30 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "b0373c4b1eda9ddf4ea2b935"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_53ea87ae5a9748efb726",
+        "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "Sell the chemical safety binder to 10 licensed hair salons at $350",
+          "opportunityIds": [
+            "cop_b951075501b94c9d9fd5"
+          ],
+          "why": "Every chain link is evidenced on the card: 18 salons paid $350 (payment records 2026-11-04..22), 18/150 conversion measured on this offer, 300 licensed salons reachable by email, Brain produces the spreadsheet, $5 cost, $0 exposure, 4 days to cash. 10 deals = $3,500 gross, $3,450 net, above the $3,000 target with ~90 contacts of 282 not yet sold."
+        },
+        "alternatives": [
+          {
+            "title": "Sell exactly 9 binders ($3,150)",
+            "why": "Meets target with no margin for a refund; 10 gives a buffer at negligible cost."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "REACH",
+            "label": "Email ~100 salons from the county cosmetology establishment licence list that have not yet bought",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "buyers",
+              "conversion"
+            ],
+            "executor": {
+              "operation": "REACH_BUYERS",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "DISCOVER_LOCAL_BUSINESSES",
+                  "state": "UNREAD"
+                },
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "OFFER",
+            "label": "Offer the chemical safety data-sheet and exposure-log binder at $350, paid before delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": "s1",
+            "evidence": [
+              "price"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "SELL",
+            "label": "Close 10 salons at $350 (12% measured conversion on ~100 contacts)",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s2",
+            "evidence": [
+              "price",
+              "conversion"
+            ],
+            "priceCents": 35000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "COLLECT",
+            "label": "Collect $350 from each of 10 salons",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 5,
+            "dependsOn": "s3",
+            "evidence": [
+              "settlement"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s5",
+            "kind": "DELIVER",
+            "label": "Brain produces and delivers 10 binders (spreadsheet), $5 direct cost each",
+            "performer": "BRAIN",
+            "costCents": 5000,
+            "day": 9,
+            "dependsOn": "s4",
+            "evidence": [
+              "cost"
+            ],
+            "executor": {
+              "operation": "BRAIN_PRODUCES",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "PRODUCE_SPREADSHEET",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 5,
+            "kind": "RECEIPT",
+            "amountCents": 350000,
+            "label": "10 x $350 binder payments",
+            "settlesDay": 9,
+            "stepId": "s4"
+          },
+          {
+            "day": 9,
+            "kind": "SPEND",
+            "amountCents": 5000,
+            "label": "Direct cost $5 x 10, paid after receipts settle",
+            "stepId": "s5"
+          }
+        ],
+        "proofDay": 9,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 350,
+            "unit": "USD per binder",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "licensed salons",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "settlement",
+            "status": "EVIDENCED",
+            "value": 4,
+            "unit": "days to usable cash",
+            "sources": [
+              "s_ttc"
+            ],
+            "needs": null
+          },
+          {
+            "name": "cost",
+            "status": "EVIDENCED",
+            "value": 5,
+            "unit": "USD per deal",
+            "sources": [
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals",
+            "status": "ESTIMATE",
+            "value": 10,
+            "unit": "deals",
+            "sources": [
+              "s_conv",
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#price",
+            "dated": "2026-11-22",
+            "claim": "18 salons paid $350 each for the binder (payment records 2026-11-04 to 2026-11-22)",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#conversionRates",
+            "dated": "2026-11-22",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "300 salons hold county cosmetology establishment licences",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "4 days to first cash",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#directCosts",
+            "dated": "2026-11-24",
+            "claim": "$5 direct cost per deal, $0 exposure",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_b951075501b94c9d9fd5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_b951075501b94c9d9fd5",
+            "deals": 10,
+            "price": 350,
+            "directCost": 5,
+            "capital": 0
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_034fd2bff9de_dc2a21",
+        "digest": "034fd2bff9de24df5b55c452",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:27:23.092Z"
+      },
+      {
+        "goalId": "wst_53ea87ae5a9748efb726",
+        "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+        "parentRevisionId": "rev_034fd2bff9de_dc2a21",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the salon binder's price is contradicted ($350 on the card, $35 in the evidence)",
+          "opportunityIds": [],
+          "why": "The card's evidence now records the binder's price as $35, while the card's price field still says $350; the earlier fact (18 salons paid $350, payment records) is no longer on the card. At $35 the target needs 86 sales, but the 300 licensed salons at the measured 18/150 conversion yield about 36 (~$1,260); at $350 it needs 9. Which price salons pay decides the plan, and it is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 10 binders at $350 (the superseded plan)",
+            "why": "Rested on payment records at $350 that the card no longer carries; the recorded evidence now says $35, which contradicts it."
+          },
+          {
+            "title": "Sell at $35 to all 300 salons",
+            "why": "Needs 86 sales, about 29% of the whole pool against a measured 12% conversion; about 36 sales ($1,260) is what the evidence supports."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price salons actually paid for the binder: reconcile the $35 evidence with the $350 card price against the payment records",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_card"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per binder",
+            "sources": [
+              "s_price",
+              "s_card"
+            ],
+            "needs": "one price buyers are shown paying; $35 (evidence) and $350 (card field) contradict each other"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "licensed salons",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals_needed_at_35",
+            "status": "ESTIMATE",
+            "value": 86,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals_supported_at_measured_rate",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deals",
+            "sources": [
+              "s_conv",
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#price",
+            "dated": "2026-11-27",
+            "claim": "Price recorded as evidence: $35",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_card",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#priceCents",
+            "dated": "2026-11-27",
+            "claim": "Card price field: $350 (no sourced fact supports it now)",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "300 salons hold county cosmetology establishment licences",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted: the card's evidence records $35 per binder while its price field says $350, and the payment-record fact at $350 is gone. At $35 the 300 salons at the measured 12% conversion yield about 36 sales (~$1,260), far short of $3,000; at $350, 9 sales suffice. Until one price is established, neither the offer's price nor whether the market holds enough sales can be decided.",
+          "resolution": "Brain reconciles the price against the salons' payment records for the 18 sales (2026-11-04 to 2026-11-22) and records the paid amount as evidence. If $350 is confirmed, the 10-sale plan (~84 fresh contacts of the 150 uncontacted salons, $5 cost, 4 days to cash) is executable; if $35 is confirmed, the target cannot be reached from this market and needs either a higher-priced offer with evidenced buyers or further openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Step s1 says 'salons that have not yet bought'; target the 150 uncontacted salons",
+            "resolution": "Accepted for any reinstated plan: the resolution counts only the 150 uncontacted salons. The plan itself is superseded because the card's price evidence changed to $35."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED",
+            "resolution": "Noted; no outreach step remains in this no-plan revision."
+          },
+          {
+            "finding": "The ledger collapses ten receipts into one entry",
+            "resolution": "No ledger in this no-plan revision; a reinstated plan would spread receipts across days 5-20."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_b951075501b94c9d9fd5",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_36c852455f6a_c958ad",
+        "digest": "36c852455f6ad2a8505dad93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:40:57.714Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_53ea87ae5a9748efb726",
+      "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+      "parentRevisionId": "rev_034fd2bff9de_dc2a21",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the salon binder's price is contradicted ($350 on the card, $35 in the evidence)",
+        "opportunityIds": [],
+        "why": "The card's evidence now records the binder's price as $35, while the card's price field still says $350; the earlier fact (18 salons paid $350, payment records) is no longer on the card. At $35 the target needs 86 sales, but the 300 licensed salons at the measured 18/150 conversion yield about 36 (~$1,260); at $350 it needs 9. Which price salons pay decides the plan, and it is not established."
+      },
+      "alternatives": [
+        {
+          "title": "Sell 10 binders at $350 (the superseded plan)",
+          "why": "Rested on payment records at $350 that the card no longer carries; the recorded evidence now says $35, which contradicts it."
+        },
+        {
+          "title": "Sell at $35 to all 300 salons",
+          "why": "Needs 86 sales, about 29% of the whole pool against a measured 12% conversion; about 36 sales ($1,260) is what the evidence supports."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Establish the price salons actually paid for the binder: reconcile the $35 evidence with the $350 card price against the payment records",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price",
+            "s_card"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per binder",
+          "sources": [
+            "s_price",
+            "s_card"
+          ],
+          "needs": "one price buyers are shown paying; $35 (evidence) and $350 (card field) contradict each other"
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.12,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyers",
+          "status": "EVIDENCED",
+          "value": 300,
+          "unit": "licensed salons",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals_needed_at_35",
+          "status": "ESTIMATE",
+          "value": 86,
+          "unit": "deals",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "deals_supported_at_measured_rate",
+          "status": "ESTIMATE",
+          "value": 36,
+          "unit": "deals",
+          "sources": [
+            "s_conv",
+            "s_vol"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#price",
+          "dated": "2026-11-27",
+          "claim": "Price recorded as evidence: $35",
+          "population": "Hair salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_card",
+          "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#priceCents",
+          "dated": "2026-11-27",
+          "claim": "Card price field: $350 (no sourced fact supports it now)",
+          "population": "Hair salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "18 agreements from 150 contacts",
+          "population": "Hair salon owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "300 salons hold county cosmetology establishment licences",
+          "population": "Hair salon owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "The price is contradicted: the card's evidence records $35 per binder while its price field says $350, and the payment-record fact at $350 is gone. At $35 the 300 salons at the measured 12% conversion yield about 36 sales (~$1,260), far short of $3,000; at $350, 9 sales suffice. Until one price is established, neither the offer's price nor whether the market holds enough sales can be decided.",
+        "resolution": "Brain reconciles the price against the salons' payment records for the 18 sales (2026-11-04 to 2026-11-22) and records the paid amount as evidence. If $350 is confirmed, the 10-sale plan (~84 fresh contacts of the 150 uncontacted salons, $5 cost, 4 days to cash) is executable; if $35 is confirmed, the target cannot be reached from this market and needs either a higher-priced offer with evidenced buyers or further openings.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "Step s1 says 'salons that have not yet bought'; target the 150 uncontacted salons",
+          "resolution": "Accepted for any reinstated plan: the resolution counts only the 150 uncontacted salons. The plan itself is superseded because the card's price evidence changed to $35."
+        },
+        {
+          "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED",
+          "resolution": "Noted; no outreach step remains in this no-plan revision."
+        },
+        {
+          "finding": "The ledger collapses ten receipts into one entry",
+          "resolution": "No ledger in this no-plan revision; a reinstated plan would spread receipts across days 5-20."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_b951075501b94c9d9fd5",
+          "missing": [
+            "OFFER_AND_PRICE",
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE",
+        "MARKET_VOLUME"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_36c852455f6a_c958ad",
+      "digest": "36c852455f6ad2a8505dad93",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_d868ec15e4694e59b16f/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:40:57.714Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_36c852455f6a_c958ad",
+      "digest": "36c852455f6ad2a8505dad93",
+      "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 15216× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Chemical safety data-sheet and exposure-log binder for hair \" needs [figure withheld] and keeps [figure withheld], 188× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Hair salon owners\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_b951075501b94c9d9fd5"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Chemical safety data-sheet and exposure-log binder for hair salons\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Chemical safety data-sheet and exposure-log binder for hair salons\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Hair salon owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Hair salon owners",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 9.97939167364267
+          },
+          {
+            "label": "Collect payment for \"Chemical safety data-sheet and exposure-log binder for hair salons\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_b951075501b94c9d9fd5",
+            "title": "Chemical safety data-sheet and exposure-log binder for hair salons",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Hair salon owners",
+              "reachableChannel": "Salon emails from the county cosmetology establishment licence list",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:08.124Z",
+              "offerScope": "Chemical safety data-sheet and exposure-log binder for hair salons",
+              "priceCents": 35000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "hair salons",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Salon emails from the county cosmetology establishment licence list"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "no single price on the card"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": false,
+                "basis": "87 deal(s) needed at the measured rate means asking 1019 prospects, but the market holds only 300 (300 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 25.6"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "4 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "300 salons hold county cosmetology establishment licences; each must keep current safety data sheets and exposure logs for inspection.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Chemical safety data-sheet and exposure-log binder for hair salons to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "18 agreements from 150 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Hair salon owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "$35",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "4 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_58239c939b87444696e0"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:40:24.769Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_034fd2bff9de_dc2a21",
+        "revisionDigest": "034fd2bff9de24df5b55c452",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9accf4450f604e37b34d/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is justified. Price is evidenced by 18 payment records at $350 from the same buyer population (hair salons, 2026-11-04..22); conversion 18/150 = 12% measured on this offer; 300 licensed salons are reachable via the county licence list; Brain has proved PRODUCE_SPREADSHEET; $5 cost, $0 exposure, 4 days to cash. Arithmetic: 9 deals x $350 = $3,150 already clears $3,000; the plan takes 10 = $3,500 gross, $3,450 net after $50 cost paid after receipts. 300 - 150 contacted = 150 uncontacted salons; at 12% they yield ~18 sales expected, so 10 needs ~84 fresh contacts - within the pool and inside 30 days (receipts day 5, settled day 9). Spend $50 is paid from settled receipts, so no owner funding and exposure stays $0.",
+        "findings": [
+          "Step s1 says 'salons that have not yet bought'; the 132 already-contacted non-buyers should not be counted at 12%. Target the 150 uncontacted salons (all of them, to buy margin against variance: 10 of ~100 at p=0.12 is only roughly a coin-flip-plus; all 150 gives ~18 expected).",
+          "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; s1-s4 cannot run until they are connected.",
+          "The ledger collapses ten receipts into one $3,500 entry on day 5; receipts will arrive across days 5-20, still inside the window."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:56.250Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_36c852455f6a_c958ad",
+        "revisionDigest": "36c852455f6ad2a8505dad93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9accf4450f604e37b34d/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Withdrawing the EXECUTABLE plan is right. The card's price fact is now the bare EVIDENCE '$35'; the payment-record fact (18 salons at $350) that carried the previous plan is gone, and the card's priceCents $350 has no sourced fact behind it, so the price is contradicted and Brain's own OFFER_AND_PRICE link is false ('no single price on the card'). The plan cannot rest on $350. Arithmetic: at $35, $3,000 needs ceil(3000/35) = 86 sales (gross); at the measured 12% that needs ~717 contacts against 300 licensed salons, so MARKET_VOLUME also fails at that price, which the revision names. At $350, 9 sales suffice. NO_PLAN with OFFER_AND_PRICE decisive (MARKET_VOLUME dependent on it) is the right stance, stated as a gap, not a constraint - correct, since even at $35 full conversion of the pool is not ruled out by evidence, only by the measured rate. The resolution - reconcile against the 18 payment records and record the paid amount - is the right evidence (what these buyers actually paid), and both branches are stated.",
+        "findings": [
+          "'300 salons at 12% yield about 36 sales' counts the 150 already contacted (18 of whom already bought before the window). Only the 150 uncontacted salons are fresh: ~18 more sales, ~$630 at $35. The conclusion (far short) is unchanged, but the figure overstates the pool by 2x.",
+          "The 18 earlier sales (2026-11-04..22) were before the goal's window and cannot count toward settled cash in it, whatever price is confirmed.",
+          "The bare '$35' fact has no unit or context; the reconciliation should also establish whether $35 is a per-binder price, a partial payment, or a data-entry error against the $350 records."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:43:01.003Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_36c852455f6a_c958ad",
+      "digest": "36c852455f6ad2a8505dad93",
+      "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+      "plan": {
+        "goalId": "wst_53ea87ae5a9748efb726",
+        "contractDigest": "b0373c4b1eda9ddf4ea2b935",
+        "parentRevisionId": "rev_034fd2bff9de_dc2a21",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the salon binder's price is contradicted ($350 on the card, $35 in the evidence)",
+          "opportunityIds": [],
+          "why": "The card's evidence now records the binder's price as $35, while the card's price field still says $350; the earlier fact (18 salons paid $350, payment records) is no longer on the card. At $35 the target needs 86 sales, but the 300 licensed salons at the measured 18/150 conversion yield about 36 (~$1,260); at $350 it needs 9. Which price salons pay decides the plan, and it is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Sell 10 binders at $350 (the superseded plan)",
+            "why": "Rested on payment records at $350 that the card no longer carries; the recorded evidence now says $35, which contradicts it."
+          },
+          {
+            "title": "Sell at $35 to all 300 salons",
+            "why": "Needs 86 sales, about 29% of the whole pool against a measured 12% conversion; about 36 sales ($1,260) is what the evidence supports."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price salons actually paid for the binder: reconcile the $35 evidence with the $350 card price against the payment records",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price",
+              "s_card"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per binder",
+            "sources": [
+              "s_price",
+              "s_card"
+            ],
+            "needs": "one price buyers are shown paying; $35 (evidence) and $350 (card field) contradict each other"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.12,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 300,
+            "unit": "licensed salons",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals_needed_at_35",
+            "status": "ESTIMATE",
+            "value": 86,
+            "unit": "deals",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "deals_supported_at_measured_rate",
+            "status": "ESTIMATE",
+            "value": 36,
+            "unit": "deals",
+            "sources": [
+              "s_conv",
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#price",
+            "dated": "2026-11-27",
+            "claim": "Price recorded as evidence: $35",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_card",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#priceCents",
+            "dated": "2026-11-27",
+            "claim": "Card price field: $350 (no sourced fact supports it now)",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "18 agreements from 150 contacts",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_b951075501b94c9d9fd5#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "300 salons hold county cosmetology establishment licences",
+            "population": "Hair salon owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The price is contradicted: the card's evidence records $35 per binder while its price field says $350, and the payment-record fact at $350 is gone. At $35 the 300 salons at the measured 12% conversion yield about 36 sales (~$1,260), far short of $3,000; at $350, 9 sales suffice. Until one price is established, neither the offer's price nor whether the market holds enough sales can be decided.",
+          "resolution": "Brain reconciles the price against the salons' payment records for the 18 sales (2026-11-04 to 2026-11-22) and records the paid amount as evidence. If $350 is confirmed, the 10-sale plan (~84 fresh contacts of the 150 uncontacted salons, $5 cost, 4 days to cash) is executable; if $35 is confirmed, the target cannot be reached from this market and needs either a higher-priced offer with evidenced buyers or further openings.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "Step s1 says 'salons that have not yet bought'; target the 150 uncontacted salons",
+            "resolution": "Accepted for any reinstated plan: the resolution counts only the 150 uncontacted salons. The plan itself is superseded because the card's price evidence changed to $35."
+          },
+          {
+            "finding": "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED",
+            "resolution": "Noted; no outreach step remains in this no-plan revision."
+          },
+          {
+            "finding": "The ledger collapses ten receipts into one entry",
+            "resolution": "No ledger in this no-plan revision; a reinstated plan would spread receipts across days 5-20."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_b951075501b94c9d9fd5",
+            "missing": [
+              "OFFER_AND_PRICE",
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_36c852455f6a_c958ad",
+        "digest": "36c852455f6ad2a8505dad93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:40:57.714Z"
+      },
+      "review": {
+        "revisionId": "rev_36c852455f6a_c958ad",
+        "revisionDigest": "36c852455f6ad2a8505dad93",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_d868ec15e4694e59b16f/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_9accf4450f604e37b34d/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "Withdrawing the EXECUTABLE plan is right. The card's price fact is now the bare EVIDENCE '$35'; the payment-record fact (18 salons at $350) that carried the previous plan is gone, and the card's priceCents $350 has no sourced fact behind it, so the price is contradicted and Brain's own OFFER_AND_PRICE link is false ('no single price on the card'). The plan cannot rest on $350. Arithmetic: at $35, $3,000 needs ceil(3000/35) = 86 sales (gross); at the measured 12% that needs ~717 contacts against 300 licensed salons, so MARKET_VOLUME also fails at that price, which the revision names. At $350, 9 sales suffice. NO_PLAN with OFFER_AND_PRICE decisive (MARKET_VOLUME dependent on it) is the right stance, stated as a gap, not a constraint - correct, since even at $35 full conversion of the pool is not ruled out by evidence, only by the measured rate. The resolution - reconcile against the 18 payment records and record the paid amount - is the right evidence (what these buyers actually paid), and both branches are stated.",
+        "findings": [
+          "'300 salons at 12% yield about 36 sales' counts the 150 already contacted (18 of whom already bought before the window). Only the 150 uncontacted salons are fresh: ~18 more sales, ~$630 at $35. The conclusion (far short) is unchanged, but the figure overstates the pool by 2x.",
+          "The 18 earlier sales (2026-11-04..22) were before the goal's window and cannot count toward settled cash in it, whatever price is confirmed.",
+          "The bare '$35' fact has no unit or context; the reconciliation should also establish whether $35 is a per-binder price, a partial payment, or a data-entry error against the $350 records."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:43:01.003Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:43:11.985Z"
+    },
+    "staleFinal": null
+  }
+}

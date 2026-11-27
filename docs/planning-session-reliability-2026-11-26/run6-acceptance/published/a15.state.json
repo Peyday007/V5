@@ -1,0 +1,902 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_1d30094a0ece463da2b6",
+      "words": "Collect $12,000 of settled cash within 45 days using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1200000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 45,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "$12,000 of settled cash received within 45 days",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "2623e6c9c6b18750d320a58e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_1d30094a0ece463da2b6",
+        "contractDigest": "2623e6c9c6b18750d320a58e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: one $3,500 RFQ cannot reach $12,000",
+          "opportunityIds": [],
+          "why": "The only opening is a single buyer, Northgate Metals Recycling, with one $3,500 request for quotation (RFQ 2026-11-19); even if Northgate awards it, the most it settles is $3,500 (day ~25), far below the $12,000 target, and whether Northgate would award it to Brain (close rate) is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on Northgate's $3,500 RFQ",
+            "why": "Even a won bid reaches only $3,500 of the $12,000 target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover further paid openings that settle within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 3500,
+            "unit": "USD per audit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyer",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "award probability",
+            "sources": [],
+            "needs": "Northgate's award decision"
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#price",
+            "dated": "2026-11-19",
+            "claim": "Northgate issued a $3,500 RFQ for a scale-ticket and seller-ID compliance audit",
+            "population": "Northgate Metals Recycling, Inc. (one organisation)",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "25 days to first cash",
+            "population": "Northgate",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The only opening is a single buyer, Northgate Metals Recycling, with one $3,500 request for quotation (RFQ 2026-11-19); even if Northgate awards it, the most it settles is $3,500 (day ~25), far below the $12,000 target, and whether Northgate would award it to Brain (close rate) is not established.",
+          "resolution": "Relax the target to $3,500 and bid on Northgate's RFQ (Brain produces the audit spreadsheet, $30 cost, settles in 25 days), or have Brain discover and evidence further paid openings worth at least $8,500 more that settle inside 45 days.",
+          "decisiveLinks": [
+            "CONVERSION"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "CONVERSION"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Relax the target to $3,500 (one Northgate audit at the RFQ price)",
+            "basis": [
+              {
+                "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_6908705ed629_b2daf4",
+        "digest": "6908705ed629d6f504bf51cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.670Z"
+      },
+      {
+        "goalId": "wst_1d30094a0ece463da2b6",
+        "contractDigest": "2623e6c9c6b18750d320a58e",
+        "parentRevisionId": "rev_6908705ed629_b2daf4",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: one $3,500 RFQ cannot reach $12,000",
+          "opportunityIds": [],
+          "why": "The only opening is a single buyer, Northgate Metals Recycling, with one $3,500 request for quotation (RFQ 2026-11-19); even if Northgate awards it, the most it settles is $3,500 (day ~25), far below the $12,000 target, and whether Northgate would award it to Brain (close rate) is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on Northgate's $3,500 RFQ alone",
+            "why": "Even a won bid reaches only $3,500 of the $12,000 target; with a relaxed target it would be CONDITIONAL on the unknown award."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover and evidence further paid openings worth >= $8,500 that settle within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "target_gap"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 3500,
+            "unit": "USD per audit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyer",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "award probability",
+            "sources": [],
+            "needs": "Northgate's award decision"
+          },
+          {
+            "name": "target_gap",
+            "status": "EVIDENCED",
+            "value": 8500,
+            "unit": "USD short of target at the maximum reach of the only opening",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#price",
+            "dated": "2026-11-19",
+            "claim": "Northgate issued a $3,500 RFQ for a scale-ticket and seller-ID compliance audit",
+            "population": "Northgate Metals Recycling, Inc. (one organisation)",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "25 days to first cash",
+            "population": "Northgate",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Reach ceiling: the only opening is one organisation (Northgate Metals Recycling) with one one-off $3,500 RFQ (2026-11-19); even a certain award settles at most $3,500 on day ~25, $8,500 short of the $12,000 target. Northgate's award decision (CONVERSION) is also unknown, but it is secondary: establishing it would not unlock the target.",
+          "resolution": "Keep the owner's target: Brain discovers and evidences further paid openings worth at least $8,500 more (established buyer, price, fulfilment, cost) that settle inside 45 days, and combines them with a Northgate bid. If the owner instead relaxes the target to $3,500, the plan becomes CONDITIONAL on Northgate awarding the RFQ (Brain produces the audit spreadsheet, $30 cost, 25 days to cash).",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "decisiveLinks/resolves should not be CONVERSION",
+            "resolution": "Accepted: decisiveLinks and resolves are now empty; the decisive gap is the reach ceiling recorded as the TARGET constraint (1 buyer x $3,500 card price), and CONVERSION is named as a secondary, non-decisive unknown."
+          },
+          {
+            "finding": "Relaxing the target is the owner's decision and would yield a CONDITIONAL plan on the award",
+            "resolution": "Accepted: the resolution leads with discovering >= $8,500 of further openings that keep the owner's target, and states that a relaxed $3,500 target would give a plan CONDITIONAL on Northgate's award, not a certain $3,500."
+          },
+          {
+            "finding": "Step r1 cites s_price as evidence for discovering other openings",
+            "resolution": "Accepted: r1 now cites the target_gap quantity ($8,500 shortfall) instead."
+          },
+          {
+            "finding": "Fulfilment and economics check for the $3,500 leg is fine",
+            "resolution": "Agreed; no change."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Relax the target to $3,500 (one Northgate audit at the RFQ price)",
+            "basis": [
+              {
+                "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_efc968d1cb87_5777b4",
+        "digest": "efc968d1cb876096c528a9fc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:33:19.790Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_1d30094a0ece463da2b6",
+      "contractDigest": "2623e6c9c6b18750d320a58e",
+      "parentRevisionId": "rev_6908705ed629_b2daf4",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: one $3,500 RFQ cannot reach $12,000",
+        "opportunityIds": [],
+        "why": "The only opening is a single buyer, Northgate Metals Recycling, with one $3,500 request for quotation (RFQ 2026-11-19); even if Northgate awards it, the most it settles is $3,500 (day ~25), far below the $12,000 target, and whether Northgate would award it to Brain (close rate) is not established."
+      },
+      "alternatives": [
+        {
+          "title": "Bid on Northgate's $3,500 RFQ alone",
+          "why": "Even a won bid reaches only $3,500 of the $12,000 target; with a relaxed target it would be CONDITIONAL on the unknown award."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Discover and evidence further paid openings worth >= $8,500 that settle within 45 days",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "target_gap"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "EVIDENCED",
+          "value": 3500,
+          "unit": "USD per audit",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyers",
+          "status": "EVIDENCED",
+          "value": 1,
+          "unit": "buyer",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "conversion",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "award probability",
+          "sources": [],
+          "needs": "Northgate's award decision"
+        },
+        {
+          "name": "target_gap",
+          "status": "EVIDENCED",
+          "value": 8500,
+          "unit": "USD short of target at the maximum reach of the only opening",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#price",
+          "dated": "2026-11-19",
+          "claim": "Northgate issued a $3,500 RFQ for a scale-ticket and seller-ID compliance audit",
+          "population": "Northgate Metals Recycling, Inc. (one organisation)",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ttc",
+          "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#timeToFirstCash",
+          "dated": "2026-11-24",
+          "claim": "25 days to first cash",
+          "population": "Northgate",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "Reach ceiling: the only opening is one organisation (Northgate Metals Recycling) with one one-off $3,500 RFQ (2026-11-19); even a certain award settles at most $3,500 on day ~25, $8,500 short of the $12,000 target. Northgate's award decision (CONVERSION) is also unknown, but it is secondary: establishing it would not unlock the target.",
+        "resolution": "Keep the owner's target: Brain discovers and evidences further paid openings worth at least $8,500 more (established buyer, price, fulfilment, cost) that settle inside 45 days, and combines them with a Northgate bid. If the owner instead relaxes the target to $3,500, the plan becomes CONDITIONAL on Northgate awarding the RFQ (Brain produces the audit spreadsheet, $30 cost, 25 days to cash).",
+        "decisiveLinks": []
+      },
+      "reach": null,
+      "answers": [
+        {
+          "finding": "decisiveLinks/resolves should not be CONVERSION",
+          "resolution": "Accepted: decisiveLinks and resolves are now empty; the decisive gap is the reach ceiling recorded as the TARGET constraint (1 buyer x $3,500 card price), and CONVERSION is named as a secondary, non-decisive unknown."
+        },
+        {
+          "finding": "Relaxing the target is the owner's decision and would yield a CONDITIONAL plan on the award",
+          "resolution": "Accepted: the resolution leads with discovering >= $8,500 of further openings that keep the owner's target, and states that a relaxed $3,500 target would give a plan CONDITIONAL on Northgate's award, not a certain $3,500."
+        },
+        {
+          "finding": "Step r1 cites s_price as evidence for discovering other openings",
+          "resolution": "Accepted: r1 now cites the target_gap quantity ($8,500 shortfall) instead."
+        },
+        {
+          "finding": "Fulfilment and economics check for the $3,500 leg is fine",
+          "resolution": "Agreed; no change."
+        }
+      ],
+      "chain": [
+        {
+          "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+          "missing": [
+            "CONVERSION"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Relax the target to $3,500 (one Northgate audit at the RFQ price)",
+          "basis": [
+            {
+              "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_efc968d1cb87_5777b4",
+      "digest": "efc968d1cb876096c528a9fc",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:33:19.790Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_efc968d1cb87_5777b4",
+      "digest": "efc968d1cb876096c528a9fc",
+      "contractDigest": "2623e6c9c6b18750d320a58e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 3500). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6637× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3470× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Scale-ticket and seller-ID compliance audit for Northgate Metals Recyc\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_2b2b8c2c25cb4c7fa90f"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling\"",
+            "owner": "PERSON",
+            "cost": 30
+          },
+          {
+            "label": "Collect payment for \"Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling\"",
+            "owner": "BRAIN",
+            "cost": 0
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 3500 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+            "title": "Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling",
+            "missing": [
+              "CONVERSION"
+            ],
+            "stage": "C_MARKET_TEST_READY",
+            "supportedReach": 3500,
+            "potentialReach": 3500,
+            "card": {
+              "payer": "Northgate Metals Recycling, Inc.",
+              "reachableChannel": "Northgate's procurement contact named on its published request for quotation",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:29.614Z",
+              "offerScope": "Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling",
+              "priceCents": 350000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 2,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "scrap metal recycling",
+              "mechanism": "EXPLICIT_PAID_REQUEST",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Northgate's procurement contact named on its published request for quotation"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "price 3500 USD (EVIDENCE)"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": false,
+                "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 30, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "25 days to usable cash against 45 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Scale-ticket and seller-ID compliance audit for Northgate Metals Recycling to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$30",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Northgate Metals Recycling, Inc.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Northgate Metals Recycling issued a $3,500 request for quotation for a scale-ticket and seller-ID compliance audit (RFQ, 2026-11-19).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "25 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_5a172676080b4d98a8f3",
+          "cnd_cec4df72ca4248549f6e"
+        ],
+        "scope": {
+          "targetCents": 1200000,
+          "daysLeft": 45,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:13:20.370Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_6908705ed629_b2daf4",
+        "revisionDigest": "6908705ed629d6f504bf51cc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bd71ca178f6745a3b30b/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "REVISE",
+        "reasons": "The stance NO_PLAN and the TARGET constraint are right, but the decisive link is mislabelled. With all the evidence in hand the only opening is one buyer (Northgate Metals Recycling, one organisation) and one $3,500 RFQ: even a certain award settles at most $3,500 on day ~25, $8,500 short of $12,000. That is a constraint the evidence decides, independent of conversion. The revision names CONVERSION as decisiveLinks and resolves, which says that establishing Northgate's award would unlock the plan - it would not. Brain's own verdict agrees the ceiling is $3,500 'even if every buyer agreed'.",
+        "findings": [
+          "decisiveLinks/resolves should not be CONVERSION; the decisive gap is the reach ceiling (one one-off buyer, max $3,500 vs $12,000) recorded as the TARGET constraint, with the unknown award (CONVERSION) as a secondary, non-decisive gap.",
+          "Resolution's second route ('discover openings worth >= $8,500 more that settle inside 45 days') is the one that keeps the owner's target; the first (relax target to $3,500) is the owner's decision, and even then the bid outcome is unknown, so that would be a CONDITIONAL plan on the award, not a certain $3,500.",
+          "Step r1 cites s_price as evidence for discovering other openings; it is unrelated to that research.",
+          "Fulfilment and economics check: Brain produces the audit spreadsheet ($30), $0 exposure, 25 days to cash inside 45 - fine for the $3,500 leg."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:57.575Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_efc968d1cb87_5777b4",
+        "revisionDigest": "efc968d1cb876096c528a9fc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bd71ca178f6745a3b30b/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The revision answers every finding of the prior review. NO_PLAN is right and the decisive gap is now the reach ceiling the evidence decides: one organisation (Northgate Metals Recycling) with one one-off ,500 RFQ; even a certain award settles at most ,500 on day ~25, and 2,000 - ,500 = ,500 short. That is recorded as the TARGET constraint (basis: the card's price), with CONVERSION (the unknown award) named as secondary and no longer in decisiveLinks/resolves. The resolution leads with discovering >= ,500 of further evidenced openings settling inside 45 days, which keeps the owner's target, and correctly says a relaxed ,500 target would give a plan CONDITIONAL on the award, not a certain ,500. Nothing unknown is treated as known; the ledger is empty, consistent with no plan.",
+        "findings": [
+          "target_gap (,500) is a derived figure (target minus the card price), not a sourced quantity; labelled EVIDENCED via s_price it is acceptable as arithmetic on evidenced inputs.",
+          "The Northgate leg itself checks: Brain produces the audit spreadsheet (0), /bin/bash exposure, 25 days to cash inside 45; it can be a member of a combined plan once other openings are evidenced."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:11.259Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_efc968d1cb87_5777b4",
+      "digest": "efc968d1cb876096c528a9fc",
+      "contractDigest": "2623e6c9c6b18750d320a58e",
+      "plan": {
+        "goalId": "wst_1d30094a0ece463da2b6",
+        "contractDigest": "2623e6c9c6b18750d320a58e",
+        "parentRevisionId": "rev_6908705ed629_b2daf4",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: one $3,500 RFQ cannot reach $12,000",
+          "opportunityIds": [],
+          "why": "The only opening is a single buyer, Northgate Metals Recycling, with one $3,500 request for quotation (RFQ 2026-11-19); even if Northgate awards it, the most it settles is $3,500 (day ~25), far below the $12,000 target, and whether Northgate would award it to Brain (close rate) is not established."
+        },
+        "alternatives": [
+          {
+            "title": "Bid on Northgate's $3,500 RFQ alone",
+            "why": "Even a won bid reaches only $3,500 of the $12,000 target; with a relaxed target it would be CONDITIONAL on the unknown award."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Discover and evidence further paid openings worth >= $8,500 that settle within 45 days",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "target_gap"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "EVIDENCED",
+            "value": 3500,
+            "unit": "USD per audit",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 1,
+            "unit": "buyer",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "conversion",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "award probability",
+            "sources": [],
+            "needs": "Northgate's award decision"
+          },
+          {
+            "name": "target_gap",
+            "status": "EVIDENCED",
+            "value": 8500,
+            "unit": "USD short of target at the maximum reach of the only opening",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#price",
+            "dated": "2026-11-19",
+            "claim": "Northgate issued a $3,500 RFQ for a scale-ticket and seller-ID compliance audit",
+            "population": "Northgate Metals Recycling, Inc. (one organisation)",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ttc",
+            "url": "https://brain.local/card/cop_2b2b8c2c25cb4c7fa90f#timeToFirstCash",
+            "dated": "2026-11-24",
+            "claim": "25 days to first cash",
+            "population": "Northgate",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "Reach ceiling: the only opening is one organisation (Northgate Metals Recycling) with one one-off $3,500 RFQ (2026-11-19); even a certain award settles at most $3,500 on day ~25, $8,500 short of the $12,000 target. Northgate's award decision (CONVERSION) is also unknown, but it is secondary: establishing it would not unlock the target.",
+          "resolution": "Keep the owner's target: Brain discovers and evidences further paid openings worth at least $8,500 more (established buyer, price, fulfilment, cost) that settle inside 45 days, and combines them with a Northgate bid. If the owner instead relaxes the target to $3,500, the plan becomes CONDITIONAL on Northgate awarding the RFQ (Brain produces the audit spreadsheet, $30 cost, 25 days to cash).",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [
+          {
+            "finding": "decisiveLinks/resolves should not be CONVERSION",
+            "resolution": "Accepted: decisiveLinks and resolves are now empty; the decisive gap is the reach ceiling recorded as the TARGET constraint (1 buyer x $3,500 card price), and CONVERSION is named as a secondary, non-decisive unknown."
+          },
+          {
+            "finding": "Relaxing the target is the owner's decision and would yield a CONDITIONAL plan on the award",
+            "resolution": "Accepted: the resolution leads with discovering >= $8,500 of further openings that keep the owner's target, and states that a relaxed $3,500 target would give a plan CONDITIONAL on Northgate's award, not a certain $3,500."
+          },
+          {
+            "finding": "Step r1 cites s_price as evidence for discovering other openings",
+            "resolution": "Accepted: r1 now cites the target_gap quantity ($8,500 shortfall) instead."
+          },
+          {
+            "finding": "Fulfilment and economics check for the $3,500 leg is fine",
+            "resolution": "Agreed; no change."
+          }
+        ],
+        "chain": [
+          {
+            "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+            "missing": [
+              "CONVERSION"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Relax the target to $3,500 (one Northgate audit at the RFQ price)",
+            "basis": [
+              {
+                "opportunityId": "cop_2b2b8c2c25cb4c7fa90f",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_efc968d1cb87_5777b4",
+        "digest": "efc968d1cb876096c528a9fc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:33:19.790Z"
+      },
+      "review": {
+        "revisionId": "rev_efc968d1cb87_5777b4",
+        "revisionDigest": "efc968d1cb876096c528a9fc",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_bf7c2ba25ede4174b36d/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_bd71ca178f6745a3b30b/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "The revision answers every finding of the prior review. NO_PLAN is right and the decisive gap is now the reach ceiling the evidence decides: one organisation (Northgate Metals Recycling) with one one-off ,500 RFQ; even a certain award settles at most ,500 on day ~25, and 2,000 - ,500 = ,500 short. That is recorded as the TARGET constraint (basis: the card's price), with CONVERSION (the unknown award) named as secondary and no longer in decisiveLinks/resolves. The resolution leads with discovering >= ,500 of further evidenced openings settling inside 45 days, which keeps the owner's target, and correctly says a relaxed ,500 target would give a plan CONDITIONAL on the award, not a certain ,500. Nothing unknown is treated as known; the ledger is empty, consistent with no plan.",
+        "findings": [
+          "target_gap (,500) is a derived figure (target minus the card price), not a sourced quantity; labelled EVIDENCED via s_price it is acceptable as arithmetic on evidenced inputs.",
+          "The Northgate leg itself checks: Brain produces the audit spreadsheet (0), /bin/bash exposure, 25 days to cash inside 45; it can be a member of a combined plan once other openings are evidenced."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:34:11.259Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:35:04.002Z"
+    },
+    "staleFinal": null
+  }
+}

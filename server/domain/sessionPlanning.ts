@@ -202,6 +202,8 @@ export interface SourceInput {
   population: string;
   /** Whether that population is the plan's actual buyer; false means it may not support this buyer's demand. */
   matchesBuyer: boolean;
+  /** The opening the source is about, when it is about one (its provenance for an opening the session discovered). */
+  opportunityId?: string;
 }
 
 export interface PlanRevisionInput {
@@ -217,7 +219,11 @@ export interface PlanRevisionInput {
   proofDay: number | null;
   quantities: QuantityInput[];
   sources: SourceInput[];
-  validation: { proof: string; stop: string[]; continue: string[] } | null;
+  /**
+   * A conditional plan's live test. `decides` names the chain link(s) whose measurement decides whether the plan goes
+   * on — the decisive missing evidence of COMPLETION-SPEC §2(B) — each one the test measures (in `resolves`).
+   */
+  validation: { proof: string; stop: string[]; continue: string[]; decides?: string[] } | null;
   /** decisiveLinks: the chain links the decisive gap is about (structured, so the gap, the chain and `resolves` can be checked to agree). */
   noPlan: { decisiveGap: string; resolution: string; decisiveLinks?: string[] } | null;
   /** A simulated chance of reaching the target, and whether it is calibrated against resolved outcomes. */
@@ -347,6 +353,8 @@ export type CheckCode =
   | 'CONSTRAINT_FROM_MISSING_EVIDENCE'
   | 'REVIEW_CONDITION_UNANSWERED'
   | 'EXCLUSION_DISPUTE_UNSTATED'
+  | 'CONDITIONAL_DECISIVE_UNNAMED'
+  | 'DISCOVERY_UNSOURCED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -377,6 +385,8 @@ export interface BrainFacts {
   reviewConditions?: ReviewCondition[];
   /** Openings Brain's planner set aside, with its reason: a plan that builds on one states why the exclusion is wrong. */
   excluded?: Record<string, string>;
+  /** Openings this goal's own sessions proposed as routes (session discovery), whose provenance is the session's sources. */
+  discovered?: string[];
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -517,6 +527,17 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
         const evidenced = cited.some((b) => (card ?? []).some((f) => f.field === b.field && f.kind === 'EVIDENCE'));
         if (!evidenced) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `${k.constraint} needs the established figure that makes ${c.opportunityId}'s ${inputs.binds} fall short: cite the card's EVIDENCE fact in the constraint's \`basis\`${cited.length ? ` ("${cited.map((b) => b.field).join(', ')}" is not one)` : ''}. Without one, ${inputs.binds} is unknown, a gap to research rather than a limit`, c.opportunityId);
       }
+      /*
+       * TARGET says the market cannot carry the target, so it rests on a counted market: an EVIDENCE fact that counts
+       * the buyers (buyerVolume). The openings the world happens to hold are not the market — one known buyer with one
+       * request is not a population that ends at one (acceptance run 2026-11-27, ac-15: a $12,000 target declared out
+       * of reach because the only opening was one company's $3,500 RFQ, while nothing counted the other buyers).
+       */
+      // (Where a chain already marks MARKET_VOLUME missing, the check above has said so.)
+      if (k.constraint === 'TARGET' && !(r.chain ?? []).some((c) => c.missing.includes('MARKET_VOLUME'))) {
+        const counted = (k.basis ?? []).some((b) => b.field === 'buyerVolume' && (brain?.facts?.[b.opportunityId] ?? []).some((f) => f.field === 'buyerVolume' && f.kind === 'EVIDENCE'));
+        if (!counted) add('CONSTRAINT_FROM_MISSING_EVIDENCE', `TARGET says the market cannot carry the target, so it needs a counted market: cite an opening's EVIDENCE buyerVolume fact in its \`basis\`. Nothing here counts the buyers — the openings on file are not the whole market — so MARKET_VOLUME is unknown: name it as a decisive gap (noPlan.decisiveLinks) with research or a test that counts the market, not as a limit`, null);
+      }
     }
   }
 
@@ -572,6 +593,31 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       if (t.ownerPhysicalWork === 'FORBIDDEN' && s.performer === 'OWNER' && /deliver|install|drop|ship|visit|drive|on[- ]site/i.test(`${s.label} ${s.kind}`)) add('STEP_FIELD_ABSENT', 'the owner may do no physical work; this step gives it to the owner', s.id);
     }
     if (r.stance === 'CONDITIONAL' && (!r.validation || !r.validation.proof.trim() || r.validation.stop.length === 0)) add('CONDITIONAL_WITHOUT_VALIDATION', 'a conditional plan must state the proof condition it tests and when it stops');
+    /*
+     * A conditional plan is a "no executable plan yet" with a test (COMPLETION-SPEC §2(B)): it names the decisive missing
+     * evidence — the link whose measurement decides whether the plan goes on — not a list of everything unknown
+     * (acceptance run 2026-11-27: four discovery plans charted every link missing and singled out none).
+     */
+    if (r.stance === 'CONDITIONAL' && r.validation) {
+      const decides = r.validation.decides ?? [];
+      const missingAnywhere = new Set((r.chain ?? []).flatMap((c) => c.missing));
+      if (decides.length === 0) add('CONDITIONAL_DECISIVE_UNNAMED', 'name in `validation.decides` the chain link(s) whose measurement decides whether this plan goes on (the decisive missing evidence), not every unknown');
+      for (const l of decides) {
+        if (!(CHAIN_LINKS as readonly string[]).includes(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, which is not a chain link`);
+        else if (!missingAnywhere.has(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, but no opening's chain marks it missing`);
+        else if (!(r.resolves ?? []).includes(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, but \`resolves\` says the test does not measure it`);
+      }
+    }
+    /*
+     * An opening the session discovered is a hypothesis whose only provenance is what the session found: the plan cites,
+     * for each it builds on, a public source about that opening (a URL outside Brain), so the owner can see where the
+     * opportunity came from. A card link back into Brain is circular (acceptance run 2026-11-27, discovery worlds).
+     */
+    for (const id of r.strategy.opportunityIds) {
+      if (!brain?.discovered?.includes(id)) continue;
+      const cited = r.sources.some((x) => x.opportunityId === id && /^https?:\/\//i.test(x.url) && !/^https?:\/\/brain\.local\b/i.test(x.url));
+      if (!cited) add('DISCOVERY_UNSOURCED', `opening ${id} was discovered by this session: cite in \`sources\` (with \`opportunityId\`) the public page(s) that show it exists — the buyers, the offer or the request — not Brain's own card`, id);
+    }
     for (const id of r.strategy.opportunityIds) if (brain && !brain.admittedOpportunityIds.includes(id)) add('OPPORTUNITY_NOT_ADMITTED', `opening ${id} was never admitted to this goal; submit it as a route first`, id);
   }
 

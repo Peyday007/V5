@@ -87,7 +87,7 @@ function revision(goalId: string, contractDigest: string, opp: string, over: Par
       { name: 'buyer conversion per 100 emails', status: 'EVIDENCED', value: 2, unit: 'orders', sources: ['s3'], needs: null },
     ],
     sources: [
-      { id: 's1', url: 'https://example.test/price', dated: '2026-10-01', claim: 'practices pay $750', population: 'independent dental practices', matchesBuyer: true },
+      { id: 's1', url: 'https://example.test/price', dated: '2026-10-01', claim: 'practices pay $750', population: 'independent dental practices', matchesBuyer: true, opportunityId: opp },
       { id: 's2', url: 'https://example.test/quote', dated: '2026-11-20', claim: 'contractor quote $100', population: 'supplier', matchesBuyer: true },
       { id: 's3', url: 'https://example.test/pilot', dated: '2026-11-15', claim: '4 paid from 200 emails', population: 'independent dental practices', matchesBuyer: true },
     ],
@@ -231,6 +231,38 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(await svc.reviewRecordedBy(goalId, id, fleet.id)).toBe(true);
   }, 240_000);
 
+  it('a published plan goes stale when the owner’s objective or a weighed opening’s record changes after publication, and is current again when they are restored (acceptance run 2026-11-27)', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const { getWorkstream, updateWorkstream } = await import('../server/repos/register.ts');
+    const { cardFactsFor, recordCardFact } = await import('../server/repos/cashCardFacts.ts');
+    const first = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [] }, actor: AUTHOR, today: '2026-11-26' });
+    const disagreements = (first.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []).filter((l) => !l.ok).map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s3' }));
+    const clean = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements }, actor: AUTHOR, today: '2026-11-26' });
+    expect(clean.problems).toEqual([]);
+    await svc.recordReview({ goalId, revisionId: clean.revision.revisionId, reviewer: REVIEWER, verdict: 'PASS', reasons: 'recomputed', findings: [] });
+    expect((await svc.finalizePlan({ goalId, revisionId: clean.revision.revisionId, actor: AUTHOR })).published).toBe(true);
+    const fresh = await svc.planningState(goalId);
+    expect(fresh.final?.revisionId).toBe(clean.revision.revisionId);
+    expect(fresh.staleBecause).toEqual([]);
+    // The owner's words change outside the session (narrowed to one industry): the plan is history, and the state says why.
+    const intent = (await getWorkstream(goalId))!.intent;
+    await updateWorkstream(goalId, { intent: `${intent} Only in a single industry the owner names.` });
+    const narrowed = await svc.planningState(goalId);
+    expect(narrowed.final).toBeNull();
+    expect(narrowed.staleFinal?.revisionId).toBe(clean.revision.revisionId);
+    expect(narrowed.staleBecause.join(' ')).toMatch(/objective changed/);
+    await updateWorkstream(goalId, { intent });
+    expect((await svc.planningState(goalId)).final?.revisionId).toBe(clean.revision.revisionId);
+    // New evidence on an opening the plan weighed (a contradicting price) makes it stale the same way.
+    const fact = (await cardFactsFor(opp))[0]!;
+    await recordCardFact({ projectId: world.projectId, opportunityId: opp, field: fact.field, kind: fact.kind, value: `${fact.value} (contradicted by a later quote)`, decidedBy: 'BRAIN' });
+    const contradicted = await svc.planningState(goalId);
+    expect(contradicted.final).toBeNull();
+    expect(contradicted.staleBecause.join(' ')).toMatch(new RegExp(`opening ${opp}`));
+    await recordCardFact({ projectId: world.projectId, opportunityId: opp, field: fact.field, kind: fact.kind, value: fact.value, decidedBy: 'BRAIN' });
+    expect((await svc.planningState(goalId)).final?.revisionId).toBe(clean.revision.revisionId);
+  }, 240_000);
+
   it('a reviewer that dies loses its review: the lapsed lease grants nothing, and the queue deals the review to another member', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     const { createWorker } = await import('../server/repos/identity.ts');
@@ -242,7 +274,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     const clean = await svc.submitRevision({ revision: { ...revision(goalId, digest, opp), chain: [{ opportunityId: opp, missing: [] }], resolves: [], disagreements }, actor: AUTHOR, today: '2026-11-26' });
     expect(clean.problems).toEqual([]);
     const id = clean.revision.revisionId;
-    const scopes = [{ projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete'] }];
+    const scopes = [{ projectId: world.projectId, scopes: ['project:read', 'queue:claim', 'queue:complete'] as ('project:read' | 'queue:claim' | 'queue:complete')[] }];
     // Drain every waiting review to the dying member on the shortest lease the queue grants.
     const held = await claimWork({ workerId: dead.id, limit: 25, leaseMs: 5_000, scopes, workTypes: [svc.PLAN_REVIEW_WORK] });
     expect(held.some((one) => one.payload['revisionId'] === id)).toBe(true);
@@ -266,7 +298,13 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(exec.problems.map((p) => p.code)).toContain('UNKNOWN_IN_EXECUTABLE');
     const filled = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [{ ...unknown, value: 0.02 }] }, actor: AUTHOR, today: '2026-11-26' });
     expect(filled.problems.map((p) => p.code)).toContain('UNKNOWN_FILLED');
-    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown] }, actor: AUTHOR, today: '2026-11-26' });
+    // A conditional plan names the decisive unknown its test measures (validation.decides, acceptance run 2026-11-27).
+    const undecided = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown] }, actor: AUTHOR, today: '2026-11-26' });
+    expect(undecided.problems.map((p) => p.code)).toEqual(['CONDITIONAL_DECISIVE_UNNAMED']);
+    const brainLinks = (undecided.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []);
+    const disagreements = brainLinks.filter((l) => !l.ok && l.link !== 'CONVERSION').map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s2' }))
+      .concat(brainLinks.some((l) => l.link === 'CONVERSION' && l.ok) ? [{ opportunityId: opp, link: 'CONVERSION', reason: 'the 200-email rate is untested for this list' }] : []);
+    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
     expect(cond.problems).toEqual([]);
   }, 120_000);
 

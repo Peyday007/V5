@@ -1,0 +1,1092 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_e254dbbc3ce44244b97c",
+      "words": "Keep $3,000 of net cash after direct costs, settled within 30 days, using no up-front capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 300000,
+        "currency": "USD",
+        "metric": "CONTRIBUTION",
+        "windowDays": 30,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": 0,
+        "proofCondition": "Net cash of at least $3,000 after direct costs settled within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "adaba1e7f767206bce598ae7"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_e254dbbc3ce44244b97c",
+        "contractDigest": "adaba1e7f767206bce598ae7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the held openings cannot net $3,000",
+          "opportunityIds": [],
+          "why": "The AV installation is priced at $1,400 and the subcontractor's written quote is $1,400, so each deal nets $0. The year-end workbook nets $145 a deal ($150 - $5), and its whole population is the 10 congregations on the platform, all already signed: at most $1,450 net. Together at most $1,450 net against a $3,000 target."
+        },
+        "alternatives": [
+          {
+            "title": "Sell all 10 workbooks",
+            "why": "Nets $1,450, under half the target."
+          },
+          {
+            "title": "Resell AV installations with a markup",
+            "why": "The four congregations signed at $1,400, equal to the subcontractor's quote; no evidence any buyer pays more."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "AV price",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "a_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "AV subcontractor cost",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "a_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "workbook buyers in population",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "congregations",
+            "sources": [
+              "b_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "workbook net per deal",
+            "status": "EVIDENCED",
+            "value": 14500,
+            "unit": "cents",
+            "sources": [
+              "b_price",
+              "b_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum net in window",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "b_vol",
+              "b_price",
+              "b_cost",
+              "a_price",
+              "a_ful"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "a_price",
+            "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#price",
+            "dated": "2026-11-23",
+            "claim": "Four congregations signed installation agreements at $1,400 each",
+            "population": "Congregation administrators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "a_ful",
+            "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#fulfillment",
+            "dated": "2026-11-23",
+            "claim": "Sanctuary AV Installers written quote $1,400 per installation",
+            "population": "Congregation administrators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_price",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#price",
+            "dated": "2026-11-23",
+            "claim": "Ten congregations signed orders at $150 each",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_cost",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#directCosts",
+            "dated": "2026-11-23",
+            "claim": "Direct cost $5 per workbook",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_vol",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#buyerVolume",
+            "dated": "2026-11-23",
+            "claim": "10 member congregations on the platform, all signed; no other congregation uses it",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "ECONOMICS and MARKET_VOLUME: the AV installation nets $0 per deal (price $1,400 = quote $1,400), and the workbook population is exhausted at 10 congregations x $145 = $1,450 net, below $3,000.",
+          "resolution": "Lower the target to $1,450 net (sell the 10 signed workbooks), or renegotiate the AV subcontract below $1,400 / raise the AV price with buyer evidence, or have Brain research further congregations or platforms for the workbook.",
+          "decisiveLinks": [
+            "ECONOMICS",
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_22f68c50cbe94016bbd8",
+            "missing": [
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_007ecb89152f4063bf7a",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "ECONOMICS",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $1,450 of net cash (10 workbooks x $145); the AV installations add nothing at cost = price.",
+            "basis": [
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "directCosts"
+              },
+              {
+                "opportunityId": "cop_22f68c50cbe94016bbd8",
+                "field": "fulfillment"
+              },
+              {
+                "opportunityId": "cop_22f68c50cbe94016bbd8",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_007ecb89152f4063bf7a",
+            "link": "CONVERSION",
+            "reason": "Ten written acceptances at $150 (price fact: ten congregations signed orders, 2026-11-23) establish conversion of the whole 10-congregation population; only volume is missing."
+          }
+        ],
+        "revisionId": "rev_38752d574ad6_2aa400",
+        "digest": "38752d574ad65aa99edb684c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_912c0d329ec94cd58ad2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:21:29.163Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_e254dbbc3ce44244b97c",
+      "contractDigest": "adaba1e7f767206bce598ae7",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the held openings cannot net $3,000",
+        "opportunityIds": [],
+        "why": "The AV installation is priced at $1,400 and the subcontractor's written quote is $1,400, so each deal nets $0. The year-end workbook nets $145 a deal ($150 - $5), and its whole population is the 10 congregations on the platform, all already signed: at most $1,450 net. Together at most $1,450 net against a $3,000 target."
+      },
+      "alternatives": [
+        {
+          "title": "Sell all 10 workbooks",
+          "why": "Nets $1,450, under half the target."
+        },
+        {
+          "title": "Resell AV installations with a markup",
+          "why": "The four congregations signed at $1,400, equal to the subcontractor's quote; no evidence any buyer pays more."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "AV price",
+          "status": "EVIDENCED",
+          "value": 140000,
+          "unit": "cents",
+          "sources": [
+            "a_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "AV subcontractor cost",
+          "status": "EVIDENCED",
+          "value": 140000,
+          "unit": "cents",
+          "sources": [
+            "a_ful"
+          ],
+          "needs": null
+        },
+        {
+          "name": "workbook buyers in population",
+          "status": "EVIDENCED",
+          "value": 10,
+          "unit": "congregations",
+          "sources": [
+            "b_vol"
+          ],
+          "needs": null
+        },
+        {
+          "name": "workbook net per deal",
+          "status": "EVIDENCED",
+          "value": 14500,
+          "unit": "cents",
+          "sources": [
+            "b_price",
+            "b_cost"
+          ],
+          "needs": null
+        },
+        {
+          "name": "maximum net in window",
+          "status": "EVIDENCED",
+          "value": 145000,
+          "unit": "cents",
+          "sources": [
+            "b_vol",
+            "b_price",
+            "b_cost",
+            "a_price",
+            "a_ful"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "a_price",
+          "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#price",
+          "dated": "2026-11-23",
+          "claim": "Four congregations signed installation agreements at $1,400 each",
+          "population": "Congregation administrators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "a_ful",
+          "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#fulfillment",
+          "dated": "2026-11-23",
+          "claim": "Sanctuary AV Installers written quote $1,400 per installation",
+          "population": "Congregation administrators",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b_price",
+          "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#price",
+          "dated": "2026-11-23",
+          "claim": "Ten congregations signed orders at $150 each",
+          "population": "Congregation treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b_cost",
+          "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#directCosts",
+          "dated": "2026-11-23",
+          "claim": "Direct cost $5 per workbook",
+          "population": "Congregation treasurers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "b_vol",
+          "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#buyerVolume",
+          "dated": "2026-11-23",
+          "claim": "10 member congregations on the platform, all signed; no other congregation uses it",
+          "population": "Congregation treasurers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "ECONOMICS and MARKET_VOLUME: the AV installation nets $0 per deal (price $1,400 = quote $1,400), and the workbook population is exhausted at 10 congregations x $145 = $1,450 net, below $3,000.",
+        "resolution": "Lower the target to $1,450 net (sell the 10 signed workbooks), or renegotiate the AV subcontract below $1,400 / raise the AV price with buyer evidence, or have Brain research further congregations or platforms for the workbook.",
+        "decisiveLinks": [
+          "ECONOMICS",
+          "MARKET_VOLUME"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_22f68c50cbe94016bbd8",
+          "missing": [
+            "ECONOMICS"
+          ]
+        },
+        {
+          "opportunityId": "cop_007ecb89152f4063bf7a",
+          "missing": [
+            "MARKET_VOLUME"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "ECONOMICS",
+        "MARKET_VOLUME"
+      ],
+      "constraints": [
+        {
+          "constraint": "TARGET",
+          "suggestion": "Lower the target to $1,450 of net cash (10 workbooks x $145); the AV installations add nothing at cost = price.",
+          "basis": [
+            {
+              "opportunityId": "cop_007ecb89152f4063bf7a",
+              "field": "buyerVolume"
+            },
+            {
+              "opportunityId": "cop_007ecb89152f4063bf7a",
+              "field": "price"
+            },
+            {
+              "opportunityId": "cop_007ecb89152f4063bf7a",
+              "field": "directCosts"
+            },
+            {
+              "opportunityId": "cop_22f68c50cbe94016bbd8",
+              "field": "fulfillment"
+            },
+            {
+              "opportunityId": "cop_22f68c50cbe94016bbd8",
+              "field": "price"
+            }
+          ]
+        }
+      ],
+      "disagreements": [
+        {
+          "opportunityId": "cop_007ecb89152f4063bf7a",
+          "link": "CONVERSION",
+          "reason": "Ten written acceptances at $150 (price fact: ten congregations signed orders, 2026-11-23) establish conversion of the whole 10-congregation population; only volume is missing."
+        }
+      ],
+      "revisionId": "rev_38752d574ad6_2aa400",
+      "digest": "38752d574ad65aa99edb684c",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_912c0d329ec94cd58ad2/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:21:29.163Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_38752d574ad6_2aa400",
+      "digest": "38752d574ad65aa99edb684c",
+      "contractDigest": "adaba1e7f767206bce598ae7",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 1450). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 9165× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Congregation administrators — Livestream camera\" needs [figure withheld] and keeps [figure withheld], 1279× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Congregation administrators\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_007ecb89152f4063bf7a",
+          "cop_22f68c50cbe94016bbd8"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Online-giving setup and year-end contribution statement workbook for congregatio\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Online-giving setup and year-end contribution statement workbook for congregatio\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach Congregation administrators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with Congregation administrators",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 243.0111862663037
+          },
+          {
+            "label": "Collect payment for \"Online-giving setup and year-end contribution statement workbook for congregatio\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Renew",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 1450 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_22f68c50cbe94016bbd8",
+            "title": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+            "missing": [
+              "ECONOMICS"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 0,
+            "potentialReach": 0,
+            "card": {
+              "payer": "Congregation administrators",
+              "reachableChannel": "The congregations that signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:43.953Z",
+              "offerScope": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+              "priceCents": 140000,
+              "currency": "USD",
+              "fulfillmentOwner": "Sanctuary AV Installers (written quote: $1,400 per installation)",
+              "peakFundingCents": 0,
+              "humanHours": 1,
+              "requiredCapabilities": [],
+              "industry": "religious congregations",
+              "mechanism": "SUBCONTRACTED_FULFILMENT",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 140000,
+                "currency": "USD",
+                "deliverable": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 140000,
+                "currency": "USD",
+                "deliverable": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 140000,
+                "currency": "USD",
+                "deliverable": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 140000,
+                "currency": "USD",
+                "deliverable": "Livestream camera and streaming-encoder installation for congregations (AV subcontractor)",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The congregations that signed | reach: The congregations that signed"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24 | VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 1500 USD | a buyer agreed to 5600 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 1500 USD | buyers have agreed to 5600 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "no new deals needed | a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET | fulfilled by Sanctuary AV Installers (written quote: $1,400 per installation) (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": false,
+                "basis": "cost 5, tied up 0 | each deal loses money: a cost of 1400 against a price of 1400"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "7 days to usable cash against 30 left | 10 days to usable cash against 30 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Livestream camera and streaming-encoder installation for congregations (AV subcontractor) to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$1400",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Sanctuary AV Installers (written quote: $1,400 per installation) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Congregation administrators",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Four congregations signed installation agreements at $1,400 each (signed agreements, 2026-11-23).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "10 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          },
+          {
+            "opportunityId": "cop_007ecb89152f4063bf7a",
+            "title": "Online-giving setup and year-end contribution statement workbook for congregations",
+            "missing": [
+              "CONVERSION",
+              "MARKET_VOLUME"
+            ],
+            "stage": "E_COMMITTED",
+            "supportedReach": 1450,
+            "potentialReach": 3000,
+            "card": {
+              "payer": "Congregation treasurers",
+              "reachableChannel": "The congregations that signed",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:43.953Z",
+              "offerScope": "Online-giving setup and year-end contribution statement workbook for congregations",
+              "priceCents": 15000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "religious congregations",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 15000,
+                "currency": "USD",
+                "deliverable": "Online-giving setup and year-end contribution statement workbook for congregations",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "The denomination's regional office lists 10 member congregations on its online-giving platform, and all 10 have signed; no other congregation uses the platform.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Online-giving setup and year-end contribution statement workbook for congregations to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Congregation treasurers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Ten congregations signed orders at $150 each for the year-end statement workbook (signed orders, 2026-11-23).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "7 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_a73b3760faaa42ef9f55",
+          "cnd_f9e7a5ca5e044252ade4",
+          "cnd_89fe653ed20a4330813c"
+        ],
+        "scope": {
+          "targetCents": 300000,
+          "daysLeft": 30,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:20:43.954Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_38752d574ad6_2aa400",
+        "revisionDigest": "38752d574ad65aa99edb684c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_912c0d329ec94cd58ad2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_37313c34b9e84a57acff/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the target is $3,000 CONTRIBUTION (net of direct costs) and both held openings are capped by evidence, not by missing evidence. Recomputed: AV installation price $1,400 (4 signed) minus the subcontractor's written quote $1,400 = $0 per deal, so 4 installs contribute $0. Workbook: $150 - $5 = $145 x 10 congregations = $1,450, and the card's buyerVolume (EVIDENCE) says those 10 are the whole platform population and all have signed. Max contribution $1,450 < $3,000; no unknown could close the gap at recorded prices and costs. The disagreement on workbook CONVERSION is sound: 10 written acceptances of 10 buyers is measured conversion.",
+        "findings": [
+          "AV: 4 x ($1,400 - $1,400) = $0 contribution.",
+          "Workbook: 10 x $145 = $1,450 contribution; population exhausted per buyerVolume.",
+          "Total $1,450 vs $3,000 target: short by $1,550.",
+          "Resolution is coherent; raising the AV price requires buyer evidence of a higher price (none on record) and other congregations off the platform would need new research."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:22:20.273Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_38752d574ad6_2aa400",
+      "digest": "38752d574ad65aa99edb684c",
+      "contractDigest": "adaba1e7f767206bce598ae7",
+      "plan": {
+        "goalId": "wst_e254dbbc3ce44244b97c",
+        "contractDigest": "adaba1e7f767206bce598ae7",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the held openings cannot net $3,000",
+          "opportunityIds": [],
+          "why": "The AV installation is priced at $1,400 and the subcontractor's written quote is $1,400, so each deal nets $0. The year-end workbook nets $145 a deal ($150 - $5), and its whole population is the 10 congregations on the platform, all already signed: at most $1,450 net. Together at most $1,450 net against a $3,000 target."
+        },
+        "alternatives": [
+          {
+            "title": "Sell all 10 workbooks",
+            "why": "Nets $1,450, under half the target."
+          },
+          {
+            "title": "Resell AV installations with a markup",
+            "why": "The four congregations signed at $1,400, equal to the subcontractor's quote; no evidence any buyer pays more."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "AV price",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "a_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "AV subcontractor cost",
+            "status": "EVIDENCED",
+            "value": 140000,
+            "unit": "cents",
+            "sources": [
+              "a_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "workbook buyers in population",
+            "status": "EVIDENCED",
+            "value": 10,
+            "unit": "congregations",
+            "sources": [
+              "b_vol"
+            ],
+            "needs": null
+          },
+          {
+            "name": "workbook net per deal",
+            "status": "EVIDENCED",
+            "value": 14500,
+            "unit": "cents",
+            "sources": [
+              "b_price",
+              "b_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "maximum net in window",
+            "status": "EVIDENCED",
+            "value": 145000,
+            "unit": "cents",
+            "sources": [
+              "b_vol",
+              "b_price",
+              "b_cost",
+              "a_price",
+              "a_ful"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "a_price",
+            "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#price",
+            "dated": "2026-11-23",
+            "claim": "Four congregations signed installation agreements at $1,400 each",
+            "population": "Congregation administrators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "a_ful",
+            "url": "https://brain.local/card/cop_22f68c50cbe94016bbd8#fulfillment",
+            "dated": "2026-11-23",
+            "claim": "Sanctuary AV Installers written quote $1,400 per installation",
+            "population": "Congregation administrators",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_price",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#price",
+            "dated": "2026-11-23",
+            "claim": "Ten congregations signed orders at $150 each",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_cost",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#directCosts",
+            "dated": "2026-11-23",
+            "claim": "Direct cost $5 per workbook",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "b_vol",
+            "url": "https://brain.local/card/cop_007ecb89152f4063bf7a#buyerVolume",
+            "dated": "2026-11-23",
+            "claim": "10 member congregations on the platform, all signed; no other congregation uses it",
+            "population": "Congregation treasurers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "ECONOMICS and MARKET_VOLUME: the AV installation nets $0 per deal (price $1,400 = quote $1,400), and the workbook population is exhausted at 10 congregations x $145 = $1,450 net, below $3,000.",
+          "resolution": "Lower the target to $1,450 net (sell the 10 signed workbooks), or renegotiate the AV subcontract below $1,400 / raise the AV price with buyer evidence, or have Brain research further congregations or platforms for the workbook.",
+          "decisiveLinks": [
+            "ECONOMICS",
+            "MARKET_VOLUME"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_22f68c50cbe94016bbd8",
+            "missing": [
+              "ECONOMICS"
+            ]
+          },
+          {
+            "opportunityId": "cop_007ecb89152f4063bf7a",
+            "missing": [
+              "MARKET_VOLUME"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "ECONOMICS",
+          "MARKET_VOLUME"
+        ],
+        "constraints": [
+          {
+            "constraint": "TARGET",
+            "suggestion": "Lower the target to $1,450 of net cash (10 workbooks x $145); the AV installations add nothing at cost = price.",
+            "basis": [
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "buyerVolume"
+              },
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "price"
+              },
+              {
+                "opportunityId": "cop_007ecb89152f4063bf7a",
+                "field": "directCosts"
+              },
+              {
+                "opportunityId": "cop_22f68c50cbe94016bbd8",
+                "field": "fulfillment"
+              },
+              {
+                "opportunityId": "cop_22f68c50cbe94016bbd8",
+                "field": "price"
+              }
+            ]
+          }
+        ],
+        "disagreements": [
+          {
+            "opportunityId": "cop_007ecb89152f4063bf7a",
+            "link": "CONVERSION",
+            "reason": "Ten written acceptances at $150 (price fact: ten congregations signed orders, 2026-11-23) establish conversion of the whole 10-congregation population; only volume is missing."
+          }
+        ],
+        "revisionId": "rev_38752d574ad6_2aa400",
+        "digest": "38752d574ad65aa99edb684c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_912c0d329ec94cd58ad2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:21:29.163Z"
+      },
+      "review": {
+        "revisionId": "rev_38752d574ad6_2aa400",
+        "revisionDigest": "38752d574ad65aa99edb684c",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_912c0d329ec94cd58ad2/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_37313c34b9e84a57acff/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN is right: the target is $3,000 CONTRIBUTION (net of direct costs) and both held openings are capped by evidence, not by missing evidence. Recomputed: AV installation price $1,400 (4 signed) minus the subcontractor's written quote $1,400 = $0 per deal, so 4 installs contribute $0. Workbook: $150 - $5 = $145 x 10 congregations = $1,450, and the card's buyerVolume (EVIDENCE) says those 10 are the whole platform population and all have signed. Max contribution $1,450 < $3,000; no unknown could close the gap at recorded prices and costs. The disagreement on workbook CONVERSION is sound: 10 written acceptances of 10 buyers is measured conversion.",
+        "findings": [
+          "AV: 4 x ($1,400 - $1,400) = $0 contribution.",
+          "Workbook: 10 x $145 = $1,450 contribution; population exhausted per buyerVolume.",
+          "Total $1,450 vs $3,000 target: short by $1,550.",
+          "Resolution is coherent; raising the AV price requires buyer evidence of a higher price (none on record) and other congregations off the platform would need new research."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:22:20.273Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:23:31.376Z"
+    },
+    "staleFinal": null
+  }
+}

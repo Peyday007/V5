@@ -1,0 +1,736 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_676caa3522d04429aa60",
+      "words": "Collect $2,400 of settled cash within 28 days with no more than 3 hours a week of owner time.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 240000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 28,
+        "totalSpendCapCents": null,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "$2,400 of settled cash received within 28 days",
+        "ownerHoursPerWeek": 3,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 1,
+      "digest": "01ca688009e476bf93baee4e"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_676caa3522d04429aa60",
+        "contractDigest": "01ca688009e476bf93baee4e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $400 price for the pawn-shop compliance log is only hearsay",
+          "opportunityIds": [],
+          "why": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the log at $400 to register-listed pawnbrokers",
+            "why": "Would reach the target with 7 deals, but the $400 price is only a person's say-so, so its reach is not established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price pawnbrokers pay for a hold-period and police transaction-reporting compliance log",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per log",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "a price buyers are shown to pay"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "licensed pawnbrokers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#price",
+            "dated": "2026-11-24",
+            "claim": "A pawnbroker the owner knows said shops would pay $400 for the log (PERSON, not evidence)",
+            "population": "one pawnbroker",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 90 contacts",
+            "population": "Licensed pawnbrokers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 pawnbrokers hold state licences",
+            "population": "Licensed pawnbrokers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced.",
+          "resolution": "Brain researches what pawnbrokers actually pay for hold-period / police transaction-reporting compliance logs (published prices of comparable pawn compliance tools or paid orders), or records a paid order from a register-listed pawnbroker at $400; if a price >= $370 net is established, 7 deals over ~70 contacts reach $2,400 in the window.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_69de63dfb70b4e22a056",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d8183939450d_99b658",
+        "digest": "d8183939450d2e5221695857",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fd926842184d49a2b8c4/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.597Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_676caa3522d04429aa60",
+      "contractDigest": "01ca688009e476bf93baee4e",
+      "parentRevisionId": null,
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: the $400 price for the pawn-shop compliance log is only hearsay",
+        "opportunityIds": [],
+        "why": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced."
+      },
+      "alternatives": [
+        {
+          "title": "Sell the log at $400 to register-listed pawnbrokers",
+          "why": "Would reach the target with 7 deals, but the $400 price is only a person's say-so, so its reach is not established."
+        }
+      ],
+      "steps": [
+        {
+          "id": "r1",
+          "kind": "RESEARCH",
+          "label": "Establish the price pawnbrokers pay for a hold-period and police transaction-reporting compliance log",
+          "performer": "BRAIN",
+          "costCents": 0,
+          "day": 1,
+          "dependsOn": null,
+          "evidence": [
+            "s_price"
+          ],
+          "executor": {
+            "operation": "RESEARCH",
+            "performedBy": "BRAIN",
+            "provider": null,
+            "capabilities": [
+              {
+                "id": "CHEAP_MODEL_READS",
+                "state": "PRESENT"
+              }
+            ],
+            "routine": false
+          }
+        }
+      ],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price",
+          "status": "UNKNOWN",
+          "value": null,
+          "unit": "USD per log",
+          "sources": [
+            "s_price"
+          ],
+          "needs": "a price buyers are shown to pay"
+        },
+        {
+          "name": "conversion",
+          "status": "EVIDENCED",
+          "value": 0.1,
+          "unit": "agreements per contact",
+          "sources": [
+            "s_conv"
+          ],
+          "needs": null
+        },
+        {
+          "name": "buyers",
+          "status": "EVIDENCED",
+          "value": 310,
+          "unit": "licensed pawnbrokers",
+          "sources": [
+            "s_vol"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#price",
+          "dated": "2026-11-24",
+          "claim": "A pawnbroker the owner knows said shops would pay $400 for the log (PERSON, not evidence)",
+          "population": "one pawnbroker",
+          "matchesBuyer": false
+        },
+        {
+          "id": "s_conv",
+          "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#conversionRates",
+          "dated": "2026-11-24",
+          "claim": "9 agreements from 90 contacts",
+          "population": "Licensed pawnbrokers",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_vol",
+          "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#buyerVolume",
+          "dated": "2026-11-24",
+          "claim": "310 pawnbrokers hold state licences",
+          "population": "Licensed pawnbrokers",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced.",
+        "resolution": "Brain researches what pawnbrokers actually pay for hold-period / police transaction-reporting compliance logs (published prices of comparable pawn compliance tools or paid orders), or records a paid order from a register-listed pawnbroker at $400; if a price >= $370 net is established, 7 deals over ~70 contacts reach $2,400 in the window.",
+        "decisiveLinks": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_69de63dfb70b4e22a056",
+          "missing": [
+            "OFFER_AND_PRICE"
+          ]
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [
+        "OFFER_AND_PRICE"
+      ],
+      "constraints": [],
+      "disagreements": [],
+      "revisionId": "rev_d8183939450d_99b658",
+      "digest": "d8183939450d2e5221695857",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_fd926842184d49a2b8c4/author-C",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:28:11.597Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_d8183939450d_99b658",
+      "digest": "d8183939450d2e5221695857",
+      "contractDigest": "01ca688009e476bf93baee4e",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 0,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "No modelled strategy can work under the current limits: cannot reach the 2400 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 32390× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Police hold-period and transaction-reporting compliance log \" needs [figure withheld] and keeps [figure withheld], 395× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+        "acceptance": "CANDIDATE_ONLY",
+        "considered": [
+          "cop_69de63dfb70b4e22a056"
+        ],
+        "integrity": [],
+        "steps": [
+          {
+            "label": "Sell \"Police hold-period and transaction-reporting compliance log for pawn shops\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Deliver \"Police hold-period and transaction-reporting compliance log for pawn shops\"",
+            "owner": "PERSON",
+            "cost": 5
+          },
+          {
+            "label": "Research the buyers",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the price",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the supply",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research settlement",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research the cost per deal",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Research repeat purchases",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Reach buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Validate the offer with buyers to be found",
+            "owner": "BRAIN",
+            "cost": null
+          },
+          {
+            "label": "Deliver and confirm",
+            "owner": "PERSON",
+            "cost": 10.462249335302651
+          },
+          {
+            "label": "Collect payment for \"Police hold-period and transaction-reporting compliance log for pawn shops\"",
+            "owner": "BRAIN",
+            "cost": 0
+          },
+          {
+            "label": "Collect payment",
+            "owner": "PERSON",
+            "cost": 0
+          },
+          {
+            "label": "Run the next group",
+            "owner": "BRAIN",
+            "cost": null
+          }
+        ],
+        "nextTest": "Discover, construct and research openings that can reach the 2400 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+        "openings": [
+          {
+            "opportunityId": "cop_69de63dfb70b4e22a056",
+            "title": "Police hold-period and transaction-reporting compliance log for pawn shops",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ],
+            "stage": "D_BUYER_VALIDATED",
+            "supportedReach": 0,
+            "potentialReach": 2400,
+            "card": {
+              "payer": "Licensed pawnbrokers",
+              "reachableChannel": "Shop emails from the state pawnbroker licence register",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:01.032Z",
+              "offerScope": "Police hold-period and transaction-reporting compliance log for pawn shops",
+              "priceCents": 40000,
+              "currency": "USD",
+              "peakFundingCents": 0,
+              "humanHours": 0.5,
+              "requiredCapabilities": [
+                "PRODUCE_SPREADSHEET"
+              ],
+              "industry": "pawn shops",
+              "mechanism": "PRODUCTIZED_SERVICE",
+              "state": "DISCOVERED"
+            },
+            "agreements": [],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: Shop emails from the state pawnbroker licence register"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": false,
+                "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "measured on this offer's own sales: 9 accepted of 90 contacts"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "7 deal(s) needed, 8680 available in the window (310 reachable buyers, each buying about every 1 days, so 28 purchase(s) each in 28 days)"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 5, tied up 0"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "5 days to usable cash against 28 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "buyerVolume",
+                "value": "310 pawnbrokers hold state licences; each must report transactions to police daily and keep hold-period logs for inspection.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "captureMechanism",
+                "value": "Sell Police hold-period and transaction-reporting compliance log for pawn shops to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "conversionRates",
+                "value": "9 agreements from 90 contacts",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "delivery",
+                "value": "A spreadsheet Brain produces.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$5",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$0",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Licensed pawnbrokers",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "A pawnbroker the owner knows said shops would pay $400 for the log.",
+                "kind": "PERSON"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "5 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [
+          "cnd_ae54ed91e6cc444b977d"
+        ],
+        "scope": {
+          "targetCents": 240000,
+          "daysLeft": 28,
+          "hoursCeiling": 12,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": 3
+        },
+        "at": "2026-11-27T07:25:40.825Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_d8183939450d_99b658",
+        "revisionDigest": "d8183939450d2e5221695857",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fd926842184d49a2b8c4/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_a27323ec171740438269/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE decisive is right: the only price ($400) is a PERSON fact - one pawnbroker the owner knows saying shops would pay it - and Brain's own link marks it a guess; someone's word is not a purchase price and one shop is not the 310-licensee population. No agreement is recorded. All other links are evidenced (310 licensed pawnbrokers via the register, 9/90 conversion, Brain-produced spreadsheet $5, $0 exposure, 5 days to cash). Owner hours: 0.5 h per deal x 7 deals = 3.5 h across 4 weeks, under 3 h/week. Arithmetic: at $400, 7 deals x ($400-$5) = $2,765 >= $2,400; at 10% conversion that is ~70 contacts of 310. The gap is stated as a gap, not a constraint, which is correct.",
+        "findings": [
+          "The resolution's first route - 'published prices of comparable pawn compliance tools' - is a benchmark of what other sellers charge and cannot establish what these buyers pay; only its second route (a paid order at a stated price from a register-listed pawnbroker) closes OFFER_AND_PRICE. The next revision should make the priced-offer test the resolution, with proof (N paid orders at $400 from the first ~70 contacts), stop and continue rules.",
+          "The '>= $370 net' threshold is right for 7 deals ($2,590) but 6 deals need >= $405 gross; state it as ceil($2,400/(P-$5)) deals.",
+          "Brain's MARKET_VOLUME basis ('each buying about every 1 days, so 28 purchases each') is implausible for a one-time log; the plan correctly needs only one purchase per shop.",
+          "Card inconsistency: 9 agreements from 90 contacts are said to be measured on this offer, yet no agreed price is recorded."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.812Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_d8183939450d_99b658",
+      "digest": "d8183939450d2e5221695857",
+      "contractDigest": "01ca688009e476bf93baee4e",
+      "plan": {
+        "goalId": "wst_676caa3522d04429aa60",
+        "contractDigest": "01ca688009e476bf93baee4e",
+        "parentRevisionId": null,
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: the $400 price for the pawn-shop compliance log is only hearsay",
+          "opportunityIds": [],
+          "why": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced."
+        },
+        "alternatives": [
+          {
+            "title": "Sell the log at $400 to register-listed pawnbrokers",
+            "why": "Would reach the target with 7 deals, but the $400 price is only a person's say-so, so its reach is not established."
+          }
+        ],
+        "steps": [
+          {
+            "id": "r1",
+            "kind": "RESEARCH",
+            "label": "Establish the price pawnbrokers pay for a hold-period and police transaction-reporting compliance log",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "executor": {
+              "operation": "RESEARCH",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "CHEAP_MODEL_READS",
+                  "state": "PRESENT"
+                }
+              ],
+              "routine": false
+            }
+          }
+        ],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price",
+            "status": "UNKNOWN",
+            "value": null,
+            "unit": "USD per log",
+            "sources": [
+              "s_price"
+            ],
+            "needs": "a price buyers are shown to pay"
+          },
+          {
+            "name": "conversion",
+            "status": "EVIDENCED",
+            "value": 0.1,
+            "unit": "agreements per contact",
+            "sources": [
+              "s_conv"
+            ],
+            "needs": null
+          },
+          {
+            "name": "buyers",
+            "status": "EVIDENCED",
+            "value": 310,
+            "unit": "licensed pawnbrokers",
+            "sources": [
+              "s_vol"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#price",
+            "dated": "2026-11-24",
+            "claim": "A pawnbroker the owner knows said shops would pay $400 for the log (PERSON, not evidence)",
+            "population": "one pawnbroker",
+            "matchesBuyer": false
+          },
+          {
+            "id": "s_conv",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#conversionRates",
+            "dated": "2026-11-24",
+            "claim": "9 agreements from 90 contacts",
+            "population": "Licensed pawnbrokers",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_vol",
+            "url": "https://brain.local/card/cop_69de63dfb70b4e22a056#buyerVolume",
+            "dated": "2026-11-24",
+            "claim": "310 pawnbrokers hold state licences",
+            "population": "Licensed pawnbrokers",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "The only opening's price ($400) rests on one pawnbroker the owner knows saying shops would pay it (PERSON fact); no buyer is shown paying any price, no agreement is recorded, so the 6-7 deals x price needed for $2,400 cannot be established. Every other link (310 licensed pawnbrokers, 9/90 conversion, Brain-produced spreadsheet, $5 cost, 5 days to cash, Brain fulfils so owner hours fit 3/week) is evidenced.",
+          "resolution": "Brain researches what pawnbrokers actually pay for hold-period / police transaction-reporting compliance logs (published prices of comparable pawn compliance tools or paid orders), or records a paid order from a register-listed pawnbroker at $400; if a price >= $370 net is established, 7 deals over ~70 contacts reach $2,400 in the window.",
+          "decisiveLinks": [
+            "OFFER_AND_PRICE"
+          ]
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_69de63dfb70b4e22a056",
+            "missing": [
+              "OFFER_AND_PRICE"
+            ]
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [
+          "OFFER_AND_PRICE"
+        ],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_d8183939450d_99b658",
+        "digest": "d8183939450d2e5221695857",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fd926842184d49a2b8c4/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:28:11.597Z"
+      },
+      "review": {
+        "revisionId": "rev_d8183939450d_99b658",
+        "revisionDigest": "d8183939450d2e5221695857",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_fd926842184d49a2b8c4/author-C",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_a27323ec171740438269/fleet-2",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with OFFER_AND_PRICE decisive is right: the only price ($400) is a PERSON fact - one pawnbroker the owner knows saying shops would pay it - and Brain's own link marks it a guess; someone's word is not a purchase price and one shop is not the 310-licensee population. No agreement is recorded. All other links are evidenced (310 licensed pawnbrokers via the register, 9/90 conversion, Brain-produced spreadsheet $5, $0 exposure, 5 days to cash). Owner hours: 0.5 h per deal x 7 deals = 3.5 h across 4 weeks, under 3 h/week. Arithmetic: at $400, 7 deals x ($400-$5) = $2,765 >= $2,400; at 10% conversion that is ~70 contacts of 310. The gap is stated as a gap, not a constraint, which is correct.",
+        "findings": [
+          "The resolution's first route - 'published prices of comparable pawn compliance tools' - is a benchmark of what other sellers charge and cannot establish what these buyers pay; only its second route (a paid order at a stated price from a register-listed pawnbroker) closes OFFER_AND_PRICE. The next revision should make the priced-offer test the resolution, with proof (N paid orders at $400 from the first ~70 contacts), stop and continue rules.",
+          "The '>= $370 net' threshold is right for 7 deals ($2,590) but 6 deals need >= $405 gross; state it as ceil($2,400/(P-$5)) deals.",
+          "Brain's MARKET_VOLUME basis ('each buying about every 1 days, so 28 purchases each') is implausible for a one-time log; the plan correctly needs only one purchase per shop.",
+          "Card inconsistency: 9 agreements from 90 contacts are said to be measured on this offer, yet no agreed price is recorded."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:31:55.812Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:33:04.487Z"
+    },
+    "staleFinal": null
+  }
+}

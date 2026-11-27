@@ -1,0 +1,1164 @@
+{
+  "status": 200,
+  "isError": false,
+  "value": {
+    "contract": {
+      "goalId": "wst_19a6e37e9aca45809d2c",
+      "words": "Collect $10,000 of settled cash within 40 days with at most $8,000 of capital.",
+      "source": {
+        "kind": "OWNER_MESSAGE",
+        "ref": "OBJECTIVE.txt",
+        "at": "2026-11-27"
+      },
+      "terms": {
+        "targetCents": 1000000,
+        "currency": "USD",
+        "metric": "SETTLED_CASH",
+        "windowDays": 40,
+        "totalSpendCapCents": 200000,
+        "preProofSpendCapCents": null,
+        "exposureCapCents": null,
+        "proofCondition": "Settled cash of at least the target received within the window",
+        "ownerHoursPerWeek": null,
+        "ownerPhysicalWork": "UNSTATED",
+        "exclusions": [],
+        "evidenceExclusions": []
+      },
+      "explanations": {},
+      "version": 2,
+      "digest": "32e2f30c3c00ebbc9fcd68cb"
+    },
+    "revisions": [
+      {
+        "goalId": "wst_19a6e37e9aca45809d2c",
+        "contractDigest": "6018378e553b59abb527d627",
+        "parentRevisionId": null,
+        "stance": "EXECUTABLE",
+        "strategy": {
+          "title": "One truckload of liquidated shade trees resold to a signed garden centre",
+          "opportunityIds": [
+            "cop_632ddec014cf4b2bacc5"
+          ],
+          "why": "Two garden centres signed purchase agreements at $12,000 per truckload payable on delivery; Willow Creek Growers quoted $7,000 per truckload freight included, paid on order. One truckload needs $7,000 of capital (under the $8,000 cap) and collects $12,000 (over the $10,000 target) about 15 days in, against a 40-day window."
+        },
+        "alternatives": [
+          {
+            "title": "Both signed truckloads at once",
+            "why": "Needs $14,000 tied up at the same time, over the $8,000 capital cap."
+          },
+          {
+            "title": "Second truckload funded from the first receipt",
+            "why": "Possible fallback (order ~day 15, cash ~day 30) if the first buyer defaults; not needed for the target."
+          }
+        ],
+        "steps": [
+          {
+            "id": "s1",
+            "kind": "SELL",
+            "label": "Confirm delivery date with the first signed garden centre at $12,000 per truckload, payable on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 1,
+            "dependsOn": null,
+            "evidence": [
+              "s_price"
+            ],
+            "priceCents": 1200000,
+            "executor": {
+              "operation": "SEND_OFFER",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s2",
+            "kind": "ORDER",
+            "label": "Order one truckload from Willow Creek Growers at the $7,000 liquidation quote (freight included, paid on order)",
+            "performer": "Willow Creek Growers",
+            "costCents": 700000,
+            "day": 2,
+            "dependsOn": "s1",
+            "evidence": [
+              "s_ful",
+              "s_cost"
+            ],
+            "executor": {
+              "operation": "PAY_SUPPLIER",
+              "performedBy": "BRAIN",
+              "provider": "Willow Creek Growers",
+              "capabilities": [
+                {
+                  "id": "PAY_A_SUPPLIER",
+                  "state": "NOT_DECLARED"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s3",
+            "kind": "DELIVER",
+            "label": "Willow Creek Growers delivers the truckload to the garden centre",
+            "performer": "Willow Creek Growers",
+            "costCents": 0,
+            "day": 14,
+            "dependsOn": "s2",
+            "evidence": [
+              "s_ful"
+            ],
+            "executor": {
+              "operation": "SUPPLIER_DELIVERS",
+              "performedBy": "PROVIDER",
+              "provider": "Willow Creek Growers",
+              "capabilities": [
+                {
+                  "id": "SEND_A_MESSAGE",
+                  "state": "NOT_CONNECTED"
+                },
+                {
+                  "id": "READ_REPLIES",
+                  "state": "UNREAD"
+                }
+              ],
+              "routine": true
+            }
+          },
+          {
+            "id": "s4",
+            "kind": "COLLECT",
+            "label": "Collect $12,000 payable on delivery",
+            "performer": "BRAIN",
+            "costCents": 0,
+            "day": 15,
+            "dependsOn": "s3",
+            "evidence": [
+              "s_price",
+              "s_time"
+            ],
+            "executor": {
+              "operation": "COLLECT_PAYMENT",
+              "performedBy": "BRAIN",
+              "provider": null,
+              "capabilities": [
+                {
+                  "id": "ISSUE_AN_INVOICE",
+                  "state": "NOT_CONNECTED"
+                }
+              ],
+              "routine": true
+            }
+          }
+        ],
+        "cash": [
+          {
+            "day": 2,
+            "kind": "FUNDING",
+            "amountCents": 700000,
+            "label": "Owner advances $7,000 of the $8,000 capital allowance",
+            "stepId": "s2"
+          },
+          {
+            "day": 2,
+            "kind": "SPEND",
+            "amountCents": 700000,
+            "label": "Pay Willow Creek Growers on order",
+            "stepId": "s2"
+          },
+          {
+            "day": 15,
+            "kind": "RECEIPT",
+            "amountCents": 1200000,
+            "label": "Garden centre pays on delivery",
+            "settlesDay": 15,
+            "stepId": "s4"
+          }
+        ],
+        "proofDay": 15,
+        "quantities": [
+          {
+            "name": "signed purchase agreements",
+            "status": "EVIDENCED",
+            "value": 2,
+            "unit": "truckloads",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "price per truckload",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier cost per truckload",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_ful",
+              "s_cost"
+            ],
+            "needs": null
+          },
+          {
+            "name": "time to cash",
+            "status": "EVIDENCED",
+            "value": 15,
+            "unit": "days",
+            "sources": [
+              "s_time"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+            "dated": "2026-11-20",
+            "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+            "dated": "2026-11-20",
+            "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_cost",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#directCosts",
+            "dated": "2026-11-20",
+            "claim": "Direct costs $7,000",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_time",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#timeToFirstCash",
+            "dated": "2026-11-20",
+            "claim": "15 days to first cash",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": null,
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "deals": 1,
+            "price": 12000,
+            "directCost": 7000,
+            "capital": 7000
+          }
+        ],
+        "resolves": [],
+        "constraints": [],
+        "disagreements": [],
+        "revisionId": "rev_23bffce37c70_17520e",
+        "digest": "23bffce37c704bfa7823897d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:21:29.270Z"
+      },
+      {
+        "goalId": "wst_19a6e37e9aca45809d2c",
+        "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+        "parentRevisionId": "rev_23bffce37c70_17520e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: a truckload needs $7,000 paid on order, above the $2,000 capital ceiling",
+          "opportunityIds": [],
+          "why": "The two signed garden centres pay $12,000 per truckload on delivery, but Willow Creek Growers must be paid $7,000 per truckload on order. With the owner's capital now capped at $2,000, not one truckload can be ordered, so the openings held bring $0 within the limits."
+        },
+        "alternatives": [
+          {
+            "title": "One truckload with $7,000 of capital",
+            "why": "The previous plan; it now breaks the $2,000 capital ceiling."
+          },
+          {
+            "title": "Ask the buyers for a deposit or the grower for payment on delivery",
+            "why": "Neither term is on record: the price fact says payable on delivery and the grower's quote says paid on order."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per truckload",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier payment per truckload, due on order",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital ceiling",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+            "dated": "2026-11-20",
+            "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+            "dated": "2026-11-20",
+            "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $7,000 per truckload",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "CAPITAL: one truckload needs $7,000 paid to the grower on order, before the buyer pays $12,000 on delivery; the goal allows at most $2,000 of capital, so no truckload can be bought.",
+          "resolution": "Owner raises the capital ceiling to at least $7,000 (one truckload, $12,000 collected about day 15), or Brain negotiates a buyer deposit of at least $5,000 or grower payment terms on delivery and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to at least $7,000 so one truckload can be ordered; it collects $12,000 on delivery.",
+            "basis": [
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "exposure"
+              },
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_2f351ad1c3f7_097b63",
+        "digest": "2f351ad1c3f70e36d01d4994",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:09.415Z"
+      },
+      {
+        "goalId": "wst_19a6e37e9aca45809d2c",
+        "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+        "parentRevisionId": "rev_23bffce37c70_17520e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: a truckload needs $7,000 paid on order, above the $2,000 capital ceiling",
+          "opportunityIds": [],
+          "why": "The two signed garden centres pay $12,000 per truckload on delivery, but Willow Creek Growers must be paid $7,000 per truckload on order. With the owner's capital now capped at $2,000, not one truckload can be ordered, so the openings held bring $0 within the limits."
+        },
+        "alternatives": [
+          {
+            "title": "One truckload with $7,000 of capital",
+            "why": "The previous plan; it now breaks the $2,000 capital ceiling."
+          },
+          {
+            "title": "Ask the buyers for a deposit or the grower for payment on delivery",
+            "why": "Neither term is on record: the price fact says payable on delivery and the grower's quote says paid on order."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per truckload",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier payment per truckload, due on order",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "capital ceiling",
+            "status": "EVIDENCED",
+            "value": 200000,
+            "unit": "cents",
+            "sources": [],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+            "dated": "2026-11-20",
+            "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+            "dated": "2026-11-20",
+            "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $7,000 per truckload",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "CAPITAL: one truckload needs $7,000 paid to the grower on order, before the buyer pays $12,000 on delivery; the goal allows at most $2,000 of capital, so no truckload can be bought.",
+          "resolution": "Owner raises the capital ceiling to at least $7,000 (one truckload, $12,000 collected about day 15), or Brain negotiates a buyer deposit of at least $5,000 or grower payment terms on delivery and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to at least $7,000 so one truckload can be ordered; it collects $12,000 on delivery.",
+            "basis": [
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "exposure"
+              },
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_2f351ad1c3f7_fd47ac",
+        "digest": "2f351ad1c3f70e36d01d4994",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:17.579Z"
+      },
+      {
+        "goalId": "wst_19a6e37e9aca45809d2c",
+        "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+        "parentRevisionId": "rev_23bffce37c70_17520e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: a truckload needs $7,000 paid on order, above the $2,000 capital ceiling",
+          "opportunityIds": [],
+          "why": "The two signed garden centres pay $12,000 per truckload on delivery, but Willow Creek Growers must be paid $7,000 per truckload on order. With the owner's capital now capped at $2,000, not one truckload can be ordered, so the openings held bring $0 within the limits."
+        },
+        "alternatives": [
+          {
+            "title": "One truckload with $7,000 of capital",
+            "why": "The previous plan; it now breaks the $2,000 capital ceiling."
+          },
+          {
+            "title": "Ask the buyers for a deposit or the grower for payment on delivery",
+            "why": "Neither term is on record: the price fact says payable on delivery and the grower's quote says paid on order."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per truckload",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier payment per truckload, due on order",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "truckload exposure",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_exp"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+            "dated": "2026-11-20",
+            "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+            "dated": "2026-11-20",
+            "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $7,000 per truckload",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "CAPITAL: one truckload needs $7,000 paid to the grower on order, before the buyer pays $12,000 on delivery; the goal allows at most $2,000 of capital, so no truckload can be bought.",
+          "resolution": "Owner raises the capital ceiling to at least $7,000 (one truckload, $12,000 collected about day 15), or Brain negotiates a buyer deposit of at least $5,000 or grower payment terms on delivery and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to at least $7,000 so one truckload can be ordered; it collects $12,000 on delivery.",
+            "basis": [
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "exposure"
+              },
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_3d8dfeaaecfe_33ae10",
+        "digest": "3d8dfeaaecfee1f7a672c63e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:28.856Z"
+      }
+    ],
+    "current": {
+      "goalId": "wst_19a6e37e9aca45809d2c",
+      "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+      "parentRevisionId": "rev_23bffce37c70_17520e",
+      "stance": "NO_PLAN",
+      "strategy": {
+        "title": "No plan: a truckload needs $7,000 paid on order, above the $2,000 capital ceiling",
+        "opportunityIds": [],
+        "why": "The two signed garden centres pay $12,000 per truckload on delivery, but Willow Creek Growers must be paid $7,000 per truckload on order. With the owner's capital now capped at $2,000, not one truckload can be ordered, so the openings held bring $0 within the limits."
+      },
+      "alternatives": [
+        {
+          "title": "One truckload with $7,000 of capital",
+          "why": "The previous plan; it now breaks the $2,000 capital ceiling."
+        },
+        {
+          "title": "Ask the buyers for a deposit or the grower for payment on delivery",
+          "why": "Neither term is on record: the price fact says payable on delivery and the grower's quote says paid on order."
+        }
+      ],
+      "steps": [],
+      "cash": [],
+      "proofDay": null,
+      "quantities": [
+        {
+          "name": "price per truckload",
+          "status": "EVIDENCED",
+          "value": 1200000,
+          "unit": "cents",
+          "sources": [
+            "s_price"
+          ],
+          "needs": null
+        },
+        {
+          "name": "supplier payment per truckload, due on order",
+          "status": "EVIDENCED",
+          "value": 700000,
+          "unit": "cents",
+          "sources": [
+            "s_ful"
+          ],
+          "needs": null
+        },
+        {
+          "name": "truckload exposure",
+          "status": "EVIDENCED",
+          "value": 700000,
+          "unit": "cents",
+          "sources": [
+            "s_exp"
+          ],
+          "needs": null
+        }
+      ],
+      "sources": [
+        {
+          "id": "s_price",
+          "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+          "dated": "2026-11-20",
+          "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+          "population": "Independent garden centre owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_ful",
+          "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+          "dated": "2026-11-20",
+          "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+          "population": "Independent garden centre owners",
+          "matchesBuyer": true
+        },
+        {
+          "id": "s_exp",
+          "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#exposure",
+          "dated": "2026-11-20",
+          "claim": "Exposure $7,000 per truckload",
+          "population": "Independent garden centre owners",
+          "matchesBuyer": true
+        }
+      ],
+      "validation": null,
+      "noPlan": {
+        "decisiveGap": "CAPITAL: one truckload needs $7,000 paid to the grower on order, before the buyer pays $12,000 on delivery; the goal allows at most $2,000 of capital, so no truckload can be bought.",
+        "resolution": "Owner raises the capital ceiling to at least $7,000 (one truckload, $12,000 collected about day 15), or Brain negotiates a buyer deposit of at least $5,000 or grower payment terms on delivery and records them on the card.",
+        "decisiveLinks": []
+      },
+      "reach": null,
+      "answers": [],
+      "chain": [
+        {
+          "opportunityId": "cop_632ddec014cf4b2bacc5",
+          "missing": []
+        }
+      ],
+      "excluded": [],
+      "members": [],
+      "resolves": [],
+      "constraints": [
+        {
+          "constraint": "CAPITAL",
+          "suggestion": "Raise the capital ceiling from $2,000 to at least $7,000 so one truckload can be ordered; it collects $12,000 on delivery.",
+          "basis": [
+            {
+              "opportunityId": "cop_632ddec014cf4b2bacc5",
+              "field": "exposure"
+            },
+            {
+              "opportunityId": "cop_632ddec014cf4b2bacc5",
+              "field": "fulfillment"
+            }
+          ]
+        }
+      ],
+      "disagreements": [],
+      "revisionId": "rev_3d8dfeaaecfe_33ae10",
+      "digest": "3d8dfeaaecfee1f7a672c63e",
+      "author": {
+        "kind": "APP_SESSION",
+        "id": "wkr_6c0c745e58864aaba010/author-D",
+        "model": "claude-opus-5-5"
+      },
+      "createdAt": "2026-11-27T07:31:28.856Z"
+    },
+    "currentCheck": {
+      "revisionId": "rev_3d8dfeaaecfe_33ae10",
+      "digest": "3d8dfeaaecfee1f7a672c63e",
+      "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+      "problems": [],
+      "trace": {
+        "totalSpentCents": 0,
+        "committedOpenCents": 0,
+        "preProofCents": 0,
+        "maxExposureCents": 0,
+        "minCashCents": 200000,
+        "minCashDay": null,
+        "collectedCents": 0,
+        "collectedInWindowCents": 0,
+        "refundsCents": 0,
+        "ownerFundedCents": 0,
+        "netCents": 0
+      },
+      "brain": {
+        "completed": true,
+        "error": null,
+        "verdict": "NOT_VIABLE",
+        "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $10,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $7,000, what the lots that reach the target need at once; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+        "acceptance": "NOT_SUPPORTED",
+        "considered": [
+          "cop_632ddec014cf4b2bacc5"
+        ],
+        "integrity": [],
+        "steps": [],
+        "nextTest": null,
+        "openings": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "title": "Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres",
+            "missing": [],
+            "stage": "E_COMMITTED",
+            "supportedReach": 10000,
+            "potentialReach": 10000,
+            "card": {
+              "payer": "Independent garden centre owners",
+              "reachableChannel": "The garden centres that signed purchase agreements",
+              "buyingSignal": "Posted asking for this work",
+              "signalObservedAt": "2026-11-24T07:09:58.314Z",
+              "offerScope": "Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres",
+              "priceCents": 1200000,
+              "currency": "USD",
+              "fulfillmentOwner": "Willow Creek Growers (liquidation quote: $7,000 per truckload, freight included, paid on order)",
+              "peakFundingCents": 700000,
+              "humanHours": 3,
+              "requiredCapabilities": [],
+              "industry": "wholesale plant nurseries",
+              "mechanism": "SUPPLY_DEMAND_MISMATCH",
+              "state": "DISCOVERED"
+            },
+            "agreements": [
+              {
+                "amountCents": 1200000,
+                "currency": "USD",
+                "deliverable": "Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              },
+              {
+                "amountCents": 1200000,
+                "currency": "USD",
+                "deliverable": "Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres",
+                "evidenceKind": "WRITTEN_ACCEPTANCE",
+                "state": "AGREED",
+                "recordedBy": "PERSON"
+              }
+            ],
+            "links": [
+              {
+                "link": "REACHABLE_BUYER",
+                "ok": true,
+                "basis": "reach: The garden centres that signed purchase agreements"
+              },
+              {
+                "link": "CURRENT_DEMAND",
+                "ok": true,
+                "basis": "VERIFIED: signal dated 2026-11-24"
+              },
+              {
+                "link": "OFFER_AND_PRICE",
+                "ok": true,
+                "basis": "a buyer agreed to 24000 USD"
+              },
+              {
+                "link": "CONVERSION",
+                "ok": true,
+                "basis": "buyers have agreed to 24000 USD"
+              },
+              {
+                "link": "MARKET_VOLUME",
+                "ok": true,
+                "basis": "a one-off needs its one buyer"
+              },
+              {
+                "link": "FULFILMENT",
+                "ok": true,
+                "basis": "fulfilled by Willow Creek Growers (liquidation quote: $7,000 per truckload, freight included, (a source says so)"
+              },
+              {
+                "link": "ECONOMICS",
+                "ok": true,
+                "basis": "cost 7000, tied up 7000"
+              },
+              {
+                "link": "SETTLES_IN_TIME",
+                "ok": true,
+                "basis": "15 days to usable cash against 40 left"
+              }
+            ],
+            "facts": [
+              {
+                "field": "captureMechanism",
+                "value": "Sell Truckloads of container-grown shade trees from a liquidating grower, resold to garden centres to each buyer.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "directCosts",
+                "value": "$7000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "exposure",
+                "value": "$7000",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "fulfillment",
+                "value": "Willow Creek Growers (liquidation quote: $7,000 per truckload, freight included, paid on order) quoted to do the work.",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "payer",
+                "value": "Independent garden centre owners",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "price",
+                "value": "Two garden centres signed purchase agreements at $12,000 per truckload of container-grown shade trees, payable on delivery (signed agreements, 2026-11-20).",
+                "kind": "EVIDENCE"
+              },
+              {
+                "field": "timeToFirstCash",
+                "value": "15 days",
+                "kind": "EVIDENCE"
+              }
+            ]
+          }
+        ],
+        "excluded": [],
+        "questions": [],
+        "scope": {
+          "targetCents": 1000000,
+          "daysLeft": 40,
+          "hoursCeiling": null,
+          "industry": null,
+          "recurring": null,
+          "hoursPerWeek": null
+        },
+        "at": "2026-11-27T07:30:33.235Z"
+      }
+    },
+    "reviews": [
+      {
+        "revisionId": "rev_23bffce37c70_17520e",
+        "revisionDigest": "23bffce37c704bfa7823897d",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_80c7cb946f814666870d/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "EXECUTABLE is justified. Every link of the one member is established by this offer's own records: price is two written purchase agreements from independent garden centres at $12,000 per truckload payable on delivery (a real purchase price for this buyer); fulfilment and cost are Willow Creek Growers' written liquidation quote of $7,000 freight included, paid on order, and the delivery step's performer is that recorded fulfiller; 15 days to first cash (EVIDENCE) sits inside the 40-day window. Recomputed: spend $7,000 <= $8,000 total spend cap; receipt $12,000 >= $10,000 target on day 15; net +$5,000; ledger (funding 7,000, spend 7,000 day 2, receipt 12,000 day 15) matches steps s2 and s4. One deal of the two signed is enough, so no volume assumption is needed. No owner-hour limit is set (card humanHours 3).",
+        "findings": [
+          "Spend $7,000 vs $8,000 cap: $1,000 headroom; both truckloads at once ($14,000) correctly rejected.",
+          "Collected $12,000 in window vs $10,000 target; proof day 15 of 40.",
+          "The second signed agreement is a real fallback if the first buyer defaults: reordering from the first receipt (~day 15) still lands cash around day 30, inside the window.",
+          "Operational note, not a chain gap: SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED and PAY_A_SUPPLIER NOT_DECLARED on the executors; these must be connected before s1/s2/s4 run.",
+          "Brain's NEEDS_EVIDENCE verdict concerns a calibrated 90% probability, not a missing link; the plan's stance under the contract's terms holds."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:22:45.567Z",
+        "conditions": []
+      },
+      {
+        "revisionId": "rev_3d8dfeaaecfe_33ae10",
+        "revisionDigest": "3d8dfeaaecfee1f7a672c63e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_80c7cb946f814666870d/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a CAPITAL constraint is right under contract v2 (stored capital ceiling $2,000). The card's EVIDENCE facts fix the cash order: Willow Creek Growers is paid $7,000 per truckload on order (fulfillment, exposure), the garden centres pay $12,000 on delivery (price). One truckload therefore needs $7,000 out before any cash comes in, 3.5x the $2,000 ceiling; no truckload can be ordered, so the held opening brings $0 within limits. This is a constraint, not missing evidence: the recorded terms themselves exclude it. Every other link is established (Brain's chain shows nothing missing), so capital is the single decisive gap. Resolution is coherent: raise capital to >= $7,000, or record a buyer deposit of >= $5,000 (7,000 - 2,000) or grower payment on delivery; neither term is on record today, so neither may be assumed.",
+        "findings": [
+          "Exposure per truckload $7,000 (EVIDENCE) > $2,000 capital ceiling.",
+          "Deposit needed for one truckload under the cap: $7,000 - $2,000 = $5,000.",
+          "Contract integrity: contract v2's 'words' still read 'at most $8,000 of capital' while its terms and the stored goal say $2,000. The plan correctly follows the stored $2,000, but the contract text should be updated to the owner's new words so the record is not self-contradictory."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:33:20.897Z",
+        "conditions": []
+      }
+    ],
+    "final": {
+      "revisionId": "rev_3d8dfeaaecfe_33ae10",
+      "digest": "3d8dfeaaecfee1f7a672c63e",
+      "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+      "plan": {
+        "goalId": "wst_19a6e37e9aca45809d2c",
+        "contractDigest": "32e2f30c3c00ebbc9fcd68cb",
+        "parentRevisionId": "rev_23bffce37c70_17520e",
+        "stance": "NO_PLAN",
+        "strategy": {
+          "title": "No plan: a truckload needs $7,000 paid on order, above the $2,000 capital ceiling",
+          "opportunityIds": [],
+          "why": "The two signed garden centres pay $12,000 per truckload on delivery, but Willow Creek Growers must be paid $7,000 per truckload on order. With the owner's capital now capped at $2,000, not one truckload can be ordered, so the openings held bring $0 within the limits."
+        },
+        "alternatives": [
+          {
+            "title": "One truckload with $7,000 of capital",
+            "why": "The previous plan; it now breaks the $2,000 capital ceiling."
+          },
+          {
+            "title": "Ask the buyers for a deposit or the grower for payment on delivery",
+            "why": "Neither term is on record: the price fact says payable on delivery and the grower's quote says paid on order."
+          }
+        ],
+        "steps": [],
+        "cash": [],
+        "proofDay": null,
+        "quantities": [
+          {
+            "name": "price per truckload",
+            "status": "EVIDENCED",
+            "value": 1200000,
+            "unit": "cents",
+            "sources": [
+              "s_price"
+            ],
+            "needs": null
+          },
+          {
+            "name": "supplier payment per truckload, due on order",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_ful"
+            ],
+            "needs": null
+          },
+          {
+            "name": "truckload exposure",
+            "status": "EVIDENCED",
+            "value": 700000,
+            "unit": "cents",
+            "sources": [
+              "s_exp"
+            ],
+            "needs": null
+          }
+        ],
+        "sources": [
+          {
+            "id": "s_price",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#price",
+            "dated": "2026-11-20",
+            "claim": "Two garden centres signed purchase agreements at $12,000 per truckload, payable on delivery",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_ful",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#fulfillment",
+            "dated": "2026-11-20",
+            "claim": "Willow Creek Growers liquidation quote: $7,000 per truckload, freight included, paid on order",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          },
+          {
+            "id": "s_exp",
+            "url": "https://brain.local/card/cop_632ddec014cf4b2bacc5#exposure",
+            "dated": "2026-11-20",
+            "claim": "Exposure $7,000 per truckload",
+            "population": "Independent garden centre owners",
+            "matchesBuyer": true
+          }
+        ],
+        "validation": null,
+        "noPlan": {
+          "decisiveGap": "CAPITAL: one truckload needs $7,000 paid to the grower on order, before the buyer pays $12,000 on delivery; the goal allows at most $2,000 of capital, so no truckload can be bought.",
+          "resolution": "Owner raises the capital ceiling to at least $7,000 (one truckload, $12,000 collected about day 15), or Brain negotiates a buyer deposit of at least $5,000 or grower payment terms on delivery and records them on the card.",
+          "decisiveLinks": []
+        },
+        "reach": null,
+        "answers": [],
+        "chain": [
+          {
+            "opportunityId": "cop_632ddec014cf4b2bacc5",
+            "missing": []
+          }
+        ],
+        "excluded": [],
+        "members": [],
+        "resolves": [],
+        "constraints": [
+          {
+            "constraint": "CAPITAL",
+            "suggestion": "Raise the capital ceiling from $2,000 to at least $7,000 so one truckload can be ordered; it collects $12,000 on delivery.",
+            "basis": [
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "exposure"
+              },
+              {
+                "opportunityId": "cop_632ddec014cf4b2bacc5",
+                "field": "fulfillment"
+              }
+            ]
+          }
+        ],
+        "disagreements": [],
+        "revisionId": "rev_3d8dfeaaecfe_33ae10",
+        "digest": "3d8dfeaaecfee1f7a672c63e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "createdAt": "2026-11-27T07:31:28.856Z"
+      },
+      "review": {
+        "revisionId": "rev_3d8dfeaaecfe_33ae10",
+        "revisionDigest": "3d8dfeaaecfee1f7a672c63e",
+        "author": {
+          "kind": "APP_SESSION",
+          "id": "wkr_6c0c745e58864aaba010/author-D",
+          "model": "claude-opus-5-5"
+        },
+        "reviewer": {
+          "kind": "MODEL",
+          "id": "wkr_80c7cb946f814666870d/fleet-3",
+          "model": "claude-opus-5-5"
+        },
+        "verdict": "PASS",
+        "reasons": "NO_PLAN with a CAPITAL constraint is right under contract v2 (stored capital ceiling $2,000). The card's EVIDENCE facts fix the cash order: Willow Creek Growers is paid $7,000 per truckload on order (fulfillment, exposure), the garden centres pay $12,000 on delivery (price). One truckload therefore needs $7,000 out before any cash comes in, 3.5x the $2,000 ceiling; no truckload can be ordered, so the held opening brings $0 within limits. This is a constraint, not missing evidence: the recorded terms themselves exclude it. Every other link is established (Brain's chain shows nothing missing), so capital is the single decisive gap. Resolution is coherent: raise capital to >= $7,000, or record a buyer deposit of >= $5,000 (7,000 - 2,000) or grower payment on delivery; neither term is on record today, so neither may be assumed.",
+        "findings": [
+          "Exposure per truckload $7,000 (EVIDENCE) > $2,000 capital ceiling.",
+          "Deposit needed for one truckload under the cap: $7,000 - $2,000 = $5,000.",
+          "Contract integrity: contract v2's 'words' still read 'at most $8,000 of capital' while its terms and the stored goal say $2,000. The plan correctly follows the stored $2,000, but the contract text should be updated to the owner's new words so the record is not self-contradictory."
+        ],
+        "resolution": null,
+        "at": "2026-11-27T07:33:20.897Z",
+        "conditions": []
+      },
+      "at": "2026-11-27T07:33:32.133Z"
+    },
+    "staleFinal": null
+  }
+}

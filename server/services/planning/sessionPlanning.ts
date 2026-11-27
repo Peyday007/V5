@@ -20,7 +20,7 @@
  * session resumes by replaying them. Planning authority is all this grants: it never spends,
  * contacts a buyer, resumes a goal or writes a verified fact.
  */
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { getWorkstream, linkWorkstream, listLinks, recordWorkstreamEvent, workstreamEventsOfKind } from '../../repos/register.ts';
 import { readTarget } from '../goals/target.ts';
 import { cardFactsFor } from '../../repos/cashCardFacts.ts';
@@ -725,7 +725,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])) };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: brainRun.integrity, completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, r.strategy.opportunityIds) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),
@@ -847,20 +847,63 @@ export async function planningState(goalId: string) {
   const revs = await revisions(goalId);
   const checks = (await events(goalId, PLANNING_EVENTS.check)).map((e) => e.detail as { revisionId: string; digest: string; contractDigest: string; problems: CheckProblem[]; trace: unknown; brain: BrainRunSummary });
   const reviews = (await events(goalId, PLANNING_EVENTS.review)).map((e) => ({ ...(e.detail['review'] as PlanReview), conditions: (e.detail['conditions'] as ReviewCondition[] | undefined) ?? [] }));
-  const finals = (await events(goalId, PLANNING_EVENTS.final)).map((e) => e.detail as { revisionId: string; digest: string; contractDigest: string; plan: PlanRevision; review: PlanReview; at: string });
+  const finals = (await events(goalId, PLANNING_EVENTS.final)).map((e) => e.detail as { revisionId: string; digest: string; contractDigest: string; plan: PlanRevision; review: PlanReview; at: string; basis?: PlanBasis });
   const current = revs[revs.length - 1] ?? null;
   const currentCheck = current ? (checks.filter((c) => c.revisionId === current.revisionId).pop() ?? null) : null;
   const final = finals[finals.length - 1] ?? null;
+  // A published plan rests on the goal's words and terms and on the records of the openings it weighed; once any of
+  // them changes, the plan is history until a session plans the world as it now stands (acceptance run 2026-11-27:
+  // an objective narrowed to one industry, a cut capital limit and new contradicting evidence each left the old plan
+  // reported as current, so no session knew to re-plan).
+  const changed = final?.basis ? await basisChanges(goalId, final.basis) : [];
+  const current_ = final && current && final.revisionId === current.revisionId && contract && final.contractDigest === contract.digest && changed.length === 0;
   return {
     contract,
     revisions: revs,
     current,
     currentCheck,
     reviews,
-    // A final built on a superseded revision or an old contract is history, not the plan.
-    final: final && current && final.revisionId === current.revisionId && contract && final.contractDigest === contract.digest ? final : null,
-    staleFinal: final && !(current && final.revisionId === current.revisionId && contract && final.contractDigest === contract.digest) ? final : null,
+    // A final built on a superseded revision, an old contract or a basis that has since changed is history, not the plan.
+    final: current_ ? final : null,
+    staleFinal: final && !current_ ? final : null,
+    staleBecause: final && !current_ ? (changed.length ? changed : ['the published revision is no longer the current revision or its contract was superseded']) : [],
   };
+}
+
+/** The openings among `ids` that this goal's sessions proposed as routes (record id under the goal's route prefix). */
+async function discoveredIds(goalId: string, ids: readonly string[]): Promise<string[]> {
+  const { goalRoutePrefix } = await import('../../domain/routeOrigin.ts');
+  const prefix = goalRoutePrefix(goalId);
+  const out: string[] = [];
+  for (const id of ids) {
+    const o = (await getOpportunity(id)) as unknown as { externalRecordId?: string | null } | null;
+    if (o?.externalRecordId?.startsWith(prefix)) out.push(id);
+  }
+  return out;
+}
+
+/** What a published plan rests on, fingerprinted: the goal's words, its stored terms, and each weighed opening's record. */
+interface PlanBasis { intent: string; terms: string; openings: Record<string, string> }
+
+const fingerprint = (value: unknown): string => createHash('sha256').update(JSON.stringify(value)).digest('hex').slice(0, 16);
+
+async function planBasis(goalId: string, opportunityIds: readonly string[]): Promise<PlanBasis> {
+  const goal = await liveGoal(goalId);
+  const { proven: _proven, projectId: _project, ...terms } = await storedTerms(goalId);
+  const openings: Record<string, string> = {};
+  for (const id of [...new Set(opportunityIds)].sort()) openings[id] = fingerprint(await openingRecord(id));
+  return { intent: (goal.intent ?? '').replace(/\s+/g, ' ').trim(), terms: fingerprint(terms), openings };
+}
+
+/** What changed since `basis` was recorded, in words; empty when nothing did. */
+async function basisChanges(goalId: string, basis: PlanBasis): Promise<string[]> {
+  const now = await planBasis(goalId, Object.keys(basis.openings)).catch(() => null);
+  if (!now) return ['the goal could not be read'];
+  const out: string[] = [];
+  if (now.intent !== basis.intent) out.push("the owner's objective changed since publication");
+  if (now.terms !== basis.terms) out.push("the goal's stored terms (target, window, capital or hours) changed since publication");
+  for (const [id, fp] of Object.entries(basis.openings)) if (now.openings[id] !== fp) out.push(`the record of opening ${id} (its card, facts or agreements) changed since publication`);
+  return out;
 }
 
 /** Publish the current revision as the goal's one plan, or say exactly what still stops it. */
@@ -882,7 +925,10 @@ export async function finalizePlan(input: { goalId: string; revisionId: string; 
     if (review.verdict !== 'PASS') blockers.push(`the review verdict is ${review.verdict}`);
   }
   if (blockers.length || !rev || !review || !state.contract) return { published: false as const, blockers };
-  const detail = { revisionId: rev.revisionId, digest: rev.digest, contractDigest: state.contract.digest, plan: rev, review, at: new Date().toISOString() };
+  const brainRun = state.currentCheck!.brain;
+  const weighed = [...rev.strategy.opportunityIds, ...(brainRun?.openings ?? []).map((o) => o.opportunityId), ...(brainRun?.excluded ?? []).map((x) => x.opportunityId)];
+  const basis = await planBasis(input.goalId, weighed);
+  const detail = { revisionId: rev.revisionId, digest: rev.digest, contractDigest: state.contract.digest, plan: rev, review, basis, at: new Date().toISOString() };
   await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.final, summary: `Published plan ${rev.revisionId} (${rev.stance})`, detail, actorRef: actorOf(input.actor) });
   return { published: true as const, final: detail };
 }

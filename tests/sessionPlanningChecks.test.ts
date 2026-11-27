@@ -269,6 +269,15 @@ describe('missing evidence is a gap, never an arithmetic ceiling (2026-11-27 run
     expect(ceiling(noPlan(['MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'lower the target', basis: [{ opportunityId: 'o1', field: 'demandEstimate' }] }]))).toBe(1);
   });
 
+  it('refuses a TARGET ceiling read from the openings on file when nothing counts the market (acceptance run 2026-11-27, ac-15: one $3,500 RFQ against $12,000)', () => {
+    // The author judged MARKET_VOLUME established for the one-off ("one buyer, one deal") and cited only the price.
+    expect(ceiling(noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'relax the target to $3,500', basis: [{ opportunityId: 'o1', field: 'price' }] }]))).toBe(1);
+    const detail = checkRevision(contract, noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'x', basis: [{ opportunityId: 'o1', field: 'price' }] }]), brain({ facts }), '2026-11-27').find((p) => p.code === 'CONSTRAINT_FROM_MISSING_EVIDENCE')!.detail;
+    expect(detail).toMatch(/counted market.*buyerVolume/);
+    // Control: the same judgement with the counted market cited is a real limit (ac-20: 380 dealerships × $500).
+    expect(ceiling(noPlan(['CONVERSION'], [{ constraint: 'TARGET', suggestion: 'about $190,000', basis: [{ opportunityId: 'o1', field: 'buyerVolume' }, { opportunityId: 'o1', field: 'price' }] }]))).toBe(0);
+  });
+
   it('controls: a counted market with an established price, and a measured settlement delay, are real limits', () => {
     expect(ceiling(noPlan(['MARKET_VOLUME'], [{ constraint: 'TARGET', suggestion: 'about $2,400', basis: [{ opportunityId: 'o1', field: 'buyerVolume' }] }]))).toBe(0);
     expect(ceiling(noPlan(['SETTLES_IN_TIME'], [{ constraint: 'DEADLINE', suggestion: '75 days', basis: [{ opportunityId: 'o1', field: 'timeToFirstCash' }] }]))).toBe(0);
@@ -321,5 +330,39 @@ describe('the session’s chain judgement against Brain’s, and what resolves a
     const r = plan({ stance: 'CONDITIONAL', chain: [{ opportunityId: 'o1', missing: ['CONVERSION', 'MARKET_VOLUME'] }], resolves: ['CONVERSION'], validation: { proof: 'p', stop: ['s'], continue: ['c'] } });
     expect(codes(r)).toContain('RESOLUTION_UNNAMED');
     expect(codes({ ...r, resolves: ['CONVERSION', 'MARKET_VOLUME'] })).not.toContain('RESOLUTION_UNNAMED');
+  });
+});
+
+describe('a conditional plan names its decisive link, and a discovered opening cites where it was found (acceptance run 2026-11-27, discovery worlds)', () => {
+  const conditional = (over: Partial<PlanRevisionInput> = {}) => plan({
+    stance: 'CONDITIONAL', chain: [{ opportunityId: 'o1', missing: ['OFFER_AND_PRICE', 'CONVERSION', 'SETTLES_IN_TIME'] }],
+    resolves: ['OFFER_AND_PRICE', 'CONVERSION', 'SETTLES_IN_TIME'],
+    validation: { proof: '5 prepaid by day 5', stop: ['none by day 5'], continue: ['5 prepaid'], decides: ['CONVERSION'] },
+    ...over,
+  });
+  const decisive = (r: PlanRevisionInput) => codes(r).filter((c) => c === 'CONDITIONAL_DECISIVE_UNNAMED').length;
+
+  it('refuses a conditional plan that charts every unknown and singles out none', () => {
+    expect(decisive(conditional({ validation: { proof: 'p', stop: ['s'], continue: ['c'] } }))).toBe(1);
+  });
+  it('refuses a decisive link that is not missing, or that the test does not measure', () => {
+    expect(decisive(conditional({ validation: { proof: 'p', stop: ['s'], continue: ['c'], decides: ['FULFILMENT'] } }))).toBe(1);
+    expect(decisive(conditional({ resolves: ['OFFER_AND_PRICE'], validation: { proof: 'p', stop: ['s'], continue: ['c'], decides: ['CONVERSION'] } }))).toBeGreaterThan(0);
+  });
+  it('control: a named decisive link the chain misses and the test measures passes', () => {
+    expect(decisive(conditional())).toBe(0);
+  });
+
+  const discovered = brain({ discovered: ['o1'] });
+  const unsourced = (r: PlanRevisionInput, b = discovered) => checkRevision(contract, r, b, '2026-11-27').filter((p) => p.code === 'DISCOVERY_UNSOURCED').length;
+  const card = { id: 's1', url: 'https://brain.local/card/o1#price', dated: null, claim: 'price', population: 'p', matchesBuyer: true, opportunityId: 'o1' };
+  const page = { id: 's2', url: 'https://www.example.org/directory/local-movers', dated: '2026-11-20', claim: 'lists 420 moving companies', population: 'movers', matchesBuyer: true, opportunityId: 'o1' };
+  it('refuses a plan on a session-discovered opening whose only citation is Brain’s own card', () => {
+    expect(unsourced(conditional({ sources: [card] }))).toBe(1);
+    expect(unsourced(conditional({ sources: [] }))).toBe(1);
+  });
+  it('controls: a public page about the opening passes; an opening filed by research (not discovered by the session) needs none', () => {
+    expect(unsourced(conditional({ sources: [card, page] }))).toBe(0);
+    expect(unsourced(conditional({ sources: [card] }), brain())).toBe(0);
   });
 });
