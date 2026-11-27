@@ -165,6 +165,7 @@ export function mapBin(row: BinRow): Bin {
     maxAttempts: row.max_attempts,
     dispatchNotBefore: row.dispatch_not_before ?? null,
     heldByWorkstreamId: row.held_by_workstream_id ?? null,
+    goalId: row.goal_id ?? null,
     heldReason: row.held_reason ?? null,
     leaseGeneration: row.lease_generation,
     leaseId: row.lease_id,
@@ -641,6 +642,8 @@ export interface CreateBinInput {
    * ambiguous, and the one nobody reads is the one that drifts.
    */
   factoryCampaignId?: string | null;
+  /** The goal the bin serves (a one-goal planning bin); admits it under the owner's §118 exception when the goal is owner-directed. */
+  goalId?: string | null;
   /** Author it already dispatchable. Used by every caller that has finished planning. */
   ready?: boolean;
 }
@@ -715,12 +718,12 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
        checkpoint, checkpoint_at, terminal_reason, last_refusal, refusal_count,
        required_capabilities, workload_class, pinned_routine_id, factory_campaign_id,
        created_by_type, created_by_id, created_at, updated_at, ready_at, completed_at,
-       purpose, purpose_basis)
+       purpose, purpose_basis, goal_id)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 0, NULL, NULL, NULL,
              NULL, NULL, NULL, NULL, 0, NULL, NULL, NULL, NULL, 0,
              ?, ?, ?, ?,
              ?, ?, ?, ?, ?, NULL,
-             ?, ?)`,
+             ?, ?, ?)`,
     [
       id,
       input.projectId,
@@ -753,6 +756,7 @@ export async function createBin(input: CreateBinInput): Promise<Bin> {
       ready ? at : null,
       purpose.purpose,
       purpose.basis,
+      input.goalId ?? null,
     ],
   );
   const created = await getBin(id);
@@ -1717,7 +1721,9 @@ function goalBinSql(prefix: string, goals: string): string {
     `((${outer}orchestration_id IS NOT NULL AND ${outer}orchestration_id IN (${goalPacketIdsSql(goals)}))` +
     ` OR (${outer}factory_campaign_id IS NOT NULL AND ${outer}factory_campaign_id IN (` +
     `SELECT gl.ref FROM workstream_links gl WHERE ${live} AND gl.kind = 'CAMPAIGN' AND gl.ref IS NOT NULL))` +
-    ` OR ${outer}id IN (${missions('bin_id')}))`
+    ` OR ${outer}id IN (${missions('bin_id')})` +
+    // A bin made for one goal's planning names the goal itself (`164_bin_goal.sql`).
+    ` OR (${outer}goal_id IS NOT NULL AND ${outer}goal_id IN (${goals})))`
   );
 }
 

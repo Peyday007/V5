@@ -236,7 +236,8 @@ export type RoutingRefusal =
   | 'REPOSITORY_NOT_AUTHORIZED'
   | 'REPOSITORY_NOT_NAMED'
   | 'CAPABILITY_NOT_DECLARED'
-  | 'SCOPE_MISSING';
+  | 'SCOPE_MISSING'
+  | 'NOT_INDEPENDENT';
 
 export interface RoutingDecision {
   ok: boolean;
@@ -298,6 +299,20 @@ export function decideBinRouting(input: {
       refusal: 'SCOPE_MISSING',
       family,
       reason: 'This worker may not claim work on that project.',
+    };
+  }
+
+  /*
+   * A planning review bin is never handed to the worker whose work it judges: the author (or researcher) is named on
+   * the manifest, and a review by the same principal is refused at recording anyway, so handing it over would only
+   * spend an attempt and a fire.
+   */
+  if (input.bin.completionContract === 'PLAN_REVIEW_V1' && (input.bin.manifest.independentOf ?? []).includes(input.principal.id)) {
+    return {
+      ok: false,
+      refusal: 'NOT_INDEPENDENT',
+      family,
+      reason: 'This worker wrote the plan or research this bin reviews, so it may not review it.',
     };
   }
 
@@ -371,7 +386,8 @@ export function decideBinRouting(input: {
  * mapping is research prefixes to RESEARCH and everything else to GENERAL.
  */
 export function familyOfWorkType(workType: string): WorkloadFamily {
-  if (workType.startsWith('RESEARCH') || workType.startsWith('RUSSELL')) return 'RESEARCH';
+  // An independent review of a plan, or verification of its research, is research surfaces' work (as RESEARCH_AUDIT is).
+  if (workType.startsWith('RESEARCH') || workType.startsWith('RUSSELL') || workType === 'PLAN_REVIEW' || workType === 'PLAN_VERIFY') return 'RESEARCH';
   return 'GENERAL';
 }
 

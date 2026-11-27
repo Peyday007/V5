@@ -563,23 +563,27 @@ export async function answerResearch(input: {
 export const PLAN_VERIFY_WORK = 'PLAN_VERIFY';
 const verifyCorrelation = (needId: string, attempt: number) => `plan-verify:${needId}:${attempt}`;
 
+const VERIFY_INSTRUCTIONS =
+        'Independent verification of research submitted for one planning question. Read brain_planning_context for goalId (the question ' +
+        'and each submitted claim: text, source URL, excerpt, locator). Open each source yourself; answer brain_planning_verify_research ' +
+        'with need_id, one verdict per claim (supportsClaim, and scopeMatch geography/timeframe/population/definitions: MATCH, MISMATCH, ' +
+        'UNKNOWN, NOT_APPLICABLE or UNSTATED, each with its basis) and sufficiency; then brain_complete_work. The researcher may not ' +
+        'verify its own research: release the item if that is you.';
+
 async function requestVerification(goalId: string, projectId: string, needId: string, attempt: number, researcherPrincipal: string, claimIds: string[]): Promise<{ id: string; created: boolean }> {
   const { getDb } = await import('../../db/database.ts');
   const correlation = verifyCorrelation(needId, attempt);
   const existing = await getDb().get<{ id: string }>(`SELECT id FROM work_items WHERE project_id = ? AND work_type = ? AND correlation_id = ?`, [projectId, PLAN_VERIFY_WORK, correlation]);
   if (existing) return { id: existing.id, created: false };
   const { enqueueWork } = await import('../../repos/workQueue.ts');
+  const binId = await reviewBin({ goalId, projectId, title: `Verify research ${needId} (attempt ${attempt})`, instructions: VERIFY_INSTRUCTIONS, independentOf: researcherPrincipal });
   const item = await enqueueWork({
     projectId,
+    binId,
     workType: PLAN_VERIFY_WORK,
     payload: {
       goalId, needId, attempt, researcherPrincipal, claimIds,
-      instructions:
-        'Independent verification of research submitted for one planning question. Read brain_planning_context for goalId (the question ' +
-        'and each submitted claim: text, source URL, excerpt, locator). Open each source yourself; answer brain_planning_verify_research ' +
-        'with need_id, one verdict per claim (supportsClaim, and scopeMatch geography/timeframe/population/definitions: MATCH, MISMATCH, ' +
-        'UNKNOWN, NOT_APPLICABLE or UNSTATED, each with its basis) and sufficiency; then brain_complete_work. The researcher may not ' +
-        'verify its own research: release the item if that is you.',
+      instructions: VERIFY_INSTRUCTIONS,
     },
     requiredScopes: ['project:read', 'queue:complete'],
     correlationId: correlation,
@@ -744,6 +748,57 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   return { revision, problems, trace, brain: brainRun, reviewItem };
 }
 
+/**
+ * The one-item bin a review or verification item belongs to. Claude routines are handed bins through
+ * `brain_check_in` and nothing else, so an item no bin carries never reached the fleet on production (2026-11-27,
+ * the app journey: twelve routines idle while the review waited). The bin names its goal, which admits it under
+ * the owner's §118 exception exactly when the goal is owner-directed, and the principal whose work it judges, who is
+ * never handed it. A worker that claims the item directly (`brain_claim_work`) still may: the bin only adds a door.
+ */
+async function reviewBin(input: { goalId: string; projectId: string; title: string; instructions: string; independentOf: string }): Promise<string> {
+  const { createBin } = await import('../../repos/bins.ts');
+  const bin = await createBin({
+    projectId: input.projectId,
+    goalId: input.goalId,
+    kind: 'PLAN_REVIEW',
+    title: input.title,
+    objective: input.instructions,
+    rationale: 'Independent review on the app-session planning path: the author may not certify its own plan.',
+    manifest: {
+      objective: input.instructions,
+      why: 'A plan is published only after a reviewer other than its author passes the exact revision Brain checked.',
+      independentOf: [input.independentOf],
+      lineage: { projectId: input.projectId, layerId: null, goal: null, orchestrationId: null },
+      units: [],
+      acceptableSources: ['brain_planning_state and brain_planning_context for the goal', 'the public sources the revision and its research cite'],
+      excludedSources: ['anything the author says about its own plan outside the recorded revision'],
+      evidence: ['the review (or verification) recorded by this worker against the exact revision (or research answer) named'],
+      outputs: ['one brain_planning_review or brain_planning_verify_research record'],
+      authorizedActions: ['claim the bin\'s one item with brain_bin_next_item', 'read the goal\'s planning state and context', 'open the cited sources', 'record the review or verification', 'complete the item and the bin'],
+      prohibitedActions: ['changing the plan, the goal or its terms', 'spending, contacting anyone, or any external effect', 'reviewing work this worker wrote'],
+      budgetUnits: 1,
+      retry: { maxAttempts: 6, backoffSeconds: 60 },
+      stoppingConditions: ['the item is complete'],
+    },
+    completionContract: 'PLAN_REVIEW_V1',
+    workloadClass: 'RESEARCH_PLAN_REVIEW_V1',
+    maxAttempts: 6,
+    priority: 8,
+    ready: true,
+    createdByType: 'SYSTEM',
+    createdById: 'session-planning',
+  });
+  return bin.id;
+}
+
+const REVIEW_INSTRUCTIONS =
+        'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
+        'revision skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
+        'against the target, capital per cycle against the limits, when the cash settles against the window) and checking that any ' +
+        'test does not take buyers’ orders before the opening’s fulfilment is shown possible; record brain_planning_review with verdict PASS or REVISE, ' +
+        'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
+        'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.';
+
 /** The queue's work type for an independent plan review; one item per revision. */
 export const PLAN_REVIEW_WORK = 'PLAN_REVIEW';
 const reviewCorrelation = (revisionId: string) => `plan-review:${revisionId}`;
@@ -761,21 +816,18 @@ export async function requestReview(goalId: string, revision: Pick<PlanRevision,
   const existing = await getDb().get<{ id: string }>(`SELECT id FROM work_items WHERE project_id = ? AND work_type = ? AND correlation_id = ?`, [goal.projectId, PLAN_REVIEW_WORK, reviewCorrelation(revision.revisionId)]);
   if (existing) return { id: existing.id, created: false };
   const { enqueueWork } = await import('../../repos/workQueue.ts');
+  const instructions = REVIEW_INSTRUCTIONS;
+  const binId = await reviewBin({ goalId, projectId: goal.projectId, title: `Review plan revision ${revision.revisionId}`, instructions, independentOf: principalOf(revision.author.id) });
   const item = await enqueueWork({
     projectId: goal.projectId,
+    binId,
     workType: PLAN_REVIEW_WORK,
     payload: {
       goalId,
       revisionId: revision.revisionId,
       revisionDigest: revision.digest,
       authorPrincipal: principalOf(revision.author.id),
-      instructions:
-        'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
-        'revision skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
-        'against the target, capital per cycle against the limits, when the cash settles against the window) and checking that any ' +
-        'test does not take buyers’ orders before the opening’s fulfilment is shown possible; record brain_planning_review with verdict PASS or REVISE, ' +
-        'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
-        'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.',
+      instructions,
     },
     requiredScopes: ['project:read', 'queue:complete'],
     correlationId: reviewCorrelation(revision.revisionId),

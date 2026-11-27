@@ -5533,6 +5533,9 @@ export const COMPLETION_CONTRACTS = [
   // Establishes what a worker's execution surface can and cannot reach, in a
   // closed vocabulary, so that "blocked" stops being one word for four facts.
   'SURFACE_PROBE_V1',
+  // One independent review or verification on the app-session planning path: the bin carries one PLAN_REVIEW or
+  // PLAN_VERIFY item, and is complete when that item is (`services/planning/sessionPlanning.ts`).
+  'PLAN_REVIEW_V1',
   // One conversation turn. The worker submits a structured proposal and Brain
   // decides what, if anything, it causes — see `services/russell/turn.ts`.
   'RUSSELL_TURN_V1',
@@ -5670,6 +5673,8 @@ export interface BinManifest {
   objective: string;
   why: string;
   /** Set for a bin whose work is a change to a repository. */
+  /** A planning review bin only (`PLAN_REVIEW_V1`): the principals whose work it judges, who may not be handed it. */
+  independentOf?: string[];
   repository?: BinRepository;
   lineage: {
     projectId: string;
@@ -5713,6 +5718,8 @@ export interface BinRow {
   max_attempts: number;
   dispatch_not_before: string | null;
   held_by_workstream_id?: string | null;
+  /** The goal the bin serves, for a bin made for one goal's planning (`164_bin_goal.sql`). */
+  goal_id?: string | null;
   held_reason?: string | null;
   lease_generation: number;
   lease_id: string | null;
@@ -5791,6 +5798,7 @@ export interface Bin {
    * `services/goals/tick.ts`.
    */
   heldByWorkstreamId: string | null;
+  goalId: string | null;
   heldReason: string | null;
   /** The fencing token. Advances on every assignment and every cancellation. */
   leaseGeneration: number;

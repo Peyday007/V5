@@ -25,7 +25,7 @@ import { createHash } from 'node:crypto';
 import type { Bin, BinManifest, BinUnitSpec } from '../../domain/types.ts';
 import { listBinUnitResults } from '../../repos/bins.ts';
 import { getOrchestration } from '../../repos/research.ts';
-import { listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
+import { listWorkItemsForBin, listWorkItemsForOrchestration } from '../../repos/workQueue.ts';
 import { getDocument } from '../../repos/documents.ts';
 import { listAuditsByRun } from '../../repos/audits.ts';
 import { readObject, storageKeyOf } from '../storage.ts';
@@ -873,12 +873,32 @@ async function evaluateFactoryDelivery(bin: Bin): Promise<ContractVerdict> {
   return satisfied(observed);
 }
 
+/**
+ * One independent review or verification on the app-session planning path, answered.
+ *
+ * The bin carries exactly one PLAN_REVIEW or PLAN_VERIFY queue item, and that item can only be completed once its
+ * holder's review (or verification) is recorded against the exact revision (or research answer) it names — the
+ * completion guard in `brain_complete_work`. So the bin is finished exactly when its item is: the verdict itself is
+ * read by the planning adapter, never here.
+ */
+async function evaluatePlanReview(bin: Bin): Promise<ContractVerdict> {
+  const items = await listWorkItemsForBin({ id: bin.id, orchestrationId: null });
+  const open = items.filter((item) => item.state !== 'SUCCEEDED' && item.state !== 'CANCELLED');
+  const observed = { items: items.length, open: open.length };
+  if (items.length === 0) return refuse('HUMAN', ['The bin carries no review item, so there is nothing to review.'], observed);
+  if (open.length) {
+    return refuse('RETRY', [`The ${open.map((item) => item.workType).join(', ')} item is not complete: claim it with brain_bin_next_item, record brain_planning_review (or brain_planning_verify_research), then brain_complete_work.`], observed);
+  }
+  return satisfied(observed);
+}
+
 const EVALUATORS: Record<string, Evaluator> = {
   DETERMINISTIC_UNITS_V1: evaluateDeterministicUnits,
   BLUEPRINT_EXTRACTION_V1: evaluateBlueprintExtraction,
   BLUEPRINT_AUDIT_V1: evaluateBlueprintAudit,
   RESEARCH_PACKET_V1: evaluateResearchPacket,
   SURFACE_PROBE_V1: evaluateSurfaceProbe,
+  PLAN_REVIEW_V1: evaluatePlanReview,
   RUSSELL_TURN_V1: evaluateRussellTurn,
   RUSSELL_LENS_V1: evaluateRussellLens,
   FACTORY_PLAN_V1: evaluateFactoryPlan,
