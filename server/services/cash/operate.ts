@@ -1923,7 +1923,7 @@ export async function operate(
    * A position need is raised without a blocker key, and an untyped need is grouped with every other
    * by its blocked action with the quoted title erased — so fifty unrelated openings read as one
    * "missing resource" that nobody acquires. Each is given the key its own next step names: the
-   * licensed partner it needs, by what the opening performs.
+   * licensed partner it needs, by what the opening performs, keyed to that one opening.
    */
   await step('typeRegulatedPositionNeeds', () => typeRegulatedPositionNeeds(projectId, positions), [] as string[]);
   /*
@@ -2206,16 +2206,18 @@ function replySyncDue(projectId: string, now = Date.now()): boolean {
  * The blocker key of one held-back opening's position need. Pure; exported for tests.
  *
  * The need's own next step is "name an authorized licensed partner and agree a contract", which is a
- * supplier the piece lacks (`SUPPLIER`, routed to the commercial workflow, never to a person). Openings
- * that perform the same regulated activities need the same kind of licensed partner, so they share a
- * key and one partner genuinely serves them. An opening whose activity was not recognised shares
- * nothing with any other, so its key is its own and it can never form a false shared resource.
+ * supplier the piece lacks (`SUPPLIER`, routed to the commercial workflow, never to a person). The key is
+ * the opening's own: its completion condition is that *this* opening's record shows a compliant position,
+ * which turns on its product, its location and a contract in place for it (`assessRole`), and a published
+ * practice is not an executed contract. Two openings performing the same activity can still differ in all
+ * three, so sharing an activity is not sharing a resource, and a key built from the activity alone would
+ * let the self-model group them as one acquisition that "serves all of them" — the same false shared
+ * resource this key exists to dissolve. The activities stay in the key so a reader can see what kind of
+ * partner it names; the opening id makes it one need's, and no group of two can form from it.
  */
 export function regulatedPositionBlockerKey(opportunityId: string, activities: readonly RegulatedActivity[]): BlockerKey | null {
-  const kind = activities.length > 0
-    ? [...new Set(activities)].sort().join('+')
-    : `unrecognised:${opportunityId}`;
-  return parseBlockerKey(`SUPPLIER:licensed-partner/${kind}`);
+  const kind = activities.length > 0 ? [...new Set(activities)].sort().join('+') : 'unrecognised';
+  return parseBlockerKey(`SUPPLIER:licensed-partner/${kind}@${opportunityId}`);
 }
 
 /**

@@ -4,7 +4,8 @@
  * with the quoted opening title erased: unrelated openings read as one "missing resource" that the
  * untyped WATCH owner never acquires. The cash tick (operate.ts) now gives each the key its own next
  * step names — the licensed partner it needs, by what the opening performs — routed to the commercial
- * workflow and never to a person.
+ * workflow and never to a person. The key is the opening's own: two openings performing the same
+ * activity can differ in product, location and contract, so an activity is not a shared resource.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
 import { freshProject } from './helpers.ts';
@@ -93,11 +94,17 @@ describe('regulated-position needs carry a typed blocker key', () => {
       expect(owner.route).toBe('COMMERCIAL');
       expect(owner.route).not.toBe('PERSON');
     }
-    // Openings that perform the same thing need the same licensed partner, and share its key.
-    expect(keyOf.get(insuranceA)).toBe(keyOf.get(insuranceB));
+    // Performing the same activity is not sharing a resource: each need closes only on its own
+    // opening's product, location and contract, so each key is that opening's own.
+    expect(new Set(after.map((n) => n.blockerKey)).size).toBe(3);
+    expect(keyOf.get(insuranceA)).not.toBe(keyOf.get(insuranceB));
+    expect(keyOf.get(insuranceA)!.replace(/@.*$/, '')).toBe(keyOf.get(insuranceB)!.replace(/@.*$/, ''));
     expect(keyOf.get(mortgage)).not.toBe(keyOf.get(insuranceA));
-    // No group keyed by the erased title remains.
-    expect(weaknessesOf(after).map((w) => w.key)).not.toContain(FALSE_GROUP);
+    // No group keyed by the erased title remains, and no activity-wide group replaces it: nothing
+    // claims that one acquisition serves several of these openings.
+    const weaknesses = weaknessesOf(after);
+    expect(weaknesses.map((w) => w.key)).not.toContain(FALSE_GROUP);
+    expect(weaknesses).toEqual([]);
   });
 
   it('is idempotent and never replaces a key a need already has', async () => {
@@ -119,11 +126,25 @@ describe('regulated-position needs carry a typed blocker key', () => {
     expect((await positionNeeds()).find((n) => n.opportunityId === other)!.blockerKey).toBe(otherKey);
   });
 
-  it('keys an opening with no recognised activity to itself, so it can never form a shared group', () => {
+  it('keys every opening to itself, so openings sharing an activity never form a shared group', () => {
     const a = regulatedPositionBlockerKey('opp_a', []);
     const b = regulatedPositionBlockerKey('opp_b', []);
-    expect(a).toBe('SUPPLIER:licensed-partner/unrecognised:opp_a');
+    expect(a).toBe('SUPPLIER:licensed-partner/unrecognised@opp_a');
     expect(a).not.toBe(b);
-    expect(regulatedPositionBlockerKey('x', ['EARN_COMMISSION', 'BROKER', 'BROKER'])).toBe('SUPPLIER:licensed-partner/BROKER+EARN_COMMISSION');
+    expect(regulatedPositionBlockerKey('x', ['EARN_COMMISSION', 'BROKER', 'BROKER'])).toBe('SUPPLIER:licensed-partner/BROKER+EARN_COMMISSION@x');
+    const same = ['opp_1', 'opp_2', 'opp_3'].map((id) => regulatedPositionBlockerKey(id, ['EARN_COMMISSION']));
+    expect(new Set(same).size).toBe(3);
+    // Fed to the self-model as open needs on three openings, they originate no weakness at all.
+    const grouped = unmetNeedWeaknesses(
+      same.map((key, i) => ({
+        id: `need_${i}`,
+        opportunityId: `opp_${i + 1}`,
+        blockerKey: key,
+        blockedAction: `count the economics of "opening ${i + 1}"`,
+        recommendedPath: 'Establish what this role needs for its product and location.',
+        expectedCostCents: null,
+      })),
+    );
+    expect(grouped).toEqual([]);
   });
 });
