@@ -1,0 +1,19 @@
+{
+ "published": true,
+ "revisionId": "rev_04068c407b1e_13c8a5",
+ "stance": "EXECUTABLE",
+ "author": "wkr_80cd8da5d7fc4474a297/j1-app-session",
+ "reviewer": "wkr_6f1d71921bbe47f1b343/fleet-worker",
+ "reviewVerdict": "PASS",
+ "independent": true,
+ "queueItems": [
+  [
+   "PLAN_REVIEW",
+   "SUCCEEDED",
+   "plan-review:rev_04068c407b1e_13c8a5",
+   null,
+   "2026-11-27T05:46:22.080Z",
+   "2026-11-27T06:07:52.568Z"
+  ]
+ ]
+}
