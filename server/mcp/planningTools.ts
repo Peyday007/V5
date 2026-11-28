@@ -11,6 +11,7 @@ import { invalidInput, notFoundError } from './errors.ts';
 import { getWorkstream } from '../repos/register.ts';
 import type { Principal } from '../domain/types.ts';
 import type { PlanExecutor } from '../domain/planReady.ts';
+import { CHAIN_LINKS } from '../domain/sessionPlanning.ts';
 
 async function goalProject(goalId: string): Promise<string> {
   const goal = await getWorkstream(goalId);
@@ -211,6 +212,70 @@ export function sufficiencyArg(args: Record<string, unknown>): 'SUFFICIENT' | 'I
   return s;
 }
 
+/*
+ * The revision's shape, stated to the caller. Production, 2026-11-28 (Cash Mode 1, the owner's Claude app): with the
+ * revision declared only as `{type: 'object'}`, the app's model sent `strategy` as a sentence and `chain` as bare
+ * opening ids on all three of its submits (req_nCcmZgPf0SDt, req_zqzWnNHfVlwa, req_I-7_5uk8sDO9) and again at 03:41Z,
+ * because nothing it could read said otherwise. Guidance only: `shapeProblems` remains the refusal, by path.
+ */
+const LINKS = { type: 'array', items: { type: 'string', enum: [...CHAIN_LINKS] } } as const;
+const num = { type: ['number', 'null'] } as const;
+export const REVISION_SCHEMA = {
+  type: 'object',
+  description: 'One plan revision for the goal. Read brain_planning_context first: it names the contract digest and every opening id to account for.',
+  required: ['goalId', 'contractDigest', 'stance', 'strategy', 'chain'],
+  properties: {
+    goalId: { type: 'string' },
+    contractDigest: { type: 'string', description: 'The current contract digest from brain_planning_context.' },
+    parentRevisionId: { type: ['string', 'null'], description: 'The revision this one revises (after a REVISE review), else null.' },
+    stance: { type: 'string', enum: ['EXECUTABLE', 'CONDITIONAL', 'NO_PLAN'] },
+    strategy: {
+      type: 'object', required: ['title', 'opportunityIds', 'why'],
+      properties: { title: { type: 'string' }, opportunityIds: { type: 'array', items: { type: 'string' }, description: 'The openings the plan executes (empty for NO_PLAN).' }, why: { type: 'string' } },
+    },
+    alternatives: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, why: { type: 'string' } } } },
+    chain: {
+      type: 'array', description: 'Every opening weighed, with the chain links its evidence does not establish (empty when all are).',
+      items: { type: 'object', required: ['opportunityId', 'missing'], properties: { opportunityId: { type: 'string' }, missing: LINKS } },
+    },
+    excluded: { type: 'array', items: { type: 'object', required: ['opportunityId', 'why'], properties: { opportunityId: { type: 'string' }, why: { type: 'string' } } } },
+    members: {
+      type: 'array',
+      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num } },
+    },
+    steps: {
+      type: 'array',
+      items: { type: 'object', properties: { id: { type: 'string' }, kind: { type: 'string', enum: ['REACH', 'OFFER', 'SELL', 'ORDER', 'DELIVER', 'COLLECT', 'RESEARCH', 'TEST', 'OTHER'] }, label: { type: 'string' }, performer: { type: ['string', 'null'] }, costCents: num, day: num, dependsOn: { type: ['string', 'null'] } } },
+    },
+    cash: {
+      type: 'array',
+      items: { type: 'object', properties: { day: { type: 'number' }, kind: { type: 'string', enum: ['SPEND', 'FEE', 'COMMIT', 'RELEASE', 'RECEIPT', 'REFUND', 'FUNDING'] }, amountCents: { type: 'number' }, label: { type: 'string' } } },
+    },
+    proofDay: num,
+    quantities: {
+      type: 'array',
+      items: { type: 'object', properties: { name: { type: 'string' }, status: { type: 'string', enum: ['EVIDENCED', 'ESTIMATE', 'ASSUMED', 'UNKNOWN'] }, value: num, unit: { type: 'string' }, sources: { type: 'array', items: { type: 'string' } }, needs: { type: ['string', 'null'] } } },
+    },
+    sources: {
+      type: 'array',
+      items: { type: 'object', properties: { id: { type: 'string' }, url: { type: 'string' }, dated: { type: ['string', 'null'] }, claim: { type: 'string' }, population: { type: 'string' }, matchesBuyer: { type: 'boolean' }, opportunityId: { type: 'string' } } },
+    },
+    validation: {
+      type: ['object', 'null'],
+      properties: {
+        proof: { type: 'string' }, stop: { type: 'array', items: { type: 'string' } }, continue: { type: 'array', items: { type: 'string' } }, decides: LINKS,
+        threshold: { type: 'object', properties: { paid: { type: 'number' }, of: { type: 'number' }, reach: { type: 'number' } } },
+      },
+    },
+    noPlan: { type: ['object', 'null'], properties: { decisiveGap: { type: 'string' }, resolution: { type: 'string' }, decisiveLinks: LINKS } },
+    reach: { type: ['object', 'null'], properties: { value: { type: 'number' }, calibrated: { type: 'boolean' }, presentedAs: { type: 'string', enum: ['PROBABILITY', 'COVERAGE'] } } },
+    resolves: LINKS,
+    answers: { type: 'array', items: { type: 'object', properties: { finding: { type: 'string' }, resolution: { type: 'string' }, condition: { type: 'number' }, decision: { type: 'string', enum: ['ACCEPTED', 'REBUTTED'] }, records: { type: 'array', items: { type: 'string' } } } } },
+    disagreements: { type: 'array', items: { type: 'object', properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, reason: { type: 'string' } } } },
+    constraints: { type: 'array', items: { type: 'object', properties: { constraint: { type: 'string', enum: ['DEADLINE', 'CAPITAL', 'TARGET', 'OWNER_HOURS'] }, suggestion: { type: 'string' }, basis: { type: 'array', items: { type: 'object', properties: { opportunityId: { type: 'string' }, field: { type: 'string' } } } } } } },
+  },
+} as const;
+
 const revisionTool: McpTool = {
   name: 'brain_planning_submit_revision',
   title: 'Planning: submit a plan revision',
@@ -224,7 +289,7 @@ const revisionTool: McpTool = {
     'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished, and states ' +
     '`validation.threshold` {paid, of, reach} so passing it carries the target. Brain checks ' +
     'it against the contract and its planner and returns every concrete problem to revise.',
-  inputSchema: { type: 'object', properties: { revision: { type: 'object' }, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
+  inputSchema: { type: 'object', properties: { revision: REVISION_SCHEMA, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: submit revision', ...MUTATING, idempotentHint: false },
   run: async (args, { principal }) => {
     const revision = objectArg(args, 'revision');

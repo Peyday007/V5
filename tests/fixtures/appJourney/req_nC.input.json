@@ -1,0 +1,15 @@
+{
+  "model": "claude-opus-5-5",
+  "revision": {
+    "chain": [
+      "cop_7833dae610d14a429ab7",
+      "cop_b91a72a44e094b31ae70",
+      "cop_0ffbca423d0e4c00a468"
+    ],
+    "excluded": [],
+    "goalId": "wst_5e3a85b8ae854e2a9cc4",
+    "stance": "CONDITIONAL",
+    "strategy": "Run two cold-email productized-service tests in parallel inside the $300 pre-proof cap (Shopify holiday/January email packs at $750; local-business AI chat assistant setups at $1,000). Scale only the route that collects a first payment; Upwork is the fallback."
+  },
+  "session_id": "session_01QF5Tk6652hQgdyuAQuy1ge"
+}

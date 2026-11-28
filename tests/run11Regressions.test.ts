@@ -63,6 +63,32 @@ describe('production app journey (2026-11-28, Cash Mode 1): the planning path an
     expect(shapeProblems({ strategy: { title: 't', opportunityIds: [], why: 'w' }, chain: [{ opportunityId: 'o', missing: ['CONVERSION'] }], resolves: ['CONVERSION'] })).toEqual([]);
   });
 
+  it('the three revisions production failed on (req_nCcmZgPf0SDt, req_zqzWnNHfVlwa, req_I-7_5uk8sDO9: "ids is not iterable") are refused by path', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    for (const f of ['req_nC', 'req_zq', 'req_I-7']) {
+      const input = JSON.parse(fs.readFileSync(`tests/fixtures/appJourney/${f}.input.json`, 'utf8')) as { revision: Record<string, unknown> };
+      // The real payloads: strategy as a sentence, chain as bare opening ids.
+      expect(typeof input.revision['strategy']).toBe('string');
+      const p = shapeProblems(input.revision as never);
+      expect(p).toContain('strategy must be an object {title, opportunityIds, why}');
+      expect(p.filter((x) => /^chain\[\d\] must be \{opportunityId, missing: \[links\]\}$/.test(x))).toHaveLength(3);
+    }
+  });
+
+  it('the submit tool states the revision shape the app got wrong (strategy an object, chain items {opportunityId, missing})', async () => {
+    const { REVISION_SCHEMA } = await import('../server/mcp/planningTools.ts');
+    expect(REVISION_SCHEMA.properties.strategy.type).toBe('object');
+    expect(REVISION_SCHEMA.properties.strategy.required).toEqual(['title', 'opportunityIds', 'why']);
+    expect(REVISION_SCHEMA.properties.chain.items.type).toBe('object');
+    expect(REVISION_SCHEMA.properties.chain.items.required).toEqual(['opportunityId', 'missing']);
+    expect(REVISION_SCHEMA.required).toEqual(expect.arrayContaining(['goalId', 'stance', 'strategy', 'chain']));
+    // A real published revision (run 11, d01) uses exactly the stated top-level fields.
+    const plan = read('d01').final.plan as unknown as Record<string, unknown>;
+    const stated = new Set(Object.keys(REVISION_SCHEMA.properties));
+    const recorded = new Set(['revisionId', 'digest', 'author', 'createdAt', 'truncated']); // written by Brain, not the caller
+    expect(Object.keys(plan).filter((k) => !stated.has(k) && !recorded.has(k))).toEqual([]);
+  });
+
   it('a context over the transport limit is compacted under budget, keeping every id, need and link verdict', async () => {
     const { fitContext } = await import('../server/services/planning/sessionPlanning.ts');
     const long = 'x'.repeat(5_000);
