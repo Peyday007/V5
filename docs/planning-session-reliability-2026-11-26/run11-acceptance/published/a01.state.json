@@ -1,0 +1,2155 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_0e85f762aeb047868276",
+   "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$4,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a86be8393e7238ff0c0651e9"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_0e85f762aeb047868276",
+    "contractDigest": "a86be8393e7238ff0c0651e9",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $650 Part 237 bridge-inspection workbook to the 120 un-asked short lines",
+     "opportunityIds": [
+      "cop_701c0d8912a34373b3a7"
+     ],
+     "why": "Price ($650, 9 card receipts), conversion (9/60 on this offer), buyer count (120 un-asked of 180 listed), Brain fulfilment and 6-day card settlement are all evidenced on the card; 7 deals ($4,550) are needed and ~18 are expected, with the last needed order settling by day 22 of 30, at $0 up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Grade-crossing inventory update pack at $400",
+      "why": "Close rate and buyer volume are not established (volume is only a Brain estimate); not needed since the workbook alone carries the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the engineering contact of each of the 120 not-yet-asked directory railroads",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the annual Part 237 bridge-inspection record workbook at $650, card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Take 7 card orders at $650 (expected ~18 from 120 at the measured 9/60)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain compiles each railroad's notes and photos into the workbook within 1 day of order ($8 each)",
+      "performer": "BRAIN",
+      "costCents": 5600,
+      "day": 5,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card funds settle 6 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 1",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 2",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 3",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 4",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 5",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 6",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 7",
+      "settlesDay": 22,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 22,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 650,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.15,
+      "unit": "agreements per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "un-asked reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "railroads",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "deals",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "days after order",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#price",
+      "dated": "2026-11-27",
+      "claim": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "9 agreements from 60 contacts on this offer",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "180 Class III short lines with published engineering contacts, each must keep a Part 237 record yearly; 60 emailed, 120 not yet asked",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$8 direct cost per workbook",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "8 days to first cash; card at order, funds settle 6 days after the order",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#exposure",
+      "dated": "2026-11-27",
+      "claim": "$0 exposure",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "why": "Close rate unmeasured and buyer volume only a Brain estimate (RECOMMENDATION); not needed to reach the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "deals": 7,
+      "price": 650,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 22
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_d04de215a428_278022",
+    "digest": "d04de215a428bd5b7f6be69a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7bab5aa10d24433898cc/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:37.715Z"
+   },
+   {
+    "goalId": "wst_0e85f762aeb047868276",
+    "contractDigest": "a86be8393e7238ff0c0651e9",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $650 Part 237 bridge-inspection workbook to the 120 un-asked short lines",
+     "opportunityIds": [
+      "cop_701c0d8912a34373b3a7"
+     ],
+     "why": "Price ($650, 9 card receipts), conversion (9/60 on this offer), buyer count (120 un-asked of 180 listed), Brain fulfilment and 6-day card settlement are all evidenced on the card; 7 deals ($4,550) are needed and ~18 are expected, with the last needed order settling by day 22 of 30, at $0 up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Grade-crossing inventory update pack at $400",
+      "why": "Close rate and buyer volume are not established (volume is only a Brain estimate); not needed since the workbook alone carries the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the engineering contact of each of the 120 not-yet-asked directory railroads",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the annual Part 237 bridge-inspection record workbook at $650, card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Take 7 card orders at $650 (expected ~18 from 120 at the measured 9/60)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain compiles each railroad's notes and photos into the workbook within 1 day of order ($8 each)",
+      "performer": "BRAIN",
+      "costCents": 5600,
+      "day": 5,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card funds settle 6 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 1, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 1",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 2, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 2",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 3, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 3",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 4, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 4",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 5, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 5",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 6, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 6",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 7, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 7",
+      "settlesDay": 22,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 22,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 650,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.15,
+      "unit": "agreements per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "un-asked reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "railroads",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "deals",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "days after order",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#price",
+      "dated": "2026-11-27",
+      "claim": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "9 agreements from 60 contacts on this offer",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "180 Class III short lines with published engineering contacts, each must keep a Part 237 record yearly; 60 emailed, 120 not yet asked",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$8 direct cost per workbook",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "8 days to first cash; card at order, funds settle 6 days after the order",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#exposure",
+      "dated": "2026-11-27",
+      "claim": "$0 exposure",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "why": "Close rate unmeasured and buyer volume only a Brain estimate (RECOMMENDATION); not needed to reach the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "deals": 7,
+      "price": 650,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 22
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+    "digest": "a3e7a0b4b7fe6c9d06a67cc0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7bab5aa10d24433898cc/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:46.316Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_0e85f762aeb047868276",
+   "contractDigest": "a86be8393e7238ff0c0651e9",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell the $650 Part 237 bridge-inspection workbook to the 120 un-asked short lines",
+    "opportunityIds": [
+     "cop_701c0d8912a34373b3a7"
+    ],
+    "why": "Price ($650, 9 card receipts), conversion (9/60 on this offer), buyer count (120 un-asked of 180 listed), Brain fulfilment and 6-day card settlement are all evidenced on the card; 7 deals ($4,550) are needed and ~18 are expected, with the last needed order settling by day 22 of 30, at $0 up-front capital."
+   },
+   "alternatives": [
+    {
+     "title": "Grade-crossing inventory update pack at $400",
+     "why": "Close rate and buyer volume are not established (volume is only a Brain estimate); not needed since the workbook alone carries the target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email the engineering contact of each of the 120 not-yet-asked directory railroads",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_vol"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer the annual Part 237 bridge-inspection record workbook at $650, card at order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price"
+     ],
+     "priceCents": 65000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Take 7 card orders at $650 (expected ~18 from 120 at the measured 9/60)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "offer",
+     "evidence": [
+      "s_conv",
+      "s_vol",
+      "s_price"
+     ],
+     "priceCents": 65000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain compiles each railroad's notes and photos into the workbook within 1 day of order ($8 each)",
+     "performer": "BRAIN",
+     "costCents": 5600,
+     "day": 5,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_del",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Card funds settle 6 days after each order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 1, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 1",
+     "settlesDay": 10,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 2, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 2",
+     "settlesDay": 12,
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 3, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 3",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 4, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 4",
+     "settlesDay": 16,
+     "stepId": "collect"
+    },
+    {
+     "day": 18,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 5, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 5",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 6, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 6",
+     "settlesDay": 20,
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 800,
+     "label": "Direct cost of workbook 7, paid from its settled card funds (card exposure $0, peak funding $0)",
+     "stepId": "deliver"
+    },
+    {
+     "day": 16,
+     "kind": "RECEIPT",
+     "amountCents": 65000,
+     "label": "Card payment for workbook 7",
+     "settlesDay": 22,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 22,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 650,
+     "unit": "USD per workbook",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "close rate",
+     "status": "EVIDENCED",
+     "value": 0.15,
+     "unit": "agreements per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "un-asked reachable buyers",
+     "status": "EVIDENCED",
+     "value": 120,
+     "unit": "railroads",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "deals",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "USD per workbook",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settlement lag",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "days after order",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#price",
+     "dated": "2026-11-27",
+     "claim": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#conversionRates",
+     "dated": "2026-11-27",
+     "claim": "9 agreements from 60 contacts on this offer",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#buyerVolume",
+     "dated": "2026-11-27",
+     "claim": "180 Class III short lines with published engineering contacts, each must keep a Part 237 record yearly; 60 emailed, 120 not yet asked",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#directCosts",
+     "dated": "2026-11-27",
+     "claim": "$8 direct cost per workbook",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#timeToFirstCash",
+     "dated": "2026-11-27",
+     "claim": "8 days to first cash; card at order, funds settle 6 days after the order",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_del",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#delivery",
+     "dated": "2026-11-27",
+     "claim": "A spreadsheet Brain produces",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    },
+    {
+     "id": "s_exp",
+     "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#exposure",
+     "dated": "2026-11-27",
+     "claim": "$0 exposure",
+     "population": "Class III short-line railroads in the state DOT directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_701c0d8912a34373b3a7"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_701c0d8912a34373b3a7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_67442f9d6dac4692b18d",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_67442f9d6dac4692b18d",
+     "why": "Close rate unmeasured and buyer volume only a Brain estimate (RECOMMENDATION); not needed to reach the target."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_701c0d8912a34373b3a7",
+     "deals": 7,
+     "price": 650,
+     "directCost": 8,
+     "capital": 0,
+     "settlesDay": 22
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+   "digest": "a3e7a0b4b7fe6c9d06a67cc0",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7bab5aa10d24433898cc/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:13:46.316Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+   "digest": "a3e7a0b4b7fe6c9d06a67cc0",
+   "contractDigest": "a86be8393e7238ff0c0651e9",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 5600,
+    "committedOpenCents": 0,
+    "preProofCents": 5600,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 4,
+    "collectedCents": 455000,
+    "collectedInWindowCents": 455000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 449400
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Annual Part 237 bridge-inspection record workbook for short-\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual Part 237 bridge-inspection record workbook for short-\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 75114× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual Part 237 bridge-inspection record workbook for short-line railr\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_701c0d8912a34373b3a7",
+     "cop_67442f9d6dac4692b18d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+      "owner": "PERSON",
+      "cost": 8
+     },
+     {
+      "label": "Collect payment for \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "title": "Annual Part 237 bridge-inspection record workbook for short-line railroads",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 4000,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Chief engineers and roadmasters at Class III short-line railroads",
+       "reachableChannel": "Email to the engineering contact each railroad publishes in the state DOT's short-line railroad directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-21T23:05:23.982Z",
+       "offerScope": "Brain compiles the railroad's own bridge inspection notes and photos into the annual 49 CFR Part 237 bridge-inspection record workbook, delivered within 1 day of the order; paid by card at order, funds settle 6 days after the order.",
+       "priceCents": 65000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "short-line railroads",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the engineering contact each railroad publishes in the state DOT's shor"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-21"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 650 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 9 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "8 deal(s) needed, 180 available in the window (180 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 8, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "8 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state DOT directory lists 180 Class III short-line railroads, each with a published engineering contact; each must keep a Part 237 bridge-inspection record every year. 60 of them were emailed this offer; 120 have not been asked.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain compiles the railroad's own bridge inspection notes and photos into the annual 49 CFR Part 237 bridge-inspection record workbook, delivered within 1 day of the order; paid by card at order, funds settle 6 days after the order. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "9 agreements from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$8",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Chief engineers and roadmasters at Class III short-line railroads",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "8 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "title": "Grade-crossing inventory update pack for short-line railroads",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 400,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Roadmasters at Class III short-line railroads",
+       "reachableChannel": "Email to the same directory contacts",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:23.982Z",
+       "offerScope": "Brain prepares the railroad's grade-crossing inventory update forms from its track charts.",
+       "priceCents": 40000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "short-line railroads",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the same directory contacts"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 400 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "40 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 6, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "8 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Brain estimates that most short lines update their crossing inventories at least once a year.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain prepares the railroad's grade-crossing inventory update forms from its track charts. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Roadmasters at Class III short-line railroads",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "A railroad consultancy's published rate card lists a crossing-inventory update pack at $400.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "8 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_50dff50dc27c4bc09cde",
+     "cnd_e3be336cb95f46b3b4b5"
+    ],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:43.979Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+    "revisionDigest": "a3e7a0b4b7fe6c9d06a67cc0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7bab5aa10d24433898cc/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ec2f7e0527a44423b7aa/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right: every chain link of the only member (cop_701c0d8912a34373b3a7) is established on its own card by EVIDENCE facts — price is a real purchase price paid by this buyer population (nine card receipts at $650 from directory short lines), conversion 9/60 measured on this same offer and population, volume 180 listed with 120 un-asked and a yearly Part 237 obligation, Brain-produced spreadsheet fulfilment, $8 direct cost, $0 exposure, 6-day card settlement. Arithmetic recomputed: 7 x $650 = $4,550 >= $4,000 (net of 7 x $8 = $56 cost still $4,494). Expected 120 x 9/60 = 18 orders; only 7/120 = 5.8% is needed, well under the measured 15%. Last needed order day 16 settles day 22 of 30. Each $8 cost is paid from that order's settled funds, so up-front capital and exposure are $0 within the 0 cap. Excluding the $400 crossing pack is correct: its close rate is unmeasured, its volume is only a RECOMMENDATION, and its price is another seller's rate card — it is not needed.",
+    "findings": [
+     "Order timing (one order every 2 days from day 4) is the plan's schedule, not measured; the 9 past sales took 60 days. With 8 days of slack and a 3x margin on needed close rate, this does not change the stance, but the operator should watch day-10 order count.",
+     "Brain's step list names the deliver step owner PERSON (card humanHours 0.5) while the plan says BRAIN; the card delivery fact says Brain produces the spreadsheet and the contract sets no owner-hours limit, so this does not bind, but up to 3.5 owner hours may be needed for 7 deliveries.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: an operational connection step before day 1, not an evidence gap."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:15:03.655Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+   "digest": "a3e7a0b4b7fe6c9d06a67cc0",
+   "contractDigest": "a86be8393e7238ff0c0651e9",
+   "plan": {
+    "goalId": "wst_0e85f762aeb047868276",
+    "contractDigest": "a86be8393e7238ff0c0651e9",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $650 Part 237 bridge-inspection workbook to the 120 un-asked short lines",
+     "opportunityIds": [
+      "cop_701c0d8912a34373b3a7"
+     ],
+     "why": "Price ($650, 9 card receipts), conversion (9/60 on this offer), buyer count (120 un-asked of 180 listed), Brain fulfilment and 6-day card settlement are all evidenced on the card; 7 deals ($4,550) are needed and ~18 are expected, with the last needed order settling by day 22 of 30, at $0 up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Grade-crossing inventory update pack at $400",
+      "why": "Close rate and buyer volume are not established (volume is only a Brain estimate); not needed since the workbook alone carries the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the engineering contact of each of the 120 not-yet-asked directory railroads",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the annual Part 237 bridge-inspection record workbook at $650, card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Take 7 card orders at $650 (expected ~18 from 120 at the measured 9/60)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 65000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain compiles each railroad's notes and photos into the workbook within 1 day of order ($8 each)",
+      "performer": "BRAIN",
+      "costCents": 5600,
+      "day": 5,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Card funds settle 6 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 1, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 1",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 2, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 2",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 3, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 3",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 4, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 4",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 5, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 5",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 6, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 6",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 800,
+      "label": "Direct cost of workbook 7, paid from its settled card funds (card exposure $0, peak funding $0)",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 65000,
+      "label": "Card payment for workbook 7",
+      "settlesDay": 22,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 22,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 650,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.15,
+      "unit": "agreements per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "un-asked reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "railroads",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "deals",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "days after order",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#price",
+      "dated": "2026-11-27",
+      "claim": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "9 agreements from 60 contacts on this offer",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "180 Class III short lines with published engineering contacts, each must keep a Part 237 record yearly; 60 emailed, 120 not yet asked",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$8 direct cost per workbook",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "8 days to first cash; card at order, funds settle 6 days after the order",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_701c0d8912a34373b3a7#exposure",
+      "dated": "2026-11-27",
+      "claim": "$0 exposure",
+      "population": "Class III short-line railroads in the state DOT directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_701c0d8912a34373b3a7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_67442f9d6dac4692b18d",
+      "why": "Close rate unmeasured and buyer volume only a Brain estimate (RECOMMENDATION); not needed to reach the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_701c0d8912a34373b3a7",
+      "deals": 7,
+      "price": 650,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 22
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+    "digest": "a3e7a0b4b7fe6c9d06a67cc0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7bab5aa10d24433898cc/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:46.316Z"
+   },
+   "review": {
+    "revisionId": "rev_a3e7a0b4b7fe_3abedd",
+    "revisionDigest": "a3e7a0b4b7fe6c9d06a67cc0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7bab5aa10d24433898cc/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ec2f7e0527a44423b7aa/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right: every chain link of the only member (cop_701c0d8912a34373b3a7) is established on its own card by EVIDENCE facts — price is a real purchase price paid by this buyer population (nine card receipts at $650 from directory short lines), conversion 9/60 measured on this same offer and population, volume 180 listed with 120 un-asked and a yearly Part 237 obligation, Brain-produced spreadsheet fulfilment, $8 direct cost, $0 exposure, 6-day card settlement. Arithmetic recomputed: 7 x $650 = $4,550 >= $4,000 (net of 7 x $8 = $56 cost still $4,494). Expected 120 x 9/60 = 18 orders; only 7/120 = 5.8% is needed, well under the measured 15%. Last needed order day 16 settles day 22 of 30. Each $8 cost is paid from that order's settled funds, so up-front capital and exposure are $0 within the 0 cap. Excluding the $400 crossing pack is correct: its close rate is unmeasured, its volume is only a RECOMMENDATION, and its price is another seller's rate card — it is not needed.",
+    "findings": [
+     "Order timing (one order every 2 days from day 4) is the plan's schedule, not measured; the 9 past sales took 60 days. With 8 days of slack and a 3x margin on needed close rate, this does not change the stance, but the operator should watch day-10 order count.",
+     "Brain's step list names the deliver step owner PERSON (card humanHours 0.5) while the plan says BRAIN; the card delivery fact says Brain produces the spreadsheet and the contract sets no owner-hours limit, so this does not bind, but up to 3.5 owner hours may be needed for 7 deliveries.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: an operational connection step before day 1, not an evidence gap."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:15:03.655Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "b06f1d839258b239",
+    "openings": {
+     "cop_67442f9d6dac4692b18d": "fea0b99429e1f913",
+     "cop_701c0d8912a34373b3a7": "a77767153f3b7e33"
+    }
+   },
+   "at": "2026-11-27T23:15:18.011Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -175,6 +175,19 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect((await svc.openQuestions(goalId)).some((one) => one.needId === q.needId)).toBe(false);
   }, 180_000);
 
+  it('a planner run longer than the call may wait answers "still reading", keeps going, and the next call gets its recorded reading (production, 2026-11-28)', async () => {
+    const svc = await import('../server/services/planning/sessionPlanning.ts');
+    const before = (await svc.planningState(goalId)).revisions.length;
+    const quick = await svc.runBrain({ goalId, actor: AUTHOR, budgetMs: 0 });
+    expect(quick.running).toBe(true);
+    expect(quick.completed).toBe(false);
+    // The same run, not a second one: the next call waits on it and gets the reading it records.
+    const later = await svc.runBrain({ goalId, actor: AUTHOR });
+    expect(later.completed).toBe(true);
+    expect(later.running).toBeUndefined();
+    expect((await svc.planningState(goalId)).revisions.length).toBe(before);
+  }, 180_000);
+
   it('control 1: a feasible, fully evidenced objective returns a complete plan that is reviewed and published', async () => {
     const svc = await import('../server/services/planning/sessionPlanning.ts');
     // Claiming every link established where Brain's planner holds the route as a hypothesis is refused until each
@@ -363,7 +376,7 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     const brainLinks = (undecided.brain.openings.find((o) => o.opportunityId === opp)?.links ?? []);
     const disagreements = brainLinks.filter((l) => !l.ok && l.link !== 'CONVERSION').map((l) => ({ opportunityId: opp, link: l.link, reason: 'established by the session sources s1–s2' }))
       .concat(brainLinks.some((l) => l.link === 'CONVERSION' && l.ok) ? [{ opportunityId: opp, link: 'CONVERSION', reason: 'the 200-email rate is untested for this list' }] : []);
-    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], members: [{ opportunityId: opp, deals: 4, price: 750, directCost: 100, capital: 0, settlesDay: 7 }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'] } }, actor: AUTHOR, today: '2026-11-26' });
+    const cond = await svc.submitRevision({ revision: { ...base, stance: 'CONDITIONAL', quantities: [base.quantities[0]!, base.quantities[1]!, unknown], chain: [{ opportunityId: opp, missing: ['CONVERSION'] }], members: [{ opportunityId: opp, deals: 4, price: 750, directCost: 100, capital: 0, settlesDay: 7 }], resolves: ['CONVERSION'], disagreements, validation: { ...base.validation!, decides: ['CONVERSION'], threshold: { paid: 2, of: 200, reach: 400 } } }, actor: AUTHOR, today: '2026-11-26' });
     expect(cond.problems).toEqual([]);
   }, 120_000);
 

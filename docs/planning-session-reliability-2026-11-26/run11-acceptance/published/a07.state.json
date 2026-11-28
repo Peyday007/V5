@@ -1,0 +1,715 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_edba194369e6422f8bcb",
+   "words": "Collect $5,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount is settled in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f82ba78e829cc8b96b061f55"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_edba194369e6422f8bcb",
+    "contractDigest": "f82ba78e829cc8b96b061f55",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan until a pruning crew is contracted",
+     "opportunityIds": [],
+     "why": "Demand, price and buyers are established (three signed $2,250 orders = $6,750 against a $5,000 target, paid 7 days after completion), but nobody is named to do the physical pruning: the card has no fulfillmentOwner, the deliverable is not a Brain capability, and the owner cannot be assumed to do physical work. Without a fulfiller there is no deliverable and no cash."
+    },
+    "alternatives": [
+     {
+      "title": "Owner prunes the blocks himself",
+      "why": "Rejected: the owner's physical work is not offered by the objective or any record, and 15 acres of dormant pruning is not 2 hours of owner time."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find and get a written quote from a custom orchard-pruning crew that can prune three 5-acre blocks by about day 35 at or under $1,300 a block, invoiced after completion",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "pruning fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "named provider",
+      "sources": [
+       "s2"
+      ],
+      "needs": "a written quote from a named pruning contractor with dates and price"
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "block price",
+      "status": "EVIDENCED",
+      "value": 225000,
+      "unit": "USD cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#price",
+      "dated": "2026-11-24",
+      "claim": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the extension service's $450/acre custom-rate survey.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $1,300 per block, but the card names no fulfillmentOwner and no requiredCapabilities: nobody is established to do the pruning.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Paid within 7 days of completion.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: nobody is established to perform the physical pruning of the three signed 5-acre blocks; the card names no fulfillmentOwner and the work is not a Brain capability.",
+     "resolution": "Contract a named custom orchard-pruning contractor in writing (quote at or under $1,300 a block, invoiced after completion, able to finish all three blocks by about day 35 so the 7-day payments settle by day 45); the three signed orders then carry $6,750 against the $5,000 target with no capital.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_6d9220a65675480b9b5f",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6d9220a65675480b9b5f",
+      "why": "No fulfiller is established for the physical pruning."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2ac309032ce0_e9e0d4",
+    "digest": "2ac309032ce02cec884839ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c5fcbfbfed9147f6b553/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:37.670Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_edba194369e6422f8bcb",
+   "contractDigest": "f82ba78e829cc8b96b061f55",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No executable plan until a pruning crew is contracted",
+    "opportunityIds": [],
+    "why": "Demand, price and buyers are established (three signed $2,250 orders = $6,750 against a $5,000 target, paid 7 days after completion), but nobody is named to do the physical pruning: the card has no fulfillmentOwner, the deliverable is not a Brain capability, and the owner cannot be assumed to do physical work. Without a fulfiller there is no deliverable and no cash."
+   },
+   "alternatives": [
+    {
+     "title": "Owner prunes the blocks himself",
+     "why": "Rejected: the owner's physical work is not offered by the objective or any record, and 15 acres of dormant pruning is not 2 hours of owner time."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Find and get a written quote from a custom orchard-pruning crew that can prune three 5-acre blocks by about day 35 at or under $1,300 a block, invoiced after completion",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s2"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "pruning fulfiller",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "named provider",
+     "sources": [
+      "s2"
+     ],
+     "needs": "a written quote from a named pruning contractor with dates and price"
+    },
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "block price",
+     "status": "EVIDENCED",
+     "value": 225000,
+     "unit": "USD cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#price",
+     "dated": "2026-11-24",
+     "claim": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the extension service's $450/acre custom-rate survey.",
+     "population": "Owners of mid-size apple orchards in the valley",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d9220a65675480b9b5f"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $1,300 per block, but the card names no fulfillmentOwner and no requiredCapabilities: nobody is established to do the pruning.",
+     "population": "Owners of mid-size apple orchards in the valley",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d9220a65675480b9b5f"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#captureMechanism",
+     "dated": "2026-11-24",
+     "claim": "Paid within 7 days of completion.",
+     "population": "Owners of mid-size apple orchards in the valley",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6d9220a65675480b9b5f"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No fulfiller: nobody is established to perform the physical pruning of the three signed 5-acre blocks; the card names no fulfillmentOwner and the work is not a Brain capability.",
+    "resolution": "Contract a named custom orchard-pruning contractor in writing (quote at or under $1,300 a block, invoiced after completion, able to finish all three blocks by about day 35 so the 7-day payments settle by day 45); the three signed orders then carry $6,750 against the $5,000 target with no capital.",
+    "decisiveLinks": [
+     "FULFILMENT"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_6d9220a65675480b9b5f",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_6d9220a65675480b9b5f",
+     "why": "No fulfiller is established for the physical pruning."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_2ac309032ce0_e9e0d4",
+   "digest": "2ac309032ce02cec884839ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_c5fcbfbfed9147f6b553/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:13:37.670Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_2ac309032ce0_e9e0d4",
+   "digest": "2ac309032ce02cec884839ad",
+   "contractDigest": "f82ba78e829cc8b96b061f55",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Dormant-season pruning of apple orchard blocks\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3822× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 950× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Dormant-season pruning of apple orchard blocks\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_6d9220a65675480b9b5f"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Dormant-season pruning of apple orchard blocks\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Dormant-season pruning of apple orchard blocks\"",
+      "owner": "PERSON",
+      "cost": 1300
+     },
+     {
+      "label": "Collect payment for \"Dormant-season pruning of apple orchard blocks\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish who would do the work for \"Dormant-season pruning of apple orchard blocks\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+    "openings": [
+     {
+      "opportunityId": "cop_6d9220a65675480b9b5f",
+      "title": "Dormant-season pruning of apple orchard blocks",
+      "missing": [
+       "FULFILMENT"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 5000,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Owners of mid-size apple orchards in the valley",
+       "reachableChannel": "The three orchard owners who signed orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:19.983Z",
+       "offerScope": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+       "priceCents": 225000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "apple orchards",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three orchard owners who signed orders"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 6750 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 6750 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 1300, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Dormant pruning of one 5-acre orchard block, paid within 7 days of completion. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1300",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of mid-size apple orchards in the valley",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the state extension service's custom-rate survey of $450 an acre.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_0cfc2004700645ca8344"
+    ],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:55.785Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_2ac309032ce0_e9e0d4",
+    "revisionDigest": "2ac309032ce02cec884839ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c5fcbfbfed9147f6b553/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_f07e9d979f864422ab37/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right, with the right decisive gap. cop_6d9220a65675480b9b5f has three WRITTEN_ACCEPTANCE orders at $2,250 (a real price these buyers signed, consistent with the extension service's $450/acre custom rate), but the card names no fulfillmentOwner and no Brain capability; Brain's FULFILMENT link is false ('nobody has established who would do the work'). Dormant pruning is physical work and the owner's physical work is not offered, so treating delivery as possible would treat an unknown as known. Recomputed: 3 x $2,250 = $6,750 >= $5,000, but 2 x $2,250 = $4,500 < $5,000, so all three blocks must be pruned and paid. Payment within 7 days of completion means the last block must finish by about day 38 (the plan's day-35 buffer is sensible). At the card's $1,300 a block, cost $3,900 invoiced after completion keeps capital at $0. decisiveLinks = [FULFILMENT] is missing evidence that research decides (a named contractor's written quote with dates and price), not a constraint, and the resolution states exactly what quote turns it executable. Rejecting 'owner prunes it himself' is correct.",
+    "findings": [
+     "There is no slack: losing any one of the three blocks (contractor capacity, weather, a buyer cancelling) misses the target, so the contractor quote should cover all three blocks with dates, and a fourth buyer would be the margin.",
+     "The $1,300 directCosts fact has no named source of who charges it; the resolution's 'at or under $1,300' ceiling is the right test for the quote."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:56.531Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_2ac309032ce0_e9e0d4",
+   "digest": "2ac309032ce02cec884839ad",
+   "contractDigest": "f82ba78e829cc8b96b061f55",
+   "plan": {
+    "goalId": "wst_edba194369e6422f8bcb",
+    "contractDigest": "f82ba78e829cc8b96b061f55",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan until a pruning crew is contracted",
+     "opportunityIds": [],
+     "why": "Demand, price and buyers are established (three signed $2,250 orders = $6,750 against a $5,000 target, paid 7 days after completion), but nobody is named to do the physical pruning: the card has no fulfillmentOwner, the deliverable is not a Brain capability, and the owner cannot be assumed to do physical work. Without a fulfiller there is no deliverable and no cash."
+    },
+    "alternatives": [
+     {
+      "title": "Owner prunes the blocks himself",
+      "why": "Rejected: the owner's physical work is not offered by the objective or any record, and 15 acres of dormant pruning is not 2 hours of owner time."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find and get a written quote from a custom orchard-pruning crew that can prune three 5-acre blocks by about day 35 at or under $1,300 a block, invoiced after completion",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "pruning fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "named provider",
+      "sources": [
+       "s2"
+      ],
+      "needs": "a written quote from a named pruning contractor with dates and price"
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "block price",
+      "status": "EVIDENCED",
+      "value": 225000,
+      "unit": "USD cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#price",
+      "dated": "2026-11-24",
+      "claim": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the extension service's $450/acre custom-rate survey.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $1,300 per block, but the card names no fulfillmentOwner and no requiredCapabilities: nobody is established to do the pruning.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_6d9220a65675480b9b5f#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Paid within 7 days of completion.",
+      "population": "Owners of mid-size apple orchards in the valley",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6d9220a65675480b9b5f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller: nobody is established to perform the physical pruning of the three signed 5-acre blocks; the card names no fulfillmentOwner and the work is not a Brain capability.",
+     "resolution": "Contract a named custom orchard-pruning contractor in writing (quote at or under $1,300 a block, invoiced after completion, able to finish all three blocks by about day 35 so the 7-day payments settle by day 45); the three signed orders then carry $6,750 against the $5,000 target with no capital.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_6d9220a65675480b9b5f",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6d9220a65675480b9b5f",
+      "why": "No fulfiller is established for the physical pruning."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2ac309032ce0_e9e0d4",
+    "digest": "2ac309032ce02cec884839ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c5fcbfbfed9147f6b553/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:37.670Z"
+   },
+   "review": {
+    "revisionId": "rev_2ac309032ce0_e9e0d4",
+    "revisionDigest": "2ac309032ce02cec884839ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_c5fcbfbfed9147f6b553/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_f07e9d979f864422ab37/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right, with the right decisive gap. cop_6d9220a65675480b9b5f has three WRITTEN_ACCEPTANCE orders at $2,250 (a real price these buyers signed, consistent with the extension service's $450/acre custom rate), but the card names no fulfillmentOwner and no Brain capability; Brain's FULFILMENT link is false ('nobody has established who would do the work'). Dormant pruning is physical work and the owner's physical work is not offered, so treating delivery as possible would treat an unknown as known. Recomputed: 3 x $2,250 = $6,750 >= $5,000, but 2 x $2,250 = $4,500 < $5,000, so all three blocks must be pruned and paid. Payment within 7 days of completion means the last block must finish by about day 38 (the plan's day-35 buffer is sensible). At the card's $1,300 a block, cost $3,900 invoiced after completion keeps capital at $0. decisiveLinks = [FULFILMENT] is missing evidence that research decides (a named contractor's written quote with dates and price), not a constraint, and the resolution states exactly what quote turns it executable. Rejecting 'owner prunes it himself' is correct.",
+    "findings": [
+     "There is no slack: losing any one of the three blocks (contractor capacity, weather, a buyer cancelling) misses the target, so the contractor quote should cover all three blocks with dates, and a fourth buyer would be the margin.",
+     "The $1,300 directCosts fact has no named source of who charges it; the resolution's 'at or under $1,300' ceiling is the right test for the quote."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:56.531Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "8ca88b30ada7fc31",
+    "openings": {
+     "cop_6d9220a65675480b9b5f": "12ca41adae447c4b"
+    }
+   },
+   "at": "2026-11-27T23:20:19.016Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

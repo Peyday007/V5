@@ -1,0 +1,2020 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_55c60a8a8856439c927c",
+   "words": "Collect $600 of settled cash within 45 days using no up-front capital and no more than 1 hour a week of my time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 60000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$600 of settled cash received within 45 days",
+    "ownerHoursPerWeek": 0.9333,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "82eafc6ea4c91bedceb72a5c"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_55c60a8a8856439c927c",
+    "contractDigest": "82eafc6ea4c91bedceb72a5c",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell $24 cottage-food label packs from the existing storefront",
+     "opportunityIds": [
+      "cop_ebd0bbebaf434f9ea99e"
+     ],
+     "why": "Price ($24, 41 sales), conversion (41 paid of 1,640 visitors), steady traffic (1,500-1,700/month for four months), automatic Brain delivery and 10-day settlement are evidenced; 28 sales net $604.80 after the 10% fee, expected by about day 21, settling by day 31 of 45, with zero owner hours and $0 capital."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's kitchen licensing walk-throughs ($150, six written acceptances)",
+      "why": "Each visit takes 8 hours of the owner's own time and only the owner can do it; the objective allows 1 hour a week (6 hours in the window), so not even one visit fits."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Keep the label-pack listing live on the existing digital-download storefront (marketplace search traffic, ~1,640 visitors/30 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the cottage-food label pack at $24",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Sell 28 packs at $24 by day 21 (expected ~38 in 21 days at 41/1,640 = 2.5% of ~55 visitors/day)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain turns each buyer's recipe form into the print-ready label pack automatically",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Marketplace releases each sale's funds 10 days after the sale, less its 10% fee ($2.40 a sale)",
+      "performer": "BRAIN",
+      "costCents": 6720,
+      "day": 17,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc",
+       "s_cost",
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 21600,
+      "label": "9 label-pack sales through day 7",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 2160,
+      "label": "Marketplace 10% fee on 9 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 21600,
+      "label": "9 label-pack sales through day 14",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2160,
+      "label": "Marketplace 10% fee on 9 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 24000,
+      "label": "10 label-pack sales through day 21",
+      "settlesDay": 31,
+      "stepId": "collect"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 2400,
+      "label": "Marketplace 10% fee on 10 sales, withheld at release",
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 31,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 24,
+      "unit": "USD per pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.025,
+      "unit": "paid orders per unique visitor",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "visitors",
+      "status": "EVIDENCED",
+      "value": 1640,
+      "unit": "unique visitors per 30 days",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "marketplace fee",
+      "status": "EVIDENCED",
+      "value": 2.4,
+      "unit": "USD per sale",
+      "sources": [
+       "s_cost",
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days after sale",
+      "sources": [
+       "s_vol",
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sales needed",
+      "status": "EVIDENCED",
+      "value": 28,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "s_del"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#price",
+      "dated": "2026-11-27",
+      "claim": "41 label packs sold at $24 each in the last 30 days (storefront order history)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "41 paid pre-orders from 1,640 unique visitors",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "1,640 unique visitors in the last 30 days, 1,500-1,700 in each of the three months before; marketplace releases funds 10 days after sale and keeps a 10% fee ($2.40 a sale)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$2.40 a sale (the marketplace fee)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "10 days to usable cash",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces; delivered automatically, no owner time per sale",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_bhours",
+      "url": "https://brain.local/card/cop_b88e9cbdb16a4df68e3d#captureMechanism",
+      "dated": "2026-11-27",
+      "claim": "Each kitchen visit takes 8 hours of the owner's own time including travel; nobody else can do it",
+      "population": "Home bakers applying for a cottage-food registration",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "why": "Each walk-through takes 8 hours of the owner's own time (only the owner can do it); the objective caps owner time at 1 hour a week, 6 hours in the 45-day window, so even one visit breaks the owner-hours limit."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "deals": 28,
+      "price": 24,
+      "directCost": 2.4,
+      "capital": 0,
+      "settlesDay": 31
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8eb56276b06e_a6a86a",
+    "digest": "8eb56276b06e654ff2733fa0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:08.634Z"
+   },
+   {
+    "goalId": "wst_55c60a8a8856439c927c",
+    "contractDigest": "82eafc6ea4c91bedceb72a5c",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell $24 cottage-food label packs from the existing storefront",
+     "opportunityIds": [
+      "cop_ebd0bbebaf434f9ea99e"
+     ],
+     "why": "Price ($24, 41 sales), conversion (41 paid of 1,640 visitors), steady traffic (1,500-1,700/month for four months), automatic Brain delivery and 10-day settlement are evidenced; 28 sales net $604.80 after the 10% fee, expected by about day 25 at the measured rate, settling by day 35 of 45 (sales through day 35 still settle in time, ~48 expected by then), with zero owner hours and $0 capital."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's kitchen licensing walk-throughs ($150, six written acceptances)",
+      "why": "Each visit takes 8 hours of the owner's own time and only the owner can do it; the objective allows 1 hour a week (6 hours in the window), so not even one visit fits."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Keep the label-pack listing live on the existing digital-download storefront (marketplace search traffic, ~1,640 visitors/30 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the cottage-food label pack at $24",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Sell 28 packs at $24 by about day 25 (2.5% of ~55 visitors/day = ~1.37 sales/day; ~48 expected by day 35, the last sale day that settles inside 45)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain turns each buyer's recipe form into the print-ready label pack automatically",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Marketplace releases each sale's funds 10 days after the sale, less its 10% fee ($2.40 a sale)",
+      "performer": "BRAIN",
+      "costCents": 6720,
+      "day": 17,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc",
+       "s_cost",
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 31200,
+      "label": "13 label-pack sales through day 10",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 3120,
+      "label": "Marketplace 10% fee on 13 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 31200,
+      "label": "13 label-pack sales through day 20",
+      "settlesDay": 30,
+      "stepId": "collect"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 3120,
+      "label": "Marketplace 10% fee on 13 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 4800,
+      "label": "2 label-pack sales through day 25",
+      "settlesDay": 35,
+      "stepId": "collect"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 480,
+      "label": "Marketplace 10% fee on 2 sales, withheld at release",
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 35,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 24,
+      "unit": "USD per pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.025,
+      "unit": "paid orders per unique visitor",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "visitors",
+      "status": "EVIDENCED",
+      "value": 1640,
+      "unit": "unique visitors per 30 days",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "marketplace fee",
+      "status": "EVIDENCED",
+      "value": 2.4,
+      "unit": "USD per sale",
+      "sources": [
+       "s_cost",
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days after sale",
+      "sources": [
+       "s_vol",
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sales needed",
+      "status": "EVIDENCED",
+      "value": 28,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "s_del"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#price",
+      "dated": "2026-11-27",
+      "claim": "41 label packs sold at $24 each in the last 30 days (storefront order history)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "41 paid pre-orders from 1,640 unique visitors",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "1,640 unique visitors in the last 30 days, 1,500-1,700 in each of the three months before; marketplace releases funds 10 days after sale and keeps a 10% fee ($2.40 a sale)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$2.40 a sale (the marketplace fee)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "10 days to usable cash",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces; delivered automatically, no owner time per sale",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_bhours",
+      "url": "https://brain.local/card/cop_b88e9cbdb16a4df68e3d#captureMechanism",
+      "dated": "2026-11-27",
+      "claim": "Each kitchen visit takes 8 hours of the owner's own time including travel; nobody else can do it",
+      "population": "Home bakers applying for a cottage-food registration",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "why": "Each walk-through takes 8 hours of the owner's own time (only the owner can do it); the objective caps owner time at 1 hour a week, 6 hours in the 45-day window, so even one visit breaks the owner-hours limit."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "deals": 28,
+      "price": 24,
+      "directCost": 2.4,
+      "capital": 0,
+      "settlesDay": 35
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8990c4ff9988_2bf1af",
+    "digest": "8990c4ff99882829a1b5bb5d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:19.519Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_55c60a8a8856439c927c",
+   "contractDigest": "82eafc6ea4c91bedceb72a5c",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell $24 cottage-food label packs from the existing storefront",
+    "opportunityIds": [
+     "cop_ebd0bbebaf434f9ea99e"
+    ],
+    "why": "Price ($24, 41 sales), conversion (41 paid of 1,640 visitors), steady traffic (1,500-1,700/month for four months), automatic Brain delivery and 10-day settlement are evidenced; 28 sales net $604.80 after the 10% fee, expected by about day 25 at the measured rate, settling by day 35 of 45 (sales through day 35 still settle in time, ~48 expected by then), with zero owner hours and $0 capital."
+   },
+   "alternatives": [
+    {
+     "title": "Owner's kitchen licensing walk-throughs ($150, six written acceptances)",
+     "why": "Each visit takes 8 hours of the owner's own time and only the owner can do it; the objective allows 1 hour a week (6 hours in the window), so not even one visit fits."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Keep the label-pack listing live on the existing digital-download storefront (marketplace search traffic, ~1,640 visitors/30 days)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_vol"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer the cottage-food label pack at $24",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price"
+     ],
+     "priceCents": 2400,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Sell 28 packs at $24 by about day 25 (2.5% of ~55 visitors/day = ~1.37 sales/day; ~48 expected by day 35, the last sale day that settles inside 45)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "offer",
+     "evidence": [
+      "s_conv",
+      "s_vol",
+      "s_price"
+     ],
+     "priceCents": 2400,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain turns each buyer's recipe form into the print-ready label pack automatically",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_del"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Marketplace releases each sale's funds 10 days after the sale, less its 10% fee ($2.40 a sale)",
+     "performer": "BRAIN",
+     "costCents": 6720,
+     "day": 17,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_ttc",
+      "s_cost",
+      "s_vol"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 31200,
+     "label": "13 label-pack sales through day 10",
+     "settlesDay": 20,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 3120,
+     "label": "Marketplace 10% fee on 13 sales, withheld at release",
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 31200,
+     "label": "13 label-pack sales through day 20",
+     "settlesDay": 30,
+     "stepId": "collect"
+    },
+    {
+     "day": 30,
+     "kind": "FEE",
+     "amountCents": 3120,
+     "label": "Marketplace 10% fee on 13 sales, withheld at release",
+     "stepId": "collect"
+    },
+    {
+     "day": 25,
+     "kind": "RECEIPT",
+     "amountCents": 4800,
+     "label": "2 label-pack sales through day 25",
+     "settlesDay": 35,
+     "stepId": "collect"
+    },
+    {
+     "day": 35,
+     "kind": "FEE",
+     "amountCents": 480,
+     "label": "Marketplace 10% fee on 2 sales, withheld at release",
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 35,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 24,
+     "unit": "USD per pack",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.025,
+     "unit": "paid orders per unique visitor",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "visitors",
+     "status": "EVIDENCED",
+     "value": 1640,
+     "unit": "unique visitors per 30 days",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "marketplace fee",
+     "status": "EVIDENCED",
+     "value": 2.4,
+     "unit": "USD per sale",
+     "sources": [
+      "s_cost",
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settlement lag",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "days after sale",
+     "sources": [
+      "s_vol",
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "sales needed",
+     "status": "EVIDENCED",
+     "value": 28,
+     "unit": "sales",
+     "sources": [
+      "s_price",
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "hours",
+     "sources": [
+      "s_del"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#price",
+     "dated": "2026-11-27",
+     "claim": "41 label packs sold at $24 each in the last 30 days (storefront order history)",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#conversionRates",
+     "dated": "2026-11-27",
+     "claim": "41 paid pre-orders from 1,640 unique visitors",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#buyerVolume",
+     "dated": "2026-11-27",
+     "claim": "1,640 unique visitors in the last 30 days, 1,500-1,700 in each of the three months before; marketplace releases funds 10 days after sale and keeps a 10% fee ($2.40 a sale)",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#directCosts",
+     "dated": "2026-11-27",
+     "claim": "$2.40 a sale (the marketplace fee)",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#timeToFirstCash",
+     "dated": "2026-11-27",
+     "claim": "10 days to usable cash",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_del",
+     "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#delivery",
+     "dated": "2026-11-27",
+     "claim": "A spreadsheet Brain produces; delivered automatically, no owner time per sale",
+     "population": "Home bakers and jam makers visiting the storefront",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+    },
+    {
+     "id": "s_bhours",
+     "url": "https://brain.local/card/cop_b88e9cbdb16a4df68e3d#captureMechanism",
+     "dated": "2026-11-27",
+     "claim": "Each kitchen visit takes 8 hours of the owner's own time including travel; nobody else can do it",
+     "population": "Home bakers applying for a cottage-food registration",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b88e9cbdb16a4df68e3d"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+     "why": "Each walk-through takes 8 hours of the owner's own time (only the owner can do it); the objective caps owner time at 1 hour a week, 6 hours in the 45-day window, so even one visit breaks the owner-hours limit."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+     "deals": 28,
+     "price": 24,
+     "directCost": 2.4,
+     "capital": 0,
+     "settlesDay": 35
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_8990c4ff9988_2bf1af",
+   "digest": "8990c4ff99882829a1b5bb5d",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_d7052c813aa84b9f82a1/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:14:19.519Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_8990c4ff9988_2bf1af",
+   "digest": "8990c4ff99882829a1b5bb5d",
+   "contractDigest": "82eafc6ea4c91bedceb72a5c",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 6720,
+    "committedOpenCents": 0,
+    "preProofCents": 6720,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 10,
+    "collectedCents": 67200,
+    "collectedInWindowCents": 67200,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 60480
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Cottage-food label packs sold from an existing digital-downl\" (assumption-only coverage: it reaches the target in 56.5% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1597× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Home bakers applying for a cottage-food registr\" needs [figure withheld] and keeps [figure withheld], 132× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Cottage-food label packs sold from an existing digital-download storef\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_ebd0bbebaf434f9ea99e",
+     "cop_b88e9cbdb16a4df68e3d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Cottage-food label packs sold from an existing digital-download storefront\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Cottage-food label packs sold from an existing digital-download storefront\"",
+      "owner": "PERSON",
+      "cost": 2.4
+     },
+     {
+      "label": "Collect payment for \"Cottage-food label packs sold from an existing digital-download storefront\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "title": "Home-kitchen licensing walk-throughs by the owner for cottage-food sellers",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 600,
+      "potentialReach": 600,
+      "card": {
+       "payer": "Home bakers applying for a cottage-food registration",
+       "reachableChannel": "The owner's booking page",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:32.439Z",
+       "offerScope": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+       "priceCents": 15000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 8,
+       "requiredCapabilities": [],
+       "industry": "cottage food producers",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 15000,
+        "currency": "USD",
+        "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The owner's booking page"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 900 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 900 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by The owner, personally (a person says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 10, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Home bakers applying for a cottage-food registration",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six sellers booked and agreed to pay $150 each on the owner's booking page.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "title": "Cottage-food label packs sold from an existing digital-download storefront",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 600,
+      "potentialReach": 600,
+      "card": {
+       "payer": "Home bakers and jam makers selling under the state cottage food law",
+       "reachableChannel": "The seller's own existing storefront on a digital-download marketplace, found through marketplace search",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:32.439Z",
+       "offerScope": "Brain turns the buyer's recipe form into a print-ready label pack: the state-required cottage-food statement, ingredient list and allergen declaration. Delivered automatically; no owner time per sale.",
+       "priceCents": 2400,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "cottage food producers",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The seller's own existing storefront on a digital-download marketplace, found th"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 24 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own inbound page: 41 money-committed pre-orders from 1640 unique visitors"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "26 deal(s) needed, 1640 available in the window (1640 visitors are stated for the window, each one trial of the measured rate)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 2.4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The storefront's own analytics: 1,640 unique visitors in the last 30 days, and 1,500 to 1,700 unique visitors in each of the three months before. The marketplace releases each sale's funds 10 days after the sale and keeps a 10% fee ($2.40 a sale).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain turns the buyer's recipe form into a print-ready label pack: the state-required cottage-food statement, ingredient list and allergen declaration. Delivered automatically; no owner time per sale. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "41 paid pre-orders from 1640 unique visitors",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$2.4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Home bakers and jam makers selling under the state cottage food law",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The storefront's own order history: 41 label packs sold at $24 each in the last 30 days.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 60000,
+     "daysLeft": 45,
+     "hoursCeiling": 6,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 1
+    },
+    "at": "2026-11-27T23:09:44.420Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_8eb56276b06e_a6a86a",
+    "revisionDigest": "8eb56276b06e654ff2733fa0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_808f2035184744429133/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right: the single member cop_ebd0bbebaf434f9ea99e has every link established by EVIDENCE on its own card — $24 is what these storefront buyers actually paid (41 sales in 30 days), conversion 41/1,640 = 2.5% measured on the same page and population, traffic steady at 1,500-1,700/month for four months, automatic Brain delivery, 10% marketplace fee and 10-day fund release. Arithmetic recomputed: 1,640/30 = 54.7 visitors/day x 2.5% = 1.37 sales/day. 28 sales x $24 = $672 gross, less 28 x $2.40 = $67.20 withheld fee = $604.80 settled >= $600. Sales through day 35 still settle by day 45: 54.7 x 35 = 1,913 visitors, so 28 sales need only a 1.46% rate against the measured 2.5% (~48 expected). $0 capital and $0 exposure: the fee is withheld from released funds. Owner hours fit: delivery is automatic with no owner time per sale; even reading the card's humanHours 0.2 as per sale, 28 x 0.2 = 5.6 h fits the 6 h window cap. Excluding the $150 kitchen walk-through is correct: one 8-hour owner visit already exceeds 6 hours.",
+    "findings": [
+     "Settled-cash margin at exactly 28 sales is only $4.80; the plan's safety comes from continuing sales to day 35, not from the 28 figure — the operator should not stop selling at 28.",
+     "The card's humanHours 0.2 conflicts with 'no owner time per sale'; it does not bind at this volume but should be reconciled on the card.",
+     "Ledger lumps sales into 10-day blocks settled at block end — conservative, consistent with the 10-day release."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:15:54.538Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_8990c4ff9988_2bf1af",
+    "revisionDigest": "8990c4ff99882829a1b5bb5d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_808f2035184744429133/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right: the single member cop_ebd0bbebaf434f9ea99e has every link established by EVIDENCE on its own card — $24 is what these storefront buyers actually paid (41 sales in 30 days), conversion 41/1,640 = 2.5% measured on the same page and population, traffic steady at 1,500-1,700/month for four months, automatic Brain delivery, 10% marketplace fee withheld and 10-day fund release. Arithmetic recomputed: 1,640/30 = 54.7 visitors/day x 2.5% = 1.37 sales/day; the ledger's 13 by day 10, 26 by day 20 and 28 by day 25 sits below the mean (34 expected by day 25). 28 x $24 = $672 gross less 28 x $2.40 = $67.20 withheld = $604.80 settled by day 35 >= $600. Sales through day 35 still settle by day 45: 1,913 visitors, so 28 sales need only 1.46% against the measured 2.5% (~48 expected). $0 capital and $0 exposure. Owner hours fit: delivery is automatic; even reading the card's humanHours 0.2 as per sale, 28 x 0.2 = 5.6 h fits the 6 h window. Excluding the $150 kitchen walk-through is correct: one 8-hour owner-only visit already exceeds the 6-hour window.",
+    "findings": [
+     "Settled-cash margin at exactly 28 sales is only $4.80; the safety is the continued selling to day 35, so the operator should not stop at 28.",
+     "The card's humanHours 0.2 conflicts with 'no owner time per sale'; it does not bind at this volume but should be reconciled on the card.",
+     "The sibling revision rev_8eb56276b06e_a6a86a's sell label claimed ~38 sales in 21 days; the correct figure is 28.7 — this revision's schedule fixes that."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:16:38.688Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_8990c4ff9988_2bf1af",
+   "digest": "8990c4ff99882829a1b5bb5d",
+   "contractDigest": "82eafc6ea4c91bedceb72a5c",
+   "plan": {
+    "goalId": "wst_55c60a8a8856439c927c",
+    "contractDigest": "82eafc6ea4c91bedceb72a5c",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell $24 cottage-food label packs from the existing storefront",
+     "opportunityIds": [
+      "cop_ebd0bbebaf434f9ea99e"
+     ],
+     "why": "Price ($24, 41 sales), conversion (41 paid of 1,640 visitors), steady traffic (1,500-1,700/month for four months), automatic Brain delivery and 10-day settlement are evidenced; 28 sales net $604.80 after the 10% fee, expected by about day 25 at the measured rate, settling by day 35 of 45 (sales through day 35 still settle in time, ~48 expected by then), with zero owner hours and $0 capital."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's kitchen licensing walk-throughs ($150, six written acceptances)",
+      "why": "Each visit takes 8 hours of the owner's own time and only the owner can do it; the objective allows 1 hour a week (6 hours in the window), so not even one visit fits."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Keep the label-pack listing live on the existing digital-download storefront (marketplace search traffic, ~1,640 visitors/30 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the cottage-food label pack at $24",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Sell 28 packs at $24 by about day 25 (2.5% of ~55 visitors/day = ~1.37 sales/day; ~48 expected by day 35, the last sale day that settles inside 45)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_vol",
+       "s_price"
+      ],
+      "priceCents": 2400,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain turns each buyer's recipe form into the print-ready label pack automatically",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_del"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Marketplace releases each sale's funds 10 days after the sale, less its 10% fee ($2.40 a sale)",
+      "performer": "BRAIN",
+      "costCents": 6720,
+      "day": 17,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc",
+       "s_cost",
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 31200,
+      "label": "13 label-pack sales through day 10",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 3120,
+      "label": "Marketplace 10% fee on 13 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 31200,
+      "label": "13 label-pack sales through day 20",
+      "settlesDay": 30,
+      "stepId": "collect"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 3120,
+      "label": "Marketplace 10% fee on 13 sales, withheld at release",
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 4800,
+      "label": "2 label-pack sales through day 25",
+      "settlesDay": 35,
+      "stepId": "collect"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 480,
+      "label": "Marketplace 10% fee on 2 sales, withheld at release",
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 35,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 24,
+      "unit": "USD per pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.025,
+      "unit": "paid orders per unique visitor",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "visitors",
+      "status": "EVIDENCED",
+      "value": 1640,
+      "unit": "unique visitors per 30 days",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "marketplace fee",
+      "status": "EVIDENCED",
+      "value": 2.4,
+      "unit": "USD per sale",
+      "sources": [
+       "s_cost",
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement lag",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days after sale",
+      "sources": [
+       "s_vol",
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sales needed",
+      "status": "EVIDENCED",
+      "value": 28,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "s_del"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#price",
+      "dated": "2026-11-27",
+      "claim": "41 label packs sold at $24 each in the last 30 days (storefront order history)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "41 paid pre-orders from 1,640 unique visitors",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "1,640 unique visitors in the last 30 days, 1,500-1,700 in each of the three months before; marketplace releases funds 10 days after sale and keeps a 10% fee ($2.40 a sale)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#directCosts",
+      "dated": "2026-11-27",
+      "claim": "$2.40 a sale (the marketplace fee)",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "10 days to usable cash",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_del",
+      "url": "https://brain.local/card/cop_ebd0bbebaf434f9ea99e#delivery",
+      "dated": "2026-11-27",
+      "claim": "A spreadsheet Brain produces; delivered automatically, no owner time per sale",
+      "population": "Home bakers and jam makers visiting the storefront",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e"
+     },
+     {
+      "id": "s_bhours",
+      "url": "https://brain.local/card/cop_b88e9cbdb16a4df68e3d#captureMechanism",
+      "dated": "2026-11-27",
+      "claim": "Each kitchen visit takes 8 hours of the owner's own time including travel; nobody else can do it",
+      "population": "Home bakers applying for a cottage-food registration",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+      "why": "Each walk-through takes 8 hours of the owner's own time (only the owner can do it); the objective caps owner time at 1 hour a week, 6 hours in the 45-day window, so even one visit breaks the owner-hours limit."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+      "deals": 28,
+      "price": 24,
+      "directCost": 2.4,
+      "capital": 0,
+      "settlesDay": 35
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8990c4ff9988_2bf1af",
+    "digest": "8990c4ff99882829a1b5bb5d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:19.519Z"
+   },
+   "review": {
+    "revisionId": "rev_8990c4ff9988_2bf1af",
+    "revisionDigest": "8990c4ff99882829a1b5bb5d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7052c813aa84b9f82a1/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_808f2035184744429133/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right: the single member cop_ebd0bbebaf434f9ea99e has every link established by EVIDENCE on its own card — $24 is what these storefront buyers actually paid (41 sales in 30 days), conversion 41/1,640 = 2.5% measured on the same page and population, traffic steady at 1,500-1,700/month for four months, automatic Brain delivery, 10% marketplace fee withheld and 10-day fund release. Arithmetic recomputed: 1,640/30 = 54.7 visitors/day x 2.5% = 1.37 sales/day; the ledger's 13 by day 10, 26 by day 20 and 28 by day 25 sits below the mean (34 expected by day 25). 28 x $24 = $672 gross less 28 x $2.40 = $67.20 withheld = $604.80 settled by day 35 >= $600. Sales through day 35 still settle by day 45: 1,913 visitors, so 28 sales need only 1.46% against the measured 2.5% (~48 expected). $0 capital and $0 exposure. Owner hours fit: delivery is automatic; even reading the card's humanHours 0.2 as per sale, 28 x 0.2 = 5.6 h fits the 6 h window. Excluding the $150 kitchen walk-through is correct: one 8-hour owner-only visit already exceeds the 6-hour window.",
+    "findings": [
+     "Settled-cash margin at exactly 28 sales is only $4.80; the safety is the continued selling to day 35, so the operator should not stop at 28.",
+     "The card's humanHours 0.2 conflicts with 'no owner time per sale'; it does not bind at this volume but should be reconciled on the card.",
+     "The sibling revision rev_8eb56276b06e_a6a86a's sell label claimed ~38 sales in 21 days; the correct figure is 28.7 — this revision's schedule fixes that."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:16:38.688Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $600 of settled cash within 45 days using no up-front capital and no more than 1 hour a week of my time.",
+    "terms": "a7a3ad6e7b6ed134",
+    "openings": {
+     "cop_b88e9cbdb16a4df68e3d": "144f2a785717cf16",
+     "cop_ebd0bbebaf434f9ea99e": "15c7b233d4806ad7"
+    }
+   },
+   "at": "2026-11-27T23:17:28.365Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

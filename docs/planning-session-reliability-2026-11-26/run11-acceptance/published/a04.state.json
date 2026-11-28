@@ -1,0 +1,1139 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_8a41a2cc66e047b5be08",
+   "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$4,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f028e42df76bda0f87d117cd"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_8a41a2cc66e047b5be08",
+    "contractDigest": "f028e42df76bda0f87d117cd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a price theatres pay is established for either offer",
+     "opportunityIds": [],
+     "why": "Neither opening has a purchase price. The grant-application package's $5,000 is the grant award a theatre receives, not what it pays for drafting; the contracted stage manager's $650 is the union minimum salary for a stage manager a theatre employs, not a price paid for a subcontracted one (whose cost is $500). The measured agreements (6/50 and 4/40) carry no recorded price, so no figure says what $4,000 of settled cash requires."
+    },
+    "alternatives": [
+     {
+      "title": "Grant-application drafting priced at the $5,000 award",
+      "why": "A grant award is not a purchase price; nothing shows a theatre pays anything near it for drafting."
+     },
+     {
+      "title": "Contracted stage managers at $650/week via Cue Line ($500 cost)",
+      "why": "$650 is an employee wage floor, not a price buyers have paid for a contracted stage manager; no agreement records a price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Read the 10 recorded acceptances (6 grant packages, 4 stage managers) for the price each theatre agreed to; none is recorded on the cards",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_gconv",
+       "s_sconv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Quote a stated price for each offer to un-asked directory contacts and record written acceptances at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "research",
+      "evidence": [
+       "s_gvol",
+       "s_svol",
+       "s_sful"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "grant-package price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per package",
+      "sources": [
+       "s_gprice"
+      ],
+      "needs": "A written acceptance or invoice at a stated drafting fee"
+     },
+     {
+      "name": "stage-manager price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per week",
+      "sources": [
+       "s_sprice"
+      ],
+      "needs": "A written acceptance at a stated weekly price above the $500 Cue Line cost"
+     },
+     {
+      "name": "stage-manager cost",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD per week",
+      "sources": [
+       "s_sful"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_gprice",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#price",
+      "dated": "2026-11-27",
+      "claim": "FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each — a grant the theatre receives, not a price it pays for application drafting",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_gconv",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "6 agreements from 50 contacts (no agreed price recorded)",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_gvol",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "210 companies with a named managing director; the operating-support round is open now",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_sprice",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#price",
+      "dated": "2026-11-27",
+      "claim": "Union small-theatre agreement minimum weekly salary a theatre pays a stage manager it employs: $650 — a wage floor for an employee, not a price paid for a contracted stage manager",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_sful",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "Cue Line Stage Management quoted $500 a week per stage manager, available now",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_sconv",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "4 agreements from 40 contacts (no agreed price recorded)",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_svol",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "210 companies each mount four to six productions a year",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No purchase price is established for either opening: the $5,000 is a grant award and the $650 is an employee wage floor, and the measured acceptances record no price, so whether $4,000 can settle in 30 days is undecided.",
+     "resolution": "Recover the price agreed in the 10 recorded acceptances; failing that, quote each offer at a stated price (stage managers above the $500 Cue Line cost) to un-asked directory contacts and record written acceptances, then re-plan on the established price.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_60befe0f62f948af82eb",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_28951609e7744b16851c",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_60befe0f62f948af82eb",
+      "why": "Price on record is a grant award, not a purchase price."
+     },
+     {
+      "opportunityId": "cop_28951609e7744b16851c",
+      "why": "Price on record is a union wage floor for an employed stage manager, not a price paid for a contracted one."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b155bc38fc23_fc57ac",
+    "digest": "b155bc38fc239a1f5ddcd43b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_37036bb3f46e4c40bb9d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:59.106Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_8a41a2cc66e047b5be08",
+   "contractDigest": "f028e42df76bda0f87d117cd",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until a price theatres pay is established for either offer",
+    "opportunityIds": [],
+    "why": "Neither opening has a purchase price. The grant-application package's $5,000 is the grant award a theatre receives, not what it pays for drafting; the contracted stage manager's $650 is the union minimum salary for a stage manager a theatre employs, not a price paid for a subcontracted one (whose cost is $500). The measured agreements (6/50 and 4/40) carry no recorded price, so no figure says what $4,000 of settled cash requires."
+   },
+   "alternatives": [
+    {
+     "title": "Grant-application drafting priced at the $5,000 award",
+     "why": "A grant award is not a purchase price; nothing shows a theatre pays anything near it for drafting."
+    },
+    {
+     "title": "Contracted stage managers at $650/week via Cue Line ($500 cost)",
+     "why": "$650 is an employee wage floor, not a price buyers have paid for a contracted stage manager; no agreement records a price."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Read the 10 recorded acceptances (6 grant packages, 4 stage managers) for the price each theatre agreed to; none is recorded on the cards",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_gconv",
+      "s_sconv"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Quote a stated price for each offer to un-asked directory contacts and record written acceptances at that price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "research",
+     "evidence": [
+      "s_gvol",
+      "s_svol",
+      "s_sful"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "grant-package price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per package",
+     "sources": [
+      "s_gprice"
+     ],
+     "needs": "A written acceptance or invoice at a stated drafting fee"
+    },
+    {
+     "name": "stage-manager price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per week",
+     "sources": [
+      "s_sprice"
+     ],
+     "needs": "A written acceptance at a stated weekly price above the $500 Cue Line cost"
+    },
+    {
+     "name": "stage-manager cost",
+     "status": "EVIDENCED",
+     "value": 500,
+     "unit": "USD per week",
+     "sources": [
+      "s_sful"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_gprice",
+     "url": "https://brain.local/card/cop_60befe0f62f948af82eb#price",
+     "dated": "2026-11-27",
+     "claim": "FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each — a grant the theatre receives, not a price it pays for application drafting",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_60befe0f62f948af82eb"
+    },
+    {
+     "id": "s_gconv",
+     "url": "https://brain.local/card/cop_60befe0f62f948af82eb#conversionRates",
+     "dated": "2026-11-27",
+     "claim": "6 agreements from 50 contacts (no agreed price recorded)",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_60befe0f62f948af82eb"
+    },
+    {
+     "id": "s_gvol",
+     "url": "https://brain.local/card/cop_60befe0f62f948af82eb#buyerVolume",
+     "dated": "2026-11-27",
+     "claim": "210 companies with a named managing director; the operating-support round is open now",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_60befe0f62f948af82eb"
+    },
+    {
+     "id": "s_sprice",
+     "url": "https://brain.local/card/cop_28951609e7744b16851c#price",
+     "dated": "2026-11-27",
+     "claim": "Union small-theatre agreement minimum weekly salary a theatre pays a stage manager it employs: $650 — a wage floor for an employee, not a price paid for a contracted stage manager",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_28951609e7744b16851c"
+    },
+    {
+     "id": "s_sful",
+     "url": "https://brain.local/card/cop_28951609e7744b16851c#fulfillment",
+     "dated": "2026-11-27",
+     "claim": "Cue Line Stage Management quoted $500 a week per stage manager, available now",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_28951609e7744b16851c"
+    },
+    {
+     "id": "s_sconv",
+     "url": "https://brain.local/card/cop_28951609e7744b16851c#conversionRates",
+     "dated": "2026-11-27",
+     "claim": "4 agreements from 40 contacts (no agreed price recorded)",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_28951609e7744b16851c"
+    },
+    {
+     "id": "s_svol",
+     "url": "https://brain.local/card/cop_28951609e7744b16851c#buyerVolume",
+     "dated": "2026-11-27",
+     "claim": "210 companies each mount four to six productions a year",
+     "population": "Community theatre companies in the state arts council directory (210)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_28951609e7744b16851c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No purchase price is established for either opening: the $5,000 is a grant award and the $650 is an employee wage floor, and the measured acceptances record no price, so whether $4,000 can settle in 30 days is undecided.",
+    "resolution": "Recover the price agreed in the 10 recorded acceptances; failing that, quote each offer at a stated price (stage managers above the $500 Cue Line cost) to un-asked directory contacts and record written acceptances, then re-plan on the established price.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_60befe0f62f948af82eb",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "opportunityId": "cop_28951609e7744b16851c",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_60befe0f62f948af82eb",
+     "why": "Price on record is a grant award, not a purchase price."
+    },
+    {
+     "opportunityId": "cop_28951609e7744b16851c",
+     "why": "Price on record is a union wage floor for an employed stage manager, not a price paid for a contracted one."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_b155bc38fc23_fc57ac",
+   "digest": "b155bc38fc239a1f5ddcd43b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_37036bb3f46e4c40bb9d/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:14:59.106Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_b155bc38fc23_fc57ac",
+   "digest": "b155bc38fc239a1f5ddcd43b",
+   "contractDigest": "f028e42df76bda0f87d117cd",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 34776× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Managing directors of community theatre compani\" needs [figure withheld] and keeps [figure withheld], 4974× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Managing directors of community theatre companies\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_60befe0f62f948af82eb",
+     "cop_28951609e7744b16851c"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Arts-council grant application packages for community theatre companies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Arts-council grant application packages for community theatre companies\"",
+      "owner": "PERSON",
+      "cost": 15
+     },
+     {
+      "label": "Sell \"Contracted stage managers for community theatre productions\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Contracted stage managers for community theatre productions\"",
+      "owner": "PERSON",
+      "cost": 500
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the supply",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Managing directors of community theatre companies",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Managing directors of community theatre companies",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment for \"Arts-council grant application packages for community theatre companies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment for \"Contracted stage managers for community theatre productions\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_60befe0f62f948af82eb",
+      "title": "Arts-council grant application packages for community theatre companies",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Managing directors of community theatre companies",
+       "reachableChannel": "Email to the managing director listed in the state arts council's grantee directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:49.819Z",
+       "offerScope": "Brain drafts the operating-support application (narrative, budget form, attachments checklist) from the company's own season records.",
+       "priceCents": 500000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "community theatre",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the managing director listed in the state arts council's grantee direct"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 15, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state arts council's directory lists 210 community theatre companies with a named managing director; the operating-support round is open now.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain drafts the operating-support application (narrative, budget form, attachments checklist) from the company's own season records. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "6 agreements from 50 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$15",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Managing directors of community theatre companies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state arts council's FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_28951609e7744b16851c",
+      "title": "Contracted stage managers for community theatre productions",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Producing directors of community theatre companies",
+       "reachableChannel": "Email to the producing director listed in the arts council directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:49.819Z",
+       "offerScope": "A contracted stage manager for one week of tech and performances, supplied by a freelance stage-management collective.",
+       "priceCents": 65000,
+       "currency": "USD",
+       "fulfillmentOwner": "Cue Line Stage Management (freelance collective; quoted $500 a week per stage manager, available now)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "community theatre",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the producing director listed in the arts council directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 4 accepted of 40 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "8 deal(s) needed, 210 available in the window (210 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Cue Line Stage Management (freelance collective; quoted $500 a week per stage ma (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 500, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The same directory's 210 companies each mount four to six productions a year.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A contracted stage manager for one week of tech and performances, supplied by a freelance stage-management collective. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "4 agreements from 40 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$500",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Cue Line Stage Management (freelance collective; quoted $500 a week per stage manager, available now) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Producing directors of community theatre companies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The stage managers' union small-theatre agreement sets the minimum weekly salary a theatre pays a stage manager it employs at $650.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_d2d17762ac614c0b86ec",
+     "cnd_1a3f9e065f2d4c6385f4"
+    ],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:43.315Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b155bc38fc23_fc57ac",
+    "revisionDigest": "b155bc38fc239a1f5ddcd43b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_37036bb3f46e4c40bb9d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ab726759205e4453a555/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. Neither opening has a purchase price for this buyer: cop_60befe0f62f948af82eb's $5,000 is the arts council's operating-support grant award a theatre receives, not a fee it pays for drafting; cop_28951609e7744b16851c's $650 is the union minimum salary for an employed stage manager, a wage floor and not a price any theatre paid for a contracted one. Brain's own OFFER_AND_PRICE link is false on both cards, and the measured agreements (6/50 and 4/40) carry no price. Recomputed what the gap decides: at an unknown price no deal count exists; the target cannot be divided into deals, so neither volume (210 directory companies, 160-170 un-asked) nor conversion (12% and 10%) nor settlement (7-10 days) can make a plan without it. If the stage manager sold at $650, 7 weeks = $4,550 gross from ~17 expected acceptances at 10% of 170, with $500/week Cue Line cost — feasible — but that price is not established, so decisiveLinks = [OFFER_AND_PRICE] is the decisive gap and not a constraint. The resolution is actionable: recover the agreed prices from the 10 recorded acceptances first (records, not a live test — which is why this is NO_PLAN rather than CONDITIONAL), then quote a stated price above the $500 cost and record written acceptances.",
+    "findings": [
+     "The fallback quote should state the price, the sample (a subset of un-asked contacts), the acceptance count that proves it and a stop rule, and should note that the measured 4/40 and 6/50 conversion rates were taken at an unknown price, so conversion at the quoted price is re-measured by the same test.",
+     "For the stage-manager offer, the plan should require Cue Line's payment terms to fall after the theatre pays, or exposure exceeds the $0 cap; peakFundingCents 0 on the card is the only evidence of that."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:17:44.042Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_b155bc38fc23_fc57ac",
+   "digest": "b155bc38fc239a1f5ddcd43b",
+   "contractDigest": "f028e42df76bda0f87d117cd",
+   "plan": {
+    "goalId": "wst_8a41a2cc66e047b5be08",
+    "contractDigest": "f028e42df76bda0f87d117cd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a price theatres pay is established for either offer",
+     "opportunityIds": [],
+     "why": "Neither opening has a purchase price. The grant-application package's $5,000 is the grant award a theatre receives, not what it pays for drafting; the contracted stage manager's $650 is the union minimum salary for a stage manager a theatre employs, not a price paid for a subcontracted one (whose cost is $500). The measured agreements (6/50 and 4/40) carry no recorded price, so no figure says what $4,000 of settled cash requires."
+    },
+    "alternatives": [
+     {
+      "title": "Grant-application drafting priced at the $5,000 award",
+      "why": "A grant award is not a purchase price; nothing shows a theatre pays anything near it for drafting."
+     },
+     {
+      "title": "Contracted stage managers at $650/week via Cue Line ($500 cost)",
+      "why": "$650 is an employee wage floor, not a price buyers have paid for a contracted stage manager; no agreement records a price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Read the 10 recorded acceptances (6 grant packages, 4 stage managers) for the price each theatre agreed to; none is recorded on the cards",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_gconv",
+       "s_sconv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Quote a stated price for each offer to un-asked directory contacts and record written acceptances at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "research",
+      "evidence": [
+       "s_gvol",
+       "s_svol",
+       "s_sful"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "grant-package price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per package",
+      "sources": [
+       "s_gprice"
+      ],
+      "needs": "A written acceptance or invoice at a stated drafting fee"
+     },
+     {
+      "name": "stage-manager price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per week",
+      "sources": [
+       "s_sprice"
+      ],
+      "needs": "A written acceptance at a stated weekly price above the $500 Cue Line cost"
+     },
+     {
+      "name": "stage-manager cost",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD per week",
+      "sources": [
+       "s_sful"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_gprice",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#price",
+      "dated": "2026-11-27",
+      "claim": "FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each — a grant the theatre receives, not a price it pays for application drafting",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_gconv",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "6 agreements from 50 contacts (no agreed price recorded)",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_gvol",
+      "url": "https://brain.local/card/cop_60befe0f62f948af82eb#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "210 companies with a named managing director; the operating-support round is open now",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_60befe0f62f948af82eb"
+     },
+     {
+      "id": "s_sprice",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#price",
+      "dated": "2026-11-27",
+      "claim": "Union small-theatre agreement minimum weekly salary a theatre pays a stage manager it employs: $650 — a wage floor for an employee, not a price paid for a contracted stage manager",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_sful",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "Cue Line Stage Management quoted $500 a week per stage manager, available now",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_sconv",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "4 agreements from 40 contacts (no agreed price recorded)",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     },
+     {
+      "id": "s_svol",
+      "url": "https://brain.local/card/cop_28951609e7744b16851c#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "210 companies each mount four to six productions a year",
+      "population": "Community theatre companies in the state arts council directory (210)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_28951609e7744b16851c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No purchase price is established for either opening: the $5,000 is a grant award and the $650 is an employee wage floor, and the measured acceptances record no price, so whether $4,000 can settle in 30 days is undecided.",
+     "resolution": "Recover the price agreed in the 10 recorded acceptances; failing that, quote each offer at a stated price (stage managers above the $500 Cue Line cost) to un-asked directory contacts and record written acceptances, then re-plan on the established price.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_60befe0f62f948af82eb",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_28951609e7744b16851c",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_60befe0f62f948af82eb",
+      "why": "Price on record is a grant award, not a purchase price."
+     },
+     {
+      "opportunityId": "cop_28951609e7744b16851c",
+      "why": "Price on record is a union wage floor for an employed stage manager, not a price paid for a contracted one."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b155bc38fc23_fc57ac",
+    "digest": "b155bc38fc239a1f5ddcd43b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_37036bb3f46e4c40bb9d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:59.106Z"
+   },
+   "review": {
+    "revisionId": "rev_b155bc38fc23_fc57ac",
+    "revisionDigest": "b155bc38fc239a1f5ddcd43b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_37036bb3f46e4c40bb9d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ab726759205e4453a555/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. Neither opening has a purchase price for this buyer: cop_60befe0f62f948af82eb's $5,000 is the arts council's operating-support grant award a theatre receives, not a fee it pays for drafting; cop_28951609e7744b16851c's $650 is the union minimum salary for an employed stage manager, a wage floor and not a price any theatre paid for a contracted one. Brain's own OFFER_AND_PRICE link is false on both cards, and the measured agreements (6/50 and 4/40) carry no price. Recomputed what the gap decides: at an unknown price no deal count exists; the target cannot be divided into deals, so neither volume (210 directory companies, 160-170 un-asked) nor conversion (12% and 10%) nor settlement (7-10 days) can make a plan without it. If the stage manager sold at $650, 7 weeks = $4,550 gross from ~17 expected acceptances at 10% of 170, with $500/week Cue Line cost — feasible — but that price is not established, so decisiveLinks = [OFFER_AND_PRICE] is the decisive gap and not a constraint. The resolution is actionable: recover the agreed prices from the 10 recorded acceptances first (records, not a live test — which is why this is NO_PLAN rather than CONDITIONAL), then quote a stated price above the $500 cost and record written acceptances.",
+    "findings": [
+     "The fallback quote should state the price, the sample (a subset of un-asked contacts), the acceptance count that proves it and a stop rule, and should note that the measured 4/40 and 6/50 conversion rates were taken at an unknown price, so conversion at the quoted price is re-measured by the same test.",
+     "For the stage-manager offer, the plan should require Cue Line's payment terms to fall after the theatre pays, or exposure exceeds the $0 cap; peakFundingCents 0 on the card is the only evidence of that."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:17:44.042Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "b06f1d839258b239",
+    "openings": {
+     "cop_28951609e7744b16851c": "fac3056f0c5cd656",
+     "cop_60befe0f62f948af82eb": "8be239035c49cbef"
+    }
+   },
+   "at": "2026-11-27T23:20:20.266Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

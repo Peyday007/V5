@@ -1,0 +1,110 @@
+[
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "ao-01-open-small-no-capital",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Collect $1,500 of settled cash within 21 days. I have no money to put in up front.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "ao-02-named-industry-auto-repair",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "I want to make $6,000 in the next 30 days, and it has to be in one industry: independent auto repair shops. I can put in up to $500.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "ao-03-short-window-owner-hours",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Get me $3,000 in settled cash within 14 days. I can spend up to $250 and I can give it no more than 2 hours a week myself.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "ao-04-larger-target-capital",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Collect $12,000 of settled cash within 45 days. I can put up to $2,500 into it.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ }
+]

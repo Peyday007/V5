@@ -1,0 +1,3228 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_6cd5199b515b454abcdb",
+   "words": "Collect $1,500 of settled cash within 21 days. I have no money to put in up front.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 150000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "first buyer payment settled",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "99329fc6dfb29842b5950f46"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_6cd5199b515b454abcdb",
+    "contractDigest": "99329fc6dfb29842b5950f46",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 4 owner-built $500 small-business websites by cold email, paid 100% up front by Stripe link",
+     "opportunityIds": [
+      "cop_e372072d8e814aa98198"
+     ],
+     "why": "Zero capital: the buyer pays in full before work starts, so nothing is advanced; the published web-designer floor for a small-business site is $640+ (GoDaddy, 2026-11-10), so $500 undercuts it; Stripe's first payout lands 7-14 days after the first live payment, so a first sale by day 7 settles by day 21. What no record establishes is whether cold-emailed businesses buy (close rate) - the first week measures it."
+    },
+    "alternatives": [
+     {
+      "title": "Resume rewrites for job seekers at $129",
+      "why": "Needs 13 sales instead of 4; no buying signal or price buyers pay is established on its card; kept as fallback only."
+     },
+     {
+      "title": "Per-word writing for ProBlogger job-board posters",
+      "why": "Only a handful of live postings and net payment terms unknown; one buyer is not a population and settlement inside 21 days is unestablished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Build a list of 200 local service businesses on Google Maps with no website listed, with an email or contact form",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner sends 200 personalised emails / contact-form messages from free Gmail, each with a free AI mock homepage preview",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 10,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: 5-page mobile site published in 72 hours, one revision, free hosting tier; $500 paid up front via Stripe payment link",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 200 contacts by day 7",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 4 orders on replies (short call or email), payment collected before work starts",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site with AI tools within 72 hours of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays the balance out to the owner's bank; first payout 7-14 days after the first live payment",
+      "performer": "OWNER",
+      "costCents": 6000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 1 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe 2.9% + 30c on order 1 (rounded up)",
+      "stepId": "s7"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 2 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 9,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 3 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 4 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 4",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "verifier acceptance of the GoDaddy web-designer floor ($640+) as what buyers pay"
+     },
+     {
+      "name": "buyers without a website",
+      "status": "ESTIMATE",
+      "value": 6150000,
+      "unit": "US small businesses (17% of 36.2M)",
+      "sources": [
+       "src_vol_sba",
+       "src_vol_clutch"
+      ],
+      "needs": "verifier acceptance"
+     },
+     {
+      "name": "close rate of cold contacts",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact",
+      "sources": [],
+      "needs": "the day-7 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "3 x $485 net = $1,455 < $1,500, so 4"
+     },
+     {
+      "name": "Stripe first payout delay",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days (worst case)",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": ""
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost",
+      "dated": "2026-11-10",
+      "claim": "Web designer small business website: $640+ one-time",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_clutch",
+      "url": "https://www.tmcnet.com/usubmit/-clutch-report-no-code-tools-fuel-website-growth-/2025/08/21/10242946.htm",
+      "dated": "2025-08-21",
+      "claim": "17% of small businesses have no website; 45% of sites built by outsourced partners",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_sba",
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment; later payouts follow the schedule",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge; no monthly fees",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#access",
+      "dated": "2026-11-27",
+      "claim": "cold email / contact form to businesses found on Google Maps without a website",
+      "population": "local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools, delivers it",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_res_price",
+      "url": "https://topresume.com/resume-writing",
+      "dated": "2026-11-27",
+      "claim": "TopResume packages $179-$599",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84e5d4267eb440df81df"
+     },
+     {
+      "id": "src_job",
+      "url": "https://problogger.com/jobs/",
+      "dated": "2026-11-27",
+      "claim": "4 live postings, one at $0.50/word",
+      "population": "content buyers posting on ProBlogger",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the first 200 contacted businesses pays $500 up front via Stripe by day 7 (and the site is delivered within 72 hours).",
+     "stop": [
+      "0 paid orders from 200 contacts by day 7: stop, spend nothing, report the measured close rate",
+      "A paid buyer requests a refund for non-delivery"
+     ],
+     "continue": [
+      ">=1 paid order by day 7: contact 200-400 more businesses and close the remaining orders by day 13 so the last receipt settles by day 20"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "deals": 4,
+      "price": 500,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 20
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_909bd9717285_db4365",
+    "digest": "909bd9717285964c19329479",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:24:13.536Z"
+   },
+   {
+    "goalId": "wst_6cd5199b515b454abcdb",
+    "contractDigest": "99329fc6dfb29842b5950f46",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 4 owner-built $500 small-business websites by cold email, paid 100% up front by Stripe link",
+     "opportunityIds": [
+      "cop_e372072d8e814aa98198"
+     ],
+     "why": "Zero capital: the buyer pays in full before work starts, so nothing is advanced; the published web-designer floor for a small-business site is $640+ (GoDaddy, 2026-11-10), so $500 undercuts it; Stripe's first payout lands 7-14 days after the first live payment, so a first sale by day 7 settles by day 21. What no record establishes is whether cold-emailed businesses buy (close rate) - the first week measures it."
+    },
+    "alternatives": [
+     {
+      "title": "Resume rewrites for job seekers at $129",
+      "why": "Needs 13 sales instead of 4; no buying signal or price buyers pay is established on its card; kept as fallback only."
+     },
+     {
+      "title": "Per-word writing for ProBlogger job-board posters",
+      "why": "Only a handful of live postings and net payment terms unknown; one buyer is not a population and settlement inside 21 days is unestablished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Build a list of 200 local service businesses on Google Maps with no website listed, with an email or contact form",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner sends 200 personalised emails / contact-form messages from free Gmail, each with a free AI mock homepage preview",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 10,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: 5-page mobile site published in 72 hours, one revision, free hosting tier; $500 paid up front via Stripe payment link",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 200 contacts by day 7",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 4 orders on replies (short call or email), payment collected before work starts",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site with AI tools within 72 hours of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays the balance out to the owner's bank; first payout 7-14 days after the first live payment",
+      "performer": "OWNER",
+      "costCents": 6000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 1 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe 2.9% + 30c on order 1 (rounded up)",
+      "stepId": "s7"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 2 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 3 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 4 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 4",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "verifier acceptance of the GoDaddy web-designer floor ($640+) as what buyers pay"
+     },
+     {
+      "name": "buyers without a website",
+      "status": "ESTIMATE",
+      "value": 6150000,
+      "unit": "US small businesses (17% of 36.2M)",
+      "sources": [
+       "src_vol_sba",
+       "src_vol_clutch"
+      ],
+      "needs": "verifier acceptance"
+     },
+     {
+      "name": "close rate of cold contacts",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact",
+      "sources": [],
+      "needs": "the day-7 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "3 x $485 net = $1,455 < $1,500, so 4"
+     },
+     {
+      "name": "Stripe first payout delay",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days (worst case)",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": ""
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost",
+      "dated": "2026-11-10",
+      "claim": "Web designer small business website: $640+ one-time",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_clutch",
+      "url": "https://www.tmcnet.com/usubmit/-clutch-report-no-code-tools-fuel-website-growth-/2025/08/21/10242946.htm",
+      "dated": "2025-08-21",
+      "claim": "17% of small businesses have no website; 45% of sites built by outsourced partners",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_sba",
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment; later payouts follow the schedule",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge; no monthly fees",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#access",
+      "dated": "2026-11-27",
+      "claim": "cold email / contact form to businesses found on Google Maps without a website",
+      "population": "local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools, delivers it",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_res_price",
+      "url": "https://topresume.com/resume-writing",
+      "dated": "2026-11-27",
+      "claim": "TopResume packages $179-$599",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84e5d4267eb440df81df"
+     },
+     {
+      "id": "src_job",
+      "url": "https://problogger.com/jobs/",
+      "dated": "2026-11-27",
+      "claim": "4 live postings, one at $0.50/word",
+      "population": "content buyers posting on ProBlogger",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the first 200 contacted businesses pays $500 up front via Stripe by day 7 (and the site is delivered within 72 hours).",
+     "stop": [
+      "0 paid orders from 200 contacts by day 7: stop, spend nothing, report the measured close rate",
+      "A paid buyer requests a refund for non-delivery"
+     ],
+     "continue": [
+      ">=1 paid order by day 7: contact 200-400 more businesses and close the remaining orders by day 13 so the last receipt settles by day 20"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "deals": 4,
+      "price": 500,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 20
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "deals": 13,
+      "price": 129,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "deals": 2,
+      "price": 750,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_094c021477c5_8efed8",
+    "digest": "094c021477c53c1a48378852",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:24:24.012Z"
+   },
+   {
+    "goalId": "wst_6cd5199b515b454abcdb",
+    "contractDigest": "99329fc6dfb29842b5950f46",
+    "parentRevisionId": "rev_094c021477c5_8efed8",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 4 owner-built $500 small-business websites by cold email, paid 100% up front by Stripe link",
+     "opportunityIds": [
+      "cop_e372072d8e814aa98198"
+     ],
+     "why": "Zero capital: the buyer pays in full before work starts, so nothing is advanced, and the only per-sale cost is the Stripe fee withheld from the payment. No record shows a buyer paying $500 (published designer prices are benchmarks, not this buyer), so the price, the demand, the close rate and the owner's ability to deliver in 72 hours are all measured by the first week's test: one sample site is built before anyone is charged. Stripe's first payout lands 7-14 days after the first live payment, so a first sale by day 7 settles by day 21. Start condition: the owner confirms about 26 hours over the 3 weeks."
+    },
+    "alternatives": [
+     {
+      "title": "Resume rewrites for job seekers at $129",
+      "why": "Needs 13 sales instead of 4; no buying signal or price buyers pay is established on its card; kept as fallback only."
+     },
+     {
+      "title": "Per-word writing for ProBlogger job-board posters",
+      "why": "Only a handful of live postings and net payment terms unknown; one buyer is not a population and settlement inside 21 days is unestablished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any charge: owner builds and publishes one sample 5-page site with AI tools inside 72 hours (measures fulfilment and the hours per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Build a list of 200 local service businesses on Google Maps with no website listed, with an email or contact form",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner sends 200 personalised emails / contact-form messages from free Gmail, each with a free AI mock homepage preview",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 10,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: 5-page mobile site published in 72 hours, one revision, free hosting tier; $500 paid up front via Stripe payment link",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 200 contacts by day 7",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 4 orders on replies (short call or email), payment collected before work starts",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site with AI tools within 72 hours of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays the balance out to the owner's bank; first payout 7-14 days after the first live payment",
+      "performer": "OWNER",
+      "costCents": 6000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 1 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe 2.9% + 30c on order 1 ($14.80, rounded to $15) - this fee is the member's whole $15 direct cost; buyer supplies its own domain, hosting is a free tier",
+      "stepId": "s7"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 2 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 3 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 4 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 4",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "a buyer paying $500 in the test (s4); no record establishes it"
+     },
+     {
+      "name": "buyers without a website (population)",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "research was rejected; the s1 list of 200 is the count the plan uses"
+     },
+     {
+      "name": "businesses on the s1 contact list",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "businesses",
+      "sources": [
+       "src_reach"
+      ],
+      "needs": "s1 compiles it"
+     },
+     {
+      "name": "owner hours available",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours over 21 days",
+      "sources": [],
+      "needs": "owner confirms ~26 h before s0 starts"
+     },
+     {
+      "name": "owner hours to deliver one site",
+      "status": "ESTIMATE",
+      "value": 2,
+      "unit": "hours",
+      "sources": [
+       "src_card_fulfil"
+      ],
+      "needs": "measured by s0"
+     },
+     {
+      "name": "close rate of cold contacts",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact",
+      "sources": [],
+      "needs": "the day-7 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "3 x $485 net = $1,455 < $1,500, so 4"
+     },
+     {
+      "name": "Stripe first payout delay",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days (worst case)",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": ""
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost",
+      "dated": "2026-11-10",
+      "claim": "Shows the offer exists: web designers sell small-business websites ($640+ one-time list figure; a benchmark, not this buyer's price)",
+      "population": "small businesses buying a website (geography unstated)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_clutch",
+      "url": "https://www.tmcnet.com/usubmit/-clutch-report-no-code-tools-fuel-website-growth-/2025/08/21/10242946.htm",
+      "dated": "2025-08-21",
+      "claim": "17% of small businesses have no website; 45% of sites built by outsourced partners",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_sba",
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment; later payouts follow the schedule",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge; no monthly fees",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#access",
+      "dated": "2026-11-27",
+      "claim": "cold email / contact form to businesses found on Google Maps without a website",
+      "population": "local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools, delivers it",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_res_price",
+      "url": "https://topresume.com/resume-writing",
+      "dated": "2026-11-27",
+      "claim": "TopResume packages $179-$599",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84e5d4267eb440df81df"
+     },
+     {
+      "id": "src_job",
+      "url": "https://problogger.com/jobs/",
+      "dated": "2026-11-27",
+      "claim": "4 live postings, one at $0.50/word",
+      "population": "content buyers posting on ProBlogger",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d"
+     }
+    ],
+    "validation": {
+     "proof": "Start condition: owner confirms ~26 hours and the sample site (s0) is published within 72 hours. Proof: at least 1 of the first 200 contacted businesses pays $500 up front via Stripe by day 7 and receives its site within 72 hours of paying.",
+     "stop": [
+      "Owner cannot commit ~26 hours, or the sample site is not published within 72 hours: stop before contacting anyone",
+      "0 paid orders from 200 contacts by day 7: stop, spend nothing, report the measured close rate and price objections",
+      "A paid site cannot be delivered within 72 hours: refund in full and stop selling"
+     ],
+     "continue": [
+      ">=1 paid order by day 7: contact 200-400 more businesses and close the remaining orders by day 13 so the last receipt settles by day 20"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic checked: 4 x $485.20 = $1,940.80 >= $1,500; 3 sales fall short.",
+      "resolution": "Kept: 4 sales at $485.20 net; members and cash unchanged."
+     },
+     {
+      "finding": "Settlement: day-6 first payment + up to 14 days = day 20 inside 21; there is no slack if the first sale slips past day 7, which the stop rule correctly handles.",
+      "resolution": "Kept: the day-7 stop rule guards the no-slack settlement; first sale still planned for day 6."
+     },
+     {
+      "finding": "OFFER_AND_PRICE is unestablished: GoDaddy's $640+ is a benchmark of what designers charge (verifier: definitions MISMATCH, geography UNSTATED), not what this buyer pays.",
+      "resolution": "Accepted: OFFER_AND_PRICE stays missing, GoDaddy is cited only as evidence the offer exists (matchesBuyer false), the 'undercuts $640' argument is removed, and OFFER_AND_PRICE is now in validation.decides."
+     },
+     {
+      "finding": "FULFILMENT is unestablished and the test charges buyers before a site has been shown deliverable in 72 hours.",
+      "resolution": "Accepted: new step s0 builds and publishes one sample site within 72 hours before any outreach or charge; FULFILMENT added to decides; stop rules refund and halt if a paid site misses 72 hours."
+     },
+     {
+      "finding": "Owner hours ~24.5 are not stated anywhere in the goal; unknown, not available.",
+      "resolution": "Accepted: owner hours available is now an UNKNOWN quantity and the owner's confirmation of ~26 hours is the test's start condition."
+     },
+     {
+      "finding": "Ledger: member directCost $15 per site is not in the cash ledger separately from the $15 Stripe fee; state whether the $15 card cost is the Stripe fee or an additional cost.",
+      "resolution": "Clarified: the member's $15 direct cost IS the Stripe fee ($14.80 rounded); the buyer supplies its own domain and hosting is a free tier, so there is no other per-site cost. The FEE lines are linked to s7."
+     },
+     {
+      "finding": "Buyer-volume estimate rests on rejected research; keep it UNKNOWN.",
+      "resolution": "Accepted: population quantity set UNKNOWN; the 200-business s1 list is the count stated."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "revenueRange",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "hours",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "deals": 4,
+      "price": 500,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 20
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "deals": 13,
+      "price": 129,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "deals": 2,
+      "price": 750,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_fec500de1845_94bc38",
+    "digest": "fec500de1845c47be6f52ada",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:27:45.913Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_6cd5199b515b454abcdb",
+   "contractDigest": "99329fc6dfb29842b5950f46",
+   "parentRevisionId": "rev_094c021477c5_8efed8",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell 4 owner-built $500 small-business websites by cold email, paid 100% up front by Stripe link",
+    "opportunityIds": [
+     "cop_e372072d8e814aa98198"
+    ],
+    "why": "Zero capital: the buyer pays in full before work starts, so nothing is advanced, and the only per-sale cost is the Stripe fee withheld from the payment. No record shows a buyer paying $500 (published designer prices are benchmarks, not this buyer), so the price, the demand, the close rate and the owner's ability to deliver in 72 hours are all measured by the first week's test: one sample site is built before anyone is charged. Stripe's first payout lands 7-14 days after the first live payment, so a first sale by day 7 settles by day 21. Start condition: the owner confirms about 26 hours over the 3 weeks."
+   },
+   "alternatives": [
+    {
+     "title": "Resume rewrites for job seekers at $129",
+     "why": "Needs 13 sales instead of 4; no buying signal or price buyers pay is established on its card; kept as fallback only."
+    },
+    {
+     "title": "Per-word writing for ProBlogger job-board posters",
+     "why": "Only a handful of live postings and net payment terms unknown; one buyer is not a population and settlement inside 21 days is unestablished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "TEST",
+     "label": "Before any charge: owner builds and publishes one sample 5-page site with AI tools inside 72 hours (measures fulfilment and the hours per site)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_card_fulfil"
+     ],
+     "ownerHours": 2,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Build a list of 200 local service businesses on Google Maps with no website listed, with an email or contact form",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_buyers"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Owner sends 200 personalised emails / contact-form messages from free Gmail, each with a free AI mock homepage preview",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "src_reach"
+     ],
+     "ownerHours": 10,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "Offer: 5-page mobile site published in 72 hours, one revision, free hosting tier; $500 paid up front via Stripe payment link",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "q_price"
+     ],
+     "ownerHours": 1,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "TEST",
+     "label": "Validation: count paid orders from the first 200 contacts by day 7",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Close 4 orders on replies (short call or email), payment collected before work starts",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 4,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Owner builds and publishes each site with AI tools within 72 hours of payment (2 h per site)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_card_fulfil"
+     ],
+     "ownerHours": 8,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Stripe pays the balance out to the owner's bank; first payout 7-14 days after the first live payment",
+     "performer": "OWNER",
+     "costCents": 6000,
+     "day": 20,
+     "dependsOn": "s6",
+     "evidence": [
+      "src_settle",
+      "src_fee"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Order 1 paid via Stripe",
+     "settlesDay": 20,
+     "stepId": "s5"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 1500,
+     "label": "Stripe 2.9% + 30c on order 1 ($14.80, rounded to $15) - this fee is the member's whole $15 direct cost; buyer supplies its own domain, hosting is a free tier",
+     "stepId": "s7"
+    },
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Order 2 paid via Stripe",
+     "settlesDay": 20,
+     "stepId": "s5"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 1500,
+     "label": "Stripe fee on order 2",
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Order 3 paid via Stripe",
+     "settlesDay": 20,
+     "stepId": "s5"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 1500,
+     "label": "Stripe fee on order 3",
+     "stepId": "s7"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Order 4 paid via Stripe",
+     "settlesDay": 20,
+     "stepId": "s5"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 1500,
+     "label": "Stripe fee on order 4",
+     "stepId": "s7"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price per site",
+     "status": "ESTIMATE",
+     "value": 500,
+     "unit": "USD",
+     "sources": [
+      "src_price"
+     ],
+     "needs": "a buyer paying $500 in the test (s4); no record establishes it"
+    },
+    {
+     "name": "buyers without a website (population)",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "businesses",
+     "sources": [],
+     "needs": "research was rejected; the s1 list of 200 is the count the plan uses"
+    },
+    {
+     "name": "businesses on the s1 contact list",
+     "status": "ESTIMATE",
+     "value": 200,
+     "unit": "businesses",
+     "sources": [
+      "src_reach"
+     ],
+     "needs": "s1 compiles it"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours over 21 days",
+     "sources": [],
+     "needs": "owner confirms ~26 h before s0 starts"
+    },
+    {
+     "name": "owner hours to deliver one site",
+     "status": "ESTIMATE",
+     "value": 2,
+     "unit": "hours",
+     "sources": [
+      "src_card_fulfil"
+     ],
+     "needs": "measured by s0"
+    },
+    {
+     "name": "close rate of cold contacts",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per contact",
+     "sources": [],
+     "needs": "the day-7 test (s4)"
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "src_fee"
+     ],
+     "needs": "3 x $485 net = $1,455 < $1,500, so 4"
+    },
+    {
+     "name": "Stripe first payout delay",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days (worst case)",
+     "sources": [
+      "src_settle"
+     ],
+     "needs": ""
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost",
+     "dated": "2026-11-10",
+     "claim": "Shows the offer exists: web designers sell small-business websites ($640+ one-time list figure; a benchmark, not this buyer's price)",
+     "population": "small businesses buying a website (geography unstated)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_vol_clutch",
+     "url": "https://www.tmcnet.com/usubmit/-clutch-report-no-code-tools-fuel-website-growth-/2025/08/21/10242946.htm",
+     "dated": "2025-08-21",
+     "claim": "17% of small businesses have no website; 45% of sites built by outsourced partners",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_vol_sba",
+     "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+     "dated": "2025-12-18",
+     "claim": "36.2 million US small businesses by June 2025",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_settle",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-27",
+     "claim": "First payout typically completes within 7-14 days of the first live payment; later payouts follow the schedule",
+     "population": "new US Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_fee",
+     "url": "https://stripe.com/pricing",
+     "dated": "2026-11-27",
+     "claim": "2.9% + 30c per successful domestic card charge; no monthly fees",
+     "population": "US Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_reach",
+     "url": "https://brain.local/card/cop_e372072d8e814aa98198#access",
+     "dated": "2026-11-27",
+     "claim": "cold email / contact form to businesses found on Google Maps without a website",
+     "population": "local service businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_card_fulfil",
+     "url": "https://brain.local/card/cop_e372072d8e814aa98198#fulfillment",
+     "dated": "2026-11-27",
+     "claim": "the owner, drafting with AI tools, delivers it",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e372072d8e814aa98198"
+    },
+    {
+     "id": "src_res_price",
+     "url": "https://topresume.com/resume-writing",
+     "dated": "2026-11-27",
+     "claim": "TopResume packages $179-$599",
+     "population": "US job seekers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_84e5d4267eb440df81df"
+    },
+    {
+     "id": "src_job",
+     "url": "https://problogger.com/jobs/",
+     "dated": "2026-11-27",
+     "claim": "4 live postings, one at $0.50/word",
+     "population": "content buyers posting on ProBlogger",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3f9d441cab6e4f5ea33d"
+    }
+   ],
+   "validation": {
+    "proof": "Start condition: owner confirms ~26 hours and the sample site (s0) is published within 72 hours. Proof: at least 1 of the first 200 contacted businesses pays $500 up front via Stripe by day 7 and receives its site within 72 hours of paying.",
+    "stop": [
+     "Owner cannot commit ~26 hours, or the sample site is not published within 72 hours: stop before contacting anyone",
+     "0 paid orders from 200 contacts by day 7: stop, spend nothing, report the measured close rate and price objections",
+     "A paid site cannot be delivered within 72 hours: refund in full and stop selling"
+    ],
+    "continue": [
+     ">=1 paid order by day 7: contact 200-400 more businesses and close the remaining orders by day 13 so the last receipt settles by day 20"
+    ],
+    "decides": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic checked: 4 x $485.20 = $1,940.80 >= $1,500; 3 sales fall short.",
+     "resolution": "Kept: 4 sales at $485.20 net; members and cash unchanged."
+    },
+    {
+     "finding": "Settlement: day-6 first payment + up to 14 days = day 20 inside 21; there is no slack if the first sale slips past day 7, which the stop rule correctly handles.",
+     "resolution": "Kept: the day-7 stop rule guards the no-slack settlement; first sale still planned for day 6."
+    },
+    {
+     "finding": "OFFER_AND_PRICE is unestablished: GoDaddy's $640+ is a benchmark of what designers charge (verifier: definitions MISMATCH, geography UNSTATED), not what this buyer pays.",
+     "resolution": "Accepted: OFFER_AND_PRICE stays missing, GoDaddy is cited only as evidence the offer exists (matchesBuyer false), the 'undercuts $640' argument is removed, and OFFER_AND_PRICE is now in validation.decides."
+    },
+    {
+     "finding": "FULFILMENT is unestablished and the test charges buyers before a site has been shown deliverable in 72 hours.",
+     "resolution": "Accepted: new step s0 builds and publishes one sample site within 72 hours before any outreach or charge; FULFILMENT added to decides; stop rules refund and halt if a paid site misses 72 hours."
+    },
+    {
+     "finding": "Owner hours ~24.5 are not stated anywhere in the goal; unknown, not available.",
+     "resolution": "Accepted: owner hours available is now an UNKNOWN quantity and the owner's confirmation of ~26 hours is the test's start condition."
+    },
+    {
+     "finding": "Ledger: member directCost $15 per site is not in the cash ledger separately from the $15 Stripe fee; state whether the $15 card cost is the Stripe fee or an additional cost.",
+     "resolution": "Clarified: the member's $15 direct cost IS the Stripe fee ($14.80 rounded); the buyer supplies its own domain and hosting is a free tier, so there is no other per-site cost. The FEE lines are linked to s7."
+    },
+    {
+     "finding": "Buyer-volume estimate rests on rejected research; keep it UNKNOWN.",
+     "resolution": "Accepted: population quantity set UNKNOWN; the 200-business s1 list is the count stated."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "revenueRange",
+      "brain:OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "hours",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_e372072d8e814aa98198",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_84e5d4267eb440df81df",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_e372072d8e814aa98198",
+     "deals": 4,
+     "price": 500,
+     "directCost": 15,
+     "capital": 0,
+     "settlesDay": 20
+    },
+    {
+     "opportunityId": "cop_84e5d4267eb440df81df",
+     "deals": 13,
+     "price": 129,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+     "deals": 2,
+     "price": 750,
+     "directCost": 0,
+     "capital": 0,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_fec500de1845_94bc38",
+   "digest": "fec500de1845c47be6f52ada",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_b6fa932f8ba541af85c6/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:27:45.913Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_fec500de1845_94bc38",
+   "digest": "fec500de1845c47be6f52ada",
+   "contractDigest": "99329fc6dfb29842b5950f46",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 6000,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 6,
+    "collectedCents": 200000,
+    "collectedInWindowCents": 200000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 194000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: AI-built one-page websites for + Resume rewrite for job seekers + Per-word freelance content wri\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Per-word freelance content writing from public job boards\", \"AI-built one-page websites for local service businesses with\", \"Resume rewrite for job seekers sold direct, undercutting Top\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1500× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Resume rewrite for job seekers sold direct, undercutting Top\" needs [figure withheld] and keeps [figure withheld], 125× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_3f9d441cab6e4f5ea33d",
+     "cop_e372072d8e814aa98198",
+     "cop_84e5d4267eb440df81df"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dives on \"Per-word freelance content writing from public job boards\", \"AI-built one-page websites for local service businesses with\", \"Resume rewrite for job seekers sold direct, undercutting Top\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "title": "AI-built one-page websites for local service businesses with no website, sold by cold email",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 500,
+      "card": {
+       "payer": "owner of a local service business without a website",
+       "reachableChannel": "cold email / contact form to businesses found on Google Maps without a website (free Gmail)",
+       "offerScope": "5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "local services (trades, salons, cleaners)",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email / contact form to businesses found on Google Maps without a website ("
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 15, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email / contact form to businesses found on Google Maps without a website (free Gmail)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell 5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier to owner of a local service business without a website, reached through cold email / contact form to businesses found on Google Maps without a website (free Gmail), at $500; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$15",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "owner of a local service business without a website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost; https://stripe.com/pricing; small business without website cold email; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "title": "Resume rewrite for job seekers sold direct, undercutting TopResume",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 129,
+      "card": {
+       "payer": "individual job seeker",
+       "reachableChannel": "posts in job-seeker communities and LinkedIn, Stripe payment link",
+       "offerScope": "ATS-optimized resume + cover letter rewrite in 48 hours",
+       "priceCents": 12900,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "career services",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: posts in job-seeker communities and LinkedIn, Stripe payment link"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 129 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "posts in job-seeker communities and LinkedIn, Stripe payment link",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell ATS-optimized resume + cover letter rewrite in 48 hours to individual job seeker, reached through posts in job-seeker communities and LinkedIn, Stripe payment link, at $129; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "ATS-optimized resume + cover letter rewrite in 48 hours",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "individual job seeker",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$129",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$129",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://topresume.com/resume-writing; resume writing service demand",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "title": "Per-word freelance content writing from public job boards",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "startup content lead posting a paid writing job",
+       "reachableChannel": "apply to ProBlogger job board postings",
+       "offerScope": "blog articles at the posted rate",
+       "priceCents": 75000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "B2B SaaS content marketing",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: apply to ProBlogger job board postings"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "apply to ProBlogger job board postings",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "4 startup content lead posting a paid writing job (ProBlogger board showed 4 live postings (Nov 2026), one at $0.50/word (1,500-word article = $750))",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell blog articles at the posted rate to startup content lead posting a paid writing job, reached through apply to ProBlogger job board postings, at $750; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "3 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "blog articles at the posted rate",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "startup content lead posting a paid writing job",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://problogger.com/jobs/; https://problogger.com/jobs/; https://problogger.com/jobs/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 150000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:24:44.597Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_094c021477c5_8efed8",
+    "revisionDigest": "094c021477c53c1a48378852",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_eb7a53c7c65449d38c2a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family (no capital, an unknown close rate that only selling measures), and the arithmetic is right: net per sale $500 - ($14.50 + $0.30) = $485.20, 3 sales = $1,455.60 < $1,500, so 4 sales ($1,940.80) are needed; Stripe's first payout 7-14 days after the first live payment puts order 1 (day 6) at day 20 at worst and later payouts inside the window. But the test is mis-specified in ways that matter before the owner acts on it. (1) validation.decides names only CONVERSION and CURRENT_DEMAND, yet every link of this opening is unestablished (Brain: CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, FULFILMENT, ECONOMICS, SETTLES_IN_TIME). The $500 price has no evidence: the GoDaddy $640+ row is a guide figure of what a web designer charges, not what these buyers pay, and the verifier gate rejected it twice; the only thing that establishes the price is a buyer paying $500, so OFFER_AND_PRICE must be among what the test decides, and the 'undercuts a $640 floor' argument should be dropped as support. (2) The test takes $500 paid orders before fulfilment is shown possible: the fulfiller is 'the owner, drafting with AI tools' (a RECOMMENDATION fact), with no site yet built in 72 hours. Build and publish one sample 5-page site (or the mock previews) before the first charge, and add FULFILMENT to decides with a stop if a paid site cannot be delivered in 72 hours. (3) Owner hours are treated as available: the steps need about 24.5 owner hours (10 sending, 1 offer, 1 test, 4 closing, 8 building, 0.5 collecting) and the goal states none; mark owner hours UNKNOWN and make the owner's confirmation of ~25 hours over 3 weeks a start condition. (4) The buyer-volume quantity (6.15M = 17% x 36.2M) rests on claims the gate rejected (population mismatch; the 17% is a survey share of unstated sample) and should be UNKNOWN; the 200-business Google Maps list in s1 is the real count to state.",
+    "findings": [
+     "Arithmetic checked: 4 x $485.20 = $1,940.80 >= $1,500; 3 sales fall short.",
+     "Settlement: day-6 first payment + up to 14 days = day 20 inside 21; there is no slack if the first sale slips past day 7, which the stop rule correctly handles.",
+     "OFFER_AND_PRICE is unestablished: GoDaddy's $640+ is a benchmark of what designers charge (verifier: definitions MISMATCH, geography UNSTATED), not what this buyer pays.",
+     "FULFILMENT is unestablished and the test charges buyers before a site has been shown deliverable in 72 hours.",
+     "Owner hours ~24.5 are not stated anywhere in the goal; unknown, not available.",
+     "Ledger: member directCost $15 per site is not in the cash ledger separately from the $15 Stripe fee; state whether the $15 card cost is the Stripe fee or an additional cost.",
+     "Buyer-volume estimate rests on rejected research; keep it UNKNOWN."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:25:33.695Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The card's $500 price is a RECOMMENDATION; the only cited support (GoDaddy's $640+ designer figure) is a benchmark the verifier rejected, so no buyer is shown to pay $500 until the test sells one."
+     },
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "link": "FULFILMENT",
+      "basis": "EVIDENCE",
+      "field": "fulfillment",
+      "why": "Fulfilment is 'the owner, drafting with AI tools' as a RECOMMENDATION with no site built; the test takes paid orders before delivery in 72 hours is shown possible and owner hours are unstated."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_fec500de1845_94bc38",
+    "revisionDigest": "fec500de1845c47be6f52ada",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_eb7a53c7c65449d38c2a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and the revision answers every earlier finding. No record shows a buyer paying $500, so the price is now a hypothesis the test measures (GoDaddy cited only as matchesBuyer:false benchmark), and validation.decides covers CONVERSION, CURRENT_DEMAND, OFFER_AND_PRICE and FULFILMENT. Fulfilment is shown before any charge: s0 builds and publishes a sample site within 72 hours, with a stop before contacting anyone if it fails, and a refund-and-stop rule if a paid site misses 72 hours. Owner hours are UNKNOWN with a start condition; recomputed 2 + 10 + 1 + 1 + 4 + 8 + 0.5 = 26.5 hours, matching the ~26 stated. Arithmetic: Stripe 2.9% + $0.30 on $500 = $14.80, net $485.20; 3 sales $1,455.60 < $1,500, 4 sales $1,940.80; $0 capital (buyer pays first, fee withheld), inside exposure cap 0. Settlement: first payment day 6 + up to 14 days = day 20, later payouts on the standard schedule, all by day 20 of 21; the day-7 stop guards the zero-slack timing. The cash ledger matches the steps and the trace (spent $60, collected $2,000 in window).",
+    "findings": [
+     "Recomputed net $485.20/sale; 4 sales clear $1,500; no capital at any point.",
+     "Owner hours 26.5 over 3 weeks, explicitly unknown and gated on the owner's confirmation.",
+     "Fulfilment is demonstrated (s0) before outreach or any charge.",
+     "Timing has no slack: if the first order lands after day 7 the Stripe first-payout delay can push settlement past day 21, which the stop rule handles.",
+     "Housekeeping: sources src_vol_clutch and src_vol_sba still carry matchesBuyer:true although the gate rejected both; no quantity relies on them now, so it does not change the plan."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:28:34.763Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_fec500de1845_94bc38",
+   "digest": "fec500de1845c47be6f52ada",
+   "contractDigest": "99329fc6dfb29842b5950f46",
+   "plan": {
+    "goalId": "wst_6cd5199b515b454abcdb",
+    "contractDigest": "99329fc6dfb29842b5950f46",
+    "parentRevisionId": "rev_094c021477c5_8efed8",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 4 owner-built $500 small-business websites by cold email, paid 100% up front by Stripe link",
+     "opportunityIds": [
+      "cop_e372072d8e814aa98198"
+     ],
+     "why": "Zero capital: the buyer pays in full before work starts, so nothing is advanced, and the only per-sale cost is the Stripe fee withheld from the payment. No record shows a buyer paying $500 (published designer prices are benchmarks, not this buyer), so the price, the demand, the close rate and the owner's ability to deliver in 72 hours are all measured by the first week's test: one sample site is built before anyone is charged. Stripe's first payout lands 7-14 days after the first live payment, so a first sale by day 7 settles by day 21. Start condition: the owner confirms about 26 hours over the 3 weeks."
+    },
+    "alternatives": [
+     {
+      "title": "Resume rewrites for job seekers at $129",
+      "why": "Needs 13 sales instead of 4; no buying signal or price buyers pay is established on its card; kept as fallback only."
+     },
+     {
+      "title": "Per-word writing for ProBlogger job-board posters",
+      "why": "Only a handful of live postings and net payment terms unknown; one buyer is not a population and settlement inside 21 days is unestablished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any charge: owner builds and publishes one sample 5-page site with AI tools inside 72 hours (measures fulfilment and the hours per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Build a list of 200 local service businesses on Google Maps with no website listed, with an email or contact form",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner sends 200 personalised emails / contact-form messages from free Gmail, each with a free AI mock homepage preview",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 10,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: 5-page mobile site published in 72 hours, one revision, free hosting tier; $500 paid up front via Stripe payment link",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 200 contacts by day 7",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 4 orders on replies (short call or email), payment collected before work starts",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each site with AI tools within 72 hours of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays the balance out to the owner's bank; first payout 7-14 days after the first live payment",
+      "performer": "OWNER",
+      "costCents": 6000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 1 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe 2.9% + 30c on order 1 ($14.80, rounded to $15) - this fee is the member's whole $15 direct cost; buyer supplies its own domain, hosting is a free tier",
+      "stepId": "s7"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 2 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 3 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Order 4 paid via Stripe",
+      "settlesDay": 20,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1500,
+      "label": "Stripe fee on order 4",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "a buyer paying $500 in the test (s4); no record establishes it"
+     },
+     {
+      "name": "buyers without a website (population)",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "research was rejected; the s1 list of 200 is the count the plan uses"
+     },
+     {
+      "name": "businesses on the s1 contact list",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "businesses",
+      "sources": [
+       "src_reach"
+      ],
+      "needs": "s1 compiles it"
+     },
+     {
+      "name": "owner hours available",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours over 21 days",
+      "sources": [],
+      "needs": "owner confirms ~26 h before s0 starts"
+     },
+     {
+      "name": "owner hours to deliver one site",
+      "status": "ESTIMATE",
+      "value": 2,
+      "unit": "hours",
+      "sources": [
+       "src_card_fulfil"
+      ],
+      "needs": "measured by s0"
+     },
+     {
+      "name": "close rate of cold contacts",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact",
+      "sources": [],
+      "needs": "the day-7 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "3 x $485 net = $1,455 < $1,500, so 4"
+     },
+     {
+      "name": "Stripe first payout delay",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days (worst case)",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": ""
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost",
+      "dated": "2026-11-10",
+      "claim": "Shows the offer exists: web designers sell small-business websites ($640+ one-time list figure; a benchmark, not this buyer's price)",
+      "population": "small businesses buying a website (geography unstated)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_clutch",
+      "url": "https://www.tmcnet.com/usubmit/-clutch-report-no-code-tools-fuel-website-growth-/2025/08/21/10242946.htm",
+      "dated": "2025-08-21",
+      "claim": "17% of small businesses have no website; 45% of sites built by outsourced partners",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_vol_sba",
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment; later payouts follow the schedule",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge; no monthly fees",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#access",
+      "dated": "2026-11-27",
+      "claim": "cold email / contact form to businesses found on Google Maps without a website",
+      "population": "local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_e372072d8e814aa98198#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools, delivers it",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e372072d8e814aa98198"
+     },
+     {
+      "id": "src_res_price",
+      "url": "https://topresume.com/resume-writing",
+      "dated": "2026-11-27",
+      "claim": "TopResume packages $179-$599",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84e5d4267eb440df81df"
+     },
+     {
+      "id": "src_job",
+      "url": "https://problogger.com/jobs/",
+      "dated": "2026-11-27",
+      "claim": "4 live postings, one at $0.50/word",
+      "population": "content buyers posting on ProBlogger",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d"
+     }
+    ],
+    "validation": {
+     "proof": "Start condition: owner confirms ~26 hours and the sample site (s0) is published within 72 hours. Proof: at least 1 of the first 200 contacted businesses pays $500 up front via Stripe by day 7 and receives its site within 72 hours of paying.",
+     "stop": [
+      "Owner cannot commit ~26 hours, or the sample site is not published within 72 hours: stop before contacting anyone",
+      "0 paid orders from 200 contacts by day 7: stop, spend nothing, report the measured close rate and price objections",
+      "A paid site cannot be delivered within 72 hours: refund in full and stop selling"
+     ],
+     "continue": [
+      ">=1 paid order by day 7: contact 200-400 more businesses and close the remaining orders by day 13 so the last receipt settles by day 20"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic checked: 4 x $485.20 = $1,940.80 >= $1,500; 3 sales fall short.",
+      "resolution": "Kept: 4 sales at $485.20 net; members and cash unchanged."
+     },
+     {
+      "finding": "Settlement: day-6 first payment + up to 14 days = day 20 inside 21; there is no slack if the first sale slips past day 7, which the stop rule correctly handles.",
+      "resolution": "Kept: the day-7 stop rule guards the no-slack settlement; first sale still planned for day 6."
+     },
+     {
+      "finding": "OFFER_AND_PRICE is unestablished: GoDaddy's $640+ is a benchmark of what designers charge (verifier: definitions MISMATCH, geography UNSTATED), not what this buyer pays.",
+      "resolution": "Accepted: OFFER_AND_PRICE stays missing, GoDaddy is cited only as evidence the offer exists (matchesBuyer false), the 'undercuts $640' argument is removed, and OFFER_AND_PRICE is now in validation.decides."
+     },
+     {
+      "finding": "FULFILMENT is unestablished and the test charges buyers before a site has been shown deliverable in 72 hours.",
+      "resolution": "Accepted: new step s0 builds and publishes one sample site within 72 hours before any outreach or charge; FULFILMENT added to decides; stop rules refund and halt if a paid site misses 72 hours."
+     },
+     {
+      "finding": "Owner hours ~24.5 are not stated anywhere in the goal; unknown, not available.",
+      "resolution": "Accepted: owner hours available is now an UNKNOWN quantity and the owner's confirmation of ~26 hours is the test's start condition."
+     },
+     {
+      "finding": "Ledger: member directCost $15 per site is not in the cash ledger separately from the $15 Stripe fee; state whether the $15 card cost is the Stripe fee or an additional cost.",
+      "resolution": "Clarified: the member's $15 direct cost IS the Stripe fee ($14.80 rounded); the buyer supplies its own domain and hosting is a free tier, so there is no other per-site cost. The FEE lines are linked to s7."
+     },
+     {
+      "finding": "Buyer-volume estimate rests on rejected research; keep it UNKNOWN.",
+      "resolution": "Accepted: population quantity set UNKNOWN; the 200-business s1 list is the count stated."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "revenueRange",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "hours",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e372072d8e814aa98198",
+      "deals": 4,
+      "price": 500,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 20
+     },
+     {
+      "opportunityId": "cop_84e5d4267eb440df81df",
+      "deals": 13,
+      "price": 129,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+      "deals": 2,
+      "price": 750,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_fec500de1845_94bc38",
+    "digest": "fec500de1845c47be6f52ada",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:27:45.913Z"
+   },
+   "review": {
+    "revisionId": "rev_fec500de1845_94bc38",
+    "revisionDigest": "fec500de1845c47be6f52ada",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6fa932f8ba541af85c6/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_eb7a53c7c65449d38c2a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and the revision answers every earlier finding. No record shows a buyer paying $500, so the price is now a hypothesis the test measures (GoDaddy cited only as matchesBuyer:false benchmark), and validation.decides covers CONVERSION, CURRENT_DEMAND, OFFER_AND_PRICE and FULFILMENT. Fulfilment is shown before any charge: s0 builds and publishes a sample site within 72 hours, with a stop before contacting anyone if it fails, and a refund-and-stop rule if a paid site misses 72 hours. Owner hours are UNKNOWN with a start condition; recomputed 2 + 10 + 1 + 1 + 4 + 8 + 0.5 = 26.5 hours, matching the ~26 stated. Arithmetic: Stripe 2.9% + $0.30 on $500 = $14.80, net $485.20; 3 sales $1,455.60 < $1,500, 4 sales $1,940.80; $0 capital (buyer pays first, fee withheld), inside exposure cap 0. Settlement: first payment day 6 + up to 14 days = day 20, later payouts on the standard schedule, all by day 20 of 21; the day-7 stop guards the zero-slack timing. The cash ledger matches the steps and the trace (spent $60, collected $2,000 in window).",
+    "findings": [
+     "Recomputed net $485.20/sale; 4 sales clear $1,500; no capital at any point.",
+     "Owner hours 26.5 over 3 weeks, explicitly unknown and gated on the owner's confirmation.",
+     "Fulfilment is demonstrated (s0) before outreach or any charge.",
+     "Timing has no slack: if the first order lands after day 7 the Stripe first-payout delay can push settlement past day 21, which the stop rule handles.",
+     "Housekeeping: sources src_vol_clutch and src_vol_sba still carry matchesBuyer:true although the gate rejected both; no quantity relies on them now, so it does not change the plan."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:28:34.763Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $1,500 of settled cash within 21 days. I have no money to put in up front.",
+    "terms": "e157092881e334dc",
+    "openings": {
+     "cop_3f9d441cab6e4f5ea33d": "17989f335f47085a",
+     "cop_84e5d4267eb440df81df": "4a1287a1f264a157",
+     "cop_e372072d8e814aa98198": "c3d1291a1e595377"
+    }
+   },
+   "at": "2026-11-27T23:30:28.729Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

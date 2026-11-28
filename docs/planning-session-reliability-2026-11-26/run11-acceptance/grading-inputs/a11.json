@@ -1,0 +1,171 @@
+{
+ "caseId": "an-11-ultrasound-capital-raised",
+ "keys": {
+  "cop_5b3e9a55e80342daa091": "ultrasoundUnits"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Refurbished point-of-care ultrasound units for rural urgent-\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Refurbished point-of-care ultrasound units for rural urgent-\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Fulfil \"Constructed: Reverse: own the buyer, pay a supplier to deliver, and keep the mar\" through a supplier at the c…) it would reach 82.1% (p50 $35,565): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Refurbished point-of-care ultrasound units for rural urgent-care clini\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_5b3e9a55e80342daa091"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+    "owner": "PERSON",
+    "cost": 9200
+   },
+   {
+    "label": "Collect payment for \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_5b3e9a55e80342daa091",
+    "title": "Refurbished point-of-care ultrasound units for rural urgent-care clinics",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 10000,
+    "potentialReach": 10000,
+    "card": {
+     "payer": "Practice managers at rural urgent-care clinics",
+     "reachableChannel": "The two practice managers who signed purchase agreements",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:51.217Z",
+     "offerScope": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+     "priceCents": 1350000,
+     "currency": "USD",
+     "fulfillmentOwner": "Clearview Imaging Refurb (quoted $9,200 per unit including freight and installation; two units in stock)",
+     "peakFundingCents": 920000,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "refurbished medical imaging equipment",
+     "mechanism": "RESALE_OR_ASSET",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 1350000,
+      "currency": "USD",
+      "deliverable": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 1350000,
+      "currency": "USD",
+      "deliverable": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The two practice managers who signed purchase agreements"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 27000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 27000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Clearview Imaging Refurb (quoted $9,200 per unit including freight and installat (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 9200, tied up 9200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 40 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$9200",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$9200",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Clearview Imaging Refurb (quoted $9,200 per unit including freight and installation; two units in stock) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Practice managers at rural urgent-care clinics",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_66dbd0d71fa947a7b2e1"
+  ],
+  "scope": {
+   "targetCents": 1000000,
+   "daysLeft": 40,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:22:34.131Z"
+ }
+}

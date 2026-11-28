@@ -1,0 +1,4425 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_5c52265fa77c4d219ce9",
+   "words": "I want to make $6,000 in the next 30 days, and it has to be in one industry: independent auto repair shops. I can put in up to $500.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 50000,
+    "proofCondition": "first shop payment settled",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "any industry other than independent auto repair shops"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 3,
+   "digest": "785efcad271296163dbe8c83"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_5c52265fa77c4d219ce9",
+    "contractDigest": "c83881f8d32e55fdb91d968f",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+     "opportunityIds": [
+      "cop_08684c0394384ca6b684"
+     ],
+     "why": "Shop-specific vendors publish website prices at or above ours: Autoflow charges a $1,000 one-time deposit plus $300/month for website development, Tribute Media's repair-shop template sites start at $2,800. A one-time $1,000 site with no monthly fee undercuts both. The Auto Care Association counts 273,000 US shops, so 7 buyers is a tiny share. Spend is $200 up front plus $40 per site paid from receipts, under the $500 cap. The close rate on cold-contacted shops is the unknown the first 10 days measure."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile + review-request setup at $500",
+      "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+     },
+     {
+      "title": "Monthly local SEO retainer at $600",
+      "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+      "performer": "OWNER",
+      "costCents": 20000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_af",
+       "src_tm"
+      ],
+      "ownerHours": 1,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 7 shops on short calls; full payment collected before the build",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 28000,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 14,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+      "performer": "OWNER",
+      "costCents": 20510,
+      "day": 24,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 1 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 1 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 2 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 2 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 3 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 3 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 4 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 4 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 5 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 5 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 6 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 6 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 7 pays $1,000 up front via Stripe",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 7 site",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 1000,
+      "unit": "USD",
+      "sources": [
+       "src_af",
+       "src_tm"
+      ],
+      "needs": "verifier acceptance of shop-website vendor prices"
+     },
+     {
+      "name": "US repair shops",
+      "status": "ESTIMATE",
+      "value": 273000,
+      "unit": "shops",
+      "sources": [
+       "src_vol"
+      ],
+      "needs": "verifier acceptance"
+     },
+     {
+      "name": "close rate of cold-contacted shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contacted shop",
+      "sources": [],
+      "needs": "the day-10 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+     },
+     {
+      "name": "up-front spend",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "USD",
+      "sources": [],
+      "needs": "actual tool prices at purchase"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_af",
+      "url": "https://autoflow.com/pricing/",
+      "dated": "2026-11-27",
+      "claim": "Website Development $300/monthly plus $1,000 one-time deposit",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_tm",
+      "url": "https://www.tributemedia.com/auto-shop-marketing",
+      "dated": "2026",
+      "claim": "Repair shop template sites start at $2,800; custom $7,000",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_vol",
+      "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "dated": "2024-04-10",
+      "claim": "273,000 shops and 900,000 technicians in the US",
+      "population": "US repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+      "dated": "2026-11-27",
+      "claim": "cold email + phone to shops found on Google Maps",
+      "population": "independent auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9861f57e59504f9f8a2d"
+     },
+     {
+      "id": "src_seo",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a69282002214257bbbb"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the first 150 contacted shops pays $1,000 up front via Stripe by day 10, and its site is delivered within 5 days.",
+     "stop": [
+      "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate",
+      "A paying shop asks for a refund for non-delivery"
+     ],
+     "continue": [
+      ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 40,
+      "capital": 200,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "deals": 13,
+      "price": 500,
+      "directCost": 10,
+      "capital": 100,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "deals": 11,
+      "price": 600,
+      "directCost": 49,
+      "capital": 49,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_26334edf0a81_908e12",
+    "digest": "26334edf0a8127afeeb2a648",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:24:37.089Z"
+   },
+   {
+    "goalId": "wst_5c52265fa77c4d219ce9",
+    "contractDigest": "cd4c2c07abd9b0e6447e60e8",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+     "opportunityIds": [
+      "cop_08684c0394384ca6b684"
+     ],
+     "why": "Shop-specific vendors publish website prices at or above ours: Autoflow charges a $1,000 one-time deposit plus $300/month for website development, Tribute Media's repair-shop template sites start at $2,800. A one-time $1,000 site with no monthly fee undercuts both. The Auto Care Association counts 273,000 US shops, so 7 buyers is a tiny share. Spend is $200 up front plus $40 per site paid from receipts, under the $500 cap. The close rate on cold-contacted shops is the unknown the first 10 days measure."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile + review-request setup at $500",
+      "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+     },
+     {
+      "title": "Monthly local SEO retainer at $600",
+      "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+      "performer": "OWNER",
+      "costCents": 20000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_af",
+       "src_tm"
+      ],
+      "ownerHours": 1,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 7 shops on short calls; full payment collected before the build",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 28000,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 14,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+      "performer": "OWNER",
+      "costCents": 20510,
+      "day": 24,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 1 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 1 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 2 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 2 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 3 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 3 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 4 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 4 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 5 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 5 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 6 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 6 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 7 pays $1,000 up front via Stripe",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 7 site",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 1000,
+      "unit": "USD",
+      "sources": [
+       "src_af",
+       "src_tm"
+      ],
+      "needs": "verifier acceptance of shop-website vendor prices"
+     },
+     {
+      "name": "US repair shops",
+      "status": "ESTIMATE",
+      "value": 273000,
+      "unit": "shops",
+      "sources": [
+       "src_vol"
+      ],
+      "needs": "verifier acceptance"
+     },
+     {
+      "name": "close rate of cold-contacted shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contacted shop",
+      "sources": [],
+      "needs": "the day-10 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+     },
+     {
+      "name": "up-front spend",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "USD",
+      "sources": [],
+      "needs": "actual tool prices at purchase"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_af",
+      "url": "https://autoflow.com/pricing/",
+      "dated": "2026-11-27",
+      "claim": "Website Development $300/monthly plus $1,000 one-time deposit",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_tm",
+      "url": "https://www.tributemedia.com/auto-shop-marketing",
+      "dated": "2026",
+      "claim": "Repair shop template sites start at $2,800; custom $7,000",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_vol",
+      "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "dated": "2024-04-10",
+      "claim": "273,000 shops and 900,000 technicians in the US",
+      "population": "US repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+      "dated": "2026-11-27",
+      "claim": "cold email + phone to shops found on Google Maps",
+      "population": "independent auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9861f57e59504f9f8a2d"
+     },
+     {
+      "id": "src_seo",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a69282002214257bbbb"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the first 150 contacted shops pays $1,000 up front via Stripe by day 10, and its site is delivered within 5 days.",
+     "stop": [
+      "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate",
+      "A paying shop asks for a refund for non-delivery"
+     ],
+     "continue": [
+      ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 40,
+      "capital": 200,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "deals": 13,
+      "price": 500,
+      "directCost": 10,
+      "capital": 100,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "deals": 11,
+      "price": 600,
+      "directCost": 49,
+      "capital": 49,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_f6686a38a356_813f76",
+    "digest": "f6686a38a3563186094f97db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:24:50.514Z"
+   },
+   {
+    "goalId": "wst_5c52265fa77c4d219ce9",
+    "contractDigest": "785efcad271296163dbe8c83",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+     "opportunityIds": [
+      "cop_08684c0394384ca6b684"
+     ],
+     "why": "Shop-specific vendors publish website prices at or above ours: Autoflow charges a $1,000 one-time deposit plus $300/month for website development, Tribute Media's repair-shop template sites start at $2,800. A one-time $1,000 site with no monthly fee undercuts both. The Auto Care Association counts 273,000 US shops, so 7 buyers is a tiny share. Spend is $200 up front plus $40 per site paid from receipts, under the $500 cap. The close rate on cold-contacted shops is the unknown the first 10 days measure."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile + review-request setup at $500",
+      "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+     },
+     {
+      "title": "Monthly local SEO retainer at $600",
+      "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+      "performer": "OWNER",
+      "costCents": 20000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_af",
+       "src_tm"
+      ],
+      "ownerHours": 1,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 7 shops on short calls; full payment collected before the build",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 28000,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 14,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+      "performer": "OWNER",
+      "costCents": 20510,
+      "day": 24,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 1 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 1 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 2 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 2 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 3 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 3 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 4 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 4 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 5 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 5 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 6 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 6 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 7 pays $1,000 up front via Stripe",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 7 site",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 1000,
+      "unit": "USD",
+      "sources": [
+       "src_af",
+       "src_tm"
+      ],
+      "needs": "verifier acceptance of shop-website vendor prices"
+     },
+     {
+      "name": "US repair shops",
+      "status": "ESTIMATE",
+      "value": 273000,
+      "unit": "shops",
+      "sources": [
+       "src_vol"
+      ],
+      "needs": "verifier acceptance"
+     },
+     {
+      "name": "close rate of cold-contacted shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contacted shop",
+      "sources": [],
+      "needs": "the day-10 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+     },
+     {
+      "name": "up-front spend",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "USD",
+      "sources": [],
+      "needs": "actual tool prices at purchase"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_af",
+      "url": "https://autoflow.com/pricing/",
+      "dated": "2026-11-27",
+      "claim": "Website Development $300/monthly plus $1,000 one-time deposit",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_tm",
+      "url": "https://www.tributemedia.com/auto-shop-marketing",
+      "dated": "2026",
+      "claim": "Repair shop template sites start at $2,800; custom $7,000",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_vol",
+      "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "dated": "2024-04-10",
+      "claim": "273,000 shops and 900,000 technicians in the US",
+      "population": "US repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+      "dated": "2026-11-27",
+      "claim": "cold email + phone to shops found on Google Maps",
+      "population": "independent auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9861f57e59504f9f8a2d"
+     },
+     {
+      "id": "src_seo",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a69282002214257bbbb"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the first 150 contacted shops pays $1,000 up front via Stripe by day 10, and its site is delivered within 5 days.",
+     "stop": [
+      "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate",
+      "A paying shop asks for a refund for non-delivery"
+     ],
+     "continue": [
+      ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 40,
+      "capital": 200,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "deals": 13,
+      "price": 500,
+      "directCost": 10,
+      "capital": 100,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "deals": 11,
+      "price": 600,
+      "directCost": 49,
+      "capital": 49,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c6465b950e22_990302",
+    "digest": "c6465b950e2222723e556f97",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:24:59.832Z"
+   },
+   {
+    "goalId": "wst_5c52265fa77c4d219ce9",
+    "contractDigest": "785efcad271296163dbe8c83",
+    "parentRevisionId": "rev_c6465b950e22_990302",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+     "opportunityIds": [
+      "cop_08684c0394384ca6b684"
+     ],
+     "why": "Shop-website vendors (Autoflow, Tribute Media) show the offer is sold to repair shops, but their list prices are what sellers charge, not what these shops pay, so the $1,000 price, demand, close rate, the size of the reachable pool and the owner's ability to deliver in 5 days are all measured by the test, after one sample shop site is built before any charge. Exposure is $200 up front plus $40 per site paid from receipts, inside the $500 cap. Start condition: the owner confirms about 40 hours over the 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile + review-request setup at $500",
+      "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+     },
+     {
+      "title": "Monthly local SEO retainer at $600",
+      "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any charge: owner builds and publishes one sample auto-repair-shop site with AI tools inside 5 days (measures fulfilment and hours per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+      "performer": "OWNER",
+      "costCents": 20000,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 7 shops on short calls; full payment collected before the build",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 28000,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 14,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+      "performer": "OWNER",
+      "costCents": 20510,
+      "day": 24,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 1 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 1 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 2 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 2 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 3 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 3 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 4 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 4 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 5 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 5 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 6 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 6 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 7 pays $1,000 up front via Stripe",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 7 site",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 1000,
+      "unit": "USD",
+      "sources": [
+       "src_af",
+       "src_tm"
+      ],
+      "needs": "a shop paying $1,000 in the test (s4); vendor list prices are benchmarks only"
+     },
+     {
+      "name": "independent shops with outdated or missing sites (population)",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "shops",
+      "sources": [],
+      "needs": "research rejected; s1 list is the count used and the test measures the pool"
+     },
+     {
+      "name": "shops on the s1 contact list",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "src_reach"
+      ],
+      "needs": "s1 compiles it"
+     },
+     {
+      "name": "owner hours available",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours over 30 days",
+      "sources": [],
+      "needs": "owner confirms ~40 h before s0"
+     },
+     {
+      "name": "owner hours to deliver one site",
+      "status": "ESTIMATE",
+      "value": 2,
+      "unit": "hours",
+      "sources": [
+       "src_card_fulfil"
+      ],
+      "needs": "measured by s0"
+     },
+     {
+      "name": "close rate of cold-contacted shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contacted shop",
+      "sources": [],
+      "needs": "the day-10 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+     },
+     {
+      "name": "up-front spend",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "USD",
+      "sources": [],
+      "needs": "actual tool prices at purchase"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_af",
+      "url": "https://autoflow.com/pricing/",
+      "dated": "2026-11-27",
+      "claim": "Shows the offer exists: Autoflow sells shops Website Development ($300/monthly plus $1,000 deposit list price; a benchmark, not this buyer's price)",
+      "population": "auto repair shops using Autoflow",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_tm",
+      "url": "https://www.tributemedia.com/auto-shop-marketing",
+      "dated": "2026",
+      "claim": "Shows the offer exists: repair-shop website pricing published (template from $2,800; a list price, not this buyer's)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_vol",
+      "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "dated": "2024-04-10",
+      "claim": "273,000 shops in the US (all shops, unlabelled; not the payer population)",
+      "population": "US repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+      "dated": "2026-11-27",
+      "claim": "cold email + phone to shops found on Google Maps",
+      "population": "independent auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9861f57e59504f9f8a2d"
+     },
+     {
+      "id": "src_seo",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a69282002214257bbbb"
+     }
+    ],
+    "validation": {
+     "proof": "Start condition: owner confirms ~40 hours and the sample shop site (s0) is published within 5 days. Proof: at least 1 of the first 150 contacted independent shops pays $1,000 up front via Stripe by day 10 and receives its site within 5 days of paying.",
+     "stop": [
+      "Owner cannot commit ~40 hours, or the sample site is not published within 5 days: stop before spending or contacting anyone",
+      "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate, price objections and how many listed shops qualified",
+      "A paid site cannot be delivered within 5 days: refund in full and stop selling"
+     ],
+     "continue": [
+      ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT",
+      "MARKET_VOLUME"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 7 x $930.70 = $6,514.90 >= $6,000; 6 x = $5,584.20 short; deals needed 7 is right.",
+      "resolution": "Kept: 7 sites at $930.70 net; members and cash unchanged except outreach starts day 3."
+     },
+     {
+      "finding": "Capital: $200 pre-proof, peak $200 <= $500 cap; total spend $685.10 matches the trace.",
+      "resolution": "Kept: $200 up-front exposure inside the $500 cap; $40/site paid from receipts."
+     },
+     {
+      "finding": "Settlement: all receipts settle by day 24 of 30 if the first sale lands by day 8; the day-10 stop is the right guard.",
+      "resolution": "Kept: day-8 first sale and day-10 stop guard settlement by day 24."
+     },
+     {
+      "finding": "OFFER_AND_PRICE unestablished: vendor list prices (Autoflow $300/mo + $1,000 deposit; Tribute from $2,800) are benchmarks of what sellers charge, not what these buyers pay.",
+      "resolution": "Accepted: OFFER_AND_PRICE stays missing; vendor pages are cited only to show the offer exists (matchesBuyer false); OFFER_AND_PRICE added to decides."
+     },
+     {
+      "finding": "FULFILMENT unestablished and paid orders are taken before a site is shown deliverable in 5 days.",
+      "resolution": "Accepted: s0 builds one sample shop site within 5 days before any spend or charge; FULFILMENT in decides; late paid delivery triggers refund and stop."
+     },
+     {
+      "finding": "Owner hours ~38.5 unstated by the goal: unknown, not available.",
+      "resolution": "Accepted: owner hours available is UNKNOWN and the owner's ~40 h confirmation is the start condition."
+     },
+     {
+      "finding": "MARKET_VOLUME: 273,000 is not the payer population (independent shops with outdated/missing sites) and not a reachable-channel count.",
+      "resolution": "Accepted: population is UNKNOWN; the 273,000 figure is marked not the payer population; the s1 list of 300 is the count stated and MARKET_VOLUME is in decides."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "revenueRange",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "hours",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 40,
+      "capital": 200,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "deals": 13,
+      "price": 500,
+      "directCost": 10,
+      "capital": 100,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "deals": 11,
+      "price": 600,
+      "directCost": 49,
+      "capital": 49,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c74406c7f734_0cb485",
+    "digest": "c74406c7f734a51ae8300b27",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:28:18.617Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_5c52265fa77c4d219ce9",
+   "contractDigest": "785efcad271296163dbe8c83",
+   "parentRevisionId": "rev_c6465b950e22_990302",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+    "opportunityIds": [
+     "cop_08684c0394384ca6b684"
+    ],
+    "why": "Shop-website vendors (Autoflow, Tribute Media) show the offer is sold to repair shops, but their list prices are what sellers charge, not what these shops pay, so the $1,000 price, demand, close rate, the size of the reachable pool and the owner's ability to deliver in 5 days are all measured by the test, after one sample shop site is built before any charge. Exposure is $200 up front plus $40 per site paid from receipts, inside the $500 cap. Start condition: the owner confirms about 40 hours over the 30 days."
+   },
+   "alternatives": [
+    {
+     "title": "One-time Google Business Profile + review-request setup at $500",
+     "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+    },
+    {
+     "title": "Monthly local SEO retainer at $600",
+     "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "TEST",
+     "label": "Before any charge: owner builds and publishes one sample auto-repair-shop site with AI tools inside 5 days (measures fulfilment and hours per site)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_card_fulfil"
+     ],
+     "ownerHours": 2,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_vol"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+     "performer": "OWNER",
+     "costCents": 20000,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "src_reach"
+     ],
+     "ownerHours": 15,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "q_price"
+     ],
+     "ownerHours": 1,
+     "priceCents": 100000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "TEST",
+     "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Close 7 shops on short calls; full payment collected before the build",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 7,
+     "priceCents": 100000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+     "performer": "OWNER",
+     "costCents": 28000,
+     "day": 12,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_card_fulfil"
+     ],
+     "ownerHours": 14,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+     "performer": "OWNER",
+     "costCents": 20510,
+     "day": 24,
+     "dependsOn": "s6",
+     "evidence": [
+      "src_settle",
+      "src_fee"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 20000,
+     "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+     "stepId": "s2"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 1 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 1",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 1 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 2 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 2",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 2 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 3 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 3",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 3 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 15,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 4 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 4",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 4 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 17,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 5 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 5",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 5 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 19,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 6 pays $1,000 up front via Stripe",
+     "settlesDay": 22,
+     "stepId": "s5"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 6",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 6 site",
+     "stepId": "s6"
+    },
+    {
+     "day": 21,
+     "kind": "RECEIPT",
+     "amountCents": 100000,
+     "label": "Shop 7 pays $1,000 up front via Stripe",
+     "settlesDay": 24,
+     "stepId": "s5"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 2930,
+     "label": "Stripe 2.9% + 30c on shop 7",
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4000,
+     "label": "Domain/hosting for shop 7 site",
+     "stepId": "s6"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "price per site",
+     "status": "ESTIMATE",
+     "value": 1000,
+     "unit": "USD",
+     "sources": [
+      "src_af",
+      "src_tm"
+     ],
+     "needs": "a shop paying $1,000 in the test (s4); vendor list prices are benchmarks only"
+    },
+    {
+     "name": "independent shops with outdated or missing sites (population)",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "shops",
+     "sources": [],
+     "needs": "research rejected; s1 list is the count used and the test measures the pool"
+    },
+    {
+     "name": "shops on the s1 contact list",
+     "status": "ESTIMATE",
+     "value": 300,
+     "unit": "shops",
+     "sources": [
+      "src_reach"
+     ],
+     "needs": "s1 compiles it"
+    },
+    {
+     "name": "owner hours available",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours over 30 days",
+     "sources": [],
+     "needs": "owner confirms ~40 h before s0"
+    },
+    {
+     "name": "owner hours to deliver one site",
+     "status": "ESTIMATE",
+     "value": 2,
+     "unit": "hours",
+     "sources": [
+      "src_card_fulfil"
+     ],
+     "needs": "measured by s0"
+    },
+    {
+     "name": "close rate of cold-contacted shops",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per contacted shop",
+     "sources": [],
+     "needs": "the day-10 test (s4)"
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 7,
+     "unit": "orders",
+     "sources": [
+      "src_fee"
+     ],
+     "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+    },
+    {
+     "name": "up-front spend",
+     "status": "ESTIMATE",
+     "value": 200,
+     "unit": "USD",
+     "sources": [],
+     "needs": "actual tool prices at purchase"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_af",
+     "url": "https://autoflow.com/pricing/",
+     "dated": "2026-11-27",
+     "claim": "Shows the offer exists: Autoflow sells shops Website Development ($300/monthly plus $1,000 deposit list price; a benchmark, not this buyer's price)",
+     "population": "auto repair shops using Autoflow",
+     "matchesBuyer": false,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_tm",
+     "url": "https://www.tributemedia.com/auto-shop-marketing",
+     "dated": "2026",
+     "claim": "Shows the offer exists: repair-shop website pricing published (template from $2,800; a list price, not this buyer's)",
+     "population": "auto repair shops",
+     "matchesBuyer": false,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_vol",
+     "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+     "dated": "2024-04-10",
+     "claim": "273,000 shops in the US (all shops, unlabelled; not the payer population)",
+     "population": "US repair shops",
+     "matchesBuyer": false,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_settle",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-27",
+     "claim": "First payout typically completes within 7-14 days of the first live payment",
+     "population": "new US Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_fee",
+     "url": "https://stripe.com/pricing",
+     "dated": "2026-11-27",
+     "claim": "2.9% + 30c per successful domestic card charge",
+     "population": "US Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_reach",
+     "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+     "dated": "2026-11-27",
+     "claim": "cold email + phone to shops found on Google Maps",
+     "population": "independent auto repair shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_card_fulfil",
+     "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+     "dated": "2026-11-27",
+     "claim": "the owner, drafting with AI tools",
+     "population": "",
+     "matchesBuyer": true,
+     "opportunityId": "cop_08684c0394384ca6b684"
+    },
+    {
+     "id": "src_gbp",
+     "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+     "dated": "2026-07-13",
+     "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+     "population": "US auto repair shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9861f57e59504f9f8a2d"
+    },
+    {
+     "id": "src_seo",
+     "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+     "dated": "2026-07-13",
+     "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+     "population": "US auto repair shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a69282002214257bbbb"
+    }
+   ],
+   "validation": {
+    "proof": "Start condition: owner confirms ~40 hours and the sample shop site (s0) is published within 5 days. Proof: at least 1 of the first 150 contacted independent shops pays $1,000 up front via Stripe by day 10 and receives its site within 5 days of paying.",
+    "stop": [
+     "Owner cannot commit ~40 hours, or the sample site is not published within 5 days: stop before spending or contacting anyone",
+     "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate, price objections and how many listed shops qualified",
+     "A paid site cannot be delivered within 5 days: refund in full and stop selling"
+    ],
+    "continue": [
+     ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+    ],
+    "decides": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "FULFILMENT",
+     "MARKET_VOLUME"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed: 7 x $930.70 = $6,514.90 >= $6,000; 6 x = $5,584.20 short; deals needed 7 is right.",
+     "resolution": "Kept: 7 sites at $930.70 net; members and cash unchanged except outreach starts day 3."
+    },
+    {
+     "finding": "Capital: $200 pre-proof, peak $200 <= $500 cap; total spend $685.10 matches the trace.",
+     "resolution": "Kept: $200 up-front exposure inside the $500 cap; $40/site paid from receipts."
+    },
+    {
+     "finding": "Settlement: all receipts settle by day 24 of 30 if the first sale lands by day 8; the day-10 stop is the right guard.",
+     "resolution": "Kept: day-8 first sale and day-10 stop guard settlement by day 24."
+    },
+    {
+     "finding": "OFFER_AND_PRICE unestablished: vendor list prices (Autoflow $300/mo + $1,000 deposit; Tribute from $2,800) are benchmarks of what sellers charge, not what these buyers pay.",
+     "resolution": "Accepted: OFFER_AND_PRICE stays missing; vendor pages are cited only to show the offer exists (matchesBuyer false); OFFER_AND_PRICE added to decides."
+    },
+    {
+     "finding": "FULFILMENT unestablished and paid orders are taken before a site is shown deliverable in 5 days.",
+     "resolution": "Accepted: s0 builds one sample shop site within 5 days before any spend or charge; FULFILMENT in decides; late paid delivery triggers refund and stop."
+    },
+    {
+     "finding": "Owner hours ~38.5 unstated by the goal: unknown, not available.",
+     "resolution": "Accepted: owner hours available is UNKNOWN and the owner's ~40 h confirmation is the start condition."
+    },
+    {
+     "finding": "MARKET_VOLUME: 273,000 is not the payer population (independent shops with outdated/missing sites) and not a reachable-channel count.",
+     "resolution": "Accepted: population is UNKNOWN; the 273,000 figure is marked not the payer population; the s1 list of 300 is the count stated and MARKET_VOLUME is in decides."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "revenueRange",
+      "brain:OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "hours",
+      "brain:FULFILMENT"
+     ]
+    },
+    {
+     "condition": 2,
+     "decision": "ACCEPTED",
+     "records": [
+      "buyerVolume",
+      "brain:MARKET_VOLUME"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_08684c0394384ca6b684",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_9861f57e59504f9f8a2d",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_1a69282002214257bbbb",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_08684c0394384ca6b684",
+     "deals": 7,
+     "price": 1000,
+     "directCost": 40,
+     "capital": 200,
+     "settlesDay": 24
+    },
+    {
+     "opportunityId": "cop_9861f57e59504f9f8a2d",
+     "deals": 13,
+     "price": 500,
+     "directCost": 10,
+     "capital": 100,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_1a69282002214257bbbb",
+     "deals": 11,
+     "price": 600,
+     "directCost": 49,
+     "capital": 49,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c74406c7f734_0cb485",
+   "digest": "c74406c7f734a51ae8300b27",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2e0358427a454c658c8c/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:28:18.617Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_c74406c7f734_0cb485",
+   "digest": "c74406c7f734a51ae8300b27",
+   "contractDigest": "785efcad271296163dbe8c83",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 68510,
+    "committedOpenCents": 0,
+    "preProofCents": 20000,
+    "maxExposureCents": 20000,
+    "minCashCents": 30000,
+    "minCashDay": 3,
+    "collectedCents": 700000,
+    "collectedInWindowCents": 700000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 631490
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Website rebuild for independent auto repair shops (one-time \", and what it is missing first is an offer and a price. Research first: the deep dive on \"Website rebuild for independent auto repair shops (one-time \" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 2 unmeasured assumption(s) hold (Sell a retainer of 4 unit(s) at 15% off (×3.4 the unit price, ×4.0 its direct cost); Sell \"Website rebuild for independent auto repair shops (one-time fee)\" through a partner who already serves its buye…) it would reach 62.2% (p50 $8,500): a hypothesis to test by running each one's kill criterion, not evidence.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_08684c0394384ca6b684",
+     "cop_9861f57e59504f9f8a2d",
+     "cop_1a69282002214257bbbb"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dive on \"Website rebuild for independent auto repair shops (one-time \" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "title": "Website rebuild for independent auto repair shops (one-time fee)",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "owner of an independent auto repair shop with an outdated or missing website",
+       "reachableChannel": "cold email + phone to shops found on Google Maps",
+       "offerScope": "mobile site with services, reviews, booking/call buttons, built in 5 days",
+       "priceCents": 100000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 20000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "independent auto repair shops",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email + phone to shops found on Google Maps"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "24 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "6 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 40, tied up 200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email + phone to shops found on Google Maps",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "273,000 owner of an independent auto repair shop with an outdated or missing website (Auto Care Association (2024-04-10): 273,000 US shops; competitor Autoflow charges $1,000 deposit + $300/mo for website development; need 6 sales)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell mobile site with services, reviews, booking/call buttons, built in 5 days to owner of an independent auto repair shop with an outdated or missing website, reached through cold email + phone to shops found on Google Maps, at $1,000; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$40",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "mobile site with services, reviews, booking/call buttons, built in 5 days",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "owner of an independent auto repair shop with an outdated or missing website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://autoflow.com/pricing/; https://www.tributemedia.com/auto-shop-marketing; https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "title": "Google Business Profile + review-request setup for auto repair shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "auto repair shop owner with few or stale Google reviews",
+       "reachableChannel": "cold email citing the shop's review count vs nearby competitors",
+       "offerScope": "one-time GBP optimisation plus a review-request text/email flow",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 10000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "independent auto repair shops",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email citing the shop's review count vs nearby competitors"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "48 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "12 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 10, tied up 100"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email citing the shop's review count vs nearby competitors",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "273,000 auto repair shop owner with few or stale Google reviews (RankPay lists $500/mo entry tier for auto shop online marketing; need 12 sales)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell one-time GBP optimisation plus a review-request text/email flow to auto repair shop owner with few or stale Google reviews, reached through cold email citing the shop's review count vs nearby competitors, at $500; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "one-time GBP optimisation plus a review-request text/email flow",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "auto repair shop owner with few or stale Google reviews",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.rankpay.com/auto-shops; https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "title": "Monthly local SEO retainer for auto repair shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "auto repair shop owner",
+       "reachableChannel": "cold email",
+       "offerScope": "monthly GBP posts, citations, review replies",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 4900,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "independent auto repair shops",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "40 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 49, tied up 49"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "273,000 auto repair shop owner (agencies charge $600-$1,500/mo per Stacc; only first month settles in window; need 10 clients)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell monthly GBP posts, citations, review replies to auto repair shop owner, reached through cold email, at $600; the owner, drafting with AI tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$49",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$49",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, drafting with AI tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "monthly GBP posts, citations, review replies",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "auto repair shop owner",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/; https://coloradowebimpressions.com/auto-repair-marketing-colorado",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:26:03.046Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_f6686a38a356_813f76",
+    "revisionDigest": "f6686a38a3563186094f97db",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49825dc45a48498382e5/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Reviewed the current revision rev_c6465b950e22_990302 (identical in content to rev_f6686a38a356_813f76, which was written against the previous contract digest). Arithmetic and limits hold: net per site $1,000 - $29.30 Stripe - $40 domain/hosting = $930.70; 6 sites = $5,584.20 < $6,000, 7 sites = $6,514.90; up-front spend $200 (pre-proof) and peak exposure $200 are inside the $500 cap, the $40 per site is paid from receipts; first payment day 8 settles by day 22 at worst (7-14 day first payout), shop 7 (day 21) settles day 24, inside 30; the industry exclusion is respected. But the plan is not yet one the owner should act on: (1) validation.decides names only CONVERSION and CURRENT_DEMAND while Brain shows every link unestablished. The $1,000 price rests on Autoflow's monthly add-on list price and Tribute Media's 'starts at' sheet: what vendors charge, not what independent shops pay (the verifier gate rejected both on definitions); the 'undercuts both' argument is not evidence, so OFFER_AND_PRICE must be decided by the test. (2) The test takes $1,000 paid orders before fulfilment is shown possible: the fulfiller is 'the owner, drafting with AI tools' (RECOMMENDATION) and no shop site has been built in 5 days; build one sample shop site first and add FULFILMENT to decides with a stop on late delivery. (3) Owner hours are treated as available: steps need about 38.5 owner hours (15 outreach, 1 offer, 1 test, 7 closing, 14 building, 0.5 collecting) and the goal states none; mark them UNKNOWN and make the owner's confirmation a start condition. (4) MARKET_VOLUME rests on the Auto Care 273,000 figure, which counts all shops (unlabelled), not independents with outdated or missing websites, and was rejected; the s1 list of 300 Google Maps shops is the count to state, and MARKET_VOLUME belongs in what the test measures.",
+    "findings": [
+     "Recomputed: 7 x $930.70 = $6,514.90 >= $6,000; 6 x = $5,584.20 short; deals needed 7 is right.",
+     "Capital: $200 pre-proof, peak $200 <= $500 cap; total spend $685.10 matches the trace.",
+     "Settlement: all receipts settle by day 24 of 30 if the first sale lands by day 8; the day-10 stop is the right guard.",
+     "OFFER_AND_PRICE unestablished: vendor list prices (Autoflow $300/mo + $1,000 deposit; Tribute from $2,800) are benchmarks of what sellers charge, not what these buyers pay.",
+     "FULFILMENT unestablished and paid orders are taken before a site is shown deliverable in 5 days.",
+     "Owner hours ~38.5 unstated by the goal: unknown, not available.",
+     "MARKET_VOLUME: 273,000 is not the payer population (independent shops with outdated/missing sites) and not a reachable-channel count."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:26:45.971Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The $1,000 price is a RECOMMENDATION; its only support is vendor list prices that the verifier rejected as what sellers charge, not what shops pay."
+     },
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "FULFILMENT",
+      "basis": "EVIDENCE",
+      "field": "fulfillment",
+      "why": "Fulfilment is 'the owner, drafting with AI tools' as a RECOMMENDATION; no site has been built and the test takes paid orders first; owner hours are unstated."
+     },
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "MARKET_VOLUME",
+      "basis": "EVIDENCE",
+      "field": "buyerVolume",
+      "why": "The 273,000 figure is an unlabelled all-shop count, not independent shops with outdated or missing websites reachable through a published channel; the research claim was rejected."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_c6465b950e22_990302",
+    "revisionDigest": "c6465b950e2222723e556f97",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49825dc45a48498382e5/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Reviewed the current revision rev_c6465b950e22_990302 (identical in content to rev_f6686a38a356_813f76, which was written against the previous contract digest). Arithmetic and limits hold: net per site $1,000 - $29.30 Stripe - $40 domain/hosting = $930.70; 6 sites = $5,584.20 < $6,000, 7 sites = $6,514.90; up-front spend $200 (pre-proof) and peak exposure $200 are inside the $500 cap, the $40 per site is paid from receipts; first payment day 8 settles by day 22 at worst (7-14 day first payout), shop 7 (day 21) settles day 24, inside 30; the industry exclusion is respected. But the plan is not yet one the owner should act on: (1) validation.decides names only CONVERSION and CURRENT_DEMAND while Brain shows every link unestablished. The $1,000 price rests on Autoflow's monthly add-on list price and Tribute Media's 'starts at' sheet: what vendors charge, not what independent shops pay (the verifier gate rejected both on definitions); the 'undercuts both' argument is not evidence, so OFFER_AND_PRICE must be decided by the test. (2) The test takes $1,000 paid orders before fulfilment is shown possible: the fulfiller is 'the owner, drafting with AI tools' (RECOMMENDATION) and no shop site has been built in 5 days; build one sample shop site first and add FULFILMENT to decides with a stop on late delivery. (3) Owner hours are treated as available: steps need about 38.5 owner hours (15 outreach, 1 offer, 1 test, 7 closing, 14 building, 0.5 collecting) and the goal states none; mark them UNKNOWN and make the owner's confirmation a start condition. (4) MARKET_VOLUME rests on the Auto Care 273,000 figure, which counts all shops (unlabelled), not independents with outdated or missing websites, and was rejected; the s1 list of 300 Google Maps shops is the count to state, and MARKET_VOLUME belongs in what the test measures.",
+    "findings": [
+     "Recomputed: 7 x $930.70 = $6,514.90 >= $6,000; 6 x = $5,584.20 short; deals needed 7 is right.",
+     "Capital: $200 pre-proof, peak $200 <= $500 cap; total spend $685.10 matches the trace.",
+     "Settlement: all receipts settle by day 24 of 30 if the first sale lands by day 8; the day-10 stop is the right guard.",
+     "OFFER_AND_PRICE unestablished: vendor list prices (Autoflow $300/mo + $1,000 deposit; Tribute from $2,800) are benchmarks of what sellers charge, not what these buyers pay.",
+     "FULFILMENT unestablished and paid orders are taken before a site is shown deliverable in 5 days.",
+     "Owner hours ~38.5 unstated by the goal: unknown, not available.",
+     "MARKET_VOLUME: 273,000 is not the payer population (independent shops with outdated/missing sites) and not a reachable-channel count."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:27:04.612Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The $1,000 price is a RECOMMENDATION; its only support is vendor list prices that the verifier rejected as what sellers charge, not what shops pay."
+     },
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "FULFILMENT",
+      "basis": "EVIDENCE",
+      "field": "fulfillment",
+      "why": "Fulfilment is 'the owner, drafting with AI tools' as a RECOMMENDATION; no site has been built and the test takes paid orders first; owner hours are unstated."
+     },
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "link": "MARKET_VOLUME",
+      "basis": "EVIDENCE",
+      "field": "buyerVolume",
+      "why": "The 273,000 figure is an unlabelled all-shop count, not independent shops with outdated or missing websites reachable through a published channel; the research claim was rejected."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_c74406c7f734_0cb485",
+    "revisionDigest": "c74406c7f734a51ae8300b27",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49825dc45a48498382e5/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and every earlier finding is answered. The vendor pages are now cited as benchmarks (matchesBuyer:false), and validation.decides covers CONVERSION, CURRENT_DEMAND, OFFER_AND_PRICE, FULFILMENT and MARKET_VOLUME, which is everything the test sells into. Fulfilment is shown before any spend or charge (s0 sample shop site), with stop rules for a failed sample and a refund-and-stop for a late paid delivery. Owner hours are UNKNOWN with a start condition; recomputed 2 + 15 + 1 + 1 + 7 + 14 + 0.5 = 40.5 h, matching ~40. Arithmetic: $1,000 - $29.30 - $40 = $930.70 net; 7 sites $6,514.90 >= $6,000 (6 sites $5,584.20 short). Capital: $200 on day 3 (after the sample) is the only pre-proof spend, peak exposure $200 within the $500 cap; $40/site is paid from receipts. Settlement: first payment day 8 + up to 14 days = day 22; shop 7 (day 21) settles day 24, inside 30. Industry exclusion respected. Ledger matches the trace (spent $685.10, collected $7,000 in window).",
+    "findings": [
+     "Net $930.70/site; 7 sites clear $6,000 with $514.90 margin.",
+     "Exposure $200 <= $500, spent only after the sample site exists.",
+     "Timing: s2 outreach is scheduled day 3 but depends on s0, which is allowed up to 5 days; if the sample takes longer than 2 days the first sale slips past day 8 and the day-10 stop decides it, still settling by day 24-26 inside 30.",
+     "Owner hours 40.5 over 30 days, explicitly unknown and gated on confirmation.",
+     "The proof (one paid order by day 10) is a weak signal for the 7 needed; the continue rule's day-21 close deadline keeps every receipt inside the window."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:29:14.521Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_c74406c7f734_0cb485",
+   "digest": "c74406c7f734a51ae8300b27",
+   "contractDigest": "785efcad271296163dbe8c83",
+   "plan": {
+    "goalId": "wst_5c52265fa77c4d219ce9",
+    "contractDigest": "785efcad271296163dbe8c83",
+    "parentRevisionId": "rev_c6465b950e22_990302",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell 7 owner-built $1,000 websites to independent auto repair shops by cold email and phone, paid up front by Stripe",
+     "opportunityIds": [
+      "cop_08684c0394384ca6b684"
+     ],
+     "why": "Shop-website vendors (Autoflow, Tribute Media) show the offer is sold to repair shops, but their list prices are what sellers charge, not what these shops pay, so the $1,000 price, demand, close rate, the size of the reachable pool and the owner's ability to deliver in 5 days are all measured by the test, after one sample shop site is built before any charge. Exposure is $200 up front plus $40 per site paid from receipts, inside the $500 cap. Start condition: the owner confirms about 40 hours over the 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "One-time Google Business Profile + review-request setup at $500",
+      "why": "Needs 13 sales instead of 7; no shop-specific one-time price is established on its card."
+     },
+     {
+      "title": "Monthly local SEO retainer at $600",
+      "why": "Only the first month settles inside 30 days, so 11 clients are needed; retainers close slower than a one-time site."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "TEST",
+      "label": "Before any charge: owner builds and publishes one sample auto-repair-shop site with AI tools inside 5 days (measures fulfilment and hours per site)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "List 300 independent auto repair shops on Google Maps with no or outdated websites, with emails and phone numbers",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Owner emails and phones 300 shops with a free AI mock of their new homepage",
+      "performer": "OWNER",
+      "costCents": 20000,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_reach"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer: mobile site with services, reviews, booking and call buttons, live in 5 days, one-time $1,000, no monthly fee",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 1,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 150 contacted shops by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close 7 shops on short calls; full payment collected before the build",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 100000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Owner builds and publishes each shop's site with AI tools within 5 days of payment (2 h per site)",
+      "performer": "OWNER",
+      "costCents": 28000,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_card_fulfil"
+      ],
+      "ownerHours": 14,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe pays out to the owner's bank (first payout 7-14 days after the first live payment)",
+      "performer": "OWNER",
+      "costCents": 20510,
+      "day": 24,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_settle",
+       "src_fee"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Sending domain, one mailbox and shop-contact lookup for the month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 1 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 1 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 2 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 2 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 3 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 3 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 4 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 4 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 5 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 5 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 6 pays $1,000 up front via Stripe",
+      "settlesDay": 22,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 6 site",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 100000,
+      "label": "Shop 7 pays $1,000 up front via Stripe",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 2930,
+      "label": "Stripe 2.9% + 30c on shop 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Domain/hosting for shop 7 site",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price per site",
+      "status": "ESTIMATE",
+      "value": 1000,
+      "unit": "USD",
+      "sources": [
+       "src_af",
+       "src_tm"
+      ],
+      "needs": "a shop paying $1,000 in the test (s4); vendor list prices are benchmarks only"
+     },
+     {
+      "name": "independent shops with outdated or missing sites (population)",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "shops",
+      "sources": [],
+      "needs": "research rejected; s1 list is the count used and the test measures the pool"
+     },
+     {
+      "name": "shops on the s1 contact list",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "src_reach"
+      ],
+      "needs": "s1 compiles it"
+     },
+     {
+      "name": "owner hours available",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours over 30 days",
+      "sources": [],
+      "needs": "owner confirms ~40 h before s0"
+     },
+     {
+      "name": "owner hours to deliver one site",
+      "status": "ESTIMATE",
+      "value": 2,
+      "unit": "hours",
+      "sources": [
+       "src_card_fulfil"
+      ],
+      "needs": "measured by s0"
+     },
+     {
+      "name": "close rate of cold-contacted shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contacted shop",
+      "sources": [],
+      "needs": "the day-10 test (s4)"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "orders",
+      "sources": [
+       "src_fee"
+      ],
+      "needs": "6 x ($1,000 - $29.30 fee - $40 cost) = $5,584 < $6,000, so 7"
+     },
+     {
+      "name": "up-front spend",
+      "status": "ESTIMATE",
+      "value": 200,
+      "unit": "USD",
+      "sources": [],
+      "needs": "actual tool prices at purchase"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_af",
+      "url": "https://autoflow.com/pricing/",
+      "dated": "2026-11-27",
+      "claim": "Shows the offer exists: Autoflow sells shops Website Development ($300/monthly plus $1,000 deposit list price; a benchmark, not this buyer's price)",
+      "population": "auto repair shops using Autoflow",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_tm",
+      "url": "https://www.tributemedia.com/auto-shop-marketing",
+      "dated": "2026",
+      "claim": "Shows the offer exists: repair-shop website pricing published (template from $2,800; a list price, not this buyer's)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_vol",
+      "url": "https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "dated": "2024-04-10",
+      "claim": "273,000 shops in the US (all shops, unlabelled; not the payer population)",
+      "population": "US repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-27",
+      "claim": "First payout typically completes within 7-14 days of the first live payment",
+      "population": "new US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-27",
+      "claim": "2.9% + 30c per successful domestic card charge",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#access",
+      "dated": "2026-11-27",
+      "claim": "cold email + phone to shops found on Google Maps",
+      "population": "independent auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_card_fulfil",
+      "url": "https://brain.local/card/cop_08684c0394384ca6b684#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "the owner, drafting with AI tools",
+      "population": "",
+      "matchesBuyer": true,
+      "opportunityId": "cop_08684c0394384ca6b684"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Auto repair SEO vendors advertise $300-$2,000/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9861f57e59504f9f8a2d"
+     },
+     {
+      "id": "src_seo",
+      "url": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "dated": "2026-07-13",
+      "claim": "Shop Marketing Pros SEO $500-$2,000/month; EuroShopSEO $300-$600/month",
+      "population": "US auto repair shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a69282002214257bbbb"
+     }
+    ],
+    "validation": {
+     "proof": "Start condition: owner confirms ~40 hours and the sample shop site (s0) is published within 5 days. Proof: at least 1 of the first 150 contacted independent shops pays $1,000 up front via Stripe by day 10 and receives its site within 5 days of paying.",
+     "stop": [
+      "Owner cannot commit ~40 hours, or the sample site is not published within 5 days: stop before spending or contacting anyone",
+      "0 paid orders from 150 contacted shops by day 10: stop, spend nothing more, report the measured close rate, price objections and how many listed shops qualified",
+      "A paid site cannot be delivered within 5 days: refund in full and stop selling"
+     ],
+     "continue": [
+      ">=1 paid order by day 10: contact the remaining 150 shops (and more) and close 7 orders by day 21 so every receipt settles by day 28"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT",
+      "MARKET_VOLUME"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 7 x $930.70 = $6,514.90 >= $6,000; 6 x = $5,584.20 short; deals needed 7 is right.",
+      "resolution": "Kept: 7 sites at $930.70 net; members and cash unchanged except outreach starts day 3."
+     },
+     {
+      "finding": "Capital: $200 pre-proof, peak $200 <= $500 cap; total spend $685.10 matches the trace.",
+      "resolution": "Kept: $200 up-front exposure inside the $500 cap; $40/site paid from receipts."
+     },
+     {
+      "finding": "Settlement: all receipts settle by day 24 of 30 if the first sale lands by day 8; the day-10 stop is the right guard.",
+      "resolution": "Kept: day-8 first sale and day-10 stop guard settlement by day 24."
+     },
+     {
+      "finding": "OFFER_AND_PRICE unestablished: vendor list prices (Autoflow $300/mo + $1,000 deposit; Tribute from $2,800) are benchmarks of what sellers charge, not what these buyers pay.",
+      "resolution": "Accepted: OFFER_AND_PRICE stays missing; vendor pages are cited only to show the offer exists (matchesBuyer false); OFFER_AND_PRICE added to decides."
+     },
+     {
+      "finding": "FULFILMENT unestablished and paid orders are taken before a site is shown deliverable in 5 days.",
+      "resolution": "Accepted: s0 builds one sample shop site within 5 days before any spend or charge; FULFILMENT in decides; late paid delivery triggers refund and stop."
+     },
+     {
+      "finding": "Owner hours ~38.5 unstated by the goal: unknown, not available.",
+      "resolution": "Accepted: owner hours available is UNKNOWN and the owner's ~40 h confirmation is the start condition."
+     },
+     {
+      "finding": "MARKET_VOLUME: 273,000 is not the payer population (independent shops with outdated/missing sites) and not a reachable-channel count.",
+      "resolution": "Accepted: population is UNKNOWN; the 273,000 figure is marked not the payer population; the s1 list of 300 is the count stated and MARKET_VOLUME is in decides."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "revenueRange",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "hours",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_08684c0394384ca6b684",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 40,
+      "capital": 200,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_9861f57e59504f9f8a2d",
+      "deals": 13,
+      "price": 500,
+      "directCost": 10,
+      "capital": 100,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1a69282002214257bbbb",
+      "deals": 11,
+      "price": 600,
+      "directCost": 49,
+      "capital": 49,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c74406c7f734_0cb485",
+    "digest": "c74406c7f734a51ae8300b27",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:28:18.617Z"
+   },
+   "review": {
+    "revisionId": "rev_c74406c7f734_0cb485",
+    "revisionDigest": "c74406c7f734a51ae8300b27",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2e0358427a454c658c8c/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49825dc45a48498382e5/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and every earlier finding is answered. The vendor pages are now cited as benchmarks (matchesBuyer:false), and validation.decides covers CONVERSION, CURRENT_DEMAND, OFFER_AND_PRICE, FULFILMENT and MARKET_VOLUME, which is everything the test sells into. Fulfilment is shown before any spend or charge (s0 sample shop site), with stop rules for a failed sample and a refund-and-stop for a late paid delivery. Owner hours are UNKNOWN with a start condition; recomputed 2 + 15 + 1 + 1 + 7 + 14 + 0.5 = 40.5 h, matching ~40. Arithmetic: $1,000 - $29.30 - $40 = $930.70 net; 7 sites $6,514.90 >= $6,000 (6 sites $5,584.20 short). Capital: $200 on day 3 (after the sample) is the only pre-proof spend, peak exposure $200 within the $500 cap; $40/site is paid from receipts. Settlement: first payment day 8 + up to 14 days = day 22; shop 7 (day 21) settles day 24, inside 30. Industry exclusion respected. Ledger matches the trace (spent $685.10, collected $7,000 in window).",
+    "findings": [
+     "Net $930.70/site; 7 sites clear $6,000 with $514.90 margin.",
+     "Exposure $200 <= $500, spent only after the sample site exists.",
+     "Timing: s2 outreach is scheduled day 3 but depends on s0, which is allowed up to 5 days; if the sample takes longer than 2 days the first sale slips past day 8 and the day-10 stop decides it, still settling by day 24-26 inside 30.",
+     "Owner hours 40.5 over 30 days, explicitly unknown and gated on confirmation.",
+     "The proof (one paid order by day 10) is a weak signal for the 7 needed; the continue rule's day-21 close deadline keeps every receipt inside the window."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:29:14.521Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want to make $6,000 in the next 30 days, and it has to be in one industry: independent auto repair shops. I can put in up to $500.",
+    "terms": "e3847dca3a8b3ac2",
+    "openings": {
+     "cop_08684c0394384ca6b684": "d9e01efb80933a09",
+     "cop_1a69282002214257bbbb": "4d6a9041e3f00cd3",
+     "cop_9861f57e59504f9f8a2d": "a8c6c0f15de40b80"
+    }
+   },
+   "at": "2026-11-27T23:30:29.188Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

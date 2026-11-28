@@ -223,7 +223,15 @@ export interface PlanRevisionInput {
    * A conditional plan's live test. `decides` names the chain link(s) whose measurement decides whether the plan goes
    * on — the decisive missing evidence of COMPLETION-SPEC §2(B) — each one the test measures (in `resolves`).
    */
-  validation: { proof: string; stop: string[]; continue: string[]; decides?: string[] } | null;
+  validation: {
+    proof: string; stop: string[]; continue: string[]; decides?: string[];
+    /**
+     * When the test measures CONVERSION: the pass threshold as a ratio (`paid` sales from `of` contacts) and `reach`, the
+     * contacts the plan reaches inside the window if it continues (the test's included). A test that passes exactly at
+     * its threshold must carry the deals the target needs over that reach, or passing it proves nothing about the goal.
+     */
+    threshold?: { paid: number; of: number; reach: number };
+  } | null;
   /** decisiveLinks: the chain links the decisive gap is about (structured, so the gap, the chain and `resolves` can be checked to agree). */
   noPlan: { decisiveGap: string; resolution: string; decisiveLinks?: string[] } | null;
   /** A simulated chance of reaching the target, and whether it is calibrated against resolved outcomes. */
@@ -363,6 +371,7 @@ export type CheckCode =
   | 'DISCOVERY_UNSOURCED'
   | 'OPENING_UNACCOUNTED'
   | 'ARITHMETIC_UNSTATED'
+  | 'PROOF_INSUFFICIENT'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -664,6 +673,21 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
         if (!(CHAIN_LINKS as readonly string[]).includes(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, which is not a chain link`);
         else if (!missingAnywhere.has(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, but no opening's chain marks it missing`);
         else if (!(r.resolves ?? []).includes(l)) add('CONDITIONAL_DECISIVE_UNNAMED', `\`validation.decides\` names ${l}, but \`resolves\` says the test does not measure it`);
+      }
+    }
+    /*
+     * A conversion test proves the goal only if passing it at its threshold carries the target: the threshold's rate
+     * over the contacts the plan reaches must give the deals the members need (acceptance run 11: three discovery plans
+     * set 1 paid in 150-200 contacts as proof while continuing to too few contacts for the 3-7 sales the target needed;
+     * run 9, ak-03, the same). Stated as a ratio, so the arithmetic is Brain's, not prose.
+     */
+    if (r.stance === 'CONDITIONAL' && r.validation && (r.validation.decides ?? []).includes('CONVERSION')) {
+      const th = r.validation.threshold;
+      const needed = (r.members ?? []).filter((m) => r.strategy.opportunityIds.includes(m.opportunityId)).reduce((sum, m) => sum + (m.deals ?? 0), 0);
+      if (!th || !(th.of > 0) || !(th.paid >= 0) || !(th.reach >= 0)) {
+        add('PROOF_INSUFFICIENT', 'the test decides CONVERSION: state `validation.threshold` — the pass threshold as `paid` sales from `of` contacts, and `reach`, the contacts the plan reaches in the window if it continues — so Brain can check that passing it carries the target');
+      } else if (needed > 0 && (th.paid / th.of) * th.reach < needed - 1e-9) {
+        add('PROOF_INSUFFICIENT', `a test passing exactly at its threshold (${th.paid} paid from ${th.of}) yields ${Math.round((th.paid / th.of) * th.reach * 10) / 10} sales over the ${th.reach} contacts the plan reaches, under the ${needed} its members need for the target: raise the threshold to at least ${Math.ceil((needed * th.of) / th.reach)} from ${th.of}, or reach more contacts inside the window`);
       }
     }
     for (const id of r.strategy.opportunityIds) if (brain && !brain.admittedOpportunityIds.includes(id)) add('OPPORTUNITY_NOT_ADMITTED', `opening ${id} was never admitted to this goal; submit it as a route first`, id);

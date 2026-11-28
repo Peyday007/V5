@@ -1,0 +1,889 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_9143fe083e2c41f39cb3",
+   "words": "Collect $100,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 10000000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "USD 100,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "3c8c7a5e469a544c7d361126"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_9143fe083e2c41f39cb3",
+    "contractDigest": "3c8c7a5e469a544c7d361126",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan reaches $100,000: the whole counted market is $84,000",
+     "opportunityIds": [],
+     "why": "The only opening sells a $600 annual inspection binder. The state licenses exactly 140 ground ambulance services, each needing one binder a year, so even if every one bought inside the window the opening brings at most 140 x $600 = $84,000; 12 already bought in the last 45 days, leaving at most 128 x $600 = $76,800. The $100,000 target needs 167 sales, more buyers than exist."
+    },
+    "alternatives": [
+     {
+      "title": "Sell binders to every remaining licensed service",
+      "why": "Executable mechanics (Brain produces the spreadsheet, card payment settles in 3 days, measured 12 of 60 conversion) but capped at $76,800 of a $100,000 target; at the measured 20% conversion the 128 remaining services yield about 25 sales (about $15,400)."
+     },
+     {
+      "title": "Sell a second binder per service",
+      "why": "Not established: each service faces one inspection a year and needs one binder for it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Look for other states' licensed ground ambulance services (or other inspected fleets) that can be reached with the same binder, with a published count",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "licensed ground ambulance services",
+      "status": "EVIDENCED",
+      "value": 140,
+      "unit": "buyers",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "binders per service per year",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "binders/year",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "services that already bought in the last 45 days",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "buyers",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per binder",
+      "status": "EVIDENCED",
+      "value": 60000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue from the whole counted market",
+      "status": "EVIDENCED",
+      "value": 8400000,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "agreements per contact",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#buyerVolume",
+      "dated": "2026-11-24",
+      "claim": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#price",
+      "dated": "2026-11-24",
+      "claim": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#conversionRates",
+      "dated": "2026-11-24",
+      "claim": "12 agreements from 60 contacts",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: the counted market is exactly 140 services buying one $600 binder a year ($84,000 if all bought; $76,800 after the 12 that already bought), short of the 167 sales the $100,000 target needs. No other buyer population is on the record.",
+     "resolution": "Lower the target to at most $76,800 (the remaining 128 services x $600; realistically about $15,400 at the measured 20% conversion), or Brain finds and counts another reachable buyer population (e.g. other states' licensed ambulance services) for the same binder.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "deals": 167,
+      "price": 600,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 5
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $76,800: the 128 licensed services that have not yet bought x $600 (at most $84,000 counting all 140).",
+      "basis": [
+       {
+        "opportunityId": "cop_27a171c8c3534cd5ac5b",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_27a171c8c3534cd5ac5b",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "link": "MARKET_VOLUME",
+      "reason": "Same verdict (not met), different basis: Brain says nobody has established how many buyers exist, but the card's buyerVolume EVIDENCE fact counts exactly 140 licensed services at one binder a year. The link fails because that established count is too small (140 x $600 = $84,000 < $100,000), not because it is unknown."
+     }
+    ],
+    "revisionId": "rev_10d8e925481c_0c42c2",
+    "digest": "10d8e925481cdfbd323e1757",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6489cc64b7e4204ac32/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:22.635Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_9143fe083e2c41f39cb3",
+   "contractDigest": "3c8c7a5e469a544c7d361126",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan reaches $100,000: the whole counted market is $84,000",
+    "opportunityIds": [],
+    "why": "The only opening sells a $600 annual inspection binder. The state licenses exactly 140 ground ambulance services, each needing one binder a year, so even if every one bought inside the window the opening brings at most 140 x $600 = $84,000; 12 already bought in the last 45 days, leaving at most 128 x $600 = $76,800. The $100,000 target needs 167 sales, more buyers than exist."
+   },
+   "alternatives": [
+    {
+     "title": "Sell binders to every remaining licensed service",
+     "why": "Executable mechanics (Brain produces the spreadsheet, card payment settles in 3 days, measured 12 of 60 conversion) but capped at $76,800 of a $100,000 target; at the measured 20% conversion the 128 remaining services yield about 25 sales (about $15,400)."
+    },
+    {
+     "title": "Sell a second binder per service",
+     "why": "Not established: each service faces one inspection a year and needs one binder for it."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Look for other states' licensed ground ambulance services (or other inspected fleets) that can be reached with the same binder, with a published count",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "licensed ground ambulance services",
+     "status": "EVIDENCED",
+     "value": 140,
+     "unit": "buyers",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "binders per service per year",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "binders/year",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "services that already bought in the last 45 days",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "buyers",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per binder",
+     "status": "EVIDENCED",
+     "value": 60000,
+     "unit": "cents",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "maximum revenue from the whole counted market",
+     "status": "EVIDENCED",
+     "value": 8400000,
+     "unit": "cents",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.2,
+     "unit": "agreements per contact",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#buyerVolume",
+     "dated": "2026-11-24",
+     "claim": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+     "population": "licensed ground ambulance services in the state",
+     "matchesBuyer": true,
+     "opportunityId": "cop_27a171c8c3534cd5ac5b"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#price",
+     "dated": "2026-11-24",
+     "claim": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+     "population": "licensed ground ambulance services in the state",
+     "matchesBuyer": true,
+     "opportunityId": "cop_27a171c8c3534cd5ac5b"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#conversionRates",
+     "dated": "2026-11-24",
+     "claim": "12 agreements from 60 contacts",
+     "population": "licensed ground ambulance services in the state",
+     "matchesBuyer": true,
+     "opportunityId": "cop_27a171c8c3534cd5ac5b"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: the counted market is exactly 140 services buying one $600 binder a year ($84,000 if all bought; $76,800 after the 12 that already bought), short of the 167 sales the $100,000 target needs. No other buyer population is on the record.",
+    "resolution": "Lower the target to at most $76,800 (the remaining 128 services x $600; realistically about $15,400 at the measured 20% conversion), or Brain finds and counts another reachable buyer population (e.g. other states' licensed ambulance services) for the same binder.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_27a171c8c3534cd5ac5b",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_27a171c8c3534cd5ac5b",
+     "deals": 167,
+     "price": 600,
+     "directCost": 6,
+     "capital": 0,
+     "settlesDay": 5
+    }
+   ],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $76,800: the 128 licensed services that have not yet bought x $600 (at most $84,000 counting all 140).",
+     "basis": [
+      {
+       "opportunityId": "cop_27a171c8c3534cd5ac5b",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_27a171c8c3534cd5ac5b",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [
+    {
+     "opportunityId": "cop_27a171c8c3534cd5ac5b",
+     "link": "MARKET_VOLUME",
+     "reason": "Same verdict (not met), different basis: Brain says nobody has established how many buyers exist, but the card's buyerVolume EVIDENCE fact counts exactly 140 licensed services at one binder a year. The link fails because that established count is too small (140 x $600 = $84,000 < $100,000), not because it is unknown."
+    }
+   ],
+   "revisionId": "rev_10d8e925481c_0c42c2",
+   "digest": "10d8e925481cdfbd323e1757",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_b6489cc64b7e4204ac32/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:13:22.635Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_10d8e925481c_0c42c2",
+   "digest": "10d8e925481cdfbd323e1757",
+   "contractDigest": "3c8c7a5e469a544c7d361126",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Annual inspection-readiness binders for ground ambulance ser\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 50490× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual inspection-readiness binders for ground ambulance services\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_27a171c8c3534cd5ac5b"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Annual inspection-readiness binders for ground ambulance services\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Annual inspection-readiness binders for ground ambulance services\"",
+      "owner": "PERSON",
+      "cost": 6
+     },
+     {
+      "label": "Collect payment for \"Annual inspection-readiness binders for ground ambulance services\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish how many buyers for \"Annual inspection-readiness binders for ground ambulance services\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+    "openings": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "title": "Annual inspection-readiness binders for ground ambulance services",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 600,
+      "potentialReach": 100000,
+      "card": {
+       "payer": "Operations directors at licensed ground ambulance services",
+       "reachableChannel": "Email to the operations contact listed in the state EMS office's licence register",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:58.269Z",
+       "offerScope": "Brain compiles the service's vehicle and equipment logs into the state's annual inspection checklist binder. Paid by card on delivery; funds settle in 3 days.",
+       "priceCents": 60000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "ground ambulance services",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the operations contact listed in the state EMS office's licence registe"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 600 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 12 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "27 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 6, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain compiles the service's vehicle and equipment logs into the state's annual inspection checklist binder. Paid by card on delivery; funds settle in 3 days. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "12 agreements from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Operations directors at licensed ground ambulance services",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 10000000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:56.260Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_10d8e925481c_0c42c2",
+    "revisionDigest": "10d8e925481cdfbd323e1757",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6489cc64b7e4204ac32/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_418f65a81af643639865/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive MARKET_VOLUME and a TARGET constraint is right. Recomputed: $100,000 / $600 = 166.7, so 167 sales are needed; the card's buyerVolume EVIDENCE fact counts exactly 140 licensed services at one binder a year, so the entire counted market is 140 x $600 = $84,000 and, net of the 12 that bought in the last 45 days, 128 x $600 = $76,800. Even with every remaining buyer converting, the target cannot be met: a genuine constraint on the counted population, not missing evidence about it. Every other link holds (price $600 from 12 card receipts, conversion 12/60 measured on this offer, Brain-produced spreadsheet, $6 cost, $0 capital, settles day 5 of 30). The author's disagreement with Brain's basis is correct: Brain says nobody established the buyer count, but the card holds it; the link fails because the count is too small. The next step (research other states' licensed services with a published count) names the one thing that could change the verdict.",
+    "findings": [
+     "167 sales needed vs 140 buyers in total, 128 not yet bought: max $76,800 in window.",
+     "Minor arithmetic: at 20% conversion, 128 x 0.2 = 25.6 sales = about $15,360 (25 whole sales = $15,000), not 'about $15,400'; and the 48 services already contacted who did not buy are inside the 128, so realistic yield is lower still. Neither changes the stance.",
+     "Disagreement with Brain's MARKET_VOLUME basis is well founded on the card's buyerVolume fact.",
+     "No orders are taken; the only step is research, so nothing is sold before fulfilment."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:16:07.026Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_10d8e925481c_0c42c2",
+   "digest": "10d8e925481cdfbd323e1757",
+   "contractDigest": "3c8c7a5e469a544c7d361126",
+   "plan": {
+    "goalId": "wst_9143fe083e2c41f39cb3",
+    "contractDigest": "3c8c7a5e469a544c7d361126",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan reaches $100,000: the whole counted market is $84,000",
+     "opportunityIds": [],
+     "why": "The only opening sells a $600 annual inspection binder. The state licenses exactly 140 ground ambulance services, each needing one binder a year, so even if every one bought inside the window the opening brings at most 140 x $600 = $84,000; 12 already bought in the last 45 days, leaving at most 128 x $600 = $76,800. The $100,000 target needs 167 sales, more buyers than exist."
+    },
+    "alternatives": [
+     {
+      "title": "Sell binders to every remaining licensed service",
+      "why": "Executable mechanics (Brain produces the spreadsheet, card payment settles in 3 days, measured 12 of 60 conversion) but capped at $76,800 of a $100,000 target; at the measured 20% conversion the 128 remaining services yield about 25 sales (about $15,400)."
+     },
+     {
+      "title": "Sell a second binder per service",
+      "why": "Not established: each service faces one inspection a year and needs one binder for it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Look for other states' licensed ground ambulance services (or other inspected fleets) that can be reached with the same binder, with a published count",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "licensed ground ambulance services",
+      "status": "EVIDENCED",
+      "value": 140,
+      "unit": "buyers",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "binders per service per year",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "binders/year",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "services that already bought in the last 45 days",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "buyers",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per binder",
+      "status": "EVIDENCED",
+      "value": 60000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue from the whole counted market",
+      "status": "EVIDENCED",
+      "value": 8400000,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "agreements per contact",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#buyerVolume",
+      "dated": "2026-11-24",
+      "claim": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#price",
+      "dated": "2026-11-24",
+      "claim": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_27a171c8c3534cd5ac5b#conversionRates",
+      "dated": "2026-11-24",
+      "claim": "12 agreements from 60 contacts",
+      "population": "licensed ground ambulance services in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_27a171c8c3534cd5ac5b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: the counted market is exactly 140 services buying one $600 binder a year ($84,000 if all bought; $76,800 after the 12 that already bought), short of the 167 sales the $100,000 target needs. No other buyer population is on the record.",
+     "resolution": "Lower the target to at most $76,800 (the remaining 128 services x $600; realistically about $15,400 at the measured 20% conversion), or Brain finds and counts another reachable buyer population (e.g. other states' licensed ambulance services) for the same binder.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "deals": 167,
+      "price": 600,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 5
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $76,800: the 128 licensed services that have not yet bought x $600 (at most $84,000 counting all 140).",
+      "basis": [
+       {
+        "opportunityId": "cop_27a171c8c3534cd5ac5b",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_27a171c8c3534cd5ac5b",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [
+     {
+      "opportunityId": "cop_27a171c8c3534cd5ac5b",
+      "link": "MARKET_VOLUME",
+      "reason": "Same verdict (not met), different basis: Brain says nobody has established how many buyers exist, but the card's buyerVolume EVIDENCE fact counts exactly 140 licensed services at one binder a year. The link fails because that established count is too small (140 x $600 = $84,000 < $100,000), not because it is unknown."
+     }
+    ],
+    "revisionId": "rev_10d8e925481c_0c42c2",
+    "digest": "10d8e925481cdfbd323e1757",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6489cc64b7e4204ac32/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:22.635Z"
+   },
+   "review": {
+    "revisionId": "rev_10d8e925481c_0c42c2",
+    "revisionDigest": "10d8e925481cdfbd323e1757",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b6489cc64b7e4204ac32/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_418f65a81af643639865/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive MARKET_VOLUME and a TARGET constraint is right. Recomputed: $100,000 / $600 = 166.7, so 167 sales are needed; the card's buyerVolume EVIDENCE fact counts exactly 140 licensed services at one binder a year, so the entire counted market is 140 x $600 = $84,000 and, net of the 12 that bought in the last 45 days, 128 x $600 = $76,800. Even with every remaining buyer converting, the target cannot be met: a genuine constraint on the counted population, not missing evidence about it. Every other link holds (price $600 from 12 card receipts, conversion 12/60 measured on this offer, Brain-produced spreadsheet, $6 cost, $0 capital, settles day 5 of 30). The author's disagreement with Brain's basis is correct: Brain says nobody established the buyer count, but the card holds it; the link fails because the count is too small. The next step (research other states' licensed services with a published count) names the one thing that could change the verdict.",
+    "findings": [
+     "167 sales needed vs 140 buyers in total, 128 not yet bought: max $76,800 in window.",
+     "Minor arithmetic: at 20% conversion, 128 x 0.2 = 25.6 sales = about $15,360 (25 whole sales = $15,000), not 'about $15,400'; and the 48 services already contacted who did not buy are inside the 128, so realistic yield is lower still. Neither changes the stance.",
+     "Disagreement with Brain's MARKET_VOLUME basis is well founded on the card's buyerVolume fact.",
+     "No orders are taken; the only step is research, so nothing is sold before fulfilment."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:16:07.026Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $100,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "aa2bb3d7303c11f9",
+    "openings": {
+     "cop_27a171c8c3534cd5ac5b": "3cde1ec3f8e4a26a"
+    }
+   },
+   "at": "2026-11-27T23:18:48.010Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,218 @@
+{
+ "caseId": "an-03-wind-blade-price-contradicted",
+ "keys": {
+  "cop_10499010ea344e9889ae": "bladeReports"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 6000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 42409× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Blade-inspection findings reports for independent wind farms\" needs [figure withheld] and keeps [figure withheld], 758× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Asset managers at independently owned wind farms\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_10499010ea344e9889ae"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Blade-inspection findings reports for independent wind farms\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Blade-inspection findings reports for independent wind farms\"",
+    "owner": "PERSON",
+    "cost": 12
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Asset managers at independently owned wind farms",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Asset managers at independently owned wind farms",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Collect payment for \"Blade-inspection findings reports for independent wind farms\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 130.59591037841983
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_10499010ea344e9889ae",
+    "title": "Blade-inspection findings reports for independent wind farms",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Asset managers at independently owned wind farms",
+     "reachableChannel": "Email to the asset manager named in the state energy office's wind-farm registry",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:40.839Z",
+     "offerScope": "Brain turns the farm's own rope-access inspection photos into a findings report: damage categorised per blade and a prioritised repair list. Paid net 10 after delivery.",
+     "priceCents": 140000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "wind farm operations",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the asset manager named in the state energy office's wind-farm registry"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 6 accepted of 30 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "44 deal(s) needed at the measured rate means asking 384 prospects, but the market holds only 64 (64 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days): at that rate it yields about 7.3"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 12, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state energy office's registry lists 64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain turns the farm's own rope-access inspection photos into a findings report: damage categorised per blade and a prioritised repair list. Paid net 10 after delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "6 agreements from 30 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$12",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Asset managers at independently owned wind farms",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$140",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_29719e44c00b430d9e50"
+  ],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:11:31.671Z"
+ }
+}

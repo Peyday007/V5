@@ -1,0 +1,356 @@
+{
+ "caseId": "an-04-theatre-grant-and-wage",
+ "keys": {
+  "cop_60befe0f62f948af82eb": "grantPackage",
+  "cop_28951609e7744b16851c": "stageManagers"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 34776× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Managing directors of community theatre compani\" needs [figure withheld] and keeps [figure withheld], 4974× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Managing directors of community theatre companies\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_60befe0f62f948af82eb",
+   "cop_28951609e7744b16851c"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Arts-council grant application packages for community theatre companies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Arts-council grant application packages for community theatre companies\"",
+    "owner": "PERSON",
+    "cost": 15
+   },
+   {
+    "label": "Sell \"Contracted stage managers for community theatre productions\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Contracted stage managers for community theatre productions\"",
+    "owner": "PERSON",
+    "cost": 500
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the supply",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Managing directors of community theatre companies",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Managing directors of community theatre companies",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Collect payment for \"Arts-council grant application packages for community theatre companies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment for \"Contracted stage managers for community theatre productions\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_60befe0f62f948af82eb",
+    "title": "Arts-council grant application packages for community theatre companies",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Managing directors of community theatre companies",
+     "reachableChannel": "Email to the managing director listed in the state arts council's grantee directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:49.819Z",
+     "offerScope": "Brain drafts the operating-support application (narrative, budget form, attachments checklist) from the company's own season records.",
+     "priceCents": 500000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "community theatre",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the managing director listed in the state arts council's grantee direct"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 15, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state arts council's directory lists 210 community theatre companies with a named managing director; the operating-support round is open now.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain drafts the operating-support application (narrative, budget form, attachments checklist) from the company's own season records. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "6 agreements from 50 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$15",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Managing directors of community theatre companies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The state arts council's FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_28951609e7744b16851c",
+    "title": "Contracted stage managers for community theatre productions",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Producing directors of community theatre companies",
+     "reachableChannel": "Email to the producing director listed in the arts council directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:49.819Z",
+     "offerScope": "A contracted stage manager for one week of tech and performances, supplied by a freelance stage-management collective.",
+     "priceCents": 65000,
+     "currency": "USD",
+     "fulfillmentOwner": "Cue Line Stage Management (freelance collective; quoted $500 a week per stage manager, available now)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "community theatre",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the producing director listed in the arts council directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 4 accepted of 40 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "8 deal(s) needed, 210 available in the window (210 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Cue Line Stage Management (freelance collective; quoted $500 a week per stage ma (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 500, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The same directory's 210 companies each mount four to six productions a year.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A contracted stage manager for one week of tech and performances, supplied by a freelance stage-management collective. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "4 agreements from 40 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$500",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Cue Line Stage Management (freelance collective; quoted $500 a week per stage manager, available now) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Producing directors of community theatre companies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The stage managers' union small-theatre agreement sets the minimum weekly salary a theatre pays a stage manager it employs at $650.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_d2d17762ac614c0b86ec",
+   "cnd_1a3f9e065f2d4c6385f4"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:43.315Z"
+ }
+}

@@ -1,0 +1,461 @@
+{
+ "caseId": "ao-01-open-small-no-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: AI-built one-page websites for + Resume rewrite for job seekers + Per-word freelance content wri\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Per-word freelance content writing from public job boards\", \"AI-built one-page websites for local service businesses with\", \"Resume rewrite for job seekers sold direct, undercutting Top\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1500× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Resume rewrite for job seekers sold direct, undercutting Top\" needs [figure withheld] and keeps [figure withheld], 125× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_3f9d441cab6e4f5ea33d",
+   "cop_e372072d8e814aa98198",
+   "cop_84e5d4267eb440df81df"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"Per-word freelance content writing from public job boards\", \"AI-built one-page websites for local service businesses with\", \"Resume rewrite for job seekers sold direct, undercutting Top\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_e372072d8e814aa98198",
+    "title": "AI-built one-page websites for local service businesses with no website, sold by cold email",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 500,
+    "card": {
+     "payer": "owner of a local service business without a website",
+     "reachableChannel": "cold email / contact form to businesses found on Google Maps without a website (free Gmail)",
+     "offerScope": "5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "local services (trades, salons, cleaners)",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email / contact form to businesses found on Google Maps without a website ("
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 15, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email / contact form to businesses found on Google Maps without a website (free Gmail)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell 5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier to owner of a local service business without a website, reached through cold email / contact form to businesses found on Google Maps without a website (free Gmail), at $500; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$15",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "5-page mobile website built and published in 72 hours, one revision round, hosted on a free tier",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "owner of a local service business without a website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.godaddy.com/resources/skills/how-much-does-a-website-cost; https://stripe.com/pricing; small business without website cold email; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_84e5d4267eb440df81df",
+    "title": "Resume rewrite for job seekers sold direct, undercutting TopResume",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 129,
+    "card": {
+     "payer": "individual job seeker",
+     "reachableChannel": "posts in job-seeker communities and LinkedIn, Stripe payment link",
+     "offerScope": "ATS-optimized resume + cover letter rewrite in 48 hours",
+     "priceCents": 12900,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "career services",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: posts in job-seeker communities and LinkedIn, Stripe payment link"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 129 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "posts in job-seeker communities and LinkedIn, Stripe payment link",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell ATS-optimized resume + cover letter rewrite in 48 hours to individual job seeker, reached through posts in job-seeker communities and LinkedIn, Stripe payment link, at $129; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "ATS-optimized resume + cover letter rewrite in 48 hours",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "individual job seeker",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$129",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$129",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://topresume.com/resume-writing; resume writing service demand",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_3f9d441cab6e4f5ea33d",
+    "title": "Per-word freelance content writing from public job boards",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "startup content lead posting a paid writing job",
+     "reachableChannel": "apply to ProBlogger job board postings",
+     "offerScope": "blog articles at the posted rate",
+     "priceCents": 75000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "B2B SaaS content marketing",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: apply to ProBlogger job board postings"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "apply to ProBlogger job board postings",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "4 startup content lead posting a paid writing job (ProBlogger board showed 4 live postings (Nov 2026), one at $0.50/word (1,500-word article = $750))",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell blog articles at the posted rate to startup content lead posting a paid writing job, reached through apply to ProBlogger job board postings, at $750; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "3 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "blog articles at the posted rate",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "startup content lead posting a paid writing job",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://problogger.com/jobs/; https://problogger.com/jobs/; https://problogger.com/jobs/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:24:44.597Z"
+ }
+}

@@ -1,0 +1,336 @@
+{
+ "caseId": "an-08-studio-mixes-net",
+ "keys": {
+  "cop_574ab6e4a6fa4fc0adb8": "mixPackages",
+  "cop_44b01dc2af1a486c9e20": "lacquerCutting"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Combined, fastest money first: Brokered vinyl lacquer cutting + Contracted album mixing for in\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Combined, fastest money first: Brokered vinyl lacquer cutting + Contracted album mixing for in\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3960× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Contracted album mixing for independent recording studios\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_574ab6e4a6fa4fc0adb8"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Contracted album mixing for independent recording studios\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Contracted album mixing for independent recording studios\"",
+    "owner": "PERSON",
+    "cost": 540
+   },
+   {
+    "label": "Collect payment for \"Contracted album mixing for independent recording studios\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+    "title": "Contracted album mixing for independent recording studios",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Owners of independent recording studios",
+     "reachableChannel": "The six studio owners who signed package orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:28.724Z",
+     "offerScope": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+     "priceCents": 120000,
+     "currency": "USD",
+     "fulfillmentOwner": "Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first two on day 7, then days 14 and 21; invoices net 7 after delivery)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "independent recording studios",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six studio owners who signed package orders"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 7200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 7200 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 540, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 35 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$540",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first two on day 7, then days 14 and 21; invoices net 7 after delivery) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent recording studios",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six studio owners signed mix-package orders at $1,200 each.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_44b01dc2af1a486c9e20",
+    "title": "Brokered vinyl lacquer cutting for independent studios",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Owners of independent recording studios",
+     "reachableChannel": "The studio owners who signed cutting orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:28.724Z",
+     "offerScope": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+     "priceCents": 35000,
+     "currency": "USD",
+     "fulfillmentOwner": "Groove Lane Cutting (quoted $380 a side, 5-day turnaround)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "independent recording studios",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 35000,
+      "currency": "USD",
+      "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One lacquer side cut by a contracted cutting house, paid on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$380",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Groove Lane Cutting (quoted $380 a side, 5-day turnaround) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent recording studios",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_902af810c30f435c865c",
+   "cnd_86e6f4b1bb9a4ee7a458",
+   "cnd_e0a4b1a2e9164b89a6d4"
+  ],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 35,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:54.706Z"
+ }
+}

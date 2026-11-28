@@ -1,0 +1,281 @@
+{
+ "caseId": "an-01-shortline-bridge-records",
+ "keys": {
+  "cop_701c0d8912a34373b3a7": "bridgeRecords",
+  "cop_67442f9d6dac4692b18d": "crossingInventory"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Annual Part 237 bridge-inspection record workbook for short-\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual Part 237 bridge-inspection record workbook for short-\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 75114× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual Part 237 bridge-inspection record workbook for short-line railr\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_701c0d8912a34373b3a7",
+   "cop_67442f9d6dac4692b18d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+    "owner": "PERSON",
+    "cost": 8
+   },
+   {
+    "label": "Collect payment for \"Annual Part 237 bridge-inspection record workbook for short-line railroads\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_701c0d8912a34373b3a7",
+    "title": "Annual Part 237 bridge-inspection record workbook for short-line railroads",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Chief engineers and roadmasters at Class III short-line railroads",
+     "reachableChannel": "Email to the engineering contact each railroad publishes in the state DOT's short-line railroad directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-21T23:05:23.982Z",
+     "offerScope": "Brain compiles the railroad's own bridge inspection notes and photos into the annual 49 CFR Part 237 bridge-inspection record workbook, delivered within 1 day of the order; paid by card at order, funds settle 6 days after the order.",
+     "priceCents": 65000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "short-line railroads",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the engineering contact each railroad publishes in the state DOT's shor"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-21"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 650 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 9 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "8 deal(s) needed, 180 available in the window (180 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "8 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state DOT directory lists 180 Class III short-line railroads, each with a published engineering contact; each must keep a Part 237 bridge-inspection record every year. 60 of them were emailed this offer; 120 have not been asked.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain compiles the railroad's own bridge inspection notes and photos into the annual 49 CFR Part 237 bridge-inspection record workbook, delivered within 1 day of the order; paid by card at order, funds settle 6 days after the order. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "9 agreements from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Chief engineers and roadmasters at Class III short-line railroads",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "8 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_67442f9d6dac4692b18d",
+    "title": "Grade-crossing inventory update pack for short-line railroads",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 400,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Roadmasters at Class III short-line railroads",
+     "reachableChannel": "Email to the same directory contacts",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:23.982Z",
+     "offerScope": "Brain prepares the railroad's grade-crossing inventory update forms from its track charts.",
+     "priceCents": 40000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "short-line railroads",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the same directory contacts"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 400 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "40 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "8 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Brain estimates that most short lines update their crossing inventories at least once a year.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain prepares the railroad's grade-crossing inventory update forms from its track charts. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Roadmasters at Class III short-line railroads",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "A railroad consultancy's published rate card lists a crossing-inventory update pack at $400.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "8 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_50dff50dc27c4bc09cde",
+   "cnd_e3be336cb95f46b3b4b5"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:43.979Z"
+ }
+}

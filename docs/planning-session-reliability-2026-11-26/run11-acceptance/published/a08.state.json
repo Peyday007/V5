@@ -1,0 +1,1791 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_f67d496092c649a5a023",
+   "words": "Keep $3,000 of net cash after all direct costs within 35 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 35,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount is settled in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "b9b2eb0ba26f29a862469724"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_f67d496092c649a5a023",
+    "contractDigest": "b9b2eb0ba26f29a862469724",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Six signed album-mix packages, mixed by Hollow Tree Mixing",
+     "opportunityIds": [
+      "cop_574ab6e4a6fa4fc0adb8"
+     ],
+     "why": "Six studio owners signed $1,200 orders (written acceptances); Hollow Tree Mixing quoted $540 a package and can deliver all six by day 21. Net per package $660, x6 = $3,960 kept after direct costs, all cleared by day 24 of 35. Studios pay 3 days after delivery and the mixer is paid net 7, so no capital is advanced."
+    },
+    "alternatives": [
+     {
+      "title": "Brokered vinyl lacquer cutting",
+      "why": "Rejected: Groove Lane Cutting costs $380 a side against a $350 price, so every deal loses $30."
+     },
+     {
+      "title": "Mixing plus lacquer cutting combined",
+      "why": "Adding lacquer cutting only lowers net cash ($30 lost per side)."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the six signed mix-package orders at $1,200 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Hollow Tree Mixing for six packages at $540 each (net 7 after delivery)",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 1-2 on day 7",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 7,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 1-2 (cleared day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 3-4 on day 14",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 14,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 3-4 (cleared day 17)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver3",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 5-6 on day 21",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 21,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect3",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 5-6 (cleared day 24)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 21,
+      "dependsOn": "deliver3",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 1-2",
+      "settlesDay": 10,
+      "stepId": "collect1"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 1-2 (net 7)",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 3-4",
+      "settlesDay": 17,
+      "stepId": "collect2"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 3-4 (net 7)",
+      "stepId": "deliver2"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 5-6",
+      "settlesDay": 24,
+      "stepId": "collect3"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 5-6 (net 7)",
+      "stepId": "deliver3"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "mix package price",
+      "status": "EVIDENCED",
+      "value": 120000,
+      "unit": "USD cents per package",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed mix-package orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "mixer cost",
+      "status": "EVIDENCED",
+      "value": 54000,
+      "unit": "USD cents per package",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "mixer capacity by day 21",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "packages",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net cash kept",
+      "status": "EVIDENCED",
+      "value": 396000,
+      "unit": "USD cents",
+      "sources": [
+       "s1",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "lacquer margin per side",
+      "status": "EVIDENCED",
+      "value": -3000,
+      "unit": "USD cents",
+      "sources": [
+       "s5",
+       "s6"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#price",
+      "dated": "2026-11-24",
+      "claim": "Six studio owners signed mix-package orders at $1,200 each (six written acceptances recorded).",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Hollow Tree Mixing quoted $540 a package; delivers 2 packages a week, first two on day 7, then days 14 and 21; invoices net 7 after delivery.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $540 per package.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#price",
+      "dated": "2026-11-24",
+      "claim": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_44b01dc2af1a486c9e20"
+     },
+     {
+      "id": "s6",
+      "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Groove Lane Cutting costs $380 a side, above the $350 price.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_44b01dc2af1a486c9e20"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_44b01dc2af1a486c9e20",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_44b01dc2af1a486c9e20",
+      "why": "Direct cost $380 a side is above the $350 signed price; each deal loses $30."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+      "deals": 6,
+      "price": 1200,
+      "directCost": 540,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2edff0aa4f3a_cf5840",
+    "digest": "2edff0aa4f3aa1ca4e2af892",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8af7e8e1a84246c0b76e/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:49.134Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_f67d496092c649a5a023",
+   "contractDigest": "b9b2eb0ba26f29a862469724",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Six signed album-mix packages, mixed by Hollow Tree Mixing",
+    "opportunityIds": [
+     "cop_574ab6e4a6fa4fc0adb8"
+    ],
+    "why": "Six studio owners signed $1,200 orders (written acceptances); Hollow Tree Mixing quoted $540 a package and can deliver all six by day 21. Net per package $660, x6 = $3,960 kept after direct costs, all cleared by day 24 of 35. Studios pay 3 days after delivery and the mixer is paid net 7, so no capital is advanced."
+   },
+   "alternatives": [
+    {
+     "title": "Brokered vinyl lacquer cutting",
+     "why": "Rejected: Groove Lane Cutting costs $380 a side against a $350 price, so every deal loses $30."
+    },
+    {
+     "title": "Mixing plus lacquer cutting combined",
+     "why": "Adding lacquer cutting only lowers net cash ($30 lost per side)."
+    }
+   ],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm the six signed mix-package orders at $1,200 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "order",
+     "kind": "ORDER",
+     "label": "Book Hollow Tree Mixing for six packages at $540 each (net 7 after delivery)",
+     "performer": "Hollow Tree Mixing",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": "sell",
+     "evidence": [
+      "s2"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Hollow Tree Mixing",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver1",
+     "kind": "DELIVER",
+     "label": "Hollow Tree Mixing delivers mix packages 1-2 on day 7",
+     "performer": "Hollow Tree Mixing",
+     "costCents": 108000,
+     "day": 7,
+     "dependsOn": "order",
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hollow Tree Mixing",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect1",
+     "kind": "COLLECT",
+     "label": "Collect $2,400 from the two studios for packages 1-2 (cleared day 10)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "s4"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver2",
+     "kind": "DELIVER",
+     "label": "Hollow Tree Mixing delivers mix packages 3-4 on day 14",
+     "performer": "Hollow Tree Mixing",
+     "costCents": 108000,
+     "day": 14,
+     "dependsOn": "order",
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hollow Tree Mixing",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect2",
+     "kind": "COLLECT",
+     "label": "Collect $2,400 from the two studios for packages 3-4 (cleared day 17)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "deliver2",
+     "evidence": [
+      "s4"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver3",
+     "kind": "DELIVER",
+     "label": "Hollow Tree Mixing delivers mix packages 5-6 on day 21",
+     "performer": "Hollow Tree Mixing",
+     "costCents": 108000,
+     "day": 21,
+     "dependsOn": "order",
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hollow Tree Mixing",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect3",
+     "kind": "COLLECT",
+     "label": "Collect $2,400 from the two studios for packages 5-6 (cleared day 24)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 21,
+     "dependsOn": "deliver3",
+     "evidence": [
+      "s4"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 240000,
+     "label": "Two studios pay $1,200 each on delivery of packages 1-2",
+     "settlesDay": 10,
+     "stepId": "collect1"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 108000,
+     "label": "Pay Hollow Tree Mixing $1,080 for packages 1-2 (net 7)",
+     "stepId": "deliver1"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 240000,
+     "label": "Two studios pay $1,200 each on delivery of packages 3-4",
+     "settlesDay": 17,
+     "stepId": "collect2"
+    },
+    {
+     "day": 21,
+     "kind": "SPEND",
+     "amountCents": 108000,
+     "label": "Pay Hollow Tree Mixing $1,080 for packages 3-4 (net 7)",
+     "stepId": "deliver2"
+    },
+    {
+     "day": 21,
+     "kind": "RECEIPT",
+     "amountCents": 240000,
+     "label": "Two studios pay $1,200 each on delivery of packages 5-6",
+     "settlesDay": 24,
+     "stepId": "collect3"
+    },
+    {
+     "day": 28,
+     "kind": "SPEND",
+     "amountCents": 108000,
+     "label": "Pay Hollow Tree Mixing $1,080 for packages 5-6 (net 7)",
+     "stepId": "deliver3"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "mix package price",
+     "status": "EVIDENCED",
+     "value": 120000,
+     "unit": "USD cents per package",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed mix-package orders",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "mixer cost",
+     "status": "EVIDENCED",
+     "value": 54000,
+     "unit": "USD cents per package",
+     "sources": [
+      "s2",
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "mixer capacity by day 21",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "packages",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net cash kept",
+     "status": "EVIDENCED",
+     "value": 396000,
+     "unit": "USD cents",
+     "sources": [
+      "s1",
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "lacquer margin per side",
+     "status": "EVIDENCED",
+     "value": -3000,
+     "unit": "USD cents",
+     "sources": [
+      "s5",
+      "s6"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#price",
+     "dated": "2026-11-24",
+     "claim": "Six studio owners signed mix-package orders at $1,200 each (six written acceptances recorded).",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Hollow Tree Mixing quoted $540 a package; delivers 2 packages a week, first two on day 7, then days 14 and 21; invoices net 7 after delivery.",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $540 per package.",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#captureMechanism",
+     "dated": "2026-11-24",
+     "claim": "Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#price",
+     "dated": "2026-11-24",
+     "claim": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_44b01dc2af1a486c9e20"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Groove Lane Cutting costs $380 a side, above the $350 price.",
+     "population": "Owners of independent recording studios",
+     "matchesBuyer": true,
+     "opportunityId": "cop_44b01dc2af1a486c9e20"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_44b01dc2af1a486c9e20",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_44b01dc2af1a486c9e20",
+     "why": "Direct cost $380 a side is above the $350 signed price; each deal loses $30."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+     "deals": 6,
+     "price": 1200,
+     "directCost": 540,
+     "capital": 0,
+     "settlesDay": 24
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_2edff0aa4f3a_cf5840",
+   "digest": "2edff0aa4f3aa1ca4e2af892",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_8af7e8e1a84246c0b76e/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:12:49.134Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_2edff0aa4f3a_cf5840",
+   "digest": "2edff0aa4f3aa1ca4e2af892",
+   "contractDigest": "b9b2eb0ba26f29a862469724",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 324000,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 7,
+    "collectedCents": 720000,
+    "collectedInWindowCents": 720000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 396000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Combined, fastest money first: Brokered vinyl lacquer cutting + Contracted album mixing for in\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Combined, fastest money first: Brokered vinyl lacquer cutting + Contracted album mixing for in\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3960× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Contracted album mixing for independent recording studios\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_574ab6e4a6fa4fc0adb8"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Contracted album mixing for independent recording studios\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Contracted album mixing for independent recording studios\"",
+      "owner": "PERSON",
+      "cost": 540
+     },
+     {
+      "label": "Collect payment for \"Contracted album mixing for independent recording studios\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+      "title": "Contracted album mixing for independent recording studios",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Owners of independent recording studios",
+       "reachableChannel": "The six studio owners who signed package orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:28.724Z",
+       "offerScope": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+       "priceCents": 120000,
+       "currency": "USD",
+       "fulfillmentOwner": "Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first two on day 7, then days 14 and 21; invoices net 7 after delivery)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "independent recording studios",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six studio owners who signed package orders"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 7200 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 7200 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 540, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 35 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$540",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first two on day 7, then days 14 and 21; invoices net 7 after delivery) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent recording studios",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six studio owners signed mix-package orders at $1,200 each.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_44b01dc2af1a486c9e20",
+      "title": "Brokered vinyl lacquer cutting for independent studios",
+      "missing": [
+       "ECONOMICS"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Owners of independent recording studios",
+       "reachableChannel": "The studio owners who signed cutting orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:28.724Z",
+       "offerScope": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+       "priceCents": 35000,
+       "currency": "USD",
+       "fulfillmentOwner": "Groove Lane Cutting (quoted $380 a side, 5-day turnaround)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "independent recording studios",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 35000,
+        "currency": "USD",
+        "deliverable": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One lacquer side cut by a contracted cutting house, paid on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$380",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Groove Lane Cutting (quoted $380 a side, 5-day turnaround) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent recording studios",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_902af810c30f435c865c",
+     "cnd_86e6f4b1bb9a4ee7a458",
+     "cnd_e0a4b1a2e9164b89a6d4"
+    ],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 35,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:54.706Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_2edff0aa4f3a_cf5840",
+    "revisionDigest": "2edff0aa4f3aa1ca4e2af892",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8af7e8e1a84246c0b76e/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_0feade2d489a46f98c44/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. cop_574ab6e4a6fa4fc0adb8 has six WRITTEN_ACCEPTANCE orders at $1,200 (a price these studios signed), a recorded fulfiller Hollow Tree Mixing that performs the delivery ($540 a package, 2 a week on days 7, 14, 21 = 6 by day 21, invoiced net 7), and studio payment on delivery cleared 3 days later. Every link is established on the card. Arithmetic recomputed against the CONTRIBUTION metric: 6 x ($1,200 - $540) = 6 x $660 = $3,960 >= $3,000 kept after all direct costs. Every mixer invoice ($1,080 on days 14, 21, 28) falls inside the 35-day window and is paid from receipts that cleared on days 10, 17 and 24, so cash never goes negative (min $0), no capital is advanced and exposure stays at the $0 cap. Five packages ($3,300) would still clear the target, so one slipped order does not break it. Excluding the lacquer cutting is correct: Groove Lane's $380 cost is above the $350 signed price, so each side loses $30 and adding it only lowers contribution.",
+    "findings": [
+     "proofDay is recorded as 10, but at day 10 only $2,400 has cleared with $3,240 of mixer cost still to come; contribution is $3,960 net of every cost only once the day-24 receipts clear (and final after the day-28 payment). The proof day should be 24-28; this does not change the stance.",
+     "Only the six signed studios are the market (no buyer volume beyond them), which is fine because the plan sells nothing beyond the signed orders."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:19:21.506Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_2edff0aa4f3a_cf5840",
+   "digest": "2edff0aa4f3aa1ca4e2af892",
+   "contractDigest": "b9b2eb0ba26f29a862469724",
+   "plan": {
+    "goalId": "wst_f67d496092c649a5a023",
+    "contractDigest": "b9b2eb0ba26f29a862469724",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Six signed album-mix packages, mixed by Hollow Tree Mixing",
+     "opportunityIds": [
+      "cop_574ab6e4a6fa4fc0adb8"
+     ],
+     "why": "Six studio owners signed $1,200 orders (written acceptances); Hollow Tree Mixing quoted $540 a package and can deliver all six by day 21. Net per package $660, x6 = $3,960 kept after direct costs, all cleared by day 24 of 35. Studios pay 3 days after delivery and the mixer is paid net 7, so no capital is advanced."
+    },
+    "alternatives": [
+     {
+      "title": "Brokered vinyl lacquer cutting",
+      "why": "Rejected: Groove Lane Cutting costs $380 a side against a $350 price, so every deal loses $30."
+     },
+     {
+      "title": "Mixing plus lacquer cutting combined",
+      "why": "Adding lacquer cutting only lowers net cash ($30 lost per side)."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the six signed mix-package orders at $1,200 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Hollow Tree Mixing for six packages at $540 each (net 7 after delivery)",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 1-2 on day 7",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 7,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 1-2 (cleared day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 3-4 on day 14",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 14,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 3-4 (cleared day 17)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver3",
+      "kind": "DELIVER",
+      "label": "Hollow Tree Mixing delivers mix packages 5-6 on day 21",
+      "performer": "Hollow Tree Mixing",
+      "costCents": 108000,
+      "day": 21,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollow Tree Mixing",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect3",
+      "kind": "COLLECT",
+      "label": "Collect $2,400 from the two studios for packages 5-6 (cleared day 24)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 21,
+      "dependsOn": "deliver3",
+      "evidence": [
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 1-2",
+      "settlesDay": 10,
+      "stepId": "collect1"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 1-2 (net 7)",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 3-4",
+      "settlesDay": 17,
+      "stepId": "collect2"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 3-4 (net 7)",
+      "stepId": "deliver2"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "Two studios pay $1,200 each on delivery of packages 5-6",
+      "settlesDay": 24,
+      "stepId": "collect3"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 108000,
+      "label": "Pay Hollow Tree Mixing $1,080 for packages 5-6 (net 7)",
+      "stepId": "deliver3"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "mix package price",
+      "status": "EVIDENCED",
+      "value": 120000,
+      "unit": "USD cents per package",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed mix-package orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "mixer cost",
+      "status": "EVIDENCED",
+      "value": 54000,
+      "unit": "USD cents per package",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "mixer capacity by day 21",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "packages",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net cash kept",
+      "status": "EVIDENCED",
+      "value": 396000,
+      "unit": "USD cents",
+      "sources": [
+       "s1",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "lacquer margin per side",
+      "status": "EVIDENCED",
+      "value": -3000,
+      "unit": "USD cents",
+      "sources": [
+       "s5",
+       "s6"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#price",
+      "dated": "2026-11-24",
+      "claim": "Six studio owners signed mix-package orders at $1,200 each (six written acceptances recorded).",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Hollow Tree Mixing quoted $540 a package; delivers 2 packages a week, first two on day 7, then days 14 and 21; invoices net 7 after delivery.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $540 per package.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_574ab6e4a6fa4fc0adb8#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#price",
+      "dated": "2026-11-24",
+      "claim": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_44b01dc2af1a486c9e20"
+     },
+     {
+      "id": "s6",
+      "url": "https://brain.local/card/cop_44b01dc2af1a486c9e20#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Groove Lane Cutting costs $380 a side, above the $350 price.",
+      "population": "Owners of independent recording studios",
+      "matchesBuyer": true,
+      "opportunityId": "cop_44b01dc2af1a486c9e20"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_44b01dc2af1a486c9e20",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_44b01dc2af1a486c9e20",
+      "why": "Direct cost $380 a side is above the $350 signed price; each deal loses $30."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_574ab6e4a6fa4fc0adb8",
+      "deals": 6,
+      "price": 1200,
+      "directCost": 540,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2edff0aa4f3a_cf5840",
+    "digest": "2edff0aa4f3aa1ca4e2af892",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8af7e8e1a84246c0b76e/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:49.134Z"
+   },
+   "review": {
+    "revisionId": "rev_2edff0aa4f3a_cf5840",
+    "revisionDigest": "2edff0aa4f3aa1ca4e2af892",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8af7e8e1a84246c0b76e/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_0feade2d489a46f98c44/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. cop_574ab6e4a6fa4fc0adb8 has six WRITTEN_ACCEPTANCE orders at $1,200 (a price these studios signed), a recorded fulfiller Hollow Tree Mixing that performs the delivery ($540 a package, 2 a week on days 7, 14, 21 = 6 by day 21, invoiced net 7), and studio payment on delivery cleared 3 days later. Every link is established on the card. Arithmetic recomputed against the CONTRIBUTION metric: 6 x ($1,200 - $540) = 6 x $660 = $3,960 >= $3,000 kept after all direct costs. Every mixer invoice ($1,080 on days 14, 21, 28) falls inside the 35-day window and is paid from receipts that cleared on days 10, 17 and 24, so cash never goes negative (min $0), no capital is advanced and exposure stays at the $0 cap. Five packages ($3,300) would still clear the target, so one slipped order does not break it. Excluding the lacquer cutting is correct: Groove Lane's $380 cost is above the $350 signed price, so each side loses $30 and adding it only lowers contribution.",
+    "findings": [
+     "proofDay is recorded as 10, but at day 10 only $2,400 has cleared with $3,240 of mixer cost still to come; contribution is $3,960 net of every cost only once the day-24 receipts clear (and final after the day-28 payment). The proof day should be 24-28; this does not change the stance.",
+     "Only the six signed studios are the market (no buyer volume beyond them), which is fine because the plan sells nothing beyond the signed orders."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:19:21.506Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Keep $3,000 of net cash after all direct costs within 35 days using no up-front capital.",
+    "terms": "d0a4da6e05ac2617",
+    "openings": {
+     "cop_44b01dc2af1a486c9e20": "a74c7b6ecaf4f683",
+     "cop_574ab6e4a6fa4fc0adb8": "a2f7efb914e249cb"
+    }
+   },
+   "at": "2026-11-27T23:20:19.498Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

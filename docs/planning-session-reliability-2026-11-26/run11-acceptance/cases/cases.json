@@ -1,0 +1,770 @@
+[
+  {
+    "id": "an-01-shortline-bridge-records",
+    "heldOut": true,
+    "description": "Bridge records: 180 directory contacts, 60 asked, 9 paid $650 (15% of contacts, this offer's own measurement); 120 not yet asked. $4,000 needs 7 sales (7 × $650 = $4,550). At the Wilson-low ~8%, 120 × 8% ≈ 9.6 sales ≈ $6,200; at 15%, 18 sales = $11,700. Calendar: emails days 1-3, orders by ~day 14, Brain delivers within a day, card funds settle 6 days after the order → last cash ~day 21 < day 30. Cost $8 of $650; nothing tied up. The crossing-inventory pack has an evidenced price but its volume is only Brain's estimate and no conversion is measured, so a correct plan does not count it. Executable on bridge records alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "short-line railroads",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "bridgeRecords",
+        "title": "Annual Part 237 bridge-inspection record workbook for short-line railroads",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "short-line railroads",
+        "payer": "Chief engineers and roadmasters at Class III short-line railroads",
+        "channel": "Email to the engineering contact each railroad publishes in the state DOT's short-line railroad directory",
+        "signalDaysAgo": 6,
+        "offer": "Brain compiles the railroad's own bridge inspection notes and photos into the annual 49 CFR Part 237 bridge-inspection record workbook, delivered within 1 day of the order; paid by card at order, funds settle 6 days after the order.",
+        "price": 650,
+        "priceEvidence": "Nine short-line railroads paid $650 each for this workbook in the last 60 days (card receipts on file).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 8,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state DOT directory lists 180 Class III short-line railroads, each with a published engineering contact; each must keep a Part 237 bridge-inspection record every year. 60 of them were emailed this offer; 120 have not been asked.",
+        "conversion": {
+          "paid": 9,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "crossingInventory",
+        "title": "Grade-crossing inventory update pack for short-line railroads",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "short-line railroads",
+        "payer": "Roadmasters at Class III short-line railroads",
+        "channel": "Email to the same directory contacts",
+        "offer": "Brain prepares the railroad's grade-crossing inventory update forms from its track charts.",
+        "price": 400,
+        "priceEvidence": "A railroad consultancy's published rate card lists a crossing-inventory update pack at $400.",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 8,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "Brain estimates that most short lines update their crossing inventories at least once a year.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": null
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "crossingInventory"
+      ]
+    }
+  },
+  {
+    "id": "an-02-cottage-food-label-storefront",
+    "heldOut": true,
+    "description": "The label storefront's own traffic: 1,640 visitors and 41 sales at $24 in the last 30 days (2.5%), 1,500-1,700 visitors a month for three months. Funds release 10 days after a sale, so only sales on days 0-35 settle inside 45 days: cautiously 1,500/30 × 35 = 1,750 visitors × 2.0% (below the measured 2.5%, near its Wilson low ~1.85%) = 35 sales × $21.60 kept after the 10% fee = $756 ≥ $600 (gross $840). Brain fulfils automatically; owner time per sale is zero. The owner allows 1 hour a week (≈ 6 hours in 45 days); each kitchen walk-through takes 8 owner hours, so not even one fits — the six booked consultations ($900) may not be used. Executable on the storefront alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "cottage food producers",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $600 of settled cash within 45 days using no up-front capital and no more than 1 hour a week of my time.",
+    "openings": [
+      {
+        "key": "labelPacks",
+        "title": "Cottage-food label packs sold from an existing digital-download storefront",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "cottage food producers",
+        "payer": "Home bakers and jam makers selling under the state cottage food law",
+        "channel": "The seller's own existing storefront on a digital-download marketplace, found through marketplace search",
+        "offer": "Brain turns the buyer's recipe form into a print-ready label pack: the state-required cottage-food statement, ingredient list and allergen declaration. Delivered automatically; no owner time per sale.",
+        "price": 24,
+        "priceEvidence": "The storefront's own order history: 41 label packs sold at $24 each in the last 30 days.",
+        "cost": 2.4,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.2,
+        "performer": "BRAIN",
+        "volume": "The storefront's own analytics: 1,640 unique visitors in the last 30 days, and 1,500 to 1,700 unique visitors in each of the three months before. The marketplace releases each sale's funds 10 days after the sale and keeps a 10% fee ($2.40 a sale).",
+        "conversion": {
+          "paid": 41,
+          "of": 1640,
+          "unit": "VISITORS"
+        }
+      },
+      {
+        "key": "kitchenConsults",
+        "title": "Home-kitchen licensing walk-throughs by the owner for cottage-food sellers",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "cottage food producers",
+        "payer": "Home bakers applying for a cottage-food registration",
+        "channel": "The owner's booking page",
+        "offer": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+        "price": 150,
+        "priceEvidence": "Six sellers booked and agreed to pay $150 each on the owner's booking page.",
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          150,
+          150,
+          150,
+          150,
+          150,
+          150
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 6,
+      "mustNotUse": [
+        "kitchenConsults"
+      ]
+    }
+  },
+  {
+    "id": "an-03-wind-blade-price-contradicted",
+    "heldOut": true,
+    "description": "Blade reports: the card cites a vendor list at $1,400 a farm, but a second source states $140. At $1,400, 64 registry farms × the measured 20% ≈ 12.8 deals ≈ $17,900 clears $6,000; at $140 even all 64 farms is $8,960 and the measured 20% is ≈ $1,790. The verdict turns entirely on which price is real, and the evidence contradicts itself. Every other link (registry contacts, measured conversion, Brain fulfils at $12, net 10 → cash by ~day 12-25 inside 30) is evidenced. No executable plan until the price is settled; the decisive gap is the offer and price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "wind farm operations",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "bladeReports",
+        "title": "Blade-inspection findings reports for independent wind farms",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "wind farm operations",
+        "payer": "Asset managers at independently owned wind farms",
+        "channel": "Email to the asset manager named in the state energy office's wind-farm registry",
+        "offer": "Brain turns the farm's own rope-access inspection photos into a findings report: damage categorised per blade and a prioritised repair list. Paid net 10 after delivery.",
+        "price": 1400,
+        "priceEvidence": "A blade-inspection reporting vendor's published price list states $1,400 per wind farm for an inspection findings report.",
+        "priceContradiction": 140,
+        "cost": 12,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state energy office's registry lists 64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year.",
+        "conversion": {
+          "paid": 6,
+          "of": 30,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "bladeReports"
+      }
+    }
+  },
+  {
+    "id": "an-04-theatre-grant-and-wage",
+    "heldOut": true,
+    "description": "Two openings, neither with a purchase price. The $5,000 is the grant the arts council awards a theatre — money paid to the theatre by a third party, not what a theatre pays for an application package (counting it, one sale would \"meet\" $4,000). The $650 is the minimum weekly salary a theatre pays a stage manager it employs — a wage, not what a theatre pays a contracting firm for a supplied stage manager. Every other link is evidenced on both (directory contacts, measured conversion, a fulfiller, settlement inside 30 days). No executable plan; the decisive gap is the offer and price on both.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "community theatre",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "grantPackage",
+        "title": "Arts-council grant application packages for community theatre companies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "community theatre",
+        "payer": "Managing directors of community theatre companies",
+        "channel": "Email to the managing director listed in the state arts council's grantee directory",
+        "offer": "Brain drafts the operating-support application (narrative, budget form, attachments checklist) from the company's own season records.",
+        "price": 5000,
+        "priceEvidence": "The state arts council's FY2027 guidelines: community theatre companies are awarded operating-support grants of $5,000 each.",
+        "cost": 15,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state arts council's directory lists 210 community theatre companies with a named managing director; the operating-support round is open now.",
+        "conversion": {
+          "paid": 6,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "stageManagers",
+        "title": "Contracted stage managers for community theatre productions",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "community theatre",
+        "payer": "Producing directors of community theatre companies",
+        "channel": "Email to the producing director listed in the arts council directory",
+        "offer": "A contracted stage manager for one week of tech and performances, supplied by a freelance stage-management collective.",
+        "price": 650,
+        "priceEvidence": "The stage managers' union small-theatre agreement sets the minimum weekly salary a theatre pays a stage manager it employs at $650.",
+        "cost": 500,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Cue Line Stage Management (freelance collective; quoted $500 a week per stage manager, available now)",
+        "volume": "The same directory's 210 companies each mount four to six productions a year.",
+        "conversion": {
+          "paid": 4,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ]
+      },
+      "notAPurchasePrice": [
+        "grantPackage",
+        "stageManagers"
+      ]
+    }
+  },
+  {
+    "id": "an-05-cnc-one-purchase-order",
+    "heldOut": true,
+    "description": "One named machine shop issued one $3,200 purchase order; Brain can fulfil it and it pays net 30 (day 32, inside 45). Nothing establishes any other buyer or that Harlan buys again, so the most this evidence shows is $3,200 against $9,000. A model that treats Harlan as a population of repeat buyers invents $5,800. No executable plan; market volume is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "CNC machine shops",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $9,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "harlanAudit",
+        "title": "AS9100 internal-audit evidence pack for Harlan Precision Machining",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "CNC machine shops",
+        "payer": "Harlan Precision Machining, Inc. (quality manager)",
+        "channel": "Harlan's quality manager, who issued the order",
+        "offer": "Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30.",
+        "price": 3200,
+        "priceEvidence": "Harlan Precision Machining's quality manager issued purchase order HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (dated 5 days ago).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 32,
+        "hours": 2,
+        "performer": "BRAIN",
+        "agreements": [
+          3200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "harlanAudit"
+      },
+      "payerDealsMax": {
+        "harlanAudit": 1
+      }
+    }
+  },
+  {
+    "id": "an-06-florist-holiday-delivery",
+    "heldOut": true,
+    "description": "Four shops signed $1,800 delivery blocks ($7,200). The courier confirmed in writing it can run all 400 deliveries over days 7-21 (≈ 27 a day, under its 40-a-day limit) at $11 a delivery ($1,100 a block, 61% of price, invoiced net 30 so nothing is tied up). Each shop pays within 3 days of its last delivery; funds clear by day 24 < day 35. Three blocks ($5,400) already clear $4,000. The window-display opening's $250 is only the owner's word, so a correct plan does not count it. Executable on the delivery blocks.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "retail florists",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $4,000 of settled cash within 35 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "holidayDelivery",
+        "title": "Holiday overflow delivery blocks for independent flower shops",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "retail florists",
+        "payer": "Owners of independent flower shops in the metro area",
+        "channel": "The four shop owners who signed block orders",
+        "offer": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+        "price": 1800,
+        "priceEvidence": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries ($18 a delivery).",
+        "cost": 1100,
+        "capital": 0,
+        "daysToCash": 24,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Petal Route Couriers LLC (quoted $11 a delivery, $1,100 a block, invoiced net 30; confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day)",
+        "agreements": [
+          1800,
+          1800,
+          1800,
+          1800
+        ]
+      },
+      {
+        "key": "windowDisplays",
+        "title": "Holiday window-display design for flower shops",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "retail florists",
+        "payer": "Owners of independent flower shops",
+        "channel": "Email to the metro florists' association member list",
+        "offer": "A freelance visual merchandiser dresses the shop window for the holiday season.",
+        "price": 250,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says flower shops will pay $250 for a holiday window.",
+        "cost": 120,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "A freelance visual merchandiser (quoted $120 a window)",
+        "volume": "The metro florists' association lists 85 member shops, each with a street-front window.",
+        "conversion": {
+          "paid": 9,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "windowDisplays"
+      ]
+    }
+  },
+  {
+    "id": "an-07-orchard-pruning-no-crew",
+    "heldOut": true,
+    "description": "Three orchard owners signed $2,250 pruning orders ($6,750 ≥ $5,000), the price matches the extension custom-rate survey, and payment within 7 days of completion would settle inside 45 days. But nobody is established to prune: no crew is named or quoted, and Brain cannot prune trees. No executable plan; fulfilment is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "FULFILMENT",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "apple orchards",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $5,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "dormantPruning",
+        "title": "Dormant-season pruning of apple orchard blocks",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "apple orchards",
+        "payer": "Owners of mid-size apple orchards in the valley",
+        "channel": "The three orchard owners who signed orders",
+        "offer": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+        "price": 2250,
+        "priceEvidence": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the state extension service's custom-rate survey of $450 an acre.",
+        "cost": 1300,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 2,
+        "performer": "NOBODY",
+        "agreements": [
+          2250,
+          2250,
+          2250
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "FULFILMENT"
+        ],
+        "opening": "dormantPruning"
+      }
+    }
+  },
+  {
+    "id": "an-08-studio-mixes-net",
+    "heldOut": true,
+    "description": "A net objective: $3,000 kept after direct costs. Six studios signed $1,200 mix packages; the engineer costs $540, so each keeps $660 and six keep $3,960 ≥ $3,000 (five keep $3,300). Calendar: the engineer delivers 2 a week, on days 7, 14 and 21; studios pay on delivery, cleared 3 days later → cash on days 10, 17, 24 < day 35; the engineer invoices net 7 after delivery (days 14, 21, 28), after the matching studio cash, so nothing is tied up. The eight signed lacquer orders ($2,800 gross) cost $380 against a $350 price — each loses $30 — and may not be used; a plan that counts gross revenue ($7,200 or $10,000) as the target is unsound. Executable on the mix packages, read net.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent recording studios",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $3,000 of net cash after all direct costs within 35 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "mixPackages",
+        "title": "Contracted album mixing for independent recording studios",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "independent recording studios",
+        "payer": "Owners of independent recording studios",
+        "channel": "The six studio owners who signed package orders",
+        "offer": "A 10-song mix package for a studio's client album, mixed by a contracted mix engineer. Studios pay on delivery of the final mixes by bank transfer, cleared 3 days after delivery.",
+        "price": 1200,
+        "priceEvidence": "Six studio owners signed mix-package orders at $1,200 each.",
+        "cost": 540,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Hollow Tree Mixing (quoted $540 a package; delivers 2 packages a week, the first two on day 7, then days 14 and 21; invoices net 7 after delivery)",
+        "agreements": [
+          1200,
+          1200,
+          1200,
+          1200,
+          1200,
+          1200
+        ]
+      },
+      {
+        "key": "lacquerCutting",
+        "title": "Brokered vinyl lacquer cutting for independent studios",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "independent recording studios",
+        "payer": "Owners of independent recording studios",
+        "channel": "The studio owners who signed cutting orders",
+        "offer": "One lacquer side cut by a contracted cutting house, paid on delivery.",
+        "price": 350,
+        "priceEvidence": "Eight studio owners signed lacquer-cutting orders at $350 a side.",
+        "cost": 380,
+        "capital": 0,
+        "daysToCash": 9,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Groove Lane Cutting (quoted $380 a side, 5-day turnaround)",
+        "agreements": [
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350,
+          350
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "lacquerCutting"
+      ]
+    }
+  },
+  {
+    "id": "an-09-listing-photos-hours-cut",
+    "heldOut": true,
+    "description": "Ten agents signed $325 shoots the owner performs at 4 hours each. First reading (no hours limit): $2,500 needs 8 shoots (8 × $325 = $2,600), 32 owner hours at up to 2 shoots a day → shot by about day 5, card funds 2 days after delivery → cash by about day 8 < 21: executable. The owner then restates the objective with at most 4 hours a week: 21 days is 3 weeks = 12 hours = 3 shoots = $975, and no one else is established to shoot. After the change no plan reaches $2,500; the owner-hours limit is decisive.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "real-estate listing photography",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $2,500 of settled cash within 21 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $2,500 of settled cash within 21 days using no up-front capital and no more than 4 hours a week of my time."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "listingShoots",
+        "title": "Listing photo shoots for residential real-estate agents",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "real-estate listing photography",
+        "payer": "Residential listing agents at two local brokerages",
+        "channel": "The ten agents who signed shoot orders",
+        "offer": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+        "price": 325,
+        "priceEvidence": "Ten listing agents signed shoot orders at $325 each, for listings going live within the next 3 weeks.",
+        "cost": 15,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 4,
+        "performer": "OWNER",
+        "agreements": [
+          325,
+          325,
+          325,
+          325,
+          325,
+          325,
+          325,
+          325,
+          325,
+          325
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 12
+    }
+  },
+  {
+    "id": "an-10-paving-net45-after-deadline",
+    "heldOut": true,
+    "description": "Six signed $1,500 traffic-control plans ($9,000), a PE stamps them in 3 days at $600, margin sound. But every signed order pays net 45 from the day-3 invoice: the earliest cash is day 48, and the window ends on day 14. No dollar can settle in time; the deadline rules every plan out.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "highway paving contractors",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $5,000 of settled cash within 14 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "trafficPlans",
+        "title": "Stamped temporary traffic-control plans for paving contractors",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "highway paving contractors",
+        "payer": "Project managers at paving contractors on state DOT resurfacing jobs",
+        "channel": "The six project managers who signed plan orders",
+        "offer": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "price": 1500,
+        "priceEvidence": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice.",
+        "cost": 600,
+        "capital": 0,
+        "daysToCash": 48,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoices net 60)",
+        "agreements": [
+          1500,
+          1500,
+          1500,
+          1500,
+          1500,
+          1500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "an-11-ultrasound-capital-raised",
+    "heldOut": true,
+    "description": "Two clinics signed $13,500 installed units; the refurbisher must be paid $9,200 in full before shipping and no clinic prepays. First reading: at most $1,500 of capital, so no unit can be bought — infeasible on capital. The owner then raises capital to $20,000: both units fit at once ($18,400). Calendar: pay day 0, ships day 10, installed day 12, ACH cleared day 14 < day 40; one unit ($13,500) alone clears the $10,000, two collect $27,000. Executable after the change.",
+    "dimensions": {
+      "capital": "large",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "refurbished medical imaging equipment",
+      "mechanism": "RESALE_OR_ASSET"
+    },
+    "objective": "Collect $10,000 of settled cash within 40 days with at most $1,500 of capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 20000
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 1500
+    },
+    "openings": [
+      {
+        "key": "ultrasoundUnits",
+        "title": "Refurbished point-of-care ultrasound units for rural urgent-care clinics",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "refurbished medical imaging equipment",
+        "payer": "Practice managers at rural urgent-care clinics",
+        "channel": "The two practice managers who signed purchase agreements",
+        "offer": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+        "price": 13500,
+        "priceEvidence": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+        "cost": 9200,
+        "capital": 9200,
+        "daysToCash": 14,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Clearview Imaging Refurb (quoted $9,200 per unit including freight and installation; two units in stock)",
+        "agreements": [
+          13500,
+          13500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 20000
+    }
+  },
+  {
+    "id": "an-12-ambulance-counted-market",
+    "heldOut": true,
+    "description": "The state licenses exactly 140 ground ambulance services and each needs one binder a year: the whole counted market is 140 × $600 = $84,000 (and 12 already bought, leaving $76,800), under the $100,000 target at any conversion and any window. Every link is otherwise evidenced. Infeasible as stated; the target is out of reach of the counted market.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "ground ambulance services",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $100,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "inspectionBinders",
+        "title": "Annual inspection-readiness binders for ground ambulance services",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "ground ambulance services",
+        "payer": "Operations directors at licensed ground ambulance services",
+        "channel": "Email to the operations contact listed in the state EMS office's licence register",
+        "offer": "Brain compiles the service's vehicle and equipment logs into the state's annual inspection checklist binder. Paid by card on delivery; funds settle in 3 days.",
+        "price": 600,
+        "priceEvidence": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+        "conversion": {
+          "paid": 12,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  }
+]

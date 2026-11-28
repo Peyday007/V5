@@ -1,0 +1,190 @@
+{
+ "caseId": "an-10-paving-net45-after-deadline",
+ "keys": {
+  "cop_e73492ae9f1441edb0ca": "trafficPlans"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 48 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_e73492ae9f1441edb0ca"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_e73492ae9f1441edb0ca",
+    "title": "Stamped temporary traffic-control plans for paving contractors",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Project managers at paving contractors on state DOT resurfacing jobs",
+     "reachableChannel": "The six project managers who signed plan orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:43.774Z",
+     "offerScope": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoices net 60)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "highway paving contractors",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 150000,
+      "currency": "USD",
+      "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six project managers who signed plan orders"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 9000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 9000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoice (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 600, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "48 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoices net 60) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Project managers at paving contractors on state DOT resurfacing jobs",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "48 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_2ab1e063028941fda730",
+   "cnd_d30cf2f060924185b43c"
+  ],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:55.407Z"
+ }
+}

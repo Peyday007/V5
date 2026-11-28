@@ -144,7 +144,55 @@ export async function establishContract(input: {
 
 // ------------------------------------------------------------------------------------- context
 
+/** The largest context a call returns: under the transport's 256 KB result limit (`mcp/limits.ts`), with room for its envelope. */
+export const CONTEXT_BUDGET_BYTES = 200 * 1024;
+
+/**
+ * The context, made to fit one call. On a large project the planner weighs many openings whose cards carry long research
+ * text, and the whole context passed the transport's limit, so the session could read nothing at all (production,
+ * 2026-11-28, Cash Mode 1: "That result is too large to return" five times). Ids, links, questions and figures are
+ * never dropped; long text is shortened first, then the record detail of openings outside the goal's own, each step
+ * saying what it left out.
+ */
+export function fitContext<T extends Record<string, unknown>>(ctx: T, budget: number = CONTEXT_BUDGET_BYTES): T & { compacted?: string[] } {
+  const size = (v: unknown) => Buffer.byteLength(JSON.stringify(v), 'utf8');
+  if (size(ctx) <= budget) return ctx;
+  const notes: string[] = [];
+  const shorten = (v: unknown, max: number): unknown => {
+    if (typeof v === 'string') return v.length > max ? `${v.slice(0, max)}… [${v.length - max} more characters]` : v;
+    if (Array.isArray(v)) return v.map((x) => shorten(x, max));
+    if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shorten(x, max)]));
+    return v;
+  };
+  let out = ctx as Record<string, unknown>;
+  for (const max of [600, 240, 120]) {
+    out = shorten(out, max) as Record<string, unknown>;
+    notes.push(`text fields longer than ${max} characters shortened`);
+    if (size(out) <= budget) return { ...(out as T), compacted: notes };
+  }
+  // Brain's weighed openings beyond the goal's own keep their id, title, missing links and link verdicts only.
+  const own = new Set(((out['openings'] as { id: string }[] | undefined) ?? []).map((o) => o.id));
+  const brain = out['brain'] as { openings?: Record<string, unknown>[]; excluded?: Record<string, unknown>[] } | null;
+  if (brain) {
+    const slim = (o: Record<string, unknown>) => (own.has(String(o['opportunityId'])) ? o : { opportunityId: o['opportunityId'], title: o['title'], missing: o['missing'], links: o['links'], reason: o['reason'], stage: o['stage'] });
+    out = { ...out, brain: { ...brain, openings: (brain.openings ?? []).map(slim), excluded: (brain.excluded ?? []).map(slim) } };
+    notes.push("openings outside the goal's own are summarized (id, title, missing links, verdicts); the goal's own keep their full cards");
+  }
+  const b2 = out['brain'] as { openings?: unknown[]; excluded?: unknown[] } | null;
+  if (b2 && size(out) > budget) {
+    const keep = 30;
+    const omitted = Math.max(0, (b2.openings?.length ?? 0) - keep) + Math.max(0, (b2.excluded?.length ?? 0) - keep);
+    out = { ...out, brain: { ...b2, openings: (b2.openings ?? []).slice(0, keep), excluded: (b2.excluded ?? []).slice(0, keep) } };
+    notes.push(`only the first ${keep} weighed and ${keep} excluded openings listed (${omitted} more not shown)`);
+  }
+  return { ...(out as T), compacted: notes };
+}
+
 export async function planningContext(goalId: string) {
+  return fitContext(await planningContextFull(goalId));
+}
+
+async function planningContextFull(goalId: string) {
   const goal = await liveGoal(goalId);
   const contract = await currentContract(goalId);
   const stored = await storedTerms(goalId);
@@ -322,50 +370,86 @@ async function raiseQuestions(reading: Parameters<typeof import('../goals/pathRe
   }
 }
 
-/** Brain's real planner on this goal, bounded in time; a failure is recorded as a failure, never as a reading. */
-/** Planner runs a timed-out call left going, per goal, so the next call can wait for them. */
-const abandonedRuns = new Map<string, Promise<void>>();
+/**
+ * How long one call waits for Brain's planner before answering. The Claude app's connector gives a tool call about 60 s
+ * (§64: Brain answers within the time its caller waits); on a large project the planner can take minutes (production,
+ * 2026-11-28, Cash Mode 1: "timed out after 60s" twice, then the run was lost). A call that outlasts its budget answers
+ * "still reading", and the reading is recorded when it finishes, for the next call and for submitRevision to use.
+ */
+export const BRAIN_CALL_BUDGET_MS = 45_000;
 
-export async function runBrain(input: { goalId: string; actor: PlanExecutor; evaluations?: number; timeoutMs?: number }): Promise<BrainRunSummary> {
+/** Planner runs in progress, per goal: a later call waits on the one already running instead of starting another. */
+const runningReads = new Map<string, Promise<BrainRunSummary>>();
+/**
+ * The planner call itself, per goal, which outlives a read that timed out: it holds the process's one scenario slot
+ * until it ends, so the next read waits for it (bounded) rather than being refused as busy.
+ */
+const plannerCalls = new Map<string, Promise<void>>();
+
+async function summarize(reading: NonNullable<Awaited<ReturnType<typeof import('../goals/plan.ts')['readGoalPlan']>>>, at: string): Promise<BrainRunSummary> {
+  return {
+    completed: true,
+    error: null,
+    verdict: reading.verdict,
+    summary: reading.summary,
+    acceptance: reading.acceptance?.status ?? null,
+    considered: (reading.strategies ?? []).flatMap((s) => s.opportunityIds ?? []).filter((v, i, a) => a.indexOf(v) === i),
+    integrity: (reading.integrity ?? []).map((v) => ({ rule: String(v.rule), detail: String(v.detail) })),
+    steps: (reading.steps ?? []).map((s) => ({ label: s.label, owner: s.owner, cost: s.cost })),
+    nextTest: reading.nextTest?.test ?? null,
+    openings: await consideredOpenings(reading),
+    excluded: await Promise.all((reading.excluded ?? []).map(async (x) => ({ opportunityId: x.opportunityId, title: x.title, reason: x.reason, ...(await openingRecord(x.opportunityId)) }))),
+    questions: await raiseQuestions(reading),
+    scope: { targetCents: reading.target.targetCents, daysLeft: reading.target.daysLeft ?? null, hoursCeiling: reading.target.hoursCeiling ?? null, industry: reading.target.scope?.industry ?? null, recurring: reading.target.scope?.recurring ?? null, hoursPerWeek: reading.target.scope?.hoursPerWeek ?? null },
+    at,
+  };
+}
+
+/**
+ * Brain's real planner on this goal, bounded in time: a failure is recorded as a failure, never as a reading, and a run
+ * that outlasts the call's budget keeps going and records its reading when it finishes. Its answer then is
+ * `running: true`, which is neither a reading nor a failure.
+ */
+export async function runBrain(input: { goalId: string; actor: PlanExecutor; evaluations?: number; timeoutMs?: number; budgetMs?: number }): Promise<BrainRunSummary & { running?: boolean }> {
   await liveGoal(input.goalId);
-  const { readGoalPlan } = await import('../goals/plan.ts');
-  const at = new Date().toISOString();
-  let summary: BrainRunSummary;
-  try {
-    // A call that timed out leaves its planner run going and holding the process's one scenario
-    // slot; a later call waits for it to end rather than being refused as busy (a resume).
-    const abandoned = abandonedRuns.get(input.goalId);
-    if (abandoned) await Promise.race([abandoned, new Promise((r) => setTimeout(r, input.timeoutMs ?? BRAIN_RUN_TIMEOUT_MS).unref?.())]);
-    const run = readGoalPlan({ goalId: input.goalId, persist: true, evaluations: input.evaluations ?? 400 });
-    const settled = run.then(() => undefined, () => undefined);
-    abandonedRuns.set(input.goalId, settled);
-    void settled.then(() => { if (abandonedRuns.get(input.goalId) === settled) abandonedRuns.delete(input.goalId); });
-    const reading = await Promise.race([
-      run,
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer within ${Math.round((input.timeoutMs ?? BRAIN_RUN_TIMEOUT_MS) / 1000)} s`)), input.timeoutMs ?? BRAIN_RUN_TIMEOUT_MS).unref?.()),
-    ]);
-    if (!reading) throw new Error('the planner returned no reading');
-    summary = {
-      completed: true,
-      error: null,
-      verdict: reading.verdict,
-      summary: reading.summary,
-      acceptance: reading.acceptance?.status ?? null,
-      considered: (reading.strategies ?? []).flatMap((s) => s.opportunityIds ?? []).filter((v, i, a) => a.indexOf(v) === i),
-      integrity: (reading.integrity ?? []).map((v) => ({ rule: String(v.rule), detail: String(v.detail) })),
-      steps: (reading.steps ?? []).map((s) => ({ label: s.label, owner: s.owner, cost: s.cost })),
-      nextTest: reading.nextTest?.test ?? null,
-      openings: await consideredOpenings(reading),
-      excluded: await Promise.all((reading.excluded ?? []).map(async (x) => ({ opportunityId: x.opportunityId, title: x.title, reason: x.reason, ...(await openingRecord(x.opportunityId)) }))),
-      questions: await raiseQuestions(reading),
-      scope: { targetCents: reading.target.targetCents, daysLeft: reading.target.daysLeft ?? null, hoursCeiling: reading.target.hoursCeiling ?? null, industry: reading.target.scope?.industry ?? null, recurring: reading.target.scope?.recurring ?? null, hoursPerWeek: reading.target.scope?.hoursPerWeek ?? null },
-      at,
-    };
-  } catch (err) {
-    summary = { completed: false, error: err instanceof Error ? err.message : String(err), verdict: null, summary: null, acceptance: null, considered: [], integrity: [], steps: [], nextTest: null, openings: [], excluded: [], questions: [], scope: null, at };
+  let pending = runningReads.get(input.goalId);
+  if (!pending) {
+    const at = new Date().toISOString();
+    const limit = input.timeoutMs ?? BRAIN_RUN_TIMEOUT_MS;
+    pending = (async (): Promise<BrainRunSummary> => {
+      let summary: BrainRunSummary;
+      try {
+        const { readGoalPlan } = await import('../goals/plan.ts');
+        const previous = plannerCalls.get(input.goalId);
+        if (previous) await Promise.race([previous, new Promise((r) => setTimeout(r, limit).unref?.())]);
+        const call = readGoalPlan({ goalId: input.goalId, persist: true, evaluations: input.evaluations ?? 400 });
+        const settled = call.then(() => undefined, () => undefined);
+        plannerCalls.set(input.goalId, settled);
+        void settled.then(() => { if (plannerCalls.get(input.goalId) === settled) plannerCalls.delete(input.goalId); });
+        const reading = await Promise.race([
+          call,
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error(`no answer within ${Math.round(limit / 1000)} s`)), limit).unref?.()),
+        ]);
+        if (!reading) throw new Error('the planner returned no reading');
+        summary = await summarize(reading, at);
+      } catch (err) {
+        summary = { completed: false, error: err instanceof Error ? err.message : String(err), verdict: null, summary: null, acceptance: null, considered: [], integrity: [], steps: [], nextTest: null, openings: [], excluded: [], questions: [], scope: null, at };
+      }
+      await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.brain, summary: summary.completed ? `Brain planner read: ${summary.verdict}` : `Brain planner FAILED: ${summary.error}`, detail: { summary }, actorRef: actorOf(input.actor) });
+      return summary;
+    })();
+    runningReads.set(input.goalId, pending);
+    const mine = pending;
+    void mine.finally(() => { if (runningReads.get(input.goalId) === mine) runningReads.delete(input.goalId); });
   }
-  await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.brain, summary: summary.completed ? `Brain planner read: ${summary.verdict}` : `Brain planner FAILED: ${summary.error}`, detail: { summary }, actorRef: actorOf(input.actor) });
-  return summary;
+  const budget = input.budgetMs ?? BRAIN_CALL_BUDGET_MS;
+  const done = await Promise.race([pending, new Promise<null>((r) => setTimeout(() => r(null), budget).unref?.())]);
+  if (done) return done;
+  return {
+    completed: false, running: true,
+    error: `Brain's planner is still reading this goal (it takes longer than one call may wait); its reading is recorded when it finishes — call brain_planning_run_brain again in a minute, or read it in brain_planning_context`,
+    verdict: null, summary: null, acceptance: null, considered: [], integrity: [], steps: [], nextTest: null, openings: [], excluded: [], questions: [], scope: null, at: new Date().toISOString(),
+  };
 }
 
 /** Openings the session may plan on: those linked to the goal, and those Brain's own planner weighed for it. */
@@ -686,6 +770,30 @@ export function incompleteSections(r: Partial<PlanRevisionInput>): string[] {
 }
 
 /**
+ * Where a payload's sections have the wrong shape, each with its path. A malformed section is refused here, by name,
+ * rather than crashing a check downstream (production, 2026-11-28, the owner's app journey: a NO_PLAN revision sent a
+ * strategy with no `opportunityIds`, and every submit failed with "ids is not iterable").
+ */
+export function shapeProblems(r: Partial<PlanRevisionInput>): string[] {
+  const out: string[] = [];
+  const arr = (v: unknown) => Array.isArray(v);
+  const strings = (v: unknown) => arr(v) && (v as unknown[]).every((x) => typeof x === 'string');
+  if (r.strategy !== undefined && r.strategy !== null) {
+    if (typeof r.strategy !== 'object') out.push('strategy must be an object {title, opportunityIds, why}');
+    else if (!strings((r.strategy as { opportunityIds?: unknown }).opportunityIds)) out.push('strategy.opportunityIds must be an array of opening ids (empty for a no-plan result)');
+  }
+  for (const k of ['alternatives', 'steps', 'cash', 'quantities', 'sources', 'answers', 'chain', 'excluded', 'members', 'resolves', 'constraints', 'disagreements'] as const) {
+    const v = (r as Record<string, unknown>)[k];
+    if (v !== undefined && v !== null && !arr(v)) out.push(`${k} must be an array`);
+  }
+  (r.chain ?? []).forEach((c, i) => { if (!c || typeof c.opportunityId !== 'string' || !strings(c.missing)) out.push(`chain[${i}] must be {opportunityId, missing: [links]}`); });
+  (r.excluded ?? []).forEach((x, i) => { if (!x || typeof x.opportunityId !== 'string') out.push(`excluded[${i}] must be {opportunityId, why}`); });
+  if (r.resolves !== undefined && r.resolves !== null && !strings(r.resolves)) out.push('resolves must be an array of chain links');
+  if (r.validation && typeof r.validation === 'object' && r.validation.decides !== undefined && !strings(r.validation.decides)) out.push('validation.decides must be an array of chain links');
+  return out;
+}
+
+/**
  * Submit a revision: it is digested, checked against the current contract and Brain's latest
  * planner run (run now when none followed the last contribution), recorded, and its concrete
  * problems returned for the next revision.
@@ -695,6 +803,8 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   await liveGoal(goalId);
   const contract = await currentContract(goalId);
   if (!contract) throw new PlanningRefusal('establish the goal contract first', 'planning:contract');
+  const malformed = shapeProblems(input.revision);
+  if (malformed.length) throw new PlanningRefusal(`the revision is malformed: ${malformed.join('; ')}`, 'planning:revision');
   const missing = incompleteSections(input.revision);
   const r: PlanRevisionInput = {
     goalId,
@@ -723,7 +833,11 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   };
   const lastContribution = (await events(goalId, PLANNING_EVENTS.contribution)).pop();
   let brainRun = ((await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined) ?? null;
-  if (!brainRun || (lastContribution && brainRun.at < lastContribution.createdAt)) brainRun = await runBrain({ goalId, actor: input.actor });
+  if (!brainRun || (lastContribution && brainRun.at < lastContribution.createdAt)) {
+    const fresh = await runBrain({ goalId, actor: input.actor });
+    if (fresh.running) throw new PlanningRefusal(`${fresh.error}; then submit this revision again (nothing was recorded)`, 'planning:revision');
+    brainRun = fresh;
+  }
   const admitted = await admittedIds(goalId);
   const fulfilment = await fulfilmentOf(r.strategy.opportunityIds);
   r.steps = await withExecutors(r.steps, r.strategy.opportunityIds, fulfilment);
@@ -795,7 +909,8 @@ const REVIEW_INSTRUCTIONS =
         'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
         'revision skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
         'against the target, capital per cycle against the limits, when the cash settles against the window) and checking that any ' +
-        'test does not take buyers’ orders before the opening’s fulfilment is shown possible; record brain_planning_review with verdict PASS or REVISE, ' +
+        'test does not take buyers’ orders before the opening’s fulfilment is shown possible, and that passing it at its threshold carries ' +
+  'the target; record brain_planning_review with verdict PASS or REVISE, ' +
         'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
         'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.';
 

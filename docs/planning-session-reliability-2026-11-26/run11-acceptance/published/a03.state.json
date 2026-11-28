@@ -1,0 +1,917 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_24c9143121c2470289b3",
+   "words": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$6,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "51bf242e8b9f6c0e2148b526"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_24c9143121c2470289b3",
+    "contractDigest": "51bf242e8b9f6c0e2148b526",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the blade-report price is established",
+     "opportunityIds": [],
+     "why": "The only opening's price is contradicted on its own record: priceCents $1,400 against a price fact of $140. At $1,400 five reports would carry $6,000 and the 34 un-asked registry farms at the measured 6/30 would yield ~6.8; at $140 it needs 43 reports from a 64-farm registry that at 6/30 yields about 7. Which one buyers pay decides whether any plan exists, and neither figure is an established purchase price."
+    },
+    "alternatives": [
+     {
+      "title": "Sell blade-inspection findings reports at $1,400",
+      "why": "Would reach the target if $1,400 were the price buyers pay, but the card's own price fact says $140; a contradicted figure is not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Establish the price actually agreed: read the 6 accepted offers' written terms or invoices for the amount each farm agreed to pay",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_pricecard",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "If unrecorded, quote the report at $1,400 net 10 to the 34 un-asked asset managers and record written acceptances at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "research",
+      "evidence": [
+       "s_vol",
+       "s_conv"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per report",
+      "sources": [
+       "s_price",
+       "s_pricecard"
+      ],
+      "needs": "A written acceptance or invoice showing what a wind-farm asset manager pays for this report ($140 and $1,400 are both on the card)"
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "agreements per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 64,
+      "unit": "wind farms (34 not yet asked)",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#price",
+      "dated": "2026-11-27",
+      "claim": "The card's price fact says $140",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_pricecard",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#priceCents",
+      "dated": "2026-11-27",
+      "claim": "The card's priceCents field says $1,400 — ten times the price fact",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "6 agreements from 30 contacts",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "12 days to usable cash (net 10 after delivery)",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The report's price is contradicted on its own record (priceCents $1,400 vs price fact $140), so no price buyers pay is established, and whether the 64-farm registry can carry $6,000 in 30 days turns entirely on which it is.",
+     "resolution": "Confirm the agreed price from the 6 accepted offers' written terms; failing that, quote $1,400 net 10 to the 34 un-asked registry asset managers and record written acceptances. At an established $1,400, five accepted reports settle within ~12 days and the plan becomes executable; at $140 it cannot reach $6,000.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_10499010ea344e9889ae",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_10499010ea344e9889ae",
+      "why": "Price contradicted ($1,400 on the card vs $140 in its price fact); market volume is sufficient only at the higher figure."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4bafa64f1f6a_b22b53",
+    "digest": "4bafa64f1f6aaab380e0ad8e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_85f4f43b4b2047249add/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:38.168Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_24c9143121c2470289b3",
+   "contractDigest": "51bf242e8b9f6c0e2148b526",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the blade-report price is established",
+    "opportunityIds": [],
+    "why": "The only opening's price is contradicted on its own record: priceCents $1,400 against a price fact of $140. At $1,400 five reports would carry $6,000 and the 34 un-asked registry farms at the measured 6/30 would yield ~6.8; at $140 it needs 43 reports from a 64-farm registry that at 6/30 yields about 7. Which one buyers pay decides whether any plan exists, and neither figure is an established purchase price."
+   },
+   "alternatives": [
+    {
+     "title": "Sell blade-inspection findings reports at $1,400",
+     "why": "Would reach the target if $1,400 were the price buyers pay, but the card's own price fact says $140; a contradicted figure is not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Establish the price actually agreed: read the 6 accepted offers' written terms or invoices for the amount each farm agreed to pay",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price",
+      "s_pricecard",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "If unrecorded, quote the report at $1,400 net 10 to the 34 un-asked asset managers and record written acceptances at that price",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "research",
+     "evidence": [
+      "s_vol",
+      "s_conv"
+     ],
+     "priceCents": 140000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per report",
+     "sources": [
+      "s_price",
+      "s_pricecard"
+     ],
+     "needs": "A written acceptance or invoice showing what a wind-farm asset manager pays for this report ($140 and $1,400 are both on the card)"
+    },
+    {
+     "name": "close rate",
+     "status": "EVIDENCED",
+     "value": 0.2,
+     "unit": "agreements per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 64,
+     "unit": "wind farms (34 not yet asked)",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_10499010ea344e9889ae#price",
+     "dated": "2026-11-27",
+     "claim": "The card's price fact says $140",
+     "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_10499010ea344e9889ae"
+    },
+    {
+     "id": "s_pricecard",
+     "url": "https://brain.local/card/cop_10499010ea344e9889ae#priceCents",
+     "dated": "2026-11-27",
+     "claim": "The card's priceCents field says $1,400 — ten times the price fact",
+     "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_10499010ea344e9889ae"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_10499010ea344e9889ae#conversionRates",
+     "dated": "2026-11-27",
+     "claim": "6 agreements from 30 contacts",
+     "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_10499010ea344e9889ae"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_10499010ea344e9889ae#buyerVolume",
+     "dated": "2026-11-27",
+     "claim": "64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year",
+     "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_10499010ea344e9889ae"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_10499010ea344e9889ae#timeToFirstCash",
+     "dated": "2026-11-27",
+     "claim": "12 days to usable cash (net 10 after delivery)",
+     "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_10499010ea344e9889ae"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "The report's price is contradicted on its own record (priceCents $1,400 vs price fact $140), so no price buyers pay is established, and whether the 64-farm registry can carry $6,000 in 30 days turns entirely on which it is.",
+    "resolution": "Confirm the agreed price from the 6 accepted offers' written terms; failing that, quote $1,400 net 10 to the 34 un-asked registry asset managers and record written acceptances. At an established $1,400, five accepted reports settle within ~12 days and the plan becomes executable; at $140 it cannot reach $6,000.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_10499010ea344e9889ae",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_10499010ea344e9889ae",
+     "why": "Price contradicted ($1,400 on the card vs $140 in its price fact); market volume is sufficient only at the higher figure."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_4bafa64f1f6a_b22b53",
+   "digest": "4bafa64f1f6aaab380e0ad8e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_85f4f43b4b2047249add/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:14:38.168Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_4bafa64f1f6a_b22b53",
+   "digest": "4bafa64f1f6aaab380e0ad8e",
+   "contractDigest": "51bf242e8b9f6c0e2148b526",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 6000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 42409× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Blade-inspection findings reports for independent wind farms\" needs [figure withheld] and keeps [figure withheld], 758× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Asset managers at independently owned wind farms\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_10499010ea344e9889ae"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Blade-inspection findings reports for independent wind farms\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Blade-inspection findings reports for independent wind farms\"",
+      "owner": "PERSON",
+      "cost": 12
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Asset managers at independently owned wind farms",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Asset managers at independently owned wind farms",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment for \"Blade-inspection findings reports for independent wind farms\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 130.59591037841983
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_10499010ea344e9889ae",
+      "title": "Blade-inspection findings reports for independent wind farms",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Asset managers at independently owned wind farms",
+       "reachableChannel": "Email to the asset manager named in the state energy office's wind-farm registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:40.839Z",
+       "offerScope": "Brain turns the farm's own rope-access inspection photos into a findings report: damage categorised per blade and a prioritised repair list. Paid net 10 after delivery.",
+       "priceCents": 140000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "wind farm operations",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the asset manager named in the state energy office's wind-farm registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 6 accepted of 30 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "44 deal(s) needed at the measured rate means asking 384 prospects, but the market holds only 64 (64 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days): at that rate it yields about 7.3"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 12, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state energy office's registry lists 64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain turns the farm's own rope-access inspection photos into a findings report: damage categorised per blade and a prioritised repair list. Paid net 10 after delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "6 agreements from 30 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$12",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Asset managers at independently owned wind farms",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$140",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_29719e44c00b430d9e50"
+    ],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:11:31.671Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_4bafa64f1f6a_b22b53",
+    "revisionDigest": "4bafa64f1f6aaab380e0ad8e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_85f4f43b4b2047249add/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_07e4ba2615ab49a08743/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the right decisive gap. The only opening cop_10499010ea344e9889ae carries two prices on its own record: priceCents $1,400 and a price EVIDENCE fact of $140. Brain's OFFER_AND_PRICE link is false ('no single price on the card'), so no price buyers pay is established, and treating either figure as known would be treating an unknown as known. Recomputed: at $1,400, ceil(6,000/1,400) = 5 reports; 34 un-asked registry farms x the measured 6/30 = 6.8 expected, settling ~12 days after delivery inside 30. At $140, ceil(6,000/140) = 43 reports against a 64-farm registry buying once a year, of which 34 are un-asked (~6.8 expected) — impossible. The price alone decides whether any plan exists, so decisiveLinks = [OFFER_AND_PRICE] is correct. It is NO_PLAN rather than CONDITIONAL because the unknown is answerable from records already held (the 6 accepted offers' written terms or invoices), not only by a live test; the resolution names that first and the $1,400 quote to the 34 un-asked managers as the fallback, with the condition under which it becomes executable.",
+    "findings": [
+     "If the fallback quote is run, it should be a bounded test (e.g. first 10-15 of the 34) with a stop rule, since quoting all 34 at a possibly wrong price spends the whole remaining market in one pass.",
+     "Whether the 6 earlier agreements were paid, and at which price, is itself the most direct evidence; their settlement is not counted toward the target, correctly."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:17:14.833Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_4bafa64f1f6a_b22b53",
+   "digest": "4bafa64f1f6aaab380e0ad8e",
+   "contractDigest": "51bf242e8b9f6c0e2148b526",
+   "plan": {
+    "goalId": "wst_24c9143121c2470289b3",
+    "contractDigest": "51bf242e8b9f6c0e2148b526",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the blade-report price is established",
+     "opportunityIds": [],
+     "why": "The only opening's price is contradicted on its own record: priceCents $1,400 against a price fact of $140. At $1,400 five reports would carry $6,000 and the 34 un-asked registry farms at the measured 6/30 would yield ~6.8; at $140 it needs 43 reports from a 64-farm registry that at 6/30 yields about 7. Which one buyers pay decides whether any plan exists, and neither figure is an established purchase price."
+    },
+    "alternatives": [
+     {
+      "title": "Sell blade-inspection findings reports at $1,400",
+      "why": "Would reach the target if $1,400 were the price buyers pay, but the card's own price fact says $140; a contradicted figure is not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Establish the price actually agreed: read the 6 accepted offers' written terms or invoices for the amount each farm agreed to pay",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_pricecard",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "If unrecorded, quote the report at $1,400 net 10 to the 34 un-asked asset managers and record written acceptances at that price",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "research",
+      "evidence": [
+       "s_vol",
+       "s_conv"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per report",
+      "sources": [
+       "s_price",
+       "s_pricecard"
+      ],
+      "needs": "A written acceptance or invoice showing what a wind-farm asset manager pays for this report ($140 and $1,400 are both on the card)"
+     },
+     {
+      "name": "close rate",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "agreements per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 64,
+      "unit": "wind farms (34 not yet asked)",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#price",
+      "dated": "2026-11-27",
+      "claim": "The card's price fact says $140",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_pricecard",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#priceCents",
+      "dated": "2026-11-27",
+      "claim": "The card's priceCents field says $1,400 — ten times the price fact",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#conversionRates",
+      "dated": "2026-11-27",
+      "claim": "6 agreements from 30 contacts",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#buyerVolume",
+      "dated": "2026-11-27",
+      "claim": "64 independently owned wind farms, each with a named asset manager; each commissions a blade inspection report once a year",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_10499010ea344e9889ae#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "12 days to usable cash (net 10 after delivery)",
+      "population": "Asset managers at the 64 independently owned wind farms in the state energy office registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_10499010ea344e9889ae"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The report's price is contradicted on its own record (priceCents $1,400 vs price fact $140), so no price buyers pay is established, and whether the 64-farm registry can carry $6,000 in 30 days turns entirely on which it is.",
+     "resolution": "Confirm the agreed price from the 6 accepted offers' written terms; failing that, quote $1,400 net 10 to the 34 un-asked registry asset managers and record written acceptances. At an established $1,400, five accepted reports settle within ~12 days and the plan becomes executable; at $140 it cannot reach $6,000.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_10499010ea344e9889ae",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_10499010ea344e9889ae",
+      "why": "Price contradicted ($1,400 on the card vs $140 in its price fact); market volume is sufficient only at the higher figure."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4bafa64f1f6a_b22b53",
+    "digest": "4bafa64f1f6aaab380e0ad8e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_85f4f43b4b2047249add/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:14:38.168Z"
+   },
+   "review": {
+    "revisionId": "rev_4bafa64f1f6a_b22b53",
+    "revisionDigest": "4bafa64f1f6aaab380e0ad8e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_85f4f43b4b2047249add/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_07e4ba2615ab49a08743/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the right decisive gap. The only opening cop_10499010ea344e9889ae carries two prices on its own record: priceCents $1,400 and a price EVIDENCE fact of $140. Brain's OFFER_AND_PRICE link is false ('no single price on the card'), so no price buyers pay is established, and treating either figure as known would be treating an unknown as known. Recomputed: at $1,400, ceil(6,000/1,400) = 5 reports; 34 un-asked registry farms x the measured 6/30 = 6.8 expected, settling ~12 days after delivery inside 30. At $140, ceil(6,000/140) = 43 reports against a 64-farm registry buying once a year, of which 34 are un-asked (~6.8 expected) — impossible. The price alone decides whether any plan exists, so decisiveLinks = [OFFER_AND_PRICE] is correct. It is NO_PLAN rather than CONDITIONAL because the unknown is answerable from records already held (the 6 accepted offers' written terms or invoices), not only by a live test; the resolution names that first and the $1,400 quote to the 34 un-asked managers as the fallback, with the condition under which it becomes executable.",
+    "findings": [
+     "If the fallback quote is run, it should be a bounded test (e.g. first 10-15 of the 34) with a stop rule, since quoting all 34 at a possibly wrong price spends the whole remaining market in one pass.",
+     "Whether the 6 earlier agreements were paid, and at which price, is itself the most direct evidence; their settlement is not counted toward the target, correctly."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:17:14.833Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "a1d602d61e0a382a",
+    "openings": {
+     "cop_10499010ea344e9889ae": "6b67adb90c9910e2"
+    }
+   },
+   "at": "2026-11-27T23:17:29.429Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

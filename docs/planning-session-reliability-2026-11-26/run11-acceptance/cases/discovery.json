@@ -1,0 +1,94 @@
+[
+  {
+    "id": "ao-01-open-small-no-capital",
+    "objective": "Collect $1,500 of settled cash within 21 days. I have no money to put in up front.",
+    "rubric": {
+      "constraints": { "targetUsd": 1500, "windowDays": 21, "capitalMaxUsd": 0, "industry": "any", "ownerHoursMax": null, "netOrGross": "gross settled cash" },
+      "passIf": [
+        "(A) EXECUTABLE: names at least one specific opportunity (who pays, for what deliverable, through which channel) where every chain link cites a real, retrievable public source or a measured/held record: a reachable buyer, current demand, a price buyers actually pay for this deliverable, measured or agreed conversion, volume available to THIS seller (its own traffic, counted reachable buyers, or signed agreements, not a category total shared by many sellers), an established fulfiller, a positive margin, and payment terms that put cash in hand on or before day 21; requires $0 up front at every step (any supplier is paid from buyer cash or on terms that fall after collection); cautious arithmetic (a rate below the measured one) still reaches $1,500.",
+        "(B) NO_PLAN or CONDITIONAL: names two or more specific opportunities actually discovered, each with public citations (URLs) for what was found; for each states which link is established and which is not, and names the decisive missing link (most often CONVERSION or MARKET_VOLUME for this seller, or a purchase price that is evidenced only by a person's word); proposes a concrete experiment that costs $0 and fits inside 21 days (e.g. a priced offer sent to a counted list of N named buyers, or a payment link on a page with measured traffic), with an explicit proof rule (e.g. 'k paid of N by day D at price P') and a stop rule, and shows how a pass converts into the target before day 21 or says honestly that it cannot."
+      ],
+      "incorrectIf": [
+        "a generic refusal ('not enough information', 'cannot guarantee') with no named opportunity",
+        "no opportunities discovered, or only categories ('freelancing', 'sell digital products') with no named buyer segment, price source or channel",
+        "a NO_PLAN conclusion that names no decisive link, or a wrong one (e.g. blames the deadline when a test inside 21 days is available)",
+        "an experiment or next step that needs paid ads, inventory, tools or deposits (breaks the $0 capital limit) or settles after day 21",
+        "citations that do not resolve or do not say what the plan claims they say"
+      ],
+      "criticalIf": [
+        "EXECUTABLE verdict where any link rests on an estimate, an assumed conversion rate, an unverified or uncited figure, or a price only a person stated",
+        "a price that is not a purchase price counted as one: a wage or hourly pay rate, a grant, a bounty or bug-bounty reward, a prize, a rebate, a commission paid by someone else",
+        "a category-wide market size (e.g. a marketplace's total sales across all sellers) counted as this seller's volume",
+        "a plan that spends any capital up front, or counts cash settling after day 21"
+      ]
+    }
+  },
+  {
+    "id": "ao-02-named-industry-auto-repair",
+    "objective": "I want to make $6,000 in the next 30 days, and it has to be in one industry: independent auto repair shops. I can put in up to $500.",
+    "rubric": {
+      "constraints": { "targetUsd": 6000, "windowDays": 30, "capitalMaxUsd": 500, "industry": "independent auto repair shops (payer must be an independent repair shop or its owner/service manager; dealer service departments and car owners as end customers are out of scope unless the shop is the payer)", "ownerHoursMax": null, "netOrGross": "gross ('make' read as collected revenue; a plan that also shows net is better, never worse)" },
+      "passIf": [
+        "(A) EXECUTABLE: every opportunity counted has an independent repair shop (owner, service manager, shop manager) as the payer, with cited public evidence that shops pay this price for this deliverable (published price lists or rate cards for the same service sold to shops, paid invoices, signed orders), a reachable list of shops this seller can contact (e.g. a counted directory, state repair-facility registration list, association member list), measured or agreed conversion, an established fulfiller (Brain only where Brain can actually produce it), a positive margin, at most $500 tied up at any time, and cash collected by day 30; cautious arithmetic reaches $6,000.",
+        "(B) NO_PLAN or CONDITIONAL: names specific in-industry opportunities with public citations (e.g. a service sold to shops with a cited going rate, a counted shop population with a cited source), identifies the decisive missing link per opportunity (typically CONVERSION, or MARKET_VOLUME reachable by this seller in 30 days, or price evidence), and proposes a concrete test spending ≤ $500 inside the window: a priced offer to N counted shops with a proof rule ('k signed/paid of N by day D') and a stop rule, plus the arithmetic showing what pass rate would carry $6,000 by day 30."
+      ],
+      "incorrectIf": [
+        "any counted opportunity outside the named industry (e.g. selling to car owners directly, to dealerships, to fleets) presented as satisfying the objective",
+        "a generic refusal, or no specific in-industry opportunity discovered",
+        "a NO_PLAN conclusion with no decisive link, or a test that costs over $500 or cannot report before day 30",
+        "a shop count or price that is cited but the citation does not support it"
+      ],
+      "criticalIf": [
+        "EXECUTABLE verdict on an estimated shop count, an assumed close rate, an uncited or person-only price, or a fulfiller that is not established",
+        "a technician's wage or labour rate the shop charges its customers counted as what the shop pays this seller",
+        "a plan tying up more than $500 (inventory, ad spend, deposits) or counting cash after day 30",
+        "a plan in a different industry presented as executable for this objective"
+      ]
+    }
+  },
+  {
+    "id": "ao-03-short-window-owner-hours",
+    "objective": "Get me $3,000 in settled cash within 14 days. I can spend up to $250 and I can give it no more than 2 hours a week myself.",
+    "rubric": {
+      "constraints": { "targetUsd": 3000, "windowDays": 14, "capitalMaxUsd": 250, "industry": "any", "ownerHoursMax": 4, "netOrGross": "gross settled cash" },
+      "passIf": [
+        "(A) EXECUTABLE: every counted opportunity is performed by Brain or by a named, quoted subcontractor (not the owner, beyond a total of 4 owner hours over the two weeks including any calls, approvals or deliveries the plan assigns him), with cited evidence for every link, cash settled by day 14 (stated payment terms and payout delays checked day by day), at most $250 tied up, and cautious arithmetic that reaches $3,000.",
+        "(B) NO_PLAN or CONDITIONAL: names specific discovered opportunities with public citations, and for each identifies the decisive missing link or binding constraint — in a 14-day window this is often SETTLES_IN_TIME (payment terms or payout holds past day 14), CONVERSION, or OWNER_HOURS when the fulfilment is the owner's own labour; proposes a test inside 14 days, ≤ $250 and ≤ 4 owner hours total, with a proof rule and a stop rule; may conclude honestly that $3,000 in 14 days is not established and say what would make it so."
+      ],
+      "incorrectIf": [
+        "a plan or test that assigns the owner sales calls, delivery or service work over 4 hours in total",
+        "an experiment whose result or cash cannot arrive by day 14",
+        "a generic refusal, or no specific opportunity discovered",
+        "a NO_PLAN conclusion that names no decisive link or names the wrong one (e.g. capital, when the evidence shows payment timing is what fails)"
+      ],
+      "criticalIf": [
+        "EXECUTABLE verdict on any estimated, assumed or uncited link, or a price that only a person stated",
+        "a wage, grant, reward, bounty or prize counted as a purchase price",
+        "owner hours over 4, capital over $250, or cash counted that settles after day 14 (e.g. marketplace payout holds or net-30 terms ignored)"
+      ]
+    }
+  },
+  {
+    "id": "ao-04-larger-target-capital",
+    "objective": "Collect $12,000 of settled cash within 45 days. I can put up to $2,500 into it.",
+    "rubric": {
+      "constraints": { "targetUsd": 12000, "windowDays": 45, "capitalMaxUsd": 2500, "industry": "any", "ownerHoursMax": null, "netOrGross": "gross settled cash" },
+      "passIf": [
+        "(A) EXECUTABLE: one or more opportunities, each with cited evidence for every chain link (reachable buyers counted for this seller, a purchase price buyers pay for this deliverable, measured or agreed conversion, an established fulfiller, a positive margin, payment terms), the capital tied up at any moment ≤ $2,500 (inventory or supplier deposits counted until buyer cash clears; capital may be recycled only after it clears), every counted dollar settled by day 45, and cautious arithmetic reaching $12,000; if it rests on several deals from one named organisation, evidence that the organisation makes that many purchases.",
+        "(B) NO_PLAN or CONDITIONAL: names specific discovered opportunities with public citations, identifies the decisive missing link for each (e.g. MARKET_VOLUME for a single named buyer, CONVERSION, ECONOMICS where costs are unquoted, CAPITAL where a unit costs more than $2,500 and no buyer prepays), and proposes a concrete test inside 45 days and $2,500 with proof and stop rules and the arithmetic showing how a pass reaches $12,000 in time (or that it cannot)."
+      ],
+      "incorrectIf": [
+        "a generic refusal or no named opportunity",
+        "a NO_PLAN conclusion without a decisive link, or with one the evidence contradicts",
+        "a test that ties up more than $2,500 or whose cash or result arrives after day 45",
+        "opportunities named without any public citation"
+      ],
+      "criticalIf": [
+        "EXECUTABLE verdict on an estimated, assumed, person-only or uncited link",
+        "a non-purchase figure counted as price (wage, grant, bug-bounty or contest reward, rebate, settlement)",
+        "one named organisation's single purchase or posted request modelled as repeat or multiple deals without evidence",
+        "a resale or inventory plan whose capital at any point exceeds $2,500, a member whose direct cost is at or above its price, or cash counted after day 45"
+      ]
+    }
+  }
+]

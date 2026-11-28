@@ -1,0 +1,473 @@
+{
+ "caseId": "ao-02-named-industry-auto-repair",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Website rebuild for independent auto repair shops (one-time \", and what it is missing first is an offer and a price. Research first: the deep dive on \"Website rebuild for independent auto repair shops (one-time \" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 2 unmeasured assumption(s) hold (Sell a retainer of 4 unit(s) at 15% off (×3.4 the unit price, ×4.0 its direct cost); Sell \"Website rebuild for independent auto repair shops (one-time fee)\" through a partner who already serves its buye…) it would reach 62.2% (p50 $8,500): a hypothesis to test by running each one's kill criterion, not evidence.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_08684c0394384ca6b684",
+   "cop_9861f57e59504f9f8a2d",
+   "cop_1a69282002214257bbbb"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dive on \"Website rebuild for independent auto repair shops (one-time \" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_08684c0394384ca6b684",
+    "title": "Website rebuild for independent auto repair shops (one-time fee)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "owner of an independent auto repair shop with an outdated or missing website",
+     "reachableChannel": "cold email + phone to shops found on Google Maps",
+     "offerScope": "mobile site with services, reviews, booking/call buttons, built in 5 days",
+     "priceCents": 100000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 20000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "independent auto repair shops",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email + phone to shops found on Google Maps"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "24 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "6 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 40, tied up 200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email + phone to shops found on Google Maps",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "273,000 owner of an independent auto repair shop with an outdated or missing website (Auto Care Association (2024-04-10): 273,000 US shops; competitor Autoflow charges $1,000 deposit + $300/mo for website development; need 6 sales)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell mobile site with services, reviews, booking/call buttons, built in 5 days to owner of an independent auto repair shop with an outdated or missing website, reached through cold email + phone to shops found on Google Maps, at $1,000; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$40",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "mobile site with services, reviews, booking/call buttons, built in 5 days",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "owner of an independent auto repair shop with an outdated or missing website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://autoflow.com/pricing/; https://www.tributemedia.com/auto-shop-marketing; https://www.autocare.org/news/latest-news/details/2024/04/10/survey-84-of-independent-repair-shops-view-vehicle-data-access-as-top-issue-for-their-business",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_9861f57e59504f9f8a2d",
+    "title": "Google Business Profile + review-request setup for auto repair shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "auto repair shop owner with few or stale Google reviews",
+     "reachableChannel": "cold email citing the shop's review count vs nearby competitors",
+     "offerScope": "one-time GBP optimisation plus a review-request text/email flow",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 10000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "independent auto repair shops",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email citing the shop's review count vs nearby competitors"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "48 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "12 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 10, tied up 100"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email citing the shop's review count vs nearby competitors",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "273,000 auto repair shop owner with few or stale Google reviews (RankPay lists $500/mo entry tier for auto shop online marketing; need 12 sales)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell one-time GBP optimisation plus a review-request text/email flow to auto repair shop owner with few or stale Google reviews, reached through cold email citing the shop's review count vs nearby competitors, at $500; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "one-time GBP optimisation plus a review-request text/email flow",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "auto repair shop owner with few or stale Google reviews",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.rankpay.com/auto-shops; https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_1a69282002214257bbbb",
+    "title": "Monthly local SEO retainer for auto repair shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "auto repair shop owner",
+     "reachableChannel": "cold email",
+     "offerScope": "monthly GBP posts, citations, review replies",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 4900,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "independent auto repair shops",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "40 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 49, tied up 49"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "273,000 auto repair shop owner (agencies charge $600-$1,500/mo per Stacc; only first month settles in window; need 10 clients)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell monthly GBP posts, citations, review replies to auto repair shop owner, reached through cold email, at $600; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$49",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$49",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "monthly GBP posts, citations, review replies",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "auto repair shop owner",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://thestacc.com/blog/how-much-does-auto-repair-shop-seo-cost/; https://coloradowebimpressions.com/auto-repair-marketing-colorado",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:26:03.046Z"
+ }
+}

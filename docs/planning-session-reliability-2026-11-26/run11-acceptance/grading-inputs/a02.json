@@ -1,0 +1,318 @@
+{
+ "caseId": "an-02-cottage-food-label-storefront",
+ "keys": {
+  "cop_ebd0bbebaf434f9ea99e": "labelPacks",
+  "cop_b88e9cbdb16a4df68e3d": "kitchenConsults"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Cottage-food label packs sold from an existing digital-downl\" (assumption-only coverage: it reaches the target in 56.5% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1597× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Home bakers applying for a cottage-food registr\" needs [figure withheld] and keeps [figure withheld], 132× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Cottage-food label packs sold from an existing digital-download storef\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_ebd0bbebaf434f9ea99e",
+   "cop_b88e9cbdb16a4df68e3d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Cottage-food label packs sold from an existing digital-download storefront\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Cottage-food label packs sold from an existing digital-download storefront\"",
+    "owner": "PERSON",
+    "cost": 2.4
+   },
+   {
+    "label": "Collect payment for \"Cottage-food label packs sold from an existing digital-download storefront\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_b88e9cbdb16a4df68e3d",
+    "title": "Home-kitchen licensing walk-throughs by the owner for cottage-food sellers",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 600,
+    "potentialReach": 600,
+    "card": {
+     "payer": "Home bakers applying for a cottage-food registration",
+     "reachableChannel": "The owner's booking page",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:32.439Z",
+     "offerScope": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+     "priceCents": 15000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 8,
+     "requiredCapabilities": [],
+     "industry": "cottage food producers",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 15000,
+      "currency": "USD",
+      "deliverable": "The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The owner's booking page"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 900 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 900 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 10, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The owner visits the seller's kitchen and walks through the registration checklist. Each visit takes 8 hours of the owner's own time including travel; nobody else can do it. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Home bakers applying for a cottage-food registration",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six sellers booked and agreed to pay $150 each on the owner's booking page.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_ebd0bbebaf434f9ea99e",
+    "title": "Cottage-food label packs sold from an existing digital-download storefront",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 600,
+    "potentialReach": 600,
+    "card": {
+     "payer": "Home bakers and jam makers selling under the state cottage food law",
+     "reachableChannel": "The seller's own existing storefront on a digital-download marketplace, found through marketplace search",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:32.439Z",
+     "offerScope": "Brain turns the buyer's recipe form into a print-ready label pack: the state-required cottage-food statement, ingredient list and allergen declaration. Delivered automatically; no owner time per sale.",
+     "priceCents": 2400,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.2,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "cottage food producers",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The seller's own existing storefront on a digital-download marketplace, found th"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 24 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own inbound page: 41 money-committed pre-orders from 1640 unique visitors"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "26 deal(s) needed, 1640 available in the window (1640 visitors are stated for the window, each one trial of the measured rate)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 2.4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The storefront's own analytics: 1,640 unique visitors in the last 30 days, and 1,500 to 1,700 unique visitors in each of the three months before. The marketplace releases each sale's funds 10 days after the sale and keeps a 10% fee ($2.40 a sale).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain turns the buyer's recipe form into a print-ready label pack: the state-required cottage-food statement, ingredient list and allergen declaration. Delivered automatically; no owner time per sale. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "41 paid pre-orders from 1640 unique visitors",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$2.4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Home bakers and jam makers selling under the state cottage food law",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The storefront's own order history: 41 label packs sold at $24 each in the last 30 days.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 60000,
+   "daysLeft": 45,
+   "hoursCeiling": 6,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 1
+  },
+  "at": "2026-11-27T23:09:44.420Z"
+ }
+}
