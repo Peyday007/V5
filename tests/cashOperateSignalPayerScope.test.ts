@@ -88,6 +88,38 @@ describe('payerQuestionUnanswerable', () => {
   });
 });
 
+describe('payerQuestionUnanswerable at its boundary, beyond the recorded titles', () => {
+  it('rules out supplier prices and resale quotes it was not fitted to', () => {
+    for (const title of [
+      'Canva Pro publishes a subscription price of $15/month for one seat',
+      'Costco charges members a $65 annual membership fee',
+      'A StubHub resale listing for the Eras Tour floor seats was $1,200',
+      'On eBay, a PSA 10 Charizard last sold for $420',
+    ]) {
+      expect(payerQuestionUnanswerable({ title, payer: null }), title).not.toBeNull();
+    }
+  });
+
+  it("keeps the payer question when a supplier's terms or a resale quote sit beside a buyer spending on work", () => {
+    // BUYER_SPEND_FACTS above guard only a billing cadence. Each sentence here
+    // carries one of the markers that actually rules a fact out — a seller's
+    // subscription, membership or registration terms, "charges subscribers",
+    // or a resale market's name with a resale quote — and also names somebody
+    // spending on work, which is exactly the party a payer question looks for.
+    for (const title of [
+      'Dental practices pay $400 a month for review replies on a subscription plan',
+      'Gyms budget $2,000 a year to manage their membership fee collections',
+      'Contractors who renew an annual registration retain a permit expediter at $300 per filing',
+      'A SaaS firm that charges subscribers monthly buys onboarding videos at $800 each',
+      'Ticket brokers who resell on StubHub spend $300/month on resale price data',
+      'eBay sellers outsource listing photography to keep items at current market price',
+      'Card shops spending on TCGPlayer market price tracking tools',
+    ]) {
+      expect(payerQuestionUnanswerable({ title, payer: null }), title).toBeNull();
+    }
+  });
+});
+
 describe('the signal gap pass', () => {
   it('asks the GitHub bounty its payer and does not ask the supplier and resale facts', async () => {
     const ids = {
