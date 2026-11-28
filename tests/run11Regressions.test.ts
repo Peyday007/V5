@@ -75,6 +75,14 @@ describe('production app journey (2026-11-28, Cash Mode 1): the planning path an
     expect((fit.brain.openings as { opportunityId: string; links: unknown[] }[]).map((o) => o.opportunityId)).toEqual(ctx.brain.openings.map((o) => o.opportunityId));
     expect((fit.brain.openings[3] as { links: unknown[] }).links).toEqual(ctx.brain.openings[3]!.links);
     expect(fit.questions[0]!.needId).toBe('need_1');
+    // Production at 30835d5: the goal's own openings (kept in full) and the open questions alone passed the limit, so the
+    // context was refused again. The longest lists are now halved until it fits, each cut named.
+    const ownHeavy = { goal: { id: 'g' }, openings: Array.from({ length: 400 }, (_, i) => ({ id: `own_${i}`, title: `own ${i}`, facts: Array.from({ length: 12 }, (_, k) => ({ field: `f${k}`, value: 'v'.repeat(100), kind: 'EVIDENCE' })) })), brain: null, questions: Array.from({ length: 900 }, (_, i) => ({ needId: `need_${i}`, opportunityId: `own_${i % 400}`, field: 'price', submitted: [] })) };
+    expect(Buffer.byteLength(JSON.stringify(ownHeavy))).toBeGreaterThan(256 * 1024);
+    const fitOwn = fitContext(ownHeavy);
+    expect(Buffer.byteLength(JSON.stringify(fitOwn))).toBeLessThanOrEqual(200 * 1024);
+    expect(fitOwn.compacted?.some((n) => /only the first \d+ of \d+ shown/.test(n))).toBe(true);
+    expect(fitOwn.openings[0]!.id).toBe('own_0');
     // A context already under budget is returned unchanged.
     const small = { goal: { id: 'g' }, openings: [], brain: null, questions: [] };
     expect(fitContext(small)).toBe(small);

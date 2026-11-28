@@ -185,6 +185,32 @@ export function fitContext<T extends Record<string, unknown>>(ctx: T, budget: nu
     out = { ...out, brain: { ...b2, openings: (b2.openings ?? []).slice(0, keep), excluded: (b2.excluded ?? []).slice(0, keep) } };
     notes.push(`only the first ${keep} weighed and ${keep} excluded openings listed (${omitted} more not shown)`);
   }
+  // Still over (production, 2026-11-28, Cash Mode 1 at 30835d5: the goal's own openings and open questions alone passed
+  // the limit): the longest list anywhere is halved, and each cut is named with its path and count, until it fits.
+  // Halving always terminates, so a context is always returned rather than refused.
+  if (size(out) > budget) out = shorten(out, 60) as Record<string, unknown>;
+  const cuts = new Map<string, { total: number; shown: number }>();
+  while (size(out) > budget) {
+    let longest: { path: string; arr: unknown[]; set: (v: unknown[]) => void } | null = null;
+    const walk = (v: unknown, path: string, set: (x: unknown[]) => void) => {
+      if (Array.isArray(v)) {
+        if (v.length > 1 && (!longest || size(v) > size(longest.arr))) longest = { path, arr: v, set };
+        v.forEach((x, i) => walk(x, `${path}[${i}]`, (n) => { v[i] = n; }));
+      } else if (v && typeof v === 'object') {
+        for (const [k, x] of Object.entries(v as Record<string, unknown>)) walk(x, path ? `${path}.${k}` : k, (n) => { (v as Record<string, unknown>)[k] = n; });
+      }
+    };
+    out = JSON.parse(JSON.stringify(out)) as Record<string, unknown>;
+    walk(out, '', () => {});
+    const l = longest as { path: string; arr: unknown[]; set: (v: unknown[]) => void } | null;
+    if (!l) break;
+    const key = l.path || '(root)';
+    const prior = cuts.get(key);
+    const shown = Math.ceil(l.arr.length / 2);
+    cuts.set(key, { total: prior?.total ?? l.arr.length, shown });
+    l.set(l.arr.slice(0, shown));
+  }
+  for (const [path, c] of cuts) notes.push(`${path}: only the first ${c.shown} of ${c.total} shown`);
   return { ...(out as T), compacted: notes };
 }
 
