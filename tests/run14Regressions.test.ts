@@ -68,3 +68,18 @@ describe('run 14, au-03: a weekly owner-hours allowance binds every week', () =>
     expect(codes('d03', {}, 'OWNER_HOURS_OVER', spread).filter((x) => /a week/.test(x.detail))).toEqual([]);
   });
 });
+
+describe('production app journey (2026-11-28, 06:00Z): every planning result fits what the app reads in one call', () => {
+  it('a planning tool whose value is over the app budget comes back under it, the cuts named; a small one is untouched', async () => {
+    const { fitted, APP_RESULT_BUDGET_BYTES } = await import('../server/mcp/planningTools.ts');
+    const big = { revisions: Array.from({ length: 300 }, (_, i) => ({ revisionId: `rev_${i}`, note: 'n'.repeat(900) })), currentCheck: { problems: Array.from({ length: 40 }, (_, i) => ({ code: 'OPENING_UNACCOUNTED', detail: `opening ${i}` })) } };
+    expect(Buffer.byteLength(JSON.stringify(big))).toBeGreaterThan(158_464);
+    const tool = fitted({ name: 't', title: 't', description: 'd', inputSchema: { type: 'object' }, annotations: {} as never, run: async () => ({ projectId: 'p', value: big }) } as never);
+    const out = (await tool.run({}, {} as never)) as unknown as { value: { compacted?: string[]; currentCheck: { problems: unknown[] } } };
+    expect(Buffer.byteLength(JSON.stringify(out.value))).toBeLessThanOrEqual(APP_RESULT_BUDGET_BYTES);
+    expect(out.value.compacted?.length).toBeGreaterThan(0);
+    expect(out.value.currentCheck.problems).toHaveLength(40);
+    const small = fitted({ name: 's', title: 's', description: 'd', inputSchema: { type: 'object' }, annotations: {} as never, run: async () => ({ projectId: 'p', value: { ok: true } }) } as never);
+    expect(((await small.run({}, {} as never)) as { value: unknown }).value).toEqual({ ok: true });
+  });
+});
