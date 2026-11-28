@@ -123,7 +123,7 @@ const routesTool: McpTool = {
 const brainTool: McpTool = {
   name: 'brain_planning_run_brain',
   title: 'Planning: run Brain’s planner on the goal',
-  description: "Run Brain's real planner (readGoalPlan) on the goal and return its complete summary; a timeout or failure is returned as a failure.",
+  description: "Run Brain's real planner (readGoalPlan) on the goal and return its complete summary; a failure is returned as a failure. On a large project the planner can take longer than one call may wait: the answer is then `running: true` — the run keeps going and records its reading when it finishes; call again in a minute to get it.",
   inputSchema: { type: 'object', properties: { goal_id: { type: 'string' }, ...SESSION }, required: ['goal_id', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: run Brain', ...MUTATING, idempotentHint: true },
   run: async (args, { principal }) => {

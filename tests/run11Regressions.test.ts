@@ -54,3 +54,29 @@ describe('run 11 (fleet report): a verification call without verdicts or suffici
     expect(sufficiencyArg({ sufficiency: 'INSUFFICIENT' })).toBe('INSUFFICIENT');
   });
 });
+
+describe('production app journey (2026-11-28, Cash Mode 1): the planning path answers on a large project', () => {
+  it('a malformed revision is refused by path before any check runs (strategy without opportunityIds crashed every submit)', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    expect(shapeProblems({ strategy: { title: 'No plan', why: 'w' } as never })).toEqual(['strategy.opportunityIds must be an array of opening ids (empty for a no-plan result)']);
+    expect(shapeProblems({ chain: [{ opportunityId: 'o', missing: 'CONVERSION' as never }] })).toHaveLength(1);
+    expect(shapeProblems({ strategy: { title: 't', opportunityIds: [], why: 'w' }, chain: [{ opportunityId: 'o', missing: ['CONVERSION'] }], resolves: ['CONVERSION'] })).toEqual([]);
+  });
+
+  it('a context over the transport limit is compacted under budget, keeping every id, need and link verdict', async () => {
+    const { fitContext } = await import('../server/services/planning/sessionPlanning.ts');
+    const long = 'x'.repeat(5_000);
+    const opening = (i: number) => ({ opportunityId: `cop_${i}`, title: `opening ${i}`, missing: ['CONVERSION'], links: [{ link: 'CONVERSION', ok: false, basis: 'unmeasured' }], card: { notes: long }, facts: Array.from({ length: 20 }, (_, k) => ({ field: `f${k}`, value: long, kind: 'EVIDENCE' })) });
+    const ctx = { goal: { id: 'g' }, openings: [{ id: 'cop_0', title: 'own', facts: [{ field: 'price', value: long, kind: 'EVIDENCE' }] }], brain: { openings: Array.from({ length: 19 }, (_, i) => opening(i)), excluded: Array.from({ length: 10 }, (_, i) => ({ ...opening(100 + i), reason: 'set aside' })) }, questions: [{ needId: 'need_1', opportunityId: 'cop_0', field: 'price', submitted: [{ claimId: 'c1', evidenceExcerpt: long }] }] };
+    expect(Buffer.byteLength(JSON.stringify(ctx))).toBeGreaterThan(256 * 1024);
+    const fit = fitContext(ctx);
+    expect(Buffer.byteLength(JSON.stringify(fit))).toBeLessThanOrEqual(200 * 1024);
+    expect(fit.compacted?.length).toBeGreaterThan(0);
+    expect((fit.brain.openings as { opportunityId: string; links: unknown[] }[]).map((o) => o.opportunityId)).toEqual(ctx.brain.openings.map((o) => o.opportunityId));
+    expect((fit.brain.openings[3] as { links: unknown[] }).links).toEqual(ctx.brain.openings[3]!.links);
+    expect(fit.questions[0]!.needId).toBe('need_1');
+    // A context already under budget is returned unchanged.
+    const small = { goal: { id: 'g' }, openings: [], brain: null, questions: [] };
+    expect(fitContext(small)).toBe(small);
+  });
+});
