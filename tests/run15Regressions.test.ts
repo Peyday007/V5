@@ -98,3 +98,25 @@ describe('production app journey (2026-11-28, 07:50Z): a revision accounts for t
     expect(checkRevision(s.contract, onSetAside, brain(own), '2026-11-28').filter((x) => x.code === 'OPPORTUNITY_NOT_ADMITTED')).toEqual([]);
   });
 });
+
+describe('production app journey (2026-11-28, 06:24Z-07:05Z): research and revisions under the names callers send', () => {
+  it('a research claim is read under snake_case and alternative names, and one naming no source or passage is refused by name', async () => {
+    const { claimArg } = await import('../server/mcp/planningTools.ts');
+    // The app's 05:54Z call (snake_case) and 05:53Z call (excerpt/locator), recorded as NO_URL and NO_EVIDENCE.
+    expect(claimArg({ claim: 'c', source_url: 'https://a.example/p', evidence_excerpt: 'q', evidence_locator: 'step 2', primary_source: true })).toMatchObject({ sourceUrl: 'https://a.example/p', evidenceExcerpt: 'q', evidenceLocator: 'step 2', primarySource: true });
+    expect(claimArg({ claim: 'c', sourceUrl: 'https://a.example/p', excerpt: 'q', locator: 'FAQ' })).toMatchObject({ evidenceExcerpt: 'q', evidenceLocator: 'FAQ' });
+    expect(claimArg({ claim: 'c', sourceUrl: 'https://a.example/p', passage: 'q', location: 'FAQ' })).toMatchObject({ evidenceExcerpt: 'q', evidenceLocator: 'FAQ' });
+    expect(() => claimArg({ claim: 'c', sourceUrl: 'https://a.example/p' }, 2)).toThrow(/claims\[2\] needs evidenceExcerpt/);
+    expect(() => claimArg({ claim: 'c', excerpt: 'q', locator: 'x' })).toThrow(/sourceUrl/);
+  });
+
+  it('the two submits that failed with server errors (req_qCqbFo-03WGw, req_C9v7E4pD0d3o) are refused by path', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    for (const f of ['req_qCqbFo-03WGw', 'req_C9v7E4pD0d3o']) {
+      const input = JSON.parse(fs.readFileSync(`tests/fixtures/appJourney/${f}.input.json`, 'utf8')) as { revision: Record<string, unknown> };
+      const p = shapeProblems(input.revision as never);
+      expect(p).toContain('steps[0].kind is required');
+      expect(p).toContain('validation.stop must be array');
+    }
+  });
+});
