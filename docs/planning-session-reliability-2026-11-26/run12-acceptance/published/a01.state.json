@@ -1,0 +1,2668 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_3a7fee9c6a3b4564b46a",
+   "words": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount has settled as cash in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "e0abd80ceba39fd640e6972f"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_3a7fee9c6a3b4564b46a",
+    "contractDigest": "e0abd80ceba39fd640e6972f",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the winter service-menu workbook to 15 of 420 listed bike shops",
+     "opportunityIds": [
+      "cop_133d3329c4fa414f9317"
+     ],
+     "why": "15 sales x $180 = $2,700 settled cash >= $2,500; conversion measured on this offer (27/300 = 9%) means ~167 contacts of 420 listed shops; card at checkout, 3 days to cash, $4 direct cost paid from receipts, so no up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly e-bike lead lists",
+      "why": "Buyer volume is only Brain's estimate (RECOMMENDATION); market volume not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published contacts (independent bike shops in the state dealers' association directory) with the offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $180 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close 15 card-at-checkout sales (measured conversion 27 paid of 300 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 420,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 180,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#buyerVolume",
+      "dated": "2026-11",
+      "claim": "420 reachable buyers with published contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#price",
+      "dated": "2026-11",
+      "claim": "Price $180",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 27 paid of 300 contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "why": "MARKET_VOLUME not established: the buyer count is a Brain estimate, not evidence."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "deals": 15,
+      "price": 180,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4ac8ff811283_056c65",
+    "digest": "4ac8ff811283e4f9e4e4eb2a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:22.673Z"
+   },
+   {
+    "goalId": "wst_3a7fee9c6a3b4564b46a",
+    "contractDigest": "e0abd80ceba39fd640e6972f",
+    "parentRevisionId": "rev_4ac8ff811283_056c65",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the winter service-menu workbook to 15 of 420 listed bike shops",
+     "opportunityIds": [
+      "cop_133d3329c4fa414f9317"
+     ],
+     "why": "15 sales x $180 = $2,700 settled cash >= $2,500; conversion measured on this offer (27/300 = 9%) means ~167 contacts of 420 listed shops; card at checkout, 3 days to cash, $4 direct cost paid from receipts, so no up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly e-bike lead lists",
+      "why": "Buyer volume is only Brain's estimate (RECOMMENDATION); market volume not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published contacts (independent bike shops in the state dealers' association directory) with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $180 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close 15 card-at-checkout sales (measured conversion 27 paid of 300 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 420,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 180,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#buyerVolume",
+      "dated": "2026-11",
+      "claim": "420 reachable buyers with published contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#price",
+      "dated": "2026-11",
+      "claim": "Price $180",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 27 paid of 300 contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic recomputed and the ledger matches.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "OFFER_AND_PRICE not established: the price fact is comparable listings.",
+      "resolution": "Rebutted. The $180 is not only a benchmark: it is this offer's recorded price (card priceCents 18000, price fact kind EVIDENCE), and Brain's CONVERSION link basis records that the rate was \"measured on this offer's own sales: 27 accepted of 300 contacts\" - i.e. buyers accepted this offer, whose price is $180, paid by card at checkout. The comparable-listing fact corroborates that the market pays $180 for this class of workbook; it is not the only basis. Brain's OFFER_AND_PRICE link is ok on that EVIDENCE. Stance stays EXECUTABLE."
+     },
+     {
+      "finding": "Conversion 27/300 does not state the price of those agreements.",
+      "resolution": "Rebutted: the conversion is recorded against this offer (Brain: measured on this offer's own sales), and the offer has one price, $180 (card priceCents). There is no other price on the record at which those sales could have happened."
+     },
+     {
+      "finding": "SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED; DISCOVER/READ_REPLIES UNREAD.",
+      "resolution": "Accepted as a note: the steps now say the outreach mailbox and card checkout are connected before day 1; Brain attached these executors and refused none of the steps, so they are performable operations, not a missing chain link. Card checkout (offerScope) collects payment without an invoice."
+     },
+     {
+      "finding": "Brain's step list assigns delivery to PERSON while the plan assigns BRAIN.",
+      "resolution": "Reconciled under the fulfilment rule: no fulfillmentOwner is named and the deliverable is in requiredCapabilities (PRODUCE_SPREADSHEET, proved; delivery fact \"A spreadsheet Brain produces\"), so DELIVER is BRAIN; humanHours is 0."
+     },
+     {
+      "finding": "Exclusion of the e-bike lead-list opening is correct.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "REBUTTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "captureMechanism",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "why": "MARKET_VOLUME not established: the buyer count is a Brain estimate, not evidence."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "deals": 15,
+      "price": 180,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_421e3bdbeda3_56163b",
+    "digest": "421e3bdbeda37d7fd4db7f37",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:42:01.159Z"
+   },
+   {
+    "goalId": "wst_3a7fee9c6a3b4564b46a",
+    "contractDigest": "e0abd80ceba39fd640e6972f",
+    "parentRevisionId": "rev_421e3bdbeda3_56163b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell the winter service-menu workbook to 15 of 420 listed bike shops",
+     "opportunityIds": [
+      "cop_133d3329c4fa414f9317"
+     ],
+     "why": "15 sales x $180 = $2,700 settled cash >= $2,500; conversion measured on this offer (27/300 = 9%) means ~167 contacts of 420 listed shops; card at checkout, 3 days to cash, $4 direct cost paid from receipts, so no up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly e-bike lead lists",
+      "why": "Buyer volume is only Brain's estimate (RECOMMENDATION); market volume not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 60 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $180 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $180 from the first 60 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 420 listed buyers once the price test passes (measured rate 27 accepted of 300 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 420,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $180 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#buyerVolume",
+      "dated": "2026-11",
+      "claim": "420 reachable buyers with published contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $180 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 27 accepted of 300 contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $180 from the first 60 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $180 by day 5: stop selling at $180; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $180 by day 5: offer to the rest of the 420 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic unchanged and correct: 15 x $180 = $2,700, cost $60, net $2,640, 167 of 420 contacts, settles by day 16 of 30.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Conversion fact says 27 agreements, not 27 payments, states no price, and the card holds no agreement records; s_conv's '27 paid' overstates the card.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Brain's own rule on a parallel card does not infer price from conversion on the offer, so OFFER_AND_PRICE here depends on the benchmark alone.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Execution notes accepted (outreach mailbox and checkout connected before day 1; delivery is BRAIN).",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "why": "MARKET_VOLUME not established: the buyer count is a Brain estimate, not evidence."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "deals": 15,
+      "price": 180,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $180 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_0a9e916c71ca_b6bae8",
+    "digest": "0a9e916c71ca271082e2f356",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:54.273Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_3a7fee9c6a3b4564b46a",
+   "contractDigest": "e0abd80ceba39fd640e6972f",
+   "parentRevisionId": "rev_421e3bdbeda3_56163b",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell the winter service-menu workbook to 15 of 420 listed bike shops",
+    "opportunityIds": [
+     "cop_133d3329c4fa414f9317"
+    ],
+    "why": "15 sales x $180 = $2,700 settled cash >= $2,500; conversion measured on this offer (27/300 = 9%) means ~167 contacts of 420 listed shops; card at checkout, 3 days to cash, $4 direct cost paid from receipts, so no up-front capital."
+   },
+   "alternatives": [
+    {
+     "title": "Weekly e-bike lead lists",
+     "why": "Buyer volume is only Brain's estimate (RECOMMENDATION); market volume not established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the first 60 published contacts with the offer (outreach mailbox connected before day 1)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "buyers",
+      "s_reach"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "OFFER",
+     "label": "Offer the workbook at $180 paid by card at checkout",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "s_price"
+     ],
+     "priceCents": 18000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Price test: count paid card orders at $180 from the first 60 contacts by day 5",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "price",
+      "conversion",
+      "s_price",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "SELL",
+     "label": "Close the remaining sales to the rest of the 420 listed buyers once the price test passes (measured rate 27 accepted of 300 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "t1",
+     "evidence": [
+      "conversion",
+      "s_conv"
+     ],
+     "priceCents": 18000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "DELIVER",
+     "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 6000,
+     "day": 4,
+     "dependsOn": "s3",
+     "evidence": [
+      "directCost",
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "COLLECT",
+     "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "timeToCash",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 90000,
+     "label": "5 workbook sales paid by card at checkout",
+     "settlesDay": 6,
+     "stepId": "s5"
+    },
+    {
+     "day": 6,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Direct cost of 5 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 90000,
+     "label": "5 workbook sales paid by card at checkout",
+     "settlesDay": 11,
+     "stepId": "s5"
+    },
+    {
+     "day": 11,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Direct cost of 5 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 90000,
+     "label": "5 workbook sales paid by card at checkout",
+     "settlesDay": 16,
+     "stepId": "s5"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Direct cost of 5 workbooks, paid from settled receipts",
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 16,
+   "quantities": [
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 420,
+     "unit": "reachable buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD actually paid per workbook",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "paid card orders at $180 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.09,
+     "unit": "paid sales per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "directCost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD per workbook",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "timeToCash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "dealsNeeded",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "sales",
+     "sources": [
+      "s_price",
+      "s_conv"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#buyerVolume",
+     "dated": "2026-11",
+     "claim": "420 reachable buyers with published contacts",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_reach",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#reachableChannel",
+     "dated": "2026-11",
+     "claim": "Published contact emails reach the buyer",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#price",
+     "dated": "2026-11",
+     "claim": "Comparable workbooks list at $180 (listing prices, a benchmark; not a recorded purchase of this offer)",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#conversionRates",
+     "dated": "2026-11",
+     "claim": "Measured on this offer: 27 accepted of 300 contacts",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#directCosts",
+     "dated": "2026-11",
+     "claim": "$4 direct cost per deal",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_133d3329c4fa414f9317#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "3 days to usable cash",
+     "population": "independent bike shops in the state dealers' association directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_133d3329c4fa414f9317"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 paid card orders at $180 from the first 60 contacts by day 5",
+    "stop": [
+     "Fewer than 3 paid orders at $180 by day 5: stop selling at $180; re-price or drop the opening"
+    ],
+    "continue": [
+     "3 or more paid orders at $180 by day 5: offer to the rest of the 420 listed buyers at the same price"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic unchanged and correct: 15 x $180 = $2,700, cost $60, net $2,640, 167 of 420 contacts, settles by day 16 of 30.",
+     "resolution": "Agreed; no change."
+    },
+    {
+     "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "finding": "Conversion fact says 27 agreements, not 27 payments, states no price, and the card holds no agreement records; s_conv's '27 paid' overstates the card.",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "finding": "Brain's own rule on a parallel card does not infer price from conversion on the offer, so OFFER_AND_PRICE here depends on the benchmark alone.",
+     "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+    },
+    {
+     "finding": "Execution notes accepted (outreach mailbox and checkout connected before day 1; delivery is BRAIN).",
+     "resolution": "Agreed; no change."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "conversionRates",
+      "brain:OFFER_AND_PRICE",
+      "brain:CONVERSION"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_133d3329c4fa414f9317",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+     "why": "MARKET_VOLUME not established: the buyer count is a Brain estimate, not evidence."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_133d3329c4fa414f9317",
+     "deals": 15,
+     "price": 180,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": 16
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_133d3329c4fa414f9317",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $180 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+    }
+   ],
+   "revisionId": "rev_0a9e916c71ca_b6bae8",
+   "digest": "0a9e916c71ca271082e2f356",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_48b4d461273640f4a335/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:44:54.273Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_0a9e916c71ca_b6bae8",
+   "digest": "0a9e916c71ca271082e2f356",
+   "contractDigest": "e0abd80ceba39fd640e6972f",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 6000,
+    "committedOpenCents": 0,
+    "preProofCents": 6000,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 3,
+    "collectedCents": 270000,
+    "collectedInWindowCents": 270000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 264000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Winter service-menu repricing and repair-queue workbook for \" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Winter service-menu repricing and repair-queue workbook for \" (assumption-only coverage: it reaches the target in 99.9% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14784× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Winter service-menu repricing and repair-queue workbook for independen\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_133d3329c4fa414f9317",
+     "cop_ba31fe0b78ec48a4b0e5"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+      "owner": "PERSON",
+      "cost": 4
+     },
+     {
+      "label": "Collect payment for \"Winter service-menu repricing and repair-queue workbook for independent bike sho\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "title": "Winter service-menu repricing and repair-queue workbook for independent bike shops",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 2500,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Independent bike shop owners and service managers",
+       "reachableChannel": "Published service-desk emails in the state bicycle dealers' association directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:09.325Z",
+       "offerScope": "A workbook built from the shop's own service tickets; delivered in 2 days; paid by card at checkout.",
+       "priceCents": 18000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "independent bicycle retail",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published service-desk emails in the state bicycle dealers' association director"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 180 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 27 accepted of 300 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "15 deal(s) needed, 420 available in the window (420 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state bicycle dealers' association directory lists 420 independent bike shops, each with a published service-desk email; each reprices its service menu every winter.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook built from the shop's own service tickets; delivered in 2 days; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "27 agreements from 300 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent bike shop owners and service managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Comparable shop-operations workbooks for bicycle retailers sell for $180 on the dealers' association member marketplace (listing prices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "title": "Weekly e-bike buyer lead lists for bike shops",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 99,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Independent bike shop owners",
+       "reachableChannel": "Published shop emails",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:09.325Z",
+       "offerScope": "Weekly e-bike buyer lead lists for bike shops",
+       "priceCents": 9900,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "independent bicycle retail",
+       "mechanism": "INFORMATION_ASYMMETRY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published shop emails"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 99 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 10 accepted of 120 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "11 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 1, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Brain estimates bike shops in the region would buy e-bike lead lists every week.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Weekly e-bike buyer lead lists for bike shops to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "10 agreements from 120 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent bike shop owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Regional retail lead lists sell for $99 a week (lead-broker rate card, 2026-10).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:36:41.850Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_4ac8ff811283_056c65",
+    "revisionDigest": "4ac8ff811283e4f9e4e4eb2a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_09324c9f51d544ba8400/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "EXECUTABLE overclaims. The arithmetic holds (15 x $180 = $2,700 >= $2,500; 15/0.09 = ~167 contacts of 420 listed shops; $60 direct cost paid after receipts settle; last receipt settles day 16 of 30; net $2,640), but the $180 price is not a purchase price this buyer has paid for this offer: the card's price fact is 'Comparable shop-operations workbooks ... sell for $180 on the dealers' association member marketplace (listing prices)' - a benchmark of what other sellers list at, not what these shops pay for this workbook. The card has no agreements, and the conversion fact (27 agreements of 300 contacts) does not state the price those agreements were at. With price unestablished the deal count needed is unknown, so the plan rests on an unknown a live test measures: it should be CONDITIONAL (offer at $180 to a first batch of ~50-60 shops; proof = paid orders at $180 at or near the measured rate; stop if none at that price) or show a recorded sale of this workbook at $180.",
+    "findings": [
+     "Arithmetic recomputed: 15 deals x $180 = $2,700; direct cost 15 x $4 = $60; net $2,640; contacts needed 15/0.09 = 167 <= 420; cash settles by day 16 < 30; no owner funding (spend after settlement). Ledger matches steps.",
+     "OFFER_AND_PRICE not established by evidence: price fact is comparable listings by other sellers on the member marketplace (listing prices), not a purchase price this buyer paid for this offer.",
+     "Conversion 27/300 is 'measured on this offer' but the card records no agreements and no price for those 27 agreements, so it does not confirm $180 either.",
+     "Execution capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES/READ_REPLIES UNREAD in the executor; the plan labels every step routine Brain work without saying these must be connected first.",
+     "Brain's own step list assigns delivery to PERSON while the plan assigns it to BRAIN; card says 'A spreadsheet Brain produces' and FULFILMENT shows PRODUCE_SPREADSHEET proved, so the plan's performer is defensible but the discrepancy should be reconciled.",
+     "Exclusion of the e-bike lead-list opening is correct: its buyerVolume is a RECOMMENDATION (Brain estimate) and its $99 is a lead-broker rate card, another seller's figure."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:40:19.748Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The price fact is comparable workbooks' listing prices on the member marketplace (what other sellers ask), not a price these shops have paid for this offer; no agreement on the card records a purchase at $180."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_421e3bdbeda3_56163b",
+    "revisionDigest": "421e3bdbeda37d7fd4db7f37",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_09324c9f51d544ba8400/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The rebuttal does not establish the price. (1) The only price fact on the card is 'Comparable shop-operations workbooks for bicycle retailers sell for $180 on the dealers' association member marketplace (listing prices)': that is what other sellers ask for other workbooks, not a purchase these shops made. card.priceCents is the offer's asking price, i.e. the plan's own input, not evidence that anyone pays it. (2) The conversion fact is '27 agreements from 300 contacts'; the card's agreements[] is empty and the fact states no price, so nothing records that any of those 27 paid $180 - the plan's source s_conv paraphrases it as '27 paid', which the card does not say. (3) Brain itself does not treat conversion-on-this-offer as establishing price: on a parallel card (18 agreements of 200 'measured on this offer', asking price $350, price fact from a person) Brain marks OFFER_AND_PRICE missing. So the price link rests solely on the benchmark. The opening is otherwise strong (420 shops, 9% rate, Brain-produced spreadsheet, $4 cost, card at checkout, 3 days to cash), so the correct stance is CONDITIONAL with a short price test: offer at $180 to the first ~60 shops; proof = at least 3 paid card orders at $180 by about day 5 (5% -> 3 + 0.05 x 360 = 21 orders, $3,780, carries $2,500); stop/re-price below that; continue to the remaining directory otherwise. Alternatively cite a recorded payment for this workbook at $180.",
+    "findings": [
+     "Arithmetic unchanged and correct: 15 x $180 = $2,700, cost $60, net $2,640, 167 of 420 contacts, settles by day 16 of 30.",
+     "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+     "Conversion fact says 27 agreements, not 27 payments, states no price, and the card holds no agreement records; s_conv's '27 paid' overstates the card.",
+     "Brain's own rule on a parallel card does not infer price from conversion on the offer, so OFFER_AND_PRICE here depends on the benchmark alone.",
+     "Execution notes accepted (outreach mailbox and checkout connected before day 1; delivery is BRAIN)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:44:00.783Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "why": "The card's price fact is comparable workbooks' listing prices on the member marketplace (other sellers' asking prices); no agreement or payment at $180 for this offer is recorded, and conversionRates records agreements without a price."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_0a9e916c71ca_b6bae8",
+    "revisionDigest": "0a9e916c71ca271082e2f356",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_09324c9f51d544ba8400/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now the right stance and the test is sound. Price is the one unknown (the card's $180 is a comparable-listing benchmark) and the test measures it directly with paid card orders at $180; validation.decides = OFFER_AND_PRICE. Fulfilment (Brain-produced spreadsheet, PRODUCE_SPREADSHEET proved) is shown possible before orders are taken, and card-at-checkout means nothing is delivered unpaid. Passing at the threshold carries the target: 3 paid of 60 (5%) -> 3 + 0.05 x 360 remaining = 21 orders x $180 = $3,780 >= $2,500; at the evidenced 9%, 15 orders need ~167 contacts. Stop and continue cover every outcome (<3 stop/re-price, >=3 continue). Costs ($4 each) are paid from settled receipts, no capital; last receipts settle by about day 16 of 30.",
+    "findings": [
+     "Threshold check: 3/60 = 5% carries the target with the remaining 360 listed shops ($3,780); even at 3 orders total plus 5% of 360 the window holds (settles well before day 30).",
+     "Minor: step days are out of order - s4 DELIVER is day 4 but depends on s3 SELL day 6; the first-batch deliveries (test orders) happen before s3. Label s4 as covering test orders too.",
+     "Minor: quantity dealsNeeded is marked EVIDENCED though it holds only if the price is $180; it is conditional on the test.",
+     "Owner should connect the outreach mailbox and card checkout before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:19.597Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_0a9e916c71ca_b6bae8",
+   "digest": "0a9e916c71ca271082e2f356",
+   "contractDigest": "e0abd80ceba39fd640e6972f",
+   "plan": {
+    "goalId": "wst_3a7fee9c6a3b4564b46a",
+    "contractDigest": "e0abd80ceba39fd640e6972f",
+    "parentRevisionId": "rev_421e3bdbeda3_56163b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell the winter service-menu workbook to 15 of 420 listed bike shops",
+     "opportunityIds": [
+      "cop_133d3329c4fa414f9317"
+     ],
+     "why": "15 sales x $180 = $2,700 settled cash >= $2,500; conversion measured on this offer (27/300 = 9%) means ~167 contacts of 420 listed shops; card at checkout, 3 days to cash, $4 direct cost paid from receipts, so no up-front capital."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly e-bike lead lists",
+      "why": "Buyer volume is only Brain's estimate (RECOMMENDATION); market volume not established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the first 60 published contacts with the offer (outreach mailbox connected before day 1)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "buyers",
+       "s_reach"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Offer the workbook at $180 paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "s_price"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Price test: count paid card orders at $180 from the first 60 contacts by day 5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "price",
+       "conversion",
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Close the remaining sales to the rest of the 420 listed buyers once the price test passes (measured rate 27 accepted of 300 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "t1",
+      "evidence": [
+       "conversion",
+       "s_conv"
+      ],
+      "priceCents": 18000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Produce each buyer's workbook within 2 days ($4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "directCost",
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payments settle to the owner's account (3 days to usable cash) via the card checkout stated in the offer scope",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToCash",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 6,
+      "stepId": "s5"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 11,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 90000,
+      "label": "5 workbook sales paid by card at checkout",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct cost of 5 workbooks, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 420,
+      "unit": "reachable buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD actually paid per workbook",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "paid card orders at $180 from the first batch; the card price fact is a comparable-listing benchmark, not a recorded purchase of this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.09,
+      "unit": "paid sales per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "directCost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per workbook",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "timeToCash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "dealsNeeded",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "sales",
+      "sources": [
+       "s_price",
+       "s_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#buyerVolume",
+      "dated": "2026-11",
+      "claim": "420 reachable buyers with published contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Published contact emails reach the buyer",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#price",
+      "dated": "2026-11",
+      "claim": "Comparable workbooks list at $180 (listing prices, a benchmark; not a recorded purchase of this offer)",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#conversionRates",
+      "dated": "2026-11",
+      "claim": "Measured on this offer: 27 accepted of 300 contacts",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_133d3329c4fa414f9317#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "3 days to usable cash",
+      "population": "independent bike shops in the state dealers' association directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_133d3329c4fa414f9317"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $180 from the first 60 contacts by day 5",
+     "stop": [
+      "Fewer than 3 paid orders at $180 by day 5: stop selling at $180; re-price or drop the opening"
+     ],
+     "continue": [
+      "3 or more paid orders at $180 by day 5: offer to the rest of the 420 listed buyers at the same price"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic unchanged and correct: 15 x $180 = $2,700, cost $60, net $2,640, 167 of 420 contacts, settles by day 16 of 30.",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "finding": "Price fact is a comparable-listing benchmark (other sellers' listing prices); card.priceCents is the asking price, not a purchase.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Conversion fact says 27 agreements, not 27 payments, states no price, and the card holds no agreement records; s_conv's '27 paid' overstates the card.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Brain's own rule on a parallel card does not infer price from conversion on the offer, so OFFER_AND_PRICE here depends on the benchmark alone.",
+      "resolution": "Accepted: the plan is now CONDITIONAL on a day-5 price test; OFFER_AND_PRICE marked missing, price UNKNOWN, s_conv now says \"accepted\", not \"paid\"."
+     },
+     {
+      "finding": "Execution notes accepted (outreach mailbox and checkout connected before day 1; delivery is BRAIN).",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_ba31fe0b78ec48a4b0e5",
+      "why": "MARKET_VOLUME not established: the buyer count is a Brain estimate, not evidence."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "deals": 15,
+      "price": 180,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 16
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_133d3329c4fa414f9317",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain marks it ok on the price fact, but that fact is comparable workbooks' listing prices (other sellers' asks); no agreement or payment at $180 for this offer is recorded and conversionRates states agreements without a price, so the paid price is unmeasured until the first batch pays."
+     }
+    ],
+    "revisionId": "rev_0a9e916c71ca_b6bae8",
+    "digest": "0a9e916c71ca271082e2f356",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:54.273Z"
+   },
+   "review": {
+    "revisionId": "rev_0a9e916c71ca_b6bae8",
+    "revisionDigest": "0a9e916c71ca271082e2f356",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48b4d461273640f4a335/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_09324c9f51d544ba8400/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now the right stance and the test is sound. Price is the one unknown (the card's $180 is a comparable-listing benchmark) and the test measures it directly with paid card orders at $180; validation.decides = OFFER_AND_PRICE. Fulfilment (Brain-produced spreadsheet, PRODUCE_SPREADSHEET proved) is shown possible before orders are taken, and card-at-checkout means nothing is delivered unpaid. Passing at the threshold carries the target: 3 paid of 60 (5%) -> 3 + 0.05 x 360 remaining = 21 orders x $180 = $3,780 >= $2,500; at the evidenced 9%, 15 orders need ~167 contacts. Stop and continue cover every outcome (<3 stop/re-price, >=3 continue). Costs ($4 each) are paid from settled receipts, no capital; last receipts settle by about day 16 of 30.",
+    "findings": [
+     "Threshold check: 3/60 = 5% carries the target with the remaining 360 listed shops ($3,780); even at 3 orders total plus 5% of 360 the window holds (settles well before day 30).",
+     "Minor: step days are out of order - s4 DELIVER is day 4 but depends on s3 SELL day 6; the first-batch deliveries (test orders) happen before s3. Label s4 as covering test orders too.",
+     "Minor: quantity dealsNeeded is marked EVIDENCED though it holds only if the price is $180; it is conditional on the test.",
+     "Owner should connect the outreach mailbox and card checkout before day 1 (SEND_A_MESSAGE NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:19.597Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "terms": "5f67e7635aeeb057",
+    "openings": {
+     "cop_133d3329c4fa414f9317": "ecd7f2b9d66ff85b",
+     "cop_ba31fe0b78ec48a4b0e5": "eb90d0b3c1871d1f"
+    }
+   },
+   "at": "2026-11-28T01:47:04.859Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

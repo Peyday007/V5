@@ -1,0 +1,5599 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_8622dd225720489ca79b",
+   "words": "I want to clear $12,000 in profit — money kept after every cost — within 45 days. I can put up to $2,500 of my own money in, and I don't care which industry.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 250000,
+    "proofCondition": "Profit after every cost is counted only as cash settled within 45 days, net of all spend, fees and refunds; the owner's own money at risk at any time never exceeds $2,500 (later costs may be paid from settled receipts).",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "a82f22fffbf9c02b0c657aed"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "d9efb3bf3a08e2c05d7ed1e9",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Set up 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months (tools only)",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories and send cold email to 1,000 of them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild in 7 days at $2,000, paid 100% up front by Stripe payment link",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and collect payment for 10 website rebuilds (test batch plus 4,000 more contacts days 15-28)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 28,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 10,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelance web designer builds each site (fixed price $600 per site)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 600000,
+      "day": 35,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank (first payout 7-14 days after first payment, then T+2)",
+      "performer": "BRAIN",
+      "costCents": 58300,
+      "day": 42,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 25,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 34,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 35,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 36,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 23,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 37,
+      "stepId": "s5"
+     },
+     {
+      "day": 23,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 38,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 39,
+      "stepId": "s5"
+     },
+     {
+      "day": 25,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 40,
+      "stepId": "s5"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 41,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 10",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [
+       "src_reply"
+      ],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer quotes $600 or less for the fixed scope — refund and stop"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,000 more contacts days 15-28 to reach 10 paid sales",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 10,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c0130fc8e9ba_3b8a9f",
+    "digest": "c0130fc8e9ba022853399ffa",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:14.565Z"
+   },
+   {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "a82f22fffbf9c02b0c657aed",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Set up 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months (tools only)",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories and send cold email to 1,000 of them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild in 7 days at $2,000, paid 100% up front by Stripe payment link",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and collect payment for 10 website rebuilds (test batch plus 4,000 more contacts days 15-28)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 28,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 10,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelance web designer builds each site (fixed price $600 per site)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 600000,
+      "day": 35,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank (first payout 7-14 days after first payment, then T+2)",
+      "performer": "BRAIN",
+      "costCents": 58300,
+      "day": 42,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 250000,
+      "label": "Owner's own money advanced (cap $2,500)"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 25,
+      "stepId": "s5"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 34,
+      "stepId": "s5"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 35,
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 36,
+      "stepId": "s5"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 23,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 37,
+      "stepId": "s5"
+     },
+     {
+      "day": 23,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 38,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 39,
+      "stepId": "s5"
+     },
+     {
+      "day": 25,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 40,
+      "stepId": "s5"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 41,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 10",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer quotes $600 or less for the fixed scope — refund and stop"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,000 more contacts days 15-28 to reach 10 paid sales",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 10,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "deals": 25,
+      "price": 649,
+      "directCost": 150,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "deals": 37,
+      "price": 1299,
+      "directCost": 974,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8228bb233d6e_b53102",
+    "digest": "8228bb233d6e5aa5bf326045",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:38.311Z"
+   },
+   {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "a82f22fffbf9c02b0c657aed",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Set up 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months (tools only)",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories and send cold email to 1,000 of them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild in 7 days at $2,000, paid 100% up front by Stripe payment link",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and collect payment for 10 website rebuilds (test batch plus 4,000 more contacts days 15-28)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 28,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 10,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelance web designer builds each site (fixed price $600 per site)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 600000,
+      "day": 35,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank (first payout 7-14 days after first payment, then T+2)",
+      "performer": "BRAIN",
+      "costCents": 58300,
+      "day": 42,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 250000,
+      "label": "Owner's own money advanced (cap $2,500)"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 1 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 2 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 3 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 25,
+      "stepId": "s5"
+     },
+     {
+      "day": 25,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 4 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 26,
+      "stepId": "s5"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 5 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 27,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 6 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 28,
+      "stepId": "s5"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 7 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 29,
+      "stepId": "s5"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 8 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 30,
+      "stepId": "s5"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 9 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 31,
+      "stepId": "s5"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 10 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer quotes $600 or less for the fixed scope — refund and stop"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,000 more contacts days 15-28 to reach 10 paid sales",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 10,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "deals": 25,
+      "price": 649,
+      "directCost": 150,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "deals": 37,
+      "price": 1299,
+      "directCost": 974,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b8bf77bf6124_84b319",
+    "digest": "b8bf77bf6124a3ba41054977",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:47.029Z"
+   },
+   {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "a82f22fffbf9c02b0c657aed",
+    "parentRevisionId": "rev_b8bf77bf6124_84b319",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Set up 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months (tools only)",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories and send cold email to 1,000 of them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild in 7 days at $2,000, paid 100% up front by Stripe payment link",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: count paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and collect payment for 10 website rebuilds (test batch plus 4,000 more contacts days 15-28)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 28,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 10,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelance web designer builds each site (fixed price $600 per site)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 600000,
+      "day": 35,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank (first payout 7-14 days after first payment, then T+2)",
+      "performer": "BRAIN",
+      "costCents": 58300,
+      "day": 42,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 250000,
+      "label": "Owner's own money advanced (cap $2,500)"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 1 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 2 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 3 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 25,
+      "stepId": "s5"
+     },
+     {
+      "day": 25,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 4 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 26,
+      "stepId": "s5"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 5 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 27,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 6 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 28,
+      "stepId": "s5"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 7 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 29,
+      "stepId": "s5"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 8 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 30,
+      "stepId": "s5"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 9 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 31,
+      "stepId": "s5"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer build site 10 (engaged once the sale's payout settles)",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer quotes $600 or less for the fixed scope — refund and stop"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,000 more contacts days 15-28 to reach 10 paid sales",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 10,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "deals": 25,
+      "price": 649,
+      "directCost": 150,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "deals": 37,
+      "price": 1299,
+      "directCost": 974,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ee115718fdb2_167166",
+    "digest": "ee115718fdb219c0b7a0e5d6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:00:25.729Z"
+   },
+   {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "a82f22fffbf9c02b0c657aed",
+    "parentRevisionId": "rev_b8bf77bf6124_84b319",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "RESEARCH",
+      "label": "Before any offer goes out: obtain a written fixed-price quote of <= $600 for the 5-page, 7-day scope plus a 5-page work sample from a freelance web designer on Fiverr/Upwork (no payment until a sale exists)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Buy 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months; start built-in warm-up on day 1 and ramp sending volume",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories; email the first 1,000 days 3-12 at warm-up-limited volume",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild delivered within 7 days of payment at $2,000, paid 100% up front by Stripe payment link (sent only once s0's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and take payment for 11 website rebuilds (2+ in the test, then 4,500 more contacts days 15-30); owner takes sales calls",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 11,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site within 7 days of the sale, paid $600 the day after each sale (first three builds funded from the owner's money, later ones from settled payouts)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 660000,
+      "day": 11,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank: first payout by day 24 (7-14 days after the day-10 first payment), later payments T+2",
+      "performer": "BRAIN",
+      "costCents": 64130,
+      "day": 24,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 220000,
+      "label": "Owner's own money advanced: $400 tools + first three $600 builds before the first payout"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 1 (delivered by day 17)",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 2 (delivered by day 18)",
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 3 (delivered by day 25)",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 27,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 4 (delivered by day 31)",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 28,
+      "stepId": "s5"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 5 (delivered by day 32)",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 29,
+      "stepId": "s5"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 6 (delivered by day 33)",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 30,
+      "stepId": "s5"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 7 (delivered by day 34)",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 31,
+      "stepId": "s5"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 8 (delivered by day 35)",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 32,
+      "stepId": "s5"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 9 (delivered by day 36)",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 33,
+      "stepId": "s5"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 10 (delivered by day 37)",
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 11",
+      "settlesDay": 34,
+      "stepId": "s5"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 11",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 11 (delivered by day 38)",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site obtained before the first offer, and the first paid site delivered within 7 days",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer gives a written quote of $600 or less with an acceptable sample by day 3 — send no offer; stop with only the $400 tools spent"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,500 more contacts days 15-30 to reach 11 paid sales (one sale of slack over the 10 that carry $12,000)",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5500
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Paid orders before FULFILMENT is shown: add a step that secures a freelancer's written fixed quote <= $600 and a work sample before s3 takes payment.",
+      "resolution": "Accepted. New step s0 (day 1) obtains a written fixed quote <= $600 for the 5-page 7-day scope and a work sample before any offer; s3 now depends on s0, and the stop rule says no offer is sent if no such quote exists by day 3."
+     },
+     {
+      "finding": "MAJOR: 'Delivered in 7 days' vs freelancer engaged only after each Stripe payout settles (day 10 sale delivered ~day 31); fund early builds from the $2,500 owner cap or restate the promise, and count refund risk.",
+      "resolution": "Accepted. Each freelancer is now paid the day after its sale; the first three builds (before the day-24 first payout) are funded from the owner's money, so peak owner money at risk is $400 + 3 x $600 = $2,200 inside the $2,500 cap, and every buyer gets delivery within 7 days of payment. One extra sale (11 instead of 10) is planned as slack against a refund."
+     },
+     {
+      "finding": "MINOR: Step days (s5 28, s6 35, s7 42) do not match the ledger (receipts 10-27, builds 24-31).",
+      "resolution": "Accepted. Step days now match the ledger: s5 starts day 10 (first receipt), s6 day 11 (first build), s7 day 24 (first payout)."
+     },
+     {
+      "finding": "MINOR: members lists rejected openings cop_5fc8d0a3c9f34afd9582 and cop_26a54c7795b044ffa30f.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening the plan weighs in `chain` (it returned ARITHMETIC_UNSTATED for both when they were omitted); they are weighed alternatives, not plan members, and the strategy's opportunityIds names only cop_f477d8f41fe44287b381."
+     },
+     {
+      "finding": "NOTE: Sending from three brand-new secondary domains on day 3 skips the usual 2+ weeks of mailbox warm-up; deliverability for the day-14 gate is at risk, so the gate may stop a viable offer. Price $2,000 rests on agency estimates I verified are not buyer payments (cnd_b3215a31a4b54aeab4ad); fine only as what the test measures.",
+      "resolution": "Accepted in part. Warm-up starts day 1 and the first 1,000 contacts are spread over days 3-12 at warm-up-limited volume; the risk that the gate stops a viable offer is stated. Price stays an ESTIMATE that the test measures (OFFER_AND_PRICE is in validation.decides)."
+     },
+     {
+      "finding": "NOTE: The ledger books a $2,500 owner FUNDING on day 1 though only $400 is spent before receipts; harmless to profit but overstates owner money committed.",
+      "resolution": "Accepted. FUNDING is now $2,200: the $400 tools plus the three $600 builds advanced before the first payout."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s0 now secures a written quote and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 11,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "deals": 25,
+      "price": 649,
+      "directCost": 150,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "deals": 37,
+      "price": 1299,
+      "directCost": 974,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_26c930a2c4ce_148bdd",
+    "digest": "26c930a2c4ce2b31e5d3570b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:00:43.323Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_8622dd225720489ca79b",
+   "contractDigest": "a82f22fffbf9c02b0c657aed",
+   "parentRevisionId": "rev_b8bf77bf6124_84b319",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+    "opportunityIds": [
+     "cop_f477d8f41fe44287b381"
+    ],
+    "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+   },
+   "alternatives": [
+    {
+     "title": "Google Business Profile optimization + monthly management",
+     "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+    },
+    {
+     "title": "White-label BrightLocal managed local SEO resale",
+     "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+    }
+   ],
+   "steps": [
+    {
+     "id": "s0",
+     "kind": "RESEARCH",
+     "label": "Before any offer goes out: obtain a written fixed-price quote of <= $600 for the 5-page, 7-day scope plus a 5-page work sample from a freelance web designer on Fiverr/Upwork (no payment until a sale exists)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s1",
+     "kind": "OTHER",
+     "label": "Buy 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months; start built-in warm-up on day 1 and ramp sending volume",
+     "performer": "BRAIN",
+     "costCents": 40000,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_instantly"
+     ],
+     "executor": {
+      "operation": "PLAN_DECISION",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [],
+      "routine": false
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Build list of US local service businesses with no/outdated website from public directories; email the first 1,000 days 3-12 at warm-up-limited volume",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_clutch",
+      "src_ibis"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "Offer fixed-scope 5-page website rebuild delivered within 7 days of payment at $2,000, paid 100% up front by Stripe payment link (sent only once s0's quote is in hand)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s0",
+     "evidence": [
+      "src_webfx",
+      "src_levitate"
+     ],
+     "priceCents": 200000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "TEST",
+     "label": "Validation gate: paid orders from the first 1,000 contacts by day 14",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Close and take payment for 11 website rebuilds (2+ in the test, then 4,500 more contacts days 15-30); owner takes sales calls",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_close_rate"
+     ],
+     "ownerHours": 11,
+     "priceCents": 200000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Quoted freelancer builds each site within 7 days of the sale, paid $600 the day after each sale (first three builds funded from the owner's money, later ones from settled payouts)",
+     "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+     "costCents": 660000,
+     "day": 11,
+     "dependsOn": "s5",
+     "evidence": [
+      "q_fulfil_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Stripe payouts to owner's bank: first payout by day 24 (7-14 days after the day-10 first payment), later payments T+2",
+     "performer": "BRAIN",
+     "costCents": 64130,
+     "day": 24,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_stripe"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "FUNDING",
+     "amountCents": 220000,
+     "label": "Owner's own money advanced: $400 tools + first three $600 builds before the first payout"
+    },
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 40000,
+     "label": "Domains, mailboxes and Instantly for 2 months",
+     "stepId": "s1"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 1",
+     "settlesDay": 24,
+     "stepId": "s5"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 1",
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 1 (delivered by day 17)",
+     "stepId": "s6"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 2",
+     "settlesDay": 24,
+     "stepId": "s5"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 2",
+     "stepId": "s7"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 2 (delivered by day 18)",
+     "stepId": "s6"
+    },
+    {
+     "day": 18,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 3",
+     "settlesDay": 24,
+     "stepId": "s5"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 3",
+     "stepId": "s7"
+    },
+    {
+     "day": 19,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 3 (delivered by day 25)",
+     "stepId": "s6"
+    },
+    {
+     "day": 24,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 4",
+     "settlesDay": 27,
+     "stepId": "s5"
+    },
+    {
+     "day": 27,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 4",
+     "stepId": "s7"
+    },
+    {
+     "day": 25,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 4 (delivered by day 31)",
+     "stepId": "s6"
+    },
+    {
+     "day": 25,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 5",
+     "settlesDay": 28,
+     "stepId": "s5"
+    },
+    {
+     "day": 28,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 5",
+     "stepId": "s7"
+    },
+    {
+     "day": 26,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 5 (delivered by day 32)",
+     "stepId": "s6"
+    },
+    {
+     "day": 26,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 6",
+     "settlesDay": 29,
+     "stepId": "s5"
+    },
+    {
+     "day": 29,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 6",
+     "stepId": "s7"
+    },
+    {
+     "day": 27,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 6 (delivered by day 33)",
+     "stepId": "s6"
+    },
+    {
+     "day": 27,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 7",
+     "settlesDay": 30,
+     "stepId": "s5"
+    },
+    {
+     "day": 30,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 7",
+     "stepId": "s7"
+    },
+    {
+     "day": 28,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 7 (delivered by day 34)",
+     "stepId": "s6"
+    },
+    {
+     "day": 28,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 8",
+     "settlesDay": 31,
+     "stepId": "s5"
+    },
+    {
+     "day": 31,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 8",
+     "stepId": "s7"
+    },
+    {
+     "day": 29,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 8 (delivered by day 35)",
+     "stepId": "s6"
+    },
+    {
+     "day": 29,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 9",
+     "settlesDay": 32,
+     "stepId": "s5"
+    },
+    {
+     "day": 32,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 9",
+     "stepId": "s7"
+    },
+    {
+     "day": 30,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 9 (delivered by day 36)",
+     "stepId": "s6"
+    },
+    {
+     "day": 30,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 10",
+     "settlesDay": 33,
+     "stepId": "s5"
+    },
+    {
+     "day": 33,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 10",
+     "stepId": "s7"
+    },
+    {
+     "day": 31,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 10 (delivered by day 37)",
+     "stepId": "s6"
+    },
+    {
+     "day": 31,
+     "kind": "RECEIPT",
+     "amountCents": 200000,
+     "label": "Website rebuild sale 11",
+     "settlesDay": 34,
+     "stepId": "s5"
+    },
+    {
+     "day": 34,
+     "kind": "FEE",
+     "amountCents": 5830,
+     "label": "Stripe fee 2.9%+30c sale 11",
+     "stepId": "s7"
+    },
+    {
+     "day": 32,
+     "kind": "SPEND",
+     "amountCents": 60000,
+     "label": "Freelancer builds site 11 (delivered by day 38)",
+     "stepId": "s6"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "q_close_rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per contact emailed",
+     "sources": [],
+     "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+    },
+    {
+     "name": "q_price",
+     "status": "ESTIMATE",
+     "value": 2000,
+     "unit": "USD per site",
+     "sources": [
+      "src_webfx",
+      "src_levitate"
+     ],
+     "needs": "Buyers paying $2,000 in the test"
+    },
+    {
+     "name": "q_fulfil_cost",
+     "status": "ESTIMATE",
+     "value": 600,
+     "unit": "USD per site",
+     "sources": [
+      "src_levitate"
+     ],
+     "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+    },
+    {
+     "name": "q_settle_days",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days from first payment to payout (max)",
+     "sources": [
+      "src_stripe"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_webfx",
+     "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+     "dated": "2024-08-14",
+     "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+     "population": "US small businesses buying a website",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_levitate",
+     "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+     "dated": "2026-02-24",
+     "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_clutch",
+     "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+     "dated": "2025-08-05",
+     "claim": "17% of 406 surveyed US small business owners have no website",
+     "population": "US small business owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_ibis",
+     "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+     "dated": "2025",
+     "claim": "127,770 plumbing businesses in the US as of 2025",
+     "population": "US plumbing businesses (one local-service segment)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_stripe",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+     "population": "Stripe US accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_instantly",
+     "url": "https://instantly.ai/pricing.md",
+     "dated": "2026-11-28",
+     "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+     "population": "cold email senders",
+     "matchesBuyer": false,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_reply",
+     "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+     "dated": "2026-01-19",
+     "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+     "population": "B2B cold email campaigns",
+     "matchesBuyer": false,
+     "opportunityId": "cop_f477d8f41fe44287b381"
+    },
+    {
+     "id": "src_gbp",
+     "url": "https://whitespark.ca/google-my-business-management-service/",
+     "dated": "2026-11-28",
+     "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+     "population": "local businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+    },
+    {
+     "id": "src_gbp2",
+     "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+     "dated": "2026-11-28",
+     "claim": "GBP audit and optimization offered at $250 one-time",
+     "population": "local businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+    },
+    {
+     "id": "src_bl",
+     "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+     "dated": "2026-11-28",
+     "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+     "population": "local businesses and agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_26a54c7795b044ffa30f"
+    }
+   ],
+   "validation": {
+    "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site obtained before the first offer, and the first paid site delivered within 7 days",
+    "stop": [
+     "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+     "No freelancer gives a written quote of $600 or less with an acceptable sample by day 3 — send no offer; stop with only the $400 tools spent"
+    ],
+    "continue": [
+     "2+ paid of 1,000 — email 4,500 more contacts days 15-30 to reach 11 paid sales (one sale of slack over the 10 that carry $12,000)",
+     "Deliver each paid site through the quoted freelancer within 7 days"
+    ],
+    "decides": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "threshold": {
+     "paid": 2,
+     "of": 1000,
+     "reach": 5500
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MAJOR: Paid orders before FULFILMENT is shown: add a step that secures a freelancer's written fixed quote <= $600 and a work sample before s3 takes payment.",
+     "resolution": "Accepted. New step s0 (day 1) obtains a written fixed quote <= $600 for the 5-page 7-day scope and a work sample before any offer; s3 now depends on s0, and the stop rule says no offer is sent if no such quote exists by day 3."
+    },
+    {
+     "finding": "MAJOR: 'Delivered in 7 days' vs freelancer engaged only after each Stripe payout settles (day 10 sale delivered ~day 31); fund early builds from the $2,500 owner cap or restate the promise, and count refund risk.",
+     "resolution": "Accepted. Each freelancer is now paid the day after its sale; the first three builds (before the day-24 first payout) are funded from the owner's money, so peak owner money at risk is $400 + 3 x $600 = $2,200 inside the $2,500 cap, and every buyer gets delivery within 7 days of payment. One extra sale (11 instead of 10) is planned as slack against a refund."
+    },
+    {
+     "finding": "MINOR: Step days (s5 28, s6 35, s7 42) do not match the ledger (receipts 10-27, builds 24-31).",
+     "resolution": "Accepted. Step days now match the ledger: s5 starts day 10 (first receipt), s6 day 11 (first build), s7 day 24 (first payout)."
+    },
+    {
+     "finding": "MINOR: members lists rejected openings cop_5fc8d0a3c9f34afd9582 and cop_26a54c7795b044ffa30f.",
+     "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening the plan weighs in `chain` (it returned ARITHMETIC_UNSTATED for both when they were omitted); they are weighed alternatives, not plan members, and the strategy's opportunityIds names only cop_f477d8f41fe44287b381."
+    },
+    {
+     "finding": "NOTE: Sending from three brand-new secondary domains on day 3 skips the usual 2+ weeks of mailbox warm-up; deliverability for the day-14 gate is at risk, so the gate may stop a viable offer. Price $2,000 rests on agency estimates I verified are not buyer payments (cnd_b3215a31a4b54aeab4ad); fine only as what the test measures.",
+     "resolution": "Accepted in part. Warm-up starts day 1 and the first 1,000 contacts are spread over days 3-12 at warm-up-limited volume; the risk that the gate stops a viable offer is stated. Price stays an ESTIMATE that the test measures (OFFER_AND_PRICE is in validation.decides)."
+    },
+    {
+     "finding": "NOTE: The ledger books a $2,500 owner FUNDING on day 1 though only $400 is spent before receipts; harmless to profit but overstates owner money committed.",
+     "resolution": "Accepted. FUNDING is now $2,200: the $400 tools plus the three $600 builds advanced before the first payout."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ],
+     "finding": "FULFILMENT condition",
+     "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s0 now secures a written quote and sample before any offer, and FULFILMENT stays in validation.decides."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_f477d8f41fe44287b381",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_26a54c7795b044ffa30f",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_f477d8f41fe44287b381",
+     "deals": 11,
+     "price": 2000,
+     "directCost": 600,
+     "capital": null,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+     "deals": 25,
+     "price": 649,
+     "directCost": 150,
+     "capital": null,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_26a54c7795b044ffa30f",
+     "deals": 37,
+     "price": 1299,
+     "directCost": 974,
+     "capital": null,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_26c930a2c4ce_148bdd",
+   "digest": "26c930a2c4ce2b31e5d3570b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T02:00:43.323Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_26c930a2c4ce_148bdd",
+   "digest": "26c930a2c4ce2b31e5d3570b",
+   "contractDigest": "a82f22fffbf9c02b0c657aed",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 764130,
+    "committedOpenCents": 0,
+    "preProofCents": 160000,
+    "maxExposureCents": 220000,
+    "minCashCents": 250000,
+    "minCashDay": 19,
+    "collectedCents": 2200000,
+    "collectedInWindowCents": 2200000,
+    "refundsCents": 0,
+    "ownerFundedCents": 220000,
+    "netCents": 1435870
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_f477d8f41fe44287b381",
+     "cop_5fc8d0a3c9f34afd9582",
+     "cop_26a54c7795b044ffa30f"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "title": "Website rebuild for US local service businesses, sold by cold email, built by a hired freelancer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1400,
+      "card": {
+       "payer": "Owners of US local service businesses (home services, clinics, trades) with no or outdated website",
+       "reachableChannel": "Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories",
+       "offerScope": "Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card",
+       "priceCents": 200000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "peakFundingCents": 90000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Small-business web design",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email from secondary sending domains through Instantly (Growth plan) to bus"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 2000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 600, tied up 900"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card to Owners of US local service businesses (home services, clinics, trades) with no or outdated website, reached through Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories, at $2,000; Freelance web designer hired per site on Fiverr/Upwork (fixed price) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$900",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance web designer hired per site on Fiverr/Upwork (fixed price).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of US local service businesses (home services, clinics, trades) with no or outdated website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$2,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$2,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; https://fitsmallbusiness.com/website-costs/; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/blog/cold-email-reply-rate-benchmarks; https://belkins.io/blog/cold-email-response-rates",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "title": "Google Business Profile optimization + monthly management for local businesses, fulfilled by a hired specialist",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 499,
+      "card": {
+       "payer": "US single-location local businesses (dentists, contractors, salons)",
+       "reachableChannel": "Cold email through Instantly to businesses whose GBP listings are incomplete",
+       "offerScope": "One-time Google Business Profile audit and optimization ($250) plus $399/month management",
+       "priceCents": 64900,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance local-SEO specialist hired per listing (fixed price)",
+       "peakFundingCents": 70000,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "Local SEO",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email through Instantly to businesses whose GBP listings are incomplete"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 649 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 150, tied up 700"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email through Instantly to businesses whose GBP listings are incomplete",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One-time Google Business Profile audit and optimization ($250) plus $399/month management to US single-location local businesses (dentists, contractors, salons), reached through Cold email through Instantly to businesses whose GBP listings are incomplete, at $649; Freelance local-SEO specialist hired per listing (fixed price) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$700",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance local-SEO specialist hired per listing (fixed price).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "One-time Google Business Profile audit and optimization ($250) plus $399/month management",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US single-location local businesses (dentists, contractors, salons)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$649",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$649",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://whitespark.ca/google-my-business-management-service/; https://clutch.co/profile/little-green-agency/seo-package; https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month; https://www.brightlocal.com/learn/local-seo/management/local-seo-services/; https://www.webfx.com/local--seo/pricing/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "title": "White-label resale of managed local SEO (BrightLocal) to local businesses",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 325,
+      "card": {
+       "payer": "US local businesses wanting managed local SEO",
+       "reachableChannel": "Cold email through Instantly",
+       "offerScope": "Managed local SEO per location per month, delivered white-label by BrightLocal",
+       "priceCents": 129900,
+       "currency": "USD",
+       "fulfillmentOwner": "BrightLocal managed local SEO (white-label $974/location/month)",
+       "peakFundingCents": 150000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Local SEO",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email through Instantly"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1299 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 974, tied up 1500"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email through Instantly",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Managed local SEO per location per month, delivered white-label by BrightLocal to US local businesses wanting managed local SEO, reached through Cold email through Instantly, at $1,299; BrightLocal managed local SEO (white-label $974/location/month) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$974",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "BrightLocal managed local SEO (white-label $974/location/month).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Managed local SEO per location per month, delivered white-label by BrightLocal",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local businesses wanting managed local SEO",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,299",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,299",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/; https://www.webfx.com/local--seo/pricing/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:49:03.159Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b8bf77bf6124_84b319",
+    "revisionDigest": "b8bf77bf6124a3ba41054977",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4fb2572b1b214647acf7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family and the arithmetic mostly holds: 10 x $2,000 = $20,000; costs $400 tools + 10 x $600 build + 10 x $58.30 Stripe = $6,983; profit $13,017 >= $12,000 (trace netCents 1301700), peak owner money at risk $400 << $2,500, last receipt settles day 31 of 45; the gate (2 paid of 1,000 = 0.2%) projected over the 5,000 planned contacts gives exactly the 10 sales needed, so passing at threshold carries the target (with no slack: 9 sales = $11,675). But: (1) The test takes buyers' money before fulfilment is shown possible. Brain's FULFILMENT link is false and the card's fulfillment is a RECOMMENDATION; the plan's own quantity says a freelancer's written fixed quote <= $600 is needed 'before the first sale is accepted', yet no step obtains it before s3 starts taking 100% up-front Stripe payments on day 3, and the stop branch is 'refund and stop'. Get the quote (and a sample of the freelancer's 5-page work) as a step before the offer goes out. (2) The delivery promise contradicts the ledger: the offer is 'delivered in 7 days', but each freelancer is engaged only once that sale's Stripe payout settles (sale 1 paid day 10, payout day 24, build to ~day 31), so early buyers wait ~3 weeks, inviting refunds/chargebacks that the ledger counts at $0. Either fund the first builds from owner money (each $600, inside the $2,500 cap) or change the promise. (3) Steps and ledger disagree: s5 SELL day 28, s6 DELIVER day 35, s7 COLLECT day 42, while receipts run days 10-27 and builds days 24-31. (4) members still carries the two rejected alternatives (25 GBP deals, 37 BrightLocal client-months) although the strategy names only cop_f477d8f41fe44287b381.",
+    "findings": [
+     "MAJOR: Paid orders before FULFILMENT is shown: add a step that secures a freelancer's written fixed quote <= $600 and a work sample before s3 takes payment.",
+     "MAJOR: 'Delivered in 7 days' vs freelancer engaged only after each Stripe payout settles (day 10 sale delivered ~day 31); fund early builds from the $2,500 owner cap or restate the promise, and count refund risk.",
+     "MINOR: Step days (s5 28, s6 35, s7 42) do not match the ledger (receipts 10-27, builds 24-31).",
+     "MINOR: members lists rejected openings cop_5fc8d0a3c9f34afd9582 and cop_26a54c7795b044ffa30f.",
+     "NOTE: Sending from three brand-new secondary domains on day 3 skips the usual 2+ weeks of mailbox warm-up; deliverability for the day-14 gate is at risk, so the gate may stop a viable offer. Price $2,000 rests on agency estimates I verified are not buyer payments (cnd_b3215a31a4b54aeab4ad); fine only as what the test measures.",
+     "NOTE: The ledger books a $2,500 owner FUNDING on day 1 though only $400 is spent before receipts; harmless to profit but overstates owner money committed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:49:54.362Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's fulfillment ('Freelance web designer hired per site on Fiverr/Upwork (fixed price)') is a RECOMMENDATION with no EVIDENCE of a quote at $600 for the 7-day 5-page scope, yet the test takes 100% up-front payments before any quote exists."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_26c930a2c4ce_148bdd",
+    "revisionDigest": "26c930a2c4ce2b31e5d3570b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4fb2572b1b214647acf7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_b8bf77bf6124_84b319 are fixed and the plan is a startable CONDITIONAL test. (1) Fulfilment before orders: s0 obtains a written fixed quote <= $600 for the 5-page, 7-day scope plus a work sample before any offer, s3 depends on it, and the stop sends no offer if it is missing by day 3. (2) Delivery promise vs cash: each build is paid the day after its sale; the first three (days 11, 12, 19) are funded by the owner before the day-24 first payout, so peak owner money at risk = $400 tools + 3 x $600 = $2,200 <= $2,500 (trace maxExposure 220000); builds 4-11 are paid from settled payouts. Recomputed profit: 11 x $2,000 = $22,000 - $400 - 11 x $600 - 11 x $58.30 = $14,358.70 (trace netCents 1435870) >= $12,000, with one sale of slack (10 sales give $12,817). Gate: 2 paid of 1,000 (0.2%) projected over the 5,500 planned contacts gives 11 sales, so passing at threshold carries the target; last receipt settles day 34 of 45. Step days now match the ledger. The members rebuttal is accepted: the alternatives are weighed in chain and Brain requires their arithmetic; the strategy names only cop_f477d8f41fe44287b381. Unknowns (close rate, price, demand, freelancer cost) are marked and decided by the test.",
+    "findings": [
+     "NOTE: Stripe's docs say the first payout is 'typically' 7-14 days, not at most 14; if it slips past day 24, funding build 4 on day 25 would take owner money to $2,800, over the $2,500 cap. State the rule: no build beyond the third (and no further sale accepted) until the first payout lands.",
+     "NOTE: Warm-up from day 1 with sending from day 3 is still short for three new domains; the plan states that the gate could stop a viable offer for deliverability reasons."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T02:01:54.012Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_26c930a2c4ce_148bdd",
+   "digest": "26c930a2c4ce2b31e5d3570b",
+   "contractDigest": "a82f22fffbf9c02b0c657aed",
+   "plan": {
+    "goalId": "wst_8622dd225720489ca79b",
+    "contractDigest": "a82f22fffbf9c02b0c657aed",
+    "parentRevisionId": "rev_b8bf77bf6124_84b319",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-emailed $2,000 website rebuilds for US local service businesses, built by hired freelancers",
+     "opportunityIds": [
+      "cop_f477d8f41fe44287b381"
+     ],
+     "why": "Highest margin per deal of the discovered routes ($2,000 price vs ~$600 build + ~$58 card fee), low tool cost inside the $2,500 cap, and first cash settles well inside 45 days; but demand, price acceptance, close rate and freelancer cost are unmeasured, so a 14-day sales test decides it."
+    },
+    "alternatives": [
+     {
+      "title": "Google Business Profile optimization + monthly management",
+      "why": "~$649 first-month revenue per client needs ~20 clients in 45 days; price only vendor list prices; weaker per-deal margin"
+     },
+     {
+      "title": "White-label BrightLocal managed local SEO resale",
+      "why": "$1,299 price minus $974 white-label cost leaves ~$325/client-month; ~37 client-months needed, impossible in 45 days"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s0",
+      "kind": "RESEARCH",
+      "label": "Before any offer goes out: obtain a written fixed-price quote of <= $600 for the 5-page, 7-day scope plus a 5-page work sample from a freelance web designer on Fiverr/Upwork (no payment until a sale exists)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Buy 3 secondary sending domains, 6 mailboxes and Instantly Hypergrowth for 2 months; start built-in warm-up on day 1 and ramp sending volume",
+      "performer": "BRAIN",
+      "costCents": 40000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Build list of US local service businesses with no/outdated website from public directories; email the first 1,000 days 3-12 at warm-up-limited volume",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_clutch",
+       "src_ibis"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild delivered within 7 days of payment at $2,000, paid 100% up front by Stripe payment link (sent only once s0's quote is in hand)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s0",
+      "evidence": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "priceCents": 200000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation gate: paid orders from the first 1,000 contacts by day 14",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Close and take payment for 11 website rebuilds (2+ in the test, then 4,500 more contacts days 15-30); owner takes sales calls",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_close_rate"
+      ],
+      "ownerHours": 11,
+      "priceCents": 200000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Quoted freelancer builds each site within 7 days of the sale, paid $600 the day after each sale (first three builds funded from the owner's money, later ones from settled payouts)",
+      "performer": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+      "costCents": 660000,
+      "day": 11,
+      "dependsOn": "s5",
+      "evidence": [
+       "q_fulfil_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Stripe payouts to owner's bank: first payout by day 24 (7-14 days after the day-10 first payment), later payments T+2",
+      "performer": "BRAIN",
+      "costCents": 64130,
+      "day": 24,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 220000,
+      "label": "Owner's own money advanced: $400 tools + first three $600 builds before the first payout"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 40000,
+      "label": "Domains, mailboxes and Instantly for 2 months",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 1",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 1 (delivered by day 17)",
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 2",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 2 (delivered by day 18)",
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 3",
+      "settlesDay": 24,
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 3 (delivered by day 25)",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 4",
+      "settlesDay": 27,
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 4 (delivered by day 31)",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 5",
+      "settlesDay": 28,
+      "stepId": "s5"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 5 (delivered by day 32)",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 6",
+      "settlesDay": 29,
+      "stepId": "s5"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 6 (delivered by day 33)",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 7",
+      "settlesDay": 30,
+      "stepId": "s5"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 7 (delivered by day 34)",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 8",
+      "settlesDay": 31,
+      "stepId": "s5"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 8 (delivered by day 35)",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 9",
+      "settlesDay": 32,
+      "stepId": "s5"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 9 (delivered by day 36)",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 10",
+      "settlesDay": 33,
+      "stepId": "s5"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 10",
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 10 (delivered by day 37)",
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 200000,
+      "label": "Website rebuild sale 11",
+      "settlesDay": 34,
+      "stepId": "s5"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 5830,
+      "label": "Stripe fee 2.9%+30c sale 11",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 60000,
+      "label": "Freelancer builds site 11 (delivered by day 38)",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "q_close_rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per contact emailed",
+      "sources": [],
+      "needs": "Live cold-email test: paid orders from first 1,000 contacts"
+     },
+     {
+      "name": "q_price",
+      "status": "ESTIMATE",
+      "value": 2000,
+      "unit": "USD per site",
+      "sources": [
+       "src_webfx",
+       "src_levitate"
+      ],
+      "needs": "Buyers paying $2,000 in the test"
+     },
+     {
+      "name": "q_fulfil_cost",
+      "status": "ESTIMATE",
+      "value": 600,
+      "unit": "USD per site",
+      "sources": [
+       "src_levitate"
+      ],
+      "needs": "Written fixed-price quote from a freelancer before the first sale is accepted"
+     },
+     {
+      "name": "q_settle_days",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days from first payment to payout (max)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business",
+      "dated": "2024-08-14",
+      "claim": "Basic small-business website design ~$2,000-$5,000 (agency statement)",
+      "population": "US small businesses buying a website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_levitate",
+      "url": "https://www.levitate.ai/blog-posts/average-website-design-cost-for-small-businesses-in-2026",
+      "dated": "2026-02-24",
+      "claim": "Freelancer small-business websites typically $500-$5,000; agencies $5,000-$15,000",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/resources/state-of-small-business-websites-2025",
+      "dated": "2025-08-05",
+      "claim": "17% of 406 surveyed US small business owners have no website",
+      "population": "US small business owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_ibis",
+      "url": "https://www.ibisworld.com/united-states/number-of-businesses/plumbers/1946/",
+      "dated": "2025",
+      "claim": "127,770 plumbing businesses in the US as of 2025",
+      "population": "US plumbing businesses (one local-service segment)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial payout typically 7-14 days after first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails/month, 1,000 uploaded contacts",
+      "population": "cold email senders",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_reply",
+      "url": "https://instantly.ai/blog/cold-email-reply-rate-benchmarks",
+      "dated": "2026-01-19",
+      "claim": "Average cold email reply rate 3.43% across Instantly 2025 data (replies, not purchases)",
+      "population": "B2B cold email campaigns",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f477d8f41fe44287b381"
+     },
+     {
+      "id": "src_gbp",
+      "url": "https://whitespark.ca/google-my-business-management-service/",
+      "dated": "2026-11-28",
+      "claim": "Whitespark GBP-only management $499/month (vendor list price)",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_gbp2",
+      "url": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month",
+      "dated": "2026-11-28",
+      "claim": "GBP audit and optimization offered at $250 one-time",
+      "population": "local businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582"
+     },
+     {
+      "id": "src_bl",
+      "url": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/",
+      "dated": "2026-11-28",
+      "claim": "BrightLocal managed local SEO $1,299/location/month; white-label $974/month",
+      "population": "local businesses and agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_26a54c7795b044ffa30f"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $2,000 orders (cash captured in Stripe) from the first 1,000 local service businesses emailed by day 14, and a freelancer's written fixed quote of no more than $600 per 5-page site obtained before the first offer, and the first paid site delivered within 7 days",
+     "stop": [
+      "Fewer than 2 paid orders from 1,000 contacts by day 14 — stop, spend is capped at the $400 tools already committed",
+      "No freelancer gives a written quote of $600 or less with an acceptable sample by day 3 — send no offer; stop with only the $400 tools spent"
+     ],
+     "continue": [
+      "2+ paid of 1,000 — email 4,500 more contacts days 15-30 to reach 11 paid sales (one sale of slack over the 10 that carry $12,000)",
+      "Deliver each paid site through the quoted freelancer within 7 days"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 5500
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Paid orders before FULFILMENT is shown: add a step that secures a freelancer's written fixed quote <= $600 and a work sample before s3 takes payment.",
+      "resolution": "Accepted. New step s0 (day 1) obtains a written fixed quote <= $600 for the 5-page 7-day scope and a work sample before any offer; s3 now depends on s0, and the stop rule says no offer is sent if no such quote exists by day 3."
+     },
+     {
+      "finding": "MAJOR: 'Delivered in 7 days' vs freelancer engaged only after each Stripe payout settles (day 10 sale delivered ~day 31); fund early builds from the $2,500 owner cap or restate the promise, and count refund risk.",
+      "resolution": "Accepted. Each freelancer is now paid the day after its sale; the first three builds (before the day-24 first payout) are funded from the owner's money, so peak owner money at risk is $400 + 3 x $600 = $2,200 inside the $2,500 cap, and every buyer gets delivery within 7 days of payment. One extra sale (11 instead of 10) is planned as slack against a refund."
+     },
+     {
+      "finding": "MINOR: Step days (s5 28, s6 35, s7 42) do not match the ledger (receipts 10-27, builds 24-31).",
+      "resolution": "Accepted. Step days now match the ledger: s5 starts day 10 (first receipt), s6 day 11 (first build), s7 day 24 (first payout)."
+     },
+     {
+      "finding": "MINOR: members lists rejected openings cop_5fc8d0a3c9f34afd9582 and cop_26a54c7795b044ffa30f.",
+      "resolution": "Rebutted. Brain's check requires `members` arithmetic for every opening the plan weighs in `chain` (it returned ARITHMETIC_UNSTATED for both when they were omitted); they are weighed alternatives, not plan members, and the strategy's opportunityIds names only cop_f477d8f41fe44287b381."
+     },
+     {
+      "finding": "NOTE: Sending from three brand-new secondary domains on day 3 skips the usual 2+ weeks of mailbox warm-up; deliverability for the day-14 gate is at risk, so the gate may stop a viable offer. Price $2,000 rests on agency estimates I verified are not buyer payments (cnd_b3215a31a4b54aeab4ad); fine only as what the test measures.",
+      "resolution": "Accepted in part. Warm-up starts day 1 and the first 1,000 contacts are spread over days 3-12 at warm-up-limited volume; the risk that the gate stops a viable offer is stated. Price stays an ESTIMATE that the test measures (OFFER_AND_PRICE is in validation.decides)."
+     },
+     {
+      "finding": "NOTE: The ledger books a $2,500 owner FUNDING on day 1 though only $400 is spent before receipts; harmless to profit but overstates owner money committed.",
+      "resolution": "Accepted. FUNDING is now $2,200: the $400 tools plus the three $600 builds advanced before the first payout."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "The card's fulfillment is a RECOMMENDATION and Brain's FULFILMENT link is false; s0 now secures a written quote and sample before any offer, and FULFILMENT stays in validation.decides."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_f477d8f41fe44287b381",
+      "deals": 11,
+      "price": 2000,
+      "directCost": 600,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+      "deals": 25,
+      "price": 649,
+      "directCost": 150,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_26a54c7795b044ffa30f",
+      "deals": 37,
+      "price": 1299,
+      "directCost": 974,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_26c930a2c4ce_148bdd",
+    "digest": "26c930a2c4ce2b31e5d3570b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T02:00:43.323Z"
+   },
+   "review": {
+    "revisionId": "rev_26c930a2c4ce_148bdd",
+    "revisionDigest": "26c930a2c4ce2b31e5d3570b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d1ec9aaf6308481a9f11/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4fb2572b1b214647acf7/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both MAJOR findings from my review of rev_b8bf77bf6124_84b319 are fixed and the plan is a startable CONDITIONAL test. (1) Fulfilment before orders: s0 obtains a written fixed quote <= $600 for the 5-page, 7-day scope plus a work sample before any offer, s3 depends on it, and the stop sends no offer if it is missing by day 3. (2) Delivery promise vs cash: each build is paid the day after its sale; the first three (days 11, 12, 19) are funded by the owner before the day-24 first payout, so peak owner money at risk = $400 tools + 3 x $600 = $2,200 <= $2,500 (trace maxExposure 220000); builds 4-11 are paid from settled payouts. Recomputed profit: 11 x $2,000 = $22,000 - $400 - 11 x $600 - 11 x $58.30 = $14,358.70 (trace netCents 1435870) >= $12,000, with one sale of slack (10 sales give $12,817). Gate: 2 paid of 1,000 (0.2%) projected over the 5,500 planned contacts gives 11 sales, so passing at threshold carries the target; last receipt settles day 34 of 45. Step days now match the ledger. The members rebuttal is accepted: the alternatives are weighed in chain and Brain requires their arithmetic; the strategy names only cop_f477d8f41fe44287b381. Unknowns (close rate, price, demand, freelancer cost) are marked and decided by the test.",
+    "findings": [
+     "NOTE: Stripe's docs say the first payout is 'typically' 7-14 days, not at most 14; if it slips past day 24, funding build 4 on day 25 would take owner money to $2,800, over the $2,500 cap. State the rule: no build beyond the third (and no further sale accepted) until the first payout lands.",
+     "NOTE: Warm-up from day 1 with sending from day 3 is still short for three new domains; the plan states that the gate could stop a viable offer for deliverability reasons."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T02:01:54.012Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want to clear $12,000 in profit — money kept after every cost — within 45 days. I can put up to $2,500 of my own money in, and I don't care which industry.",
+    "terms": "13fcd76b955da904",
+    "openings": {
+     "cop_26a54c7795b044ffa30f": "f04bd27b7c61a779",
+     "cop_5fc8d0a3c9f34afd9582": "4c93e000b19fb304",
+     "cop_f477d8f41fe44287b381": "edad97a6eb0a755e"
+    }
+   },
+   "at": "2026-11-28T02:10:43.145Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

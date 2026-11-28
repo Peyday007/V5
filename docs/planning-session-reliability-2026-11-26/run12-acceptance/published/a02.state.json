@@ -1,0 +1,1447 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_8b9b03b787a04c44bf85",
+   "words": "Keep $3,000 of net cash — after every direct cost — settled within 30 days, using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount has settled as cash in the owner's account within the window after every direct cost is paid",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "c9b3432fef523d81a4b5d516"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_8b9b03b787a04c44bf85",
+    "contractDigest": "c9b3432fef523d81a4b5d516",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the six signed drywall takeoffs through SheetCount",
+     "opportunityIds": [
+      "cop_1a36440a4c3a4ecea669"
+     ],
+     "why": "Six written orders x $900 = $5,400; SheetCount's written quote $350 x 6 = $2,100; net $3,300 >= $3,000. Deliveries days 5/12/19, contractors pay within 7 days (last day 26), SheetCount is paid net 10 (days 15/22/29) after each matching receipt, so no up-front capital and everything settles inside 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Overflow drywall hanging for general contractors",
+      "why": "Two signed orders at $4,200 but no fulfiller is named or quoted (FULFILMENT not established), and its net (2 x $1,200 = $2,400) would not reach $3,000 alone."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the six contractors who signed to collect their plans",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_reach",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Confirm the six signed $900 takeoff orders (written acceptances recorded)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "s_price",
+       "s_agree"
+      ],
+      "priceCents": 90000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "SheetCount produces 6 takeoffs at $350 each, two each on days 5, 12 and 19; invoices net 10",
+      "performer": "SheetCount Estimating LLC",
+      "costCents": 210000,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "SheetCount Estimating LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Each contractor pays $900 within 7 days of delivery (days 12, 19, 26)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s3",
+      "evidence": [
+       "s_price",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 5",
+      "settlesDay": 12,
+      "stepId": "s4"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 5",
+      "stepId": "s3"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 12",
+      "settlesDay": 19,
+      "stepId": "s4"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 12",
+      "stepId": "s3"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 19",
+      "settlesDay": 26,
+      "stepId": "s4"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 19",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 29,
+    "quantities": [
+     {
+      "name": "signedOrders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "written orders",
+      "sources": [
+       "s_price",
+       "s_agree"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per takeoff",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCost",
+      "status": "EVIDENCED",
+      "value": 350,
+      "unit": "USD per takeoff (written quote)",
+      "sources": [
+       "s_ful",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCapacity",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "takeoffs in window (2 each on days 5, 12, 19)",
+      "sources": [
+       "s_ful"
+      ],
+      "needs": null
+     },
+     {
+      "name": "paymentTerms",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days after delivery",
+      "sources": [
+       "s_price",
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "netContribution",
+      "status": "EVIDENCED",
+      "value": 3300,
+      "unit": "USD (6 x (900-350))",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#reachableChannel",
+      "dated": "2026-11",
+      "claim": "The six contractors who signed, reachable by email",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#price",
+      "dated": "2026-11-20",
+      "claim": "Six drywall contractors signed written orders at $900 per takeoff (2026-11-20)",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#agreements",
+      "dated": "2026-11-20",
+      "claim": "Six WRITTEN_ACCEPTANCE agreements at $900 each",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#fulfillment",
+      "dated": "2026-11",
+      "claim": "SheetCount written quote $350/takeoff, two a week on days 5, 12, 19, invoices net 10",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#directCosts",
+      "dated": "2026-11",
+      "claim": "$350 direct cost per takeoff",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "12 days to first usable cash (deliver day 5 + pay within 7)",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1a36440a4c3a4ecea669",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+      "why": "No fulfiller is named or quoted for physical drywall hanging (FULFILMENT not established)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_1a36440a4c3a4ecea669",
+      "deals": 6,
+      "price": 900,
+      "directCost": 350,
+      "capital": 0,
+      "settlesDay": 29
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_56706d93252e_897431",
+    "digest": "56706d93252ee64bc54338bc",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48f2c4d887964b86926b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:08.109Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_8b9b03b787a04c44bf85",
+   "contractDigest": "c9b3432fef523d81a4b5d516",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the six signed drywall takeoffs through SheetCount",
+    "opportunityIds": [
+     "cop_1a36440a4c3a4ecea669"
+    ],
+    "why": "Six written orders x $900 = $5,400; SheetCount's written quote $350 x 6 = $2,100; net $3,300 >= $3,000. Deliveries days 5/12/19, contractors pay within 7 days (last day 26), SheetCount is paid net 10 (days 15/22/29) after each matching receipt, so no up-front capital and everything settles inside 30 days."
+   },
+   "alternatives": [
+    {
+     "title": "Overflow drywall hanging for general contractors",
+     "why": "Two signed orders at $4,200 but no fulfiller is named or quoted (FULFILMENT not established), and its net (2 x $1,200 = $2,400) would not reach $3,000 alone."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the six contractors who signed to collect their plans",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_reach",
+      "s_agree"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Confirm the six signed $900 takeoff orders (written acceptances recorded)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "s_price",
+      "s_agree"
+     ],
+     "priceCents": 90000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "SheetCount produces 6 takeoffs at $350 each, two each on days 5, 12 and 19; invoices net 10",
+     "performer": "SheetCount Estimating LLC",
+     "costCents": 210000,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "s_ful",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "SheetCount Estimating LLC",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Each contractor pays $900 within 7 days of delivery (days 12, 19, 26)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "s3",
+     "evidence": [
+      "s_price",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 180000,
+     "label": "Two contractors pay for takeoffs delivered day 5",
+     "settlesDay": 12,
+     "stepId": "s4"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 70000,
+     "label": "Pay SheetCount net 10 for two takeoffs delivered day 5",
+     "stepId": "s3"
+    },
+    {
+     "day": 19,
+     "kind": "RECEIPT",
+     "amountCents": 180000,
+     "label": "Two contractors pay for takeoffs delivered day 12",
+     "settlesDay": 19,
+     "stepId": "s4"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 70000,
+     "label": "Pay SheetCount net 10 for two takeoffs delivered day 12",
+     "stepId": "s3"
+    },
+    {
+     "day": 26,
+     "kind": "RECEIPT",
+     "amountCents": 180000,
+     "label": "Two contractors pay for takeoffs delivered day 19",
+     "settlesDay": 26,
+     "stepId": "s4"
+    },
+    {
+     "day": 29,
+     "kind": "SPEND",
+     "amountCents": 70000,
+     "label": "Pay SheetCount net 10 for two takeoffs delivered day 19",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 29,
+   "quantities": [
+    {
+     "name": "signedOrders",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "written orders",
+     "sources": [
+      "s_price",
+      "s_agree"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "USD per takeoff",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "supplierCost",
+     "status": "EVIDENCED",
+     "value": 350,
+     "unit": "USD per takeoff (written quote)",
+     "sources": [
+      "s_ful",
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "supplierCapacity",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "takeoffs in window (2 each on days 5, 12, 19)",
+     "sources": [
+      "s_ful"
+     ],
+     "needs": null
+    },
+    {
+     "name": "paymentTerms",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days after delivery",
+     "sources": [
+      "s_price",
+      "s_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "netContribution",
+     "status": "EVIDENCED",
+     "value": 3300,
+     "unit": "USD (6 x (900-350))",
+     "sources": [
+      "s_price",
+      "s_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_reach",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#reachableChannel",
+     "dated": "2026-11",
+     "claim": "The six contractors who signed, reachable by email",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#price",
+     "dated": "2026-11-20",
+     "claim": "Six drywall contractors signed written orders at $900 per takeoff (2026-11-20)",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    },
+    {
+     "id": "s_agree",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#agreements",
+     "dated": "2026-11-20",
+     "claim": "Six WRITTEN_ACCEPTANCE agreements at $900 each",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    },
+    {
+     "id": "s_ful",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#fulfillment",
+     "dated": "2026-11",
+     "claim": "SheetCount written quote $350/takeoff, two a week on days 5, 12, 19, invoices net 10",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#directCosts",
+     "dated": "2026-11",
+     "claim": "$350 direct cost per takeoff",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "12 days to first usable cash (deliver day 5 + pay within 7)",
+     "population": "the six residential drywall contractors who signed written orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1a36440a4c3a4ecea669"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_1a36440a4c3a4ecea669",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+     "why": "No fulfiller is named or quoted for physical drywall hanging (FULFILMENT not established)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_1a36440a4c3a4ecea669",
+     "deals": 6,
+     "price": 900,
+     "directCost": 350,
+     "capital": 0,
+     "settlesDay": 29
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_56706d93252e_897431",
+   "digest": "56706d93252ee64bc54338bc",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_48f2c4d887964b86926b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:39:08.109Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_56706d93252e_897431",
+   "digest": "56706d93252ee64bc54338bc",
+   "contractDigest": "c9b3432fef523d81a4b5d516",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 210000,
+    "committedOpenCents": 0,
+    "preProofCents": 210000,
+    "maxExposureCents": 0,
+    "minCashCents": 110000,
+    "minCashDay": 15,
+    "collectedCents": 540000,
+    "collectedInWindowCents": 540000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 330000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5700× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted material takeoffs for residential drywall contractors\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_1a36440a4c3a4ecea669"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Subcontracted material takeoffs for residential drywall contractors\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Subcontracted material takeoffs for residential drywall contractors\"",
+      "owner": "PERSON",
+      "cost": 350
+     },
+     {
+      "label": "Collect payment for \"Subcontracted material takeoffs for residential drywall contractors\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_1a36440a4c3a4ecea669",
+      "title": "Subcontracted material takeoffs for residential drywall contractors",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Owners of residential drywall contracting firms",
+       "reachableChannel": "The six contractors who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:14.218Z",
+       "offerScope": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+       "priceCents": 90000,
+       "currency": "USD",
+       "fulfillmentOwner": "SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs a week, on days 5, 12 and 19 of the window; invoices us net 10 after each delivery)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "residential drywall contracting",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six contractors who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 5400 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5400 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 350, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Board, mud, tape and bead takeoff from the contractor's plans; the contractor pays within 7 days of delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$350",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "SheetCount Estimating LLC (written quote $350 per takeoff; delivers two takeoffs a week, on days 5, 12 and 19 of the window; invoices us net 10 after each delivery) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of residential drywall contracting firms",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six drywall contractors signed written orders at $900 per takeoff (signed orders, 2026-11-20).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+      "title": "Overflow drywall hanging for general contractors",
+      "missing": [
+       "FULFILMENT"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 2400,
+      "potentialReach": 2400,
+      "card": {
+       "payer": "General contractors with overflow framing jobs",
+       "reachableChannel": "The two contractors who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:14.218Z",
+       "offerScope": "Overflow drywall hanging for general contractors",
+       "priceCents": 420000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "residential drywall contracting",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 420000,
+        "currency": "USD",
+        "deliverable": "Overflow drywall hanging for general contractors",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 420000,
+        "currency": "USD",
+        "deliverable": "Overflow drywall hanging for general contractors",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Overflow drywall hanging for general contractors to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$3000",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "General contractors with overflow framing jobs",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Two general contractors signed written orders at $4,200 per overflow hanging job (signed orders, 2026-11-21).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:36:41.768Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_56706d93252e_897431",
+    "revisionDigest": "56706d93252ee64bc54338bc",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48f2c4d887964b86926b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_03fae851792b4f629e04/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Six WRITTEN_ACCEPTANCE agreements at $900 for exactly this takeoff are this buyer's price; SheetCount Estimating LLC is the recorded fulfiller with a written quote of $350 per takeoff and stated capacity (two each on days 5, 12, 19), and the plan's delivery performer is SheetCount. Net contribution 6 x ($900 - $350) = $3,300 >= $3,000 after every direct cost. Contractors pay within 7 days of delivery (days 12, 19, 26) and SheetCount is paid net 10 (days 15, 22, 29), each after the matching receipt, so no owner capital is advanced and everything, including the last supplier payment, falls inside 30 days.",
+    "findings": [
+     "Recomputed: revenue 6 x $900 = $5,400; supplier 6 x $350 = $2,100; net $3,300 >= $3,000; minimum cash $1,100 on day 15, never negative; last receipt day 26, last payable day 29 < 30. Ledger matches steps.",
+     "Slack is $300 of net and 4 days: one late or unpaid contractor drops net to $2,750 while the $350 payable to SheetCount is still owed (a contingent liability from delivery to payment, not up-front capital).",
+     "Payment method is unstated ('pays within 7 days'); if it is a check or ACH, usable cash may lag receipt. The 12-days-to-usable-cash fact covers the first pair, and day 26 + a few days still fits the window but tightly.",
+     "Card humanHours is 0.5 per deal; the plan has Brain do every step and shows no owner hours. There is no owner-hours limit, so this does not fail the plan, but the half hour should be stated.",
+     "Executor SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected (or done by the owner) on day 1 for plans to reach SheetCount in time for day 5.",
+     "Exclusion of overflow drywall hanging is correct: no fulfiller is named or quoted."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:58.535Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_56706d93252e_897431",
+   "digest": "56706d93252ee64bc54338bc",
+   "contractDigest": "c9b3432fef523d81a4b5d516",
+   "plan": {
+    "goalId": "wst_8b9b03b787a04c44bf85",
+    "contractDigest": "c9b3432fef523d81a4b5d516",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the six signed drywall takeoffs through SheetCount",
+     "opportunityIds": [
+      "cop_1a36440a4c3a4ecea669"
+     ],
+     "why": "Six written orders x $900 = $5,400; SheetCount's written quote $350 x 6 = $2,100; net $3,300 >= $3,000. Deliveries days 5/12/19, contractors pay within 7 days (last day 26), SheetCount is paid net 10 (days 15/22/29) after each matching receipt, so no up-front capital and everything settles inside 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Overflow drywall hanging for general contractors",
+      "why": "Two signed orders at $4,200 but no fulfiller is named or quoted (FULFILMENT not established), and its net (2 x $1,200 = $2,400) would not reach $3,000 alone."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the six contractors who signed to collect their plans",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_reach",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Confirm the six signed $900 takeoff orders (written acceptances recorded)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "s_price",
+       "s_agree"
+      ],
+      "priceCents": 90000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "SheetCount produces 6 takeoffs at $350 each, two each on days 5, 12 and 19; invoices net 10",
+      "performer": "SheetCount Estimating LLC",
+      "costCents": 210000,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "s_ful",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "SheetCount Estimating LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Each contractor pays $900 within 7 days of delivery (days 12, 19, 26)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s3",
+      "evidence": [
+       "s_price",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 5",
+      "settlesDay": 12,
+      "stepId": "s4"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 5",
+      "stepId": "s3"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 12",
+      "settlesDay": 19,
+      "stepId": "s4"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 12",
+      "stepId": "s3"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 180000,
+      "label": "Two contractors pay for takeoffs delivered day 19",
+      "settlesDay": 26,
+      "stepId": "s4"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 70000,
+      "label": "Pay SheetCount net 10 for two takeoffs delivered day 19",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 29,
+    "quantities": [
+     {
+      "name": "signedOrders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "written orders",
+      "sources": [
+       "s_price",
+       "s_agree"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per takeoff",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCost",
+      "status": "EVIDENCED",
+      "value": 350,
+      "unit": "USD per takeoff (written quote)",
+      "sources": [
+       "s_ful",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplierCapacity",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "takeoffs in window (2 each on days 5, 12, 19)",
+      "sources": [
+       "s_ful"
+      ],
+      "needs": null
+     },
+     {
+      "name": "paymentTerms",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days after delivery",
+      "sources": [
+       "s_price",
+       "s_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "netContribution",
+      "status": "EVIDENCED",
+      "value": 3300,
+      "unit": "USD (6 x (900-350))",
+      "sources": [
+       "s_price",
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_reach",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#reachableChannel",
+      "dated": "2026-11",
+      "claim": "The six contractors who signed, reachable by email",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#price",
+      "dated": "2026-11-20",
+      "claim": "Six drywall contractors signed written orders at $900 per takeoff (2026-11-20)",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#agreements",
+      "dated": "2026-11-20",
+      "claim": "Six WRITTEN_ACCEPTANCE agreements at $900 each",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#fulfillment",
+      "dated": "2026-11",
+      "claim": "SheetCount written quote $350/takeoff, two a week on days 5, 12, 19, invoices net 10",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#directCosts",
+      "dated": "2026-11",
+      "claim": "$350 direct cost per takeoff",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_1a36440a4c3a4ecea669#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "12 days to first usable cash (deliver day 5 + pay within 7)",
+      "population": "the six residential drywall contractors who signed written orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1a36440a4c3a4ecea669"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1a36440a4c3a4ecea669",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_81a4b8c69a9d4e7689fe",
+      "why": "No fulfiller is named or quoted for physical drywall hanging (FULFILMENT not established)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_1a36440a4c3a4ecea669",
+      "deals": 6,
+      "price": 900,
+      "directCost": 350,
+      "capital": 0,
+      "settlesDay": 29
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_56706d93252e_897431",
+    "digest": "56706d93252ee64bc54338bc",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48f2c4d887964b86926b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:08.109Z"
+   },
+   "review": {
+    "revisionId": "rev_56706d93252e_897431",
+    "revisionDigest": "56706d93252ee64bc54338bc",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48f2c4d887964b86926b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_03fae851792b4f629e04/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Six WRITTEN_ACCEPTANCE agreements at $900 for exactly this takeoff are this buyer's price; SheetCount Estimating LLC is the recorded fulfiller with a written quote of $350 per takeoff and stated capacity (two each on days 5, 12, 19), and the plan's delivery performer is SheetCount. Net contribution 6 x ($900 - $350) = $3,300 >= $3,000 after every direct cost. Contractors pay within 7 days of delivery (days 12, 19, 26) and SheetCount is paid net 10 (days 15, 22, 29), each after the matching receipt, so no owner capital is advanced and everything, including the last supplier payment, falls inside 30 days.",
+    "findings": [
+     "Recomputed: revenue 6 x $900 = $5,400; supplier 6 x $350 = $2,100; net $3,300 >= $3,000; minimum cash $1,100 on day 15, never negative; last receipt day 26, last payable day 29 < 30. Ledger matches steps.",
+     "Slack is $300 of net and 4 days: one late or unpaid contractor drops net to $2,750 while the $350 payable to SheetCount is still owed (a contingent liability from delivery to payment, not up-front capital).",
+     "Payment method is unstated ('pays within 7 days'); if it is a check or ACH, usable cash may lag receipt. The 12-days-to-usable-cash fact covers the first pair, and day 26 + a few days still fits the window but tightly.",
+     "Card humanHours is 0.5 per deal; the plan has Brain do every step and shows no owner hours. There is no owner-hours limit, so this does not fail the plan, but the half hour should be stated.",
+     "Executor SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected (or done by the owner) on day 1 for plans to reach SheetCount in time for day 5.",
+     "Exclusion of overflow drywall hanging is correct: no fulfiller is named or quoted."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:58.535Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Keep $3,000 of net cash — after every direct cost — settled within 30 days, using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_1a36440a4c3a4ecea669": "1c339b9c971636d0",
+     "cop_81a4b8c69a9d4e7689fe": "232e1d1d83268fed"
+    }
+   },
+   "at": "2026-11-28T01:42:22.034Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

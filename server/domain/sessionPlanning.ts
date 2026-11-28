@@ -300,12 +300,20 @@ export interface ReviewCondition {
   basis: 'EVIDENCE' | 'MISSING_PREREQUISITE';
   field: string;
   why: string;
+  /**
+   * Against an OFFER_AND_PRICE link Brain's planner establishes from an evidenced price: which defect the spec recognises
+   * the record shows (COMPLETION-SPEC §2–§3) — the price is only a person's word, another record contradicts it, or it
+   * is not a payment for this deliverable. Without one the condition contradicts Brain's evidence on no stated ground.
+   */
+  defect?: 'PERSON_WORD' | 'CONTRADICTED' | 'NOT_A_PURCHASE';
 }
+
+export const PRICE_DEFECTS = ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'] as const;
 
 export type CardFacts = Record<string, { field: string; kind: string }[]>;
 
 /** Why a proposed condition may not be recorded: each must name its supporting record or a genuinely absent prerequisite. */
-export function conditionProblems(conditions: ReviewCondition[], revision: Pick<PlanRevisionInput, 'strategy' | 'chain'>, facts: CardFacts): string[] {
+export function conditionProblems(conditions: ReviewCondition[], revision: Pick<PlanRevisionInput, 'strategy' | 'chain'>, facts: CardFacts, established: Record<string, string[]> = {}): string[] {
   const out: string[] = [];
   const openings = new Set([...revision.strategy.opportunityIds, ...(revision.chain ?? []).map((c) => c.opportunityId)]);
   conditions.forEach((c, i) => {
@@ -317,6 +325,14 @@ export function conditionProblems(conditions: ReviewCondition[], revision: Pick<
     if (c.basis === 'EVIDENCE' && !card.some((f) => f.field === c.field)) out.push(`${at}: the card holds no fact "${c.field}"; cite the record that shows the link unestablished (${card.map((f) => f.field).join(', ') || 'none'})`);
     else if (c.basis === 'MISSING_PREREQUISITE' && card.some((f) => f.field === c.field && f.kind === 'EVIDENCE')) out.push(`${at}: "${c.field}" is on the card as evidence, so it is not missing; cite it as EVIDENCE and say what in it leaves the link unestablished`);
     else if (c.basis !== 'EVIDENCE' && c.basis !== 'MISSING_PREREQUISITE') out.push(`${at}: basis must be EVIDENCE or MISSING_PREREQUISITE`);
+    /*
+     * A price Brain's planner establishes is objected to on a defect the spec names, or not at all (acceptance run 12:
+     * a reviewer held three evidenced prices — a current comparable listing, with this offer's measured paid conversion —
+     * unestablished as "what other sellers ask", Brain's planner had them established, and the plans went conditional).
+     */
+    if (c.link === 'OFFER_AND_PRICE' && c.basis === 'EVIDENCE' && (established[c.opportunityId] ?? []).includes('OFFER_AND_PRICE') && !(c.defect && (PRICE_DEFECTS as readonly string[]).includes(c.defect))) {
+      out.push(`${at}: Brain's planner establishes this opening's price from the card's evidence; a condition against it names the defect the record shows (defect: ${PRICE_DEFECTS.join(' | ')} — only a person's word, contradicted by another record, or not a payment for this deliverable), or the price stands`);
+    }
   });
   return out;
 }

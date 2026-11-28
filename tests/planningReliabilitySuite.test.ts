@@ -174,7 +174,7 @@ describe('a conversion is written in its own unit', () => {
     PROPOSALS: [3, 18, '3 bookings from 18 proposals'],
     BIDS: [2, 15, '2 contracts won from 15 bids'],
     CLICKS: [11, 138, '11 bookings from 138 clicks'],
-    CONTACTS: [5, 60, '5 agreements from 60 contacts'],
+    CONTACTS: [5, 60, '5 paid orders from 60 contacts'],
     MEMBERS: [18, 14000, '18 orders from 14,000 members'],
   };
 

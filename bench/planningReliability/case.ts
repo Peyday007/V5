@@ -69,7 +69,7 @@ export function conversionSentence(c: Conversion): string {
     case 'PROPOSALS': return `${n(paid)} bookings from ${n(of)} proposals`;
     case 'BIDS': return `${n(paid)} contracts won from ${n(of)} bids`;
     case 'CLICKS': return `${n(paid)} bookings from ${n(of)} clicks`;
-    case 'CONTACTS': return `${n(paid)} agreements from ${n(of)} contacts`;
+    case 'CONTACTS': return `${n(paid)} paid orders from ${n(of)} contacts`;
     case 'MEMBERS': return `${n(paid)} orders from ${n(of)} members`;
   }
 }

@@ -1,0 +1,110 @@
+[
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "aq-01-1k-14d-five-hours",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "I want $1,000 of settled cash in my account within 14 days. I have no money to put in and I can give it at most 5 hours a week of my own time.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "aq-02-printing-shops-5k-30d",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Make $5,000 within 30 days selling to commercial printing shops only. I can put in up to $500.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "aq-03-12k-net-45d-capital",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "I want to clear $12,000 in profit \u2014 money kept after every cost \u2014 within 45 days. I can put up to $2,500 of my own money in, and I don't care which industry.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ },
+ {
+  "heldOut": true,
+  "dimensions": {
+   "capital": "none",
+   "target": "small",
+   "deadline": "short",
+   "autonomy": "unlimited",
+   "missingEvidence": "none",
+   "contradictoryEvidence": false,
+   "objectiveChanged": false,
+   "industry": "discovery",
+   "mechanism": "INFORMATION_ASYMMETRY"
+  },
+  "id": "aq-04-2500-21d-hands-off",
+  "description": "raw-objective discovery world (graded by hidden rubric)",
+  "objective": "Get $2,500 into my account within 21 days without spending anything up front. I won't do any of the work myself \u2014 Brain or someone it hires has to do all of it.",
+  "openings": [],
+  "expect": {
+   "verdict": "NO_PLAN",
+   "blocker": {
+    "kind": "MISSING_EVIDENCE",
+    "links": [
+     "CURRENT_DEMAND"
+    ]
+   }
+  }
+ }
+]

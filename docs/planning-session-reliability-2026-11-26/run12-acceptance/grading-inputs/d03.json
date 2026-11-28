@@ -1,0 +1,455 @@
+{
+ "caseId": "aq-03-12k-net-45d-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f477d8f41fe44287b381",
+   "cop_5fc8d0a3c9f34afd9582",
+   "cop_26a54c7795b044ffa30f"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_f477d8f41fe44287b381",
+    "title": "Website rebuild for US local service businesses, sold by cold email, built by a hired freelancer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1400,
+    "card": {
+     "payer": "Owners of US local service businesses (home services, clinics, trades) with no or outdated website",
+     "reachableChannel": "Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories",
+     "offerScope": "Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card",
+     "priceCents": 200000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance web designer hired per site on Fiverr/Upwork (fixed price)",
+     "peakFundingCents": 90000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Small-business web design",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email from secondary sending domains through Instantly (Growth plan) to bus"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 2000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 600, tied up 900"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card to Owners of US local service businesses (home services, clinics, trades) with no or outdated website, reached through Cold email from secondary sending domains through Instantly (Growth plan) to businesses listed in public directories, at $2,000; Freelance web designer hired per site on Fiverr/Upwork (fixed price) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$900",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance web designer hired per site on Fiverr/Upwork (fixed price).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-scope 5-page website rebuild delivered in 7 days, copy and design AI-drafted, hosted on a low-cost builder; paid 100% up front by card",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of US local service businesses (home services, clinics, trades) with no or outdated website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$2,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$2,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; https://fitsmallbusiness.com/website-costs/; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://instantly.ai/blog/cold-email-reply-rate-benchmarks; https://belkins.io/blog/cold-email-response-rates",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_5fc8d0a3c9f34afd9582",
+    "title": "Google Business Profile optimization + monthly management for local businesses, fulfilled by a hired specialist",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 499,
+    "card": {
+     "payer": "US single-location local businesses (dentists, contractors, salons)",
+     "reachableChannel": "Cold email through Instantly to businesses whose GBP listings are incomplete",
+     "offerScope": "One-time Google Business Profile audit and optimization ($250) plus $399/month management",
+     "priceCents": 64900,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance local-SEO specialist hired per listing (fixed price)",
+     "peakFundingCents": 70000,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email through Instantly to businesses whose GBP listings are incomplete"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 649 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 150, tied up 700"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email through Instantly to businesses whose GBP listings are incomplete",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time Google Business Profile audit and optimization ($250) plus $399/month management to US single-location local businesses (dentists, contractors, salons), reached through Cold email through Instantly to businesses whose GBP listings are incomplete, at $649; Freelance local-SEO specialist hired per listing (fixed price) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$700",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance local-SEO specialist hired per listing (fixed price).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time Google Business Profile audit and optimization ($250) plus $399/month management",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US single-location local businesses (dentists, contractors, salons)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$649",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$649",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://whitespark.ca/google-my-business-management-service/; https://clutch.co/profile/little-green-agency/seo-package; https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month; https://www.brightlocal.com/learn/local-seo/management/local-seo-services/; https://www.webfx.com/local--seo/pricing/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_26a54c7795b044ffa30f",
+    "title": "White-label resale of managed local SEO (BrightLocal) to local businesses",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 325,
+    "card": {
+     "payer": "US local businesses wanting managed local SEO",
+     "reachableChannel": "Cold email through Instantly",
+     "offerScope": "Managed local SEO per location per month, delivered white-label by BrightLocal",
+     "priceCents": 129900,
+     "currency": "USD",
+     "fulfillmentOwner": "BrightLocal managed local SEO (white-label $974/location/month)",
+     "peakFundingCents": 150000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email through Instantly"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1299 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 974, tied up 1500"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email through Instantly",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Managed local SEO per location per month, delivered white-label by BrightLocal to US local businesses wanting managed local SEO, reached through Cold email through Instantly, at $1,299; BrightLocal managed local SEO (white-label $974/location/month) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$974",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "BrightLocal managed local SEO (white-label $974/location/month).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Managed local SEO per location per month, delivered white-label by BrightLocal",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local businesses wanting managed local SEO",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,299",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,299",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.brightlocal.com/learn/local-seo/management/local-seo-services/; https://www.webfx.com/local--seo/pricing/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:49:03.159Z"
+ }
+}

@@ -1,0 +1,215 @@
+{
+ "caseId": "ap-06-hardware-price-only-said",
+ "keys": {
+  "cop_d0918094b662488ba611": "deadStock"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 29325× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Dead-stock and reorder-point analysis for independent hardwa\" needs [figure withheld] and keeps [figure withheld], 345× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Independent hardware store owners\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_d0918094b662488ba611"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+    "owner": "PERSON",
+    "cost": 5
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Independent hardware store owners",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Independent hardware store owners",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 52.83561954796369
+   },
+   {
+    "label": "Collect payment for \"Dead-stock and reorder-point analysis for independent hardware stores\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_d0918094b662488ba611",
+    "title": "Dead-stock and reorder-point analysis for independent hardware stores",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Independent hardware store owners",
+     "reachableChannel": "Published store emails in the regional hardware cooperative's member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:33.649Z",
+     "offerScope": "An analysis of the store's point-of-sale export naming dead stock and reorder points; delivered in 3 days.",
+     "priceCents": 35000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent hardware stores",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published store emails in the regional hardware cooperative's member directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 18 accepted of 200 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "10 deal(s) needed, 1520 available in the window (380 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The cooperative's member directory lists 380 independent hardware stores, each with a published email; each reorders stock every week.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell An analysis of the store's point-of-sale export naming dead stock and reorder points; delivered in 3 days. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "18 agreements from 200 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent hardware store owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The owner says hardware store owners would pay $350 for the analysis (owner's statement, 2026-11-26).",
+      "kind": "PERSON"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:37:13.737Z"
+ }
+}

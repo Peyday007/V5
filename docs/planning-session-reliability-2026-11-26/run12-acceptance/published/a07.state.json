@@ -1,0 +1,1108 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_b6fb68fb177b4faaa356",
+   "words": "Collect $4,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$4,000 of settled cash in the owner's account within 45 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "ef65ced77cb7b1795a857a7d"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_b6fb68fb177b4faaa356",
+    "contractDigest": "ef65ced77cb7b1795a857a7d",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the grant-application package has no price any buyer pays",
+     "opportunityIds": [],
+     "why": "The only opening's price fact is the state program's grant award (up to $5,000 per approved department, program notice 2026-10). That is money the program pays the department, not a price a department pays for an application package; no agreement, quote or payment for the package is recorded. Without a price, the number of deals needed and whether $4,000 can settle in 45 days cannot be computed, so no plan is established."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $5,000 per package from the grant award figure",
+      "why": "Rejected: a grant is not a purchase price, and a department is unlikely to be able to pay its whole award for the application."
+     },
+     {
+      "title": "Test-sell at an invented fee",
+      "why": "No price on record to anchor a fee; the gap is named and resolved first by measuring what departments pay."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find what volunteer fire departments are published as paying for grant-application preparation (flat fees or ranges, with source and date), and whether the program allows preparation fees",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_price_grant"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the package at the researched fee to 100 registry departments and record paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price a department pays for the package",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": "A paid order, quote accepted, or published fee for grant-application preparation"
+     },
+     {
+      "name": "grant award per department (not a price)",
+      "status": "EVIDENCED",
+      "value": 500000,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": null
+     },
+     {
+      "name": "registry departments",
+      "status": "EVIDENCED",
+      "value": 540,
+      "unit": "departments",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "agreement rate on this offer",
+      "status": "EVIDENCED",
+      "value": 0.07,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_grant",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#price",
+      "dated": "2026-10-01",
+      "claim": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases — an award to the department, not a price for the package",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "14 agreements from 200 contacts",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The registry lists 540 volunteer fire departments eligible in the current round",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published department emails in the state fire marshal's registry",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No price for the grant-application package is established: the card's $5,000 is the grant a department may be awarded (a reward paid to it), not what it pays for an application, and no agreement or payment for the package exists.",
+     "resolution": "Research published fees volunteer fire departments pay for grant-application preparation and whether the program permits them; then offer the package at that fee to 100 registry departments and record paid orders. Re-plan once a price buyers pay is on the card.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_026e89479b19_85b5a5",
+    "digest": "026e89479b190891135ff8dd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f4b844416bf14741b5c3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:36.796Z"
+   },
+   {
+    "goalId": "wst_b6fb68fb177b4faaa356",
+    "contractDigest": "ef65ced77cb7b1795a857a7d",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the grant-application package has no price any buyer pays",
+     "opportunityIds": [],
+     "why": "The only opening's price fact is the state program's grant award (up to $5,000 per approved department, program notice 2026-10). That is money the program pays the department, not a price a department pays for an application package; no agreement, quote or payment for the package is recorded. Without a price, the number of deals needed and whether $4,000 can settle in 45 days cannot be computed, so no plan is established."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $5,000 per package from the grant award figure",
+      "why": "Rejected: a grant is not a purchase price, and a department is unlikely to be able to pay its whole award for the application."
+     },
+     {
+      "title": "Test-sell at an invented fee",
+      "why": "No price on record to anchor a fee; the gap is named and resolved first by measuring what departments pay."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find what volunteer fire departments are published as paying for grant-application preparation (flat fees or ranges, with source and date), and whether the program allows preparation fees",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_price_grant"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the package at the researched fee to 100 registry departments and record paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price a department pays for the package",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": "A paid order, quote accepted, or published fee for grant-application preparation"
+     },
+     {
+      "name": "grant award per department (not a price)",
+      "status": "EVIDENCED",
+      "value": 500000,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": null
+     },
+     {
+      "name": "registry departments",
+      "status": "EVIDENCED",
+      "value": 540,
+      "unit": "departments",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "agreement rate on this offer",
+      "status": "EVIDENCED",
+      "value": 0.07,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_grant",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#price",
+      "dated": "2026-10-01",
+      "claim": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases — an award to the department, not a price for the package",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "14 agreements from 200 contacts",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The registry lists 540 volunteer fire departments eligible in the current round",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published department emails in the state fire marshal's registry",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No price for the grant-application package is established: the card's $5,000 is the grant a department may be awarded (a reward paid to it), not what it pays for an application, and no agreement or payment for the package exists.",
+     "resolution": "Research published fees volunteer fire departments pay for grant-application preparation and whether the program permits them; then offer the package at that fee to 100 registry departments and record paid orders. Re-plan once a price buyers pay is on the card.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1564b22c38ef_a262b4",
+    "digest": "1564b22c38eff3d719c379ba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f4b844416bf14741b5c3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:41.238Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_b6fb68fb177b4faaa356",
+   "contractDigest": "ef65ced77cb7b1795a857a7d",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the grant-application package has no price any buyer pays",
+    "opportunityIds": [],
+    "why": "The only opening's price fact is the state program's grant award (up to $5,000 per approved department, program notice 2026-10). That is money the program pays the department, not a price a department pays for an application package; no agreement, quote or payment for the package is recorded. Without a price, the number of deals needed and whether $4,000 can settle in 45 days cannot be computed, so no plan is established."
+   },
+   "alternatives": [
+    {
+     "title": "Plan at $5,000 per package from the grant award figure",
+     "why": "Rejected: a grant is not a purchase price, and a department is unlikely to be able to pay its whole award for the application."
+    },
+    {
+     "title": "Test-sell at an invented fee",
+     "why": "No price on record to anchor a fee; the gap is named and resolved first by measuring what departments pay."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Find what volunteer fire departments are published as paying for grant-application preparation (flat fees or ranges, with source and date), and whether the program allows preparation fees",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src_price_grant"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Offer the package at the researched fee to 100 registry departments and record paid orders",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "r1",
+     "evidence": [
+      "src_reach",
+      "src_volume"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price a department pays for the package",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [
+      "src_price_grant"
+     ],
+     "needs": "A paid order, quote accepted, or published fee for grant-application preparation"
+    },
+    {
+     "name": "grant award per department (not a price)",
+     "status": "EVIDENCED",
+     "value": 500000,
+     "unit": "cents",
+     "sources": [
+      "src_price_grant"
+     ],
+     "needs": null
+    },
+    {
+     "name": "registry departments",
+     "status": "EVIDENCED",
+     "value": 540,
+     "unit": "departments",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "agreement rate on this offer",
+     "status": "EVIDENCED",
+     "value": 0.07,
+     "unit": "agreements per contact",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price_grant",
+     "url": "https://brain.local/card/cop_105b6a4814bc463fb918#price",
+     "dated": "2026-10-01",
+     "claim": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases — an award to the department, not a price for the package",
+     "population": "540 volunteer fire departments in the state fire marshal's registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_105b6a4814bc463fb918"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_105b6a4814bc463fb918#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "14 agreements from 200 contacts",
+     "population": "540 volunteer fire departments in the state fire marshal's registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_105b6a4814bc463fb918"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_105b6a4814bc463fb918#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The registry lists 540 volunteer fire departments eligible in the current round",
+     "population": "540 volunteer fire departments in the state fire marshal's registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_105b6a4814bc463fb918"
+    },
+    {
+     "id": "src_reach",
+     "url": "https://brain.local/card/cop_105b6a4814bc463fb918#reachableChannel",
+     "dated": "2026-11-25",
+     "claim": "Published department emails in the state fire marshal's registry",
+     "population": "540 volunteer fire departments in the state fire marshal's registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_105b6a4814bc463fb918"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No price for the grant-application package is established: the card's $5,000 is the grant a department may be awarded (a reward paid to it), not what it pays for an application, and no agreement or payment for the package exists.",
+    "resolution": "Research published fees volunteer fire departments pay for grant-application preparation and whether the program permits them; then offer the package at that fee to 100 registry departments and record paid orders. Re-plan once a price buyers pay is on the card.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_105b6a4814bc463fb918",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_105b6a4814bc463fb918",
+     "deals": null,
+     "price": null,
+     "directCost": 20,
+     "capital": 0,
+     "settlesDay": 10
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1564b22c38ef_a262b4",
+   "digest": "1564b22c38eff3d719c379ba",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f4b844416bf14741b5c3/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:39:41.238Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_1564b22c38ef_a262b4",
+   "digest": "1564b22c38eff3d719c379ba",
+   "contractDigest": "ef65ced77cb7b1795a857a7d",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 50357× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Volunteer fire chiefs and department treasurers\" needs [figure withheld] and keeps [figure withheld], 4965× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Volunteer fire chiefs and department treasurers\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_105b6a4814bc463fb918"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the supply",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Volunteer fire chiefs and department treasurers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Volunteer fire chiefs and department treasurers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "title": "Equipment-grant application packages for volunteer fire departments",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Volunteer fire chiefs and department treasurers",
+       "reachableChannel": "Published department emails in the state fire marshal's registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:38.367Z",
+       "offerScope": "A completed equipment-grant application package with the needs narrative and budget; delivered in 5 days.",
+       "priceCents": 500000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "volunteer fire departments",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published department emails in the state fire marshal's registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 14 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 20, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state fire marshal's registry lists 540 volunteer fire departments, each eligible to apply in the current grant round.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A completed equipment-grant application package with the needs narrative and budget; delivered in 5 days. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "14 agreements from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Volunteer fire chiefs and department treasurers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases (program notice, 2026-10).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:37:14.439Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_1564b22c38ef_a262b4",
+    "revisionDigest": "1564b22c38eff3d719c379ba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f4b844416bf14741b5c3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ccd2f83d4c3d4a9c9434/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap correctly. The card's only price fact ($5,000) is the state Volunteer Fire Assistance program's grant award to an approved department - money the program pays the buyer, not a price the buyer pays for an application package. No agreement, quote or payment for the package is recorded, and the conversion fact (14 agreements of 200) states no price. Without a price the deals needed cannot be computed, so no link chain to $4,000 in 45 days exists. The plan does not mislabel this as a constraint (the evidence is missing, not proven insufficient), sets decisiveLinks = OFFER_AND_PRICE, and its resolution (find what departments pay and whether the program permits preparation fees, then offer to 100 registry departments and record paid orders) is the evidence that decides it. Every other link (540 registry departments, published emails, Brain-produced package, $20 cost, 10 days to cash in a 45-day window) is evidenced, so a price would make the opening plannable quickly.",
+    "findings": [
+     "Price fact is a grant award (reward paid to the department), correctly rejected as a purchase price; planning at $5,000 would also be implausible since many grant programs bar paying preparation fees from the award.",
+     "decisiveLinks = [OFFER_AND_PRICE] matches Brain's only missing link; no unknown is treated as known; ledger is empty and no money is committed.",
+     "Suggestion for the next revision: once a fee is found, a CONDITIONAL test is startable - e.g. at fee F, deals needed = ceil(4000/F); at the 7% rate that needs ceil(4000/F)/0.07 contacts, which must be <= 540; also confirm whether the program allows a department to pay for preparation (an eligibility question that could itself be decisive).",
+     "Executor SEND_A_MESSAGE is NOT_CONNECTED for the test step."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:43:01.272Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_1564b22c38ef_a262b4",
+   "digest": "1564b22c38eff3d719c379ba",
+   "contractDigest": "ef65ced77cb7b1795a857a7d",
+   "plan": {
+    "goalId": "wst_b6fb68fb177b4faaa356",
+    "contractDigest": "ef65ced77cb7b1795a857a7d",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the grant-application package has no price any buyer pays",
+     "opportunityIds": [],
+     "why": "The only opening's price fact is the state program's grant award (up to $5,000 per approved department, program notice 2026-10). That is money the program pays the department, not a price a department pays for an application package; no agreement, quote or payment for the package is recorded. Without a price, the number of deals needed and whether $4,000 can settle in 45 days cannot be computed, so no plan is established."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $5,000 per package from the grant award figure",
+      "why": "Rejected: a grant is not a purchase price, and a department is unlikely to be able to pay its whole award for the application."
+     },
+     {
+      "title": "Test-sell at an invented fee",
+      "why": "No price on record to anchor a fee; the gap is named and resolved first by measuring what departments pay."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find what volunteer fire departments are published as paying for grant-application preparation (flat fees or ranges, with source and date), and whether the program allows preparation fees",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_price_grant"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the package at the researched fee to 100 registry departments and record paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "src_reach",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price a department pays for the package",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": "A paid order, quote accepted, or published fee for grant-application preparation"
+     },
+     {
+      "name": "grant award per department (not a price)",
+      "status": "EVIDENCED",
+      "value": 500000,
+      "unit": "cents",
+      "sources": [
+       "src_price_grant"
+      ],
+      "needs": null
+     },
+     {
+      "name": "registry departments",
+      "status": "EVIDENCED",
+      "value": 540,
+      "unit": "departments",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "agreement rate on this offer",
+      "status": "EVIDENCED",
+      "value": 0.07,
+      "unit": "agreements per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price_grant",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#price",
+      "dated": "2026-10-01",
+      "claim": "The state Volunteer Fire Assistance program awards each approved department a grant of up to $5,000 for equipment purchases — an award to the department, not a price for the package",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "14 agreements from 200 contacts",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The registry lists 540 volunteer fire departments eligible in the current round",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_105b6a4814bc463fb918#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "Published department emails in the state fire marshal's registry",
+      "population": "540 volunteer fire departments in the state fire marshal's registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_105b6a4814bc463fb918"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No price for the grant-application package is established: the card's $5,000 is the grant a department may be awarded (a reward paid to it), not what it pays for an application, and no agreement or payment for the package exists.",
+     "resolution": "Research published fees volunteer fire departments pay for grant-application preparation and whether the program permits them; then offer the package at that fee to 100 registry departments and record paid orders. Re-plan once a price buyers pay is on the card.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_105b6a4814bc463fb918",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1564b22c38ef_a262b4",
+    "digest": "1564b22c38eff3d719c379ba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f4b844416bf14741b5c3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:39:41.238Z"
+   },
+   "review": {
+    "revisionId": "rev_1564b22c38ef_a262b4",
+    "revisionDigest": "1564b22c38eff3d719c379ba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f4b844416bf14741b5c3/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ccd2f83d4c3d4a9c9434/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right and names the decisive gap correctly. The card's only price fact ($5,000) is the state Volunteer Fire Assistance program's grant award to an approved department - money the program pays the buyer, not a price the buyer pays for an application package. No agreement, quote or payment for the package is recorded, and the conversion fact (14 agreements of 200) states no price. Without a price the deals needed cannot be computed, so no link chain to $4,000 in 45 days exists. The plan does not mislabel this as a constraint (the evidence is missing, not proven insufficient), sets decisiveLinks = OFFER_AND_PRICE, and its resolution (find what departments pay and whether the program permits preparation fees, then offer to 100 registry departments and record paid orders) is the evidence that decides it. Every other link (540 registry departments, published emails, Brain-produced package, $20 cost, 10 days to cash in a 45-day window) is evidenced, so a price would make the opening plannable quickly.",
+    "findings": [
+     "Price fact is a grant award (reward paid to the department), correctly rejected as a purchase price; planning at $5,000 would also be implausible since many grant programs bar paying preparation fees from the award.",
+     "decisiveLinks = [OFFER_AND_PRICE] matches Brain's only missing link; no unknown is treated as known; ledger is empty and no money is committed.",
+     "Suggestion for the next revision: once a fee is found, a CONDITIONAL test is startable - e.g. at fee F, deals needed = ceil(4000/F); at the 7% rate that needs ceil(4000/F)/0.07 contacts, which must be <= 540; also confirm whether the program allows a department to pay for preparation (an eligibility question that could itself be decisive).",
+     "Executor SEND_A_MESSAGE is NOT_CONNECTED for the test step."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:43:01.272Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "e083d554c5fd4ce4",
+    "openings": {
+     "cop_105b6a4814bc463fb918": "ca69b8aaa1a117cf"
+    }
+   },
+   "at": "2026-11-28T01:44:43.843Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

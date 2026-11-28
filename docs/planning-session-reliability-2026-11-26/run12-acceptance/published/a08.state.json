@@ -1,0 +1,940 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_5eb86a0d369a4b249a4b",
+   "words": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 40,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$12,000 of settled cash in the owner's account within 40 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "afbaf9d506d14bb8e01b534f"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_5eb86a0d369a4b249a4b",
+    "contractDigest": "afbaf9d506d14bb8e01b534f",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: one $4,500 purchase order against a $12,000 target, and no established population of further buyers",
+     "opportunityIds": [],
+     "why": "The Lakeshore Philharmonic's board-approved $4,500 purchase order (2026-11-12) is real and settles in about 25 days (net 21 after delivery), inside the 40 days. But it is one organisation: $4,500 leaves $7,500 short, which needs at least two further $4,500 buyers. The card names no other buyer, no count of orchestras that buy this, no channel to them, and no measured close rate, so the remaining deals cannot be shown to exist or close in time."
+    },
+    "alternatives": [
+     {
+      "title": "Assume other orchestras buy at $4,500 and plan three deals",
+      "why": "Rejected: one organisation is not a population of buyers; neither the number of comparable buyers nor a close rate is on record."
+     },
+     {
+      "title": "Deliver the Lakeshore order alone",
+      "why": "Worth doing (it is $4,470 net of the $30 cost and needs no capital) but it reaches only $4,500 of $12,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Count orchestras with a published development-office channel that buy donor-database cleanup (directory or association list, with number and source), and how often one buys",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_payer"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the deduplication and lapsed-donor segmentation at $4,500 (net 21) to the counted orchestras and record paid orders to measure the close rate; sales must close by about day 15 to settle by day 40",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "src_price",
+       "src_settle"
+      ],
+      "priceCents": 450000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 450000,
+      "unit": "cents",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "buyers with an agreement",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "organisations",
+      "sources": [
+       "src_price",
+       "src_agreement"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed at $4,500",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "deals",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "further reachable buyers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "organisations",
+      "sources": [],
+      "needs": "A count of orchestras of this kind with a published channel"
+     },
+     {
+      "name": "close rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid per contact",
+      "sources": [],
+      "needs": "Measured offers to further orchestras"
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#price",
+      "dated": "2026-11-12",
+      "claim": "The Lakeshore Philharmonic's development office issued a $4,500 board-approved purchase order for a donor-database cleanup",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_agreement",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#agreements",
+      "dated": "2026-11-12",
+      "claim": "One WRITTEN_ACCEPTANCE agreement at $4,500, state AGREED",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_payer",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#payer",
+      "dated": "2026-11-25",
+      "claim": "The Lakeshore Philharmonic's director of development — a single organisation",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "25 days to usable cash (paid net 21 after delivery)",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Only one buyer is established: the Lakeshore Philharmonic's $4,500 purchase order. Reaching $12,000 needs at least two more $4,500 sales, and no count of comparable buyers, channel to them, or close rate is on record.",
+     "resolution": "Deliver the Lakeshore order (Brain produces it, $30 cost). Research a count of orchestras with published development-office contacts (e.g. an orchestra association member directory) and how often they buy donor-database cleanup; then offer at $4,500 net 21 to them by about day 15 and record paid orders as the close rate. Re-plan once the buyer count and close rate are on the card.",
+     "decisiveLinks": [
+      "MARKET_VOLUME",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_df98c676b2214214b15f",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_df98c676b2214214b15f",
+      "deals": 3,
+      "price": 4500,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 25
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4a6b622296e3_d5a256",
+    "digest": "4a6b622296e364f0b6c7e4c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7bf582d859d49b3bd20/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:40:01.182Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_5eb86a0d369a4b249a4b",
+   "contractDigest": "afbaf9d506d14bb8e01b534f",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: one $4,500 purchase order against a $12,000 target, and no established population of further buyers",
+    "opportunityIds": [],
+    "why": "The Lakeshore Philharmonic's board-approved $4,500 purchase order (2026-11-12) is real and settles in about 25 days (net 21 after delivery), inside the 40 days. But it is one organisation: $4,500 leaves $7,500 short, which needs at least two further $4,500 buyers. The card names no other buyer, no count of orchestras that buy this, no channel to them, and no measured close rate, so the remaining deals cannot be shown to exist or close in time."
+   },
+   "alternatives": [
+    {
+     "title": "Assume other orchestras buy at $4,500 and plan three deals",
+     "why": "Rejected: one organisation is not a population of buyers; neither the number of comparable buyers nor a close rate is on record."
+    },
+    {
+     "title": "Deliver the Lakeshore order alone",
+     "why": "Worth doing (it is $4,470 net of the $30 cost and needs no capital) but it reaches only $4,500 of $12,000."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Count orchestras with a published development-office channel that buy donor-database cleanup (directory or association list, with number and source), and how often one buys",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src_payer"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Offer the deduplication and lapsed-donor segmentation at $4,500 (net 21) to the counted orchestras and record paid orders to measure the close rate; sales must close by about day 15 to settle by day 40",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "r1",
+     "evidence": [
+      "src_price",
+      "src_settle"
+     ],
+     "priceCents": 450000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 450000,
+     "unit": "cents",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "buyers with an agreement",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "organisations",
+     "sources": [
+      "src_price",
+      "src_agreement"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed at $4,500",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "deals",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "further reachable buyers",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "organisations",
+     "sources": [],
+     "needs": "A count of orchestras of this kind with a published channel"
+    },
+    {
+     "name": "close rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid per contact",
+     "sources": [],
+     "needs": "Measured offers to further orchestras"
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 25,
+     "unit": "days",
+     "sources": [
+      "src_settle"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_df98c676b2214214b15f#price",
+     "dated": "2026-11-12",
+     "claim": "The Lakeshore Philharmonic's development office issued a $4,500 board-approved purchase order for a donor-database cleanup",
+     "population": "The Lakeshore Philharmonic (one organisation)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_df98c676b2214214b15f"
+    },
+    {
+     "id": "src_agreement",
+     "url": "https://brain.local/card/cop_df98c676b2214214b15f#agreements",
+     "dated": "2026-11-12",
+     "claim": "One WRITTEN_ACCEPTANCE agreement at $4,500, state AGREED",
+     "population": "The Lakeshore Philharmonic (one organisation)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_df98c676b2214214b15f"
+    },
+    {
+     "id": "src_payer",
+     "url": "https://brain.local/card/cop_df98c676b2214214b15f#payer",
+     "dated": "2026-11-25",
+     "claim": "The Lakeshore Philharmonic's director of development — a single organisation",
+     "population": "The Lakeshore Philharmonic (one organisation)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_df98c676b2214214b15f"
+    },
+    {
+     "id": "src_settle",
+     "url": "https://brain.local/card/cop_df98c676b2214214b15f#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "25 days to usable cash (paid net 21 after delivery)",
+     "population": "The Lakeshore Philharmonic (one organisation)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_df98c676b2214214b15f"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Only one buyer is established: the Lakeshore Philharmonic's $4,500 purchase order. Reaching $12,000 needs at least two more $4,500 sales, and no count of comparable buyers, channel to them, or close rate is on record.",
+    "resolution": "Deliver the Lakeshore order (Brain produces it, $30 cost). Research a count of orchestras with published development-office contacts (e.g. an orchestra association member directory) and how often they buy donor-database cleanup; then offer at $4,500 net 21 to them by about day 15 and record paid orders as the close rate. Re-plan once the buyer count and close rate are on the card.",
+    "decisiveLinks": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_df98c676b2214214b15f",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_df98c676b2214214b15f",
+     "deals": 3,
+     "price": 4500,
+     "directCost": 30,
+     "capital": 0,
+     "settlesDay": 25
+    }
+   ],
+   "resolves": [
+    "MARKET_VOLUME",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_4a6b622296e3_d5a256",
+   "digest": "4a6b622296e364f0b6c7e4c4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f7bf582d859d49b3bd20/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:40:01.182Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_4a6b622296e3_d5a256",
+   "digest": "4a6b622296e364f0b6c7e4c4",
+   "contractDigest": "afbaf9d506d14bb8e01b534f",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Donor-database deduplication and lapsed-donor segmentation f\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 34880× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: The Lakeshore Philharmonic's director of develo\" needs [figure withheld] and keeps [figure withheld], 4447× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Donor-database deduplication and lapsed-donor segmentation for the Lak\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_df98c676b2214214b15f"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Phi\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Phi\"",
+      "owner": "PERSON",
+      "cost": 30
+     },
+     {
+      "label": "Collect payment for \"Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Phi\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Sell \"Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Phi\": offer it to its reachable buyers at 4500 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+    "openings": [
+     {
+      "opportunityId": "cop_df98c676b2214214b15f",
+      "title": "Donor-database deduplication and lapsed-donor segmentation for the Lakeshore Philharmonic",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 9000,
+      "potentialReach": 12000,
+      "card": {
+       "payer": "The Lakeshore Philharmonic's director of development",
+       "reachableChannel": "The orchestra's development office (published email)",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:42.935Z",
+       "offerScope": "One deduplicated donor file with lapsed-donor segments; paid net 21 after delivery.",
+       "priceCents": 450000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "symphony orchestras",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 450000,
+        "currency": "USD",
+        "deliverable": "One deduplicated donor file with lapsed-donor segments; paid net 21 after delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The orchestra's development office (published email)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 4500 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (one agreement of 4500 is recorded) (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "25 days to usable cash against 40 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One deduplicated donor file with lapsed-donor segments; paid net 21 after delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "The Lakeshore Philharmonic's director of development",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The Lakeshore Philharmonic's development office issued a $4,500 purchase order for a donor-database cleanup (board-approved purchase order, 2026-11-12).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "25 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 40,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:37:15.135Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_4a6b622296e3_d5a256",
+    "revisionDigest": "4a6b622296e364f0b6c7e4c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7bf582d859d49b3bd20/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_78a3723f0f1a4fd79816/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. The only evidenced sale is one organisation's board-approved $4,500 purchase order (Lakeshore Philharmonic), which settles about day 25 (net 21 after delivery) inside 40 days; $4,500 leaves $7,500 short, i.e. at least two more $4,500 sales. One organisation is not a population: the card has no count of comparable orchestras, no channel beyond this one development office, and no close rate, so MARKET_VOLUME and CONVERSION are unestablished - exactly the decisiveLinks named, matching Brain's missing links. Missing evidence is correctly not presented as a constraint. The resolution (deliver the Lakeshore order at $30 cost; count orchestras with published development-office contacts; offer by about day 15 so 25-day settlement lands by day 40) is the evidence that decides it.",
+    "findings": [
+     "Recomputed: 1 x $4,500 = $4,500 (net $4,470); need ceil(12,000/4,500) = 3 deals; 2 more must close by ~day 15 given 25 days to usable cash; no capital.",
+     "Further buyers would also need their own price: $4,500 is what this one orchestra agreed to, so another orchestra's willingness to pay $4,500 is part of what the test measures, not a given.",
+     "Delivering the Lakeshore order now is sound (no capital, Brain produces it) and should not wait on the research.",
+     "Executor SEND_A_MESSAGE is NOT_CONNECTED for the test step; Brain's step list labels delivery PERSON while the card says Brain produces the file."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:43:15.583Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_4a6b622296e3_d5a256",
+   "digest": "4a6b622296e364f0b6c7e4c4",
+   "contractDigest": "afbaf9d506d14bb8e01b534f",
+   "plan": {
+    "goalId": "wst_5eb86a0d369a4b249a4b",
+    "contractDigest": "afbaf9d506d14bb8e01b534f",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: one $4,500 purchase order against a $12,000 target, and no established population of further buyers",
+     "opportunityIds": [],
+     "why": "The Lakeshore Philharmonic's board-approved $4,500 purchase order (2026-11-12) is real and settles in about 25 days (net 21 after delivery), inside the 40 days. But it is one organisation: $4,500 leaves $7,500 short, which needs at least two further $4,500 buyers. The card names no other buyer, no count of orchestras that buy this, no channel to them, and no measured close rate, so the remaining deals cannot be shown to exist or close in time."
+    },
+    "alternatives": [
+     {
+      "title": "Assume other orchestras buy at $4,500 and plan three deals",
+      "why": "Rejected: one organisation is not a population of buyers; neither the number of comparable buyers nor a close rate is on record."
+     },
+     {
+      "title": "Deliver the Lakeshore order alone",
+      "why": "Worth doing (it is $4,470 net of the $30 cost and needs no capital) but it reaches only $4,500 of $12,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Count orchestras with a published development-office channel that buy donor-database cleanup (directory or association list, with number and source), and how often one buys",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_payer"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the deduplication and lapsed-donor segmentation at $4,500 (net 21) to the counted orchestras and record paid orders to measure the close rate; sales must close by about day 15 to settle by day 40",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "src_price",
+       "src_settle"
+      ],
+      "priceCents": 450000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 450000,
+      "unit": "cents",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "buyers with an agreement",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "organisations",
+      "sources": [
+       "src_price",
+       "src_agreement"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed at $4,500",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "deals",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "further reachable buyers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "organisations",
+      "sources": [],
+      "needs": "A count of orchestras of this kind with a published channel"
+     },
+     {
+      "name": "close rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid per contact",
+      "sources": [],
+      "needs": "Measured offers to further orchestras"
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#price",
+      "dated": "2026-11-12",
+      "claim": "The Lakeshore Philharmonic's development office issued a $4,500 board-approved purchase order for a donor-database cleanup",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_agreement",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#agreements",
+      "dated": "2026-11-12",
+      "claim": "One WRITTEN_ACCEPTANCE agreement at $4,500, state AGREED",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_payer",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#payer",
+      "dated": "2026-11-25",
+      "claim": "The Lakeshore Philharmonic's director of development — a single organisation",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_df98c676b2214214b15f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "25 days to usable cash (paid net 21 after delivery)",
+      "population": "The Lakeshore Philharmonic (one organisation)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_df98c676b2214214b15f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Only one buyer is established: the Lakeshore Philharmonic's $4,500 purchase order. Reaching $12,000 needs at least two more $4,500 sales, and no count of comparable buyers, channel to them, or close rate is on record.",
+     "resolution": "Deliver the Lakeshore order (Brain produces it, $30 cost). Research a count of orchestras with published development-office contacts (e.g. an orchestra association member directory) and how often they buy donor-database cleanup; then offer at $4,500 net 21 to them by about day 15 and record paid orders as the close rate. Re-plan once the buyer count and close rate are on the card.",
+     "decisiveLinks": [
+      "MARKET_VOLUME",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_df98c676b2214214b15f",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_df98c676b2214214b15f",
+      "deals": 3,
+      "price": 4500,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 25
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4a6b622296e3_d5a256",
+    "digest": "4a6b622296e364f0b6c7e4c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7bf582d859d49b3bd20/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:40:01.182Z"
+   },
+   "review": {
+    "revisionId": "rev_4a6b622296e3_d5a256",
+    "revisionDigest": "4a6b622296e364f0b6c7e4c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7bf582d859d49b3bd20/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_78a3723f0f1a4fd79816/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. The only evidenced sale is one organisation's board-approved $4,500 purchase order (Lakeshore Philharmonic), which settles about day 25 (net 21 after delivery) inside 40 days; $4,500 leaves $7,500 short, i.e. at least two more $4,500 sales. One organisation is not a population: the card has no count of comparable orchestras, no channel beyond this one development office, and no close rate, so MARKET_VOLUME and CONVERSION are unestablished - exactly the decisiveLinks named, matching Brain's missing links. Missing evidence is correctly not presented as a constraint. The resolution (deliver the Lakeshore order at $30 cost; count orchestras with published development-office contacts; offer by about day 15 so 25-day settlement lands by day 40) is the evidence that decides it.",
+    "findings": [
+     "Recomputed: 1 x $4,500 = $4,500 (net $4,470); need ceil(12,000/4,500) = 3 deals; 2 more must close by ~day 15 given 25 days to usable cash; no capital.",
+     "Further buyers would also need their own price: $4,500 is what this one orchestra agreed to, so another orchestra's willingness to pay $4,500 is part of what the test measures, not a given.",
+     "Delivering the Lakeshore order now is sound (no capital, Brain produces it) and should not wait on the research.",
+     "Executor SEND_A_MESSAGE is NOT_CONNECTED for the test step; Brain's step list labels delivery PERSON while the card says Brain produces the file."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:43:15.583Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+    "terms": "5054cb240df37fc9",
+    "openings": {
+     "cop_df98c676b2214214b15f": "f13dcc8747355d57"
+    }
+   },
+   "at": "2026-11-28T01:44:44.278Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

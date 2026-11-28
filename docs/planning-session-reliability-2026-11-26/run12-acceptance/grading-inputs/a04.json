@@ -1,0 +1,257 @@
+{
+ "caseId": "ap-04-dive-shop-owner-hours",
+ "keys": {
+  "cop_270defdee1404f45aeef": "inspectionDays",
+  "cop_0c495216c5604943ba98": "airLog"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Breathing-air quality and tank-inspection compliance log wor\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Breathing-air quality and tank-inspection compliance log wor\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 22248× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Breathing-air quality and tank-inspection compliance log workbook for \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0c495216c5604943ba98"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Collect payment for \"Breathing-air quality and tank-inspection compliance log workbook for dive shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_0c495216c5604943ba98",
+    "title": "Breathing-air quality and tank-inspection compliance log workbook for dive shops",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 2000,
+    "potentialReach": 2000,
+    "card": {
+     "payer": "Dive shop owners and compressor managers",
+     "reachableChannel": "Published shop emails in the certification agency's public dive-center locator",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:23.714Z",
+     "offerScope": "A quarterly air-test and tank-visual log workbook; delivered in 2 days; paid by card at checkout.",
+     "priceCents": 22000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "recreational scuba diving",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published shop emails in the certification agency's public dive-center locator"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 220 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 30 accepted of 250 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "11 deal(s) needed, 260 available in the window (260 reachable buyers, each buying about every 91 days, so 1 purchase(s) each in 28 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The certification agency's public dive-center locator lists 260 dive shops in the region, each with a published email; each must keep its breathing-air test and tank-visual log current every quarter.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A quarterly air-test and tank-visual log workbook; delivered in 2 days; paid by card at checkout. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "30 agreements from 250 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Dive shop owners and compressor managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Comparable dive-center compliance log workbooks sell for $220 on the agency's retailer resource store (listing prices, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_270defdee1404f45aeef",
+    "title": "Owner-led regulator and tank visual-inspection days at dive shops",
+    "reason": "needs the owner's physical work: the service (\"on-site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "Dive shop owners",
+     "reachableChannel": "The four shop owners who signed, by phone and email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:23.714Z",
+     "offerScope": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 8,
+     "requiredCapabilities": [],
+     "industry": "recreational scuba diving",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "One on-site inspection day performed by the owner (8 hours on site); paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One on-site inspection day performed by the owner (8 hours on site); paid on completion. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Dive shop owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four dive shops signed written orders at $600 per on-site inspection day (signed orders, 2026-11-19).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 28,
+   "hoursCeiling": 16,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-28T01:36:41.762Z"
+ }
+}

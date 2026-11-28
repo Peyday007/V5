@@ -1,0 +1,185 @@
+{
+ "caseId": "ap-12-hotel-audits-owner-hours",
+ "keys": {
+  "cop_a923786f277d4ab5b819": "mysteryGuest"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: the agreed deals need 36 owner hours, more than the 9 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1971× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 25–43 (swept by the plan's simulation: an assumption, not established), after the 21 days left, so it brings no cash inside the goal's window.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_a923786f277d4ab5b819"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 3000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_a923786f277d4ab5b819",
+    "title": "Owner-performed mystery-guest service audits for boutique hotels",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Boutique hotel general managers",
+     "reachableChannel": "The six general managers who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:34:01.215Z",
+     "offerScope": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 6,
+     "requiredCapabilities": [],
+     "industry": "boutique hotels",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 50000,
+      "currency": "USD",
+      "deliverable": "One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six general managers who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One check-in-to-checkout service audit and written report, performed by the owner (6 owner hours each; the hotel comps the stay); paid within 5 days of the report. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Boutique hotel general managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six boutique hotel general managers signed written orders at $500 per mystery-guest audit (signed orders, 2026-11-22).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 21,
+   "hoursCeiling": 9,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 3
+  },
+  "at": "2026-11-28T01:36:45.430Z"
+ }
+}

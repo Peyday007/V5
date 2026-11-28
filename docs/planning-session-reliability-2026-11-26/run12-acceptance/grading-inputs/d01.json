@@ -1,0 +1,455 @@
+{
+ "caseId": "aq-01-1k-14d-five-hours",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 1000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Fixed-price AI-assisted blog articles on Upwork\" needs [figure withheld] and keeps [figure withheld], 90× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"AI-assisted resume rewrite sold direct to job seekers\" needs [figu), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_b15196ba5bcc4b5aaddd",
+   "cop_6699a9b8613c4647bfc0",
+   "cop_db0a4ebf726847b1a38d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 1000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+    "title": "One-off Google Business Profile optimization for local service businesses",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "owner of a local small business with an incomplete Google Business Profile",
+     "reachableChannel": "Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice",
+     "offerScope": "one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "local small businesses (home services, clinics, restaurants)",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Brain-drafted cold email from the owner's own mailbox to businesses whose public"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "5 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h to owner of a local small business with an incomplete Google Business Profile, reached through Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice, at $250; the owner, using AI-drafted copy delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, using AI-drafted copy.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "owner of a local small business with an incomplete Google Business Profile",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area; https://coloradowebimpressions.com/answers/how-much-does-google-business-profile-management-cost; https://whitespark.ca/google-my-business-management-service/; google business profile optimization one-time setup fee",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_6699a9b8613c4647bfc0",
+    "title": "AI-assisted resume rewrite sold direct to job seekers",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 150,
+    "card": {
+     "payer": "individual job seeker",
+     "reachableChannel": "owner's personal network and free community posts; paid by Zelle/Venmo",
+     "offerScope": "resume + LinkedIn summary rewrite, 48h turnaround",
+     "priceCents": 15000,
+     "currency": "USD",
+     "fulfillmentOwner": "a resume writer hired per order on Fiverr, paid only after the buyer has paid",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "career services",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: owner's personal network and free community posts; paid by Zelle/Venmo"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 60, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "3 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "owner's personal network and free community posts; paid by Zelle/Venmo",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell resume + LinkedIn summary rewrite, 48h turnaround to individual job seeker, reached through owner's personal network and free community posts; paid by Zelle/Venmo, at $150; a resume writer hired per order on Fiverr, paid only after the buyer has paid delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$60",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "a resume writer hired per order on Fiverr, paid only after the buyer has paid.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "resume + LinkedIn summary rewrite, 48h turnaround",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "individual job seeker",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://findmyprofession.com/?p=3193; https://www.thumbtack.com/p/resume-writing-prices; https://topresume.com/career-advice/how-much-does-a-professional-resume-writing-service-cost; resume writing service price survey",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_db0a4ebf726847b1a38d",
+    "title": "Fixed-price AI-assisted blog articles on Upwork",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 100,
+    "card": {
+     "payer": "Upwork client posting a fixed-price writing job",
+     "reachableChannel": "Upwork proposals",
+     "offerScope": "SEO blog article, 1,500 words",
+     "priceCents": 10000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 0.75,
+     "requiredCapabilities": [],
+     "industry": "content marketing",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Upwork proposals"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 100 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 10, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Upwork proposals",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell SEO blog article, 1,500 words to Upwork client posting a fixed-price writing job, reached through Upwork proposals, at $100; the owner, editing AI drafts delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, editing AI drafts.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.75 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "SEO blog article, 1,500 words",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Upwork client posting a fixed-price writing job",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "upwork blog article fixed price; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 100000,
+   "daysLeft": 14,
+   "hoursCeiling": 10,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 5
+  },
+  "at": "2026-11-28T01:43:01.287Z"
+ }
+}

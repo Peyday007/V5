@@ -1,0 +1,478 @@
+{
+ "caseId": "aq-02-printing-shops-5k-30d",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Google Business Profile and local SEO management for commerc\", \"White-label overflow design subscription for print shops\", \"Outsourced preflight / prepress overflow for commercial prin\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_68bb6003c9fa41c99f13",
+   "cop_aeb7143d9ddc4ecf964d",
+   "cop_042c9eef07c544248175"
+  ],
+  "integrity": [
+   {
+    "rule": "NO_FAVOURABLE_UNKNOWN",
+    "detail": "\"White-label overflow design subscription for print shops\" costs at least 600 a deal as modelled, not established, more than the 500 the goal may spend in all"
+   }
+  ],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"Google Business Profile and local SEO management for commerc\", \"White-label overflow design subscription for print shops\", \"Outsourced preflight / prepress overflow for commercial prin\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_68bb6003c9fa41c99f13",
+    "title": "Google Business Profile and local SEO management for commercial print shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "owner/manager of an independent commercial print shop",
+     "reachableChannel": "cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories",
+     "offerScope": "setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output",
+     "peakFundingCents": 8600,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "commercial printing (NAICS 323111)",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to independent commercial printers via Instantly (7/mo) from lists bu"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "36 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "9 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 49, tied up 86"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "15,140 owner/manager of an independent commercial print shop (9 shops x 00 = ,400 collected; 15,140 NAICS 323111 establishments in 2023 (County Business Patterns via WhatTheyThink); agencies quote print shops 00-,500/mo (theStacc page, vendor claim))",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report to owner/manager of an independent commercial print shop, reached through cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories, at $600; theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$49",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$86",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "owner/manager of an independent commercial print shop",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://thestacc.com/for/printing-sign-shops/; https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area; https://thestacc.com/for/printing-sign-shops/; https://inboundblogging.com/services/seo-agency-for-printing-companies/; https://whattheythink.com/industry-data/establishments/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+    "title": "White-label overflow design subscription for print shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "print shop that redesigns customer artwork in-house",
+     "reachableChannel": "cold email to independent commercial printers via Instantly",
+     "offerScope": "monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts",
+     "priceCents": 89900,
+     "currency": "USD",
+     "fulfillmentOwner": "Pixelops Design (PPAI-listed design subscription, from $600/mo)",
+     "peakFundingCents": 3700,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "commercial printing",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to independent commercial printers via Instantly"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 899 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "24 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "6 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 600, tied up 37"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to independent commercial printers via Instantly",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "15,140 print shop that redesigns customer artwork in-house (6 shops x $899 = $5,394 collected; buyer pays before the subcontractor month is bought)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts to print shop that redesigns customer artwork in-house, reached through cold email to independent commercial printers via Instantly, at $899; Pixelops Design (PPAI-listed design subscription, from $600/mo) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$37",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Pixelops Design (PPAI-listed design subscription, from $600/mo).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "print shop that redesigns customer artwork in-house",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$899",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$899",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://ppai.org/?p=55329; https://www.manypixels.co/blog/get-a-designer/white-label-graphic-design; https://www.ppai.org/solution/shoreswitch/; https://whattheythink.com/industry-data/establishments/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_042c9eef07c544248175",
+    "title": "Outsourced preflight / prepress overflow for commercial printers",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "commercial printer with prepress backlog",
+     "reachableChannel": "cold email to commercial printers via Instantly",
+     "offerScope": "preflight and print-ready file correction, per job (~3 hours of prepress)",
+     "priceCents": 15000,
+     "currency": "USD",
+     "fulfillmentOwner": "Upwork prepress freelancer at $15-35/hour",
+     "peakFundingCents": 3700,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "commercial printing",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to commercial printers via Instantly"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "136 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "34 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 75, tied up 37"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to commercial printers via Instantly",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "15,140 commercial printer with prepress backlog (34 jobs x $150 = $5,100; freelancer rates from Upwork prepress listings)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell preflight and print-ready file correction, per job (~3 hours of prepress) to commercial printer with prepress backlog, reached through cold email to commercial printers via Instantly, at $150; Upwork prepress freelancer at $15-35/hour delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$75",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$37",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Upwork prepress freelancer at $15-35/hour.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "preflight and print-ready file correction, per job (~3 hours of prepress)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "commercial printer with prepress backlog",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.upwork.com/hire/pre-press-freelancers/in/; https://fiverr.com/georgesaad/a-prepress-specialist-for-your-company-regularly; https://www.outsource2india.com/creative-services/case-studies/prepress-services-to-a-digital-printer.asp; https://whattheythink.com/industry-data/establishments/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:44:47.560Z"
+ }
+}

@@ -1,0 +1,314 @@
+{
+ "caseId": "ap-03-cinema-supplier-cost-rises",
+ "keys": {
+  "cop_9801171e716445ffaa55": "projector",
+  "cop_438080237a4449f4888e": "settlementWorkbook"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Film-rental settlement reconciliation workbook for independe\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 26320× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Film-rental settlement reconciliation workbook for independent cinemas\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_438080237a4449f4888e",
+   "cop_9801171e716445ffaa55"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+    "owner": "PERSON",
+    "cost": 5
+   },
+   {
+    "label": "Collect payment for \"Film-rental settlement reconciliation workbook for independent cinemas\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_438080237a4449f4888e",
+    "title": "Film-rental settlement reconciliation workbook for independent cinemas",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Independent cinema owners and film bookers",
+     "reachableChannel": "Published booking-contact emails in the independent-cinema alliance member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:18.969Z",
+     "offerScope": "A workbook reconciling distributor settlements against box-office reports; delivered in 2 days; paid by card at checkout.",
+     "priceCents": 24000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent cinemas",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Published booking-contact emails in the independent-cinema alliance member direc"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 240 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 24 accepted of 200 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "14 deal(s) needed, 1240 available in the window (310 reachable buyers, each buying about every 7 days, so 4 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The independent-cinema alliance directory lists 310 member cinemas, each with a published booking contact; each settles film rentals with distributors every week.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook reconciling distributor settlements against box-office reports; delivered in 2 days; paid by card at checkout. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "24 agreements from 200 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent cinema owners and film bookers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Comparable film-settlement workbooks sell for $240 on the alliance's member resource store (listing prices, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_9801171e716445ffaa55",
+    "title": "Subcontracted digital-projector lamp and filter service for independent cinemas",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Independent cinema general managers",
+     "reachableChannel": "The five managers who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:18.969Z",
+     "offerScope": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+     "priceCents": 65000,
+     "currency": "USD",
+     "fulfillmentOwner": "LumenTech Field Service (written quote $300 per visit; completes all five visits in the first 14 days; invoices us net 15)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "independent cinemas",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "One lamp, filter and alignment visit; the cinema pays within 10 days of the visit.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The five managers who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3250 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3250 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by LumenTech Field Service (written quote $300 per visit; completes all five visits (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "each deal loses money: a cost of 700 against a price of 650"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One lamp, filter and alignment visit; the cinema pays within 10 days of the visit. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$700",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "LumenTech Field Service (written quote $300 per visit; completes all five visits in the first 14 days; invoices us net 15) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent cinema general managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Five independent cinemas signed written orders at $650 per projector service visit (signed orders, 2026-11-18).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_758ee3609ea54181ad4f"
+  ],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:47:05.619Z"
+ }
+}

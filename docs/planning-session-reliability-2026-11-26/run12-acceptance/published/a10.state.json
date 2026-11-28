@@ -1,0 +1,813 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_070c3e71318140828e24",
+   "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$5,000 of settled cash received in the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "fed4725ccd54e74401582214"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_070c3e71318140828e24",
+    "contractDigest": "fed4725ccd54e74401582214",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the roast-loss workbook's price is established",
+     "opportunityIds": [],
+     "why": "The only opening's record contradicts itself on price: the card's priceCents is 75000 ($750) while its sourced price fact says $75. At $750 the target needs 7 sales (about 70 contacts at the measured 20/200 rate, inside the 400-roastery directory); at $75 it needs 67 sales, about 670 contacts, more than the 400 roasteries that exist, so the directory yields only about 40 sales ($3,000). Which price is real decides whether any plan exists, and the records do not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at $750 on the strength of the card's priceCents",
+      "why": "Rejected: the sourced price fact says $75, so $750 is contradicted and not established."
+     },
+     {
+      "title": "Sell at $75 to the whole directory",
+      "why": "Rejected: at the measured 10% conversion, 400 roasteries yield about 40 sales = $3,000, short of $5,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 20 measured agreements paid (and the listed checkout price) to reconcile $75 against $750",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-price",
+       "src-pricecents",
+       "src-conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src-price",
+       "src-pricecents"
+      ],
+      "needs": "one price the buyers actually paid; the card says both $75 and $750"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "agreements per contact",
+      "sources": [
+       "src-conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable roasteries",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "buyers",
+      "sources": [
+       "src-volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#price",
+      "dated": "2026-11-25",
+      "claim": "Price $75.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-pricecents",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#priceCents",
+      "dated": "2026-11-25",
+      "claim": "Card priceCents 75000 ($750), contradicting the $75 price fact.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-conv",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "20 agreements from 200 contacts.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-volume",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The roasters' guild directory lists 400 member roasteries with published wholesale emails.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The workbook's price is contradicted on its own record ($75 price fact vs $750 priceCents). At $750 the 400-roastery market carries the $5,000 target (7 sales, ~70 contacts); at $75 it cannot (~40 sales = $3,000 at the measured rate). Market volume therefore cannot be judged until the price is.",
+     "resolution": "Read the price the 20 measured agreements actually paid and the live checkout price. If it is $750 (and the 20/200 rate was measured at $750), plan 7 card sales to ~70 directory roasters, settling in 3 days, as an executable plan; if it is $75, record that the directory cannot reach $5,000 and look for a second opening.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_94de90d3cd0e4476a9af",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_94de90d3cd0e4476a9af",
+      "why": "Price contradicted on its record ($75 vs $750); at $75 the 400 roasteries cannot reach $5,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_7f02700f5da4_4b7f16",
+    "digest": "7f02700f5da4d191de132973",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7fe051187d0c4d8f97ac/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:19.359Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_070c3e71318140828e24",
+   "contractDigest": "fed4725ccd54e74401582214",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the roast-loss workbook's price is established",
+    "opportunityIds": [],
+    "why": "The only opening's record contradicts itself on price: the card's priceCents is 75000 ($750) while its sourced price fact says $75. At $750 the target needs 7 sales (about 70 contacts at the measured 20/200 rate, inside the 400-roastery directory); at $75 it needs 67 sales, about 670 contacts, more than the 400 roasteries that exist, so the directory yields only about 40 sales ($3,000). Which price is real decides whether any plan exists, and the records do not settle it."
+   },
+   "alternatives": [
+    {
+     "title": "Sell at $750 on the strength of the card's priceCents",
+     "why": "Rejected: the sourced price fact says $75, so $750 is contradicted and not established."
+    },
+    {
+     "title": "Sell at $75 to the whole directory",
+     "why": "Rejected: at the measured 10% conversion, 400 roasteries yield about 40 sales = $3,000, short of $5,000."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Establish the price the 20 measured agreements paid (and the listed checkout price) to reconcile $75 against $750",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src-price",
+      "src-pricecents",
+      "src-conv"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price per workbook",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [
+      "src-price",
+      "src-pricecents"
+     ],
+     "needs": "one price the buyers actually paid; the card says both $75 and $750"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "agreements per contact",
+     "sources": [
+      "src-conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable roasteries",
+     "status": "EVIDENCED",
+     "value": 400,
+     "unit": "buyers",
+     "sources": [
+      "src-volume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src-price",
+     "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#price",
+     "dated": "2026-11-25",
+     "claim": "Price $75.",
+     "population": "Small specialty roasteries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_94de90d3cd0e4476a9af"
+    },
+    {
+     "id": "src-pricecents",
+     "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#priceCents",
+     "dated": "2026-11-25",
+     "claim": "Card priceCents 75000 ($750), contradicting the $75 price fact.",
+     "population": "Small specialty roasteries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_94de90d3cd0e4476a9af"
+    },
+    {
+     "id": "src-conv",
+     "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "20 agreements from 200 contacts.",
+     "population": "Small specialty roasteries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_94de90d3cd0e4476a9af"
+    },
+    {
+     "id": "src-volume",
+     "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The roasters' guild directory lists 400 member roasteries with published wholesale emails.",
+     "population": "Small specialty roasteries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_94de90d3cd0e4476a9af"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "The workbook's price is contradicted on its own record ($75 price fact vs $750 priceCents). At $750 the 400-roastery market carries the $5,000 target (7 sales, ~70 contacts); at $75 it cannot (~40 sales = $3,000 at the measured rate). Market volume therefore cannot be judged until the price is.",
+    "resolution": "Read the price the 20 measured agreements actually paid and the live checkout price. If it is $750 (and the 20/200 rate was measured at $750), plan 7 card sales to ~70 directory roasters, settling in 3 days, as an executable plan; if it is $75, record that the directory cannot reach $5,000 and look for a second opening.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_94de90d3cd0e4476a9af",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_94de90d3cd0e4476a9af",
+     "why": "Price contradicted on its record ($75 vs $750); at $75 the 400 roasteries cannot reach $5,000."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_7f02700f5da4_4b7f16",
+   "digest": "7f02700f5da4d191de132973",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7fe051187d0c4d8f97ac/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:38:19.359Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_7f02700f5da4_4b7f16",
+   "digest": "7f02700f5da4d191de132973",
+   "contractDigest": "fed4725ccd54e74401582214",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 28816× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Green-coffee lot traceability and roast-loss workbook for sp\" needs [figure withheld] and keeps [figure withheld], 408× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Owners and head roasters at small specialty roasteries\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_94de90d3cd0e4476a9af"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Green-coffee lot traceability and roast-loss workbook for specialty roasters\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Green-coffee lot traceability and roast-loss workbook for specialty roasters\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Owners and head roasters at small specialty roasteries",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Owners and head roasters at small specialty roasteries",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 9.989778212685001
+     },
+     {
+      "label": "Collect payment for \"Green-coffee lot traceability and roast-loss workbook for specialty roasters\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_94de90d3cd0e4476a9af",
+      "title": "Green-coffee lot traceability and roast-loss workbook for specialty roasters",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Owners and head roasters at small specialty roasteries",
+       "reachableChannel": "Published wholesale-inquiry emails in the roasters' guild member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:52.151Z",
+       "offerScope": "A lot-traceability and roast-loss workbook; delivered in 2 days; paid by card at checkout.",
+       "priceCents": 75000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "specialty coffee roasting",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Published wholesale-inquiry emails in the roasters' guild member directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 20 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "68 deal(s) needed at the measured rate means asking 942 prospects, but the market holds only 400 (400 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 28.8"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The roasters' guild directory lists 400 member roasteries, each with a published wholesale email; each logs green-coffee lots with every import.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A lot-traceability and roast-loss workbook; delivered in 2 days; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "20 agreements from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners and head roasters at small specialty roasteries",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$75",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:36:45.345Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_7f02700f5da4_4b7f16",
+    "revisionDigest": "7f02700f5da4d191de132973",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7fe051187d0c4d8f97ac/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8b25d596a628433cbd0e/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and it names the decisive gap the evidence decides. The only opening's sourced price fact (EVIDENCE) is $75 while its card priceCents is 75000 ($750); Brain's OFFER_AND_PRICE link is false ('no single price on the card'). Recomputed: at $75 the target needs ceil(5000/75)=67 sales; at the measured 20/200 = 10% conversion the 400-roastery guild directory (no repeat purchase stated) yields 40 sales = $3,000 < $5,000, and Brain's cautious rate gives about 28.8 sales, so MARKET_VOLUME fails. At $750 it needs 7 sales, ~70 contacts, well inside 400, settling in 3 days of a 30-day window with $5 cost and $0 exposure. So the price the 20 measured agreements were made at decides between NO_PLAN and EXECUTABLE, and the revision's decisiveLinks [OFFER_AND_PRICE, MARKET_VOLUME] and resolution (read the price those agreements paid and the live checkout price; if $750 plan 7 sales, if $75 record the market cannot reach $5,000) are exactly that. Nothing unknown is treated as known: price is UNKNOWN in quantities, conversion and volume are EVIDENCED.",
+    "findings": [
+     "NOTE: The 20/200 conversion is only usable at the price it was measured at; if the agreements were at $75, a $750 offer has no measured conversion and would become a CONDITIONAL plan resting on a live conversion test, not an EXECUTABLE one. The resolution should carry that.",
+     "NOTE: Listing the only opening under 'excluded' while the resolution may revive it is slightly inconsistent; it is parked on a contradiction, not discarded."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:40:25.630Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_7f02700f5da4_4b7f16",
+   "digest": "7f02700f5da4d191de132973",
+   "contractDigest": "fed4725ccd54e74401582214",
+   "plan": {
+    "goalId": "wst_070c3e71318140828e24",
+    "contractDigest": "fed4725ccd54e74401582214",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the roast-loss workbook's price is established",
+     "opportunityIds": [],
+     "why": "The only opening's record contradicts itself on price: the card's priceCents is 75000 ($750) while its sourced price fact says $75. At $750 the target needs 7 sales (about 70 contacts at the measured 20/200 rate, inside the 400-roastery directory); at $75 it needs 67 sales, about 670 contacts, more than the 400 roasteries that exist, so the directory yields only about 40 sales ($3,000). Which price is real decides whether any plan exists, and the records do not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at $750 on the strength of the card's priceCents",
+      "why": "Rejected: the sourced price fact says $75, so $750 is contradicted and not established."
+     },
+     {
+      "title": "Sell at $75 to the whole directory",
+      "why": "Rejected: at the measured 10% conversion, 400 roasteries yield about 40 sales = $3,000, short of $5,000."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 20 measured agreements paid (and the listed checkout price) to reconcile $75 against $750",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-price",
+       "src-pricecents",
+       "src-conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src-price",
+       "src-pricecents"
+      ],
+      "needs": "one price the buyers actually paid; the card says both $75 and $750"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "agreements per contact",
+      "sources": [
+       "src-conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable roasteries",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "buyers",
+      "sources": [
+       "src-volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#price",
+      "dated": "2026-11-25",
+      "claim": "Price $75.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-pricecents",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#priceCents",
+      "dated": "2026-11-25",
+      "claim": "Card priceCents 75000 ($750), contradicting the $75 price fact.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-conv",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "20 agreements from 200 contacts.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     },
+     {
+      "id": "src-volume",
+      "url": "https://brain.local/card/cop_94de90d3cd0e4476a9af#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The roasters' guild directory lists 400 member roasteries with published wholesale emails.",
+      "population": "Small specialty roasteries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_94de90d3cd0e4476a9af"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The workbook's price is contradicted on its own record ($75 price fact vs $750 priceCents). At $750 the 400-roastery market carries the $5,000 target (7 sales, ~70 contacts); at $75 it cannot (~40 sales = $3,000 at the measured rate). Market volume therefore cannot be judged until the price is.",
+     "resolution": "Read the price the 20 measured agreements actually paid and the live checkout price. If it is $750 (and the 20/200 rate was measured at $750), plan 7 card sales to ~70 directory roasters, settling in 3 days, as an executable plan; if it is $75, record that the directory cannot reach $5,000 and look for a second opening.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_94de90d3cd0e4476a9af",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_94de90d3cd0e4476a9af",
+      "why": "Price contradicted on its record ($75 vs $750); at $75 the 400 roasteries cannot reach $5,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_7f02700f5da4_4b7f16",
+    "digest": "7f02700f5da4d191de132973",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7fe051187d0c4d8f97ac/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:19.359Z"
+   },
+   "review": {
+    "revisionId": "rev_7f02700f5da4_4b7f16",
+    "revisionDigest": "7f02700f5da4d191de132973",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7fe051187d0c4d8f97ac/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8b25d596a628433cbd0e/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and it names the decisive gap the evidence decides. The only opening's sourced price fact (EVIDENCE) is $75 while its card priceCents is 75000 ($750); Brain's OFFER_AND_PRICE link is false ('no single price on the card'). Recomputed: at $75 the target needs ceil(5000/75)=67 sales; at the measured 20/200 = 10% conversion the 400-roastery guild directory (no repeat purchase stated) yields 40 sales = $3,000 < $5,000, and Brain's cautious rate gives about 28.8 sales, so MARKET_VOLUME fails. At $750 it needs 7 sales, ~70 contacts, well inside 400, settling in 3 days of a 30-day window with $5 cost and $0 exposure. So the price the 20 measured agreements were made at decides between NO_PLAN and EXECUTABLE, and the revision's decisiveLinks [OFFER_AND_PRICE, MARKET_VOLUME] and resolution (read the price those agreements paid and the live checkout price; if $750 plan 7 sales, if $75 record the market cannot reach $5,000) are exactly that. Nothing unknown is treated as known: price is UNKNOWN in quantities, conversion and volume are EVIDENCED.",
+    "findings": [
+     "NOTE: The 20/200 conversion is only usable at the price it was measured at; if the agreements were at $75, a $750 offer has no measured conversion and would become a CONDITIONAL plan resting on a live conversion test, not an EXECUTABLE one. The resolution should carry that.",
+     "NOTE: Listing the only opening under 'excluded' while the resolution may revive it is slightly inconsistent; it is parked on a contradiction, not discarded."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:40:25.630Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "6068d42e192a9a6e",
+    "openings": {
+     "cop_94de90d3cd0e4476a9af": "06972296f6efd939"
+    }
+   },
+   "at": "2026-11-28T01:41:43.565Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

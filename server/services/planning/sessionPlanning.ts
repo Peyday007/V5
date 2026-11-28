@@ -906,13 +906,14 @@ async function reviewBin(input: { goalId: string; projectId: string; title: stri
 }
 
 const REVIEW_INSTRUCTIONS =
-        'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the current ' +
-        'revision skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
+        'Independent review of one plan revision. Read brain_planning_state and brain_planning_context for goalId; judge the revision ' +
+        'this item names (revisionId — not whichever is current) skeptically from the evidence, recomputing the arithmetic for every opening it weighs (deals at the evidenced price ' +
         'against the target, capital per cycle against the limits, when the cash settles against the window) and checking that any ' +
         'test does not take buyers’ orders before the opening’s fulfilment is shown possible, and that passing it at its threshold carries ' +
   'the target; record brain_planning_review with verdict PASS or REVISE, ' +
         'reasons and findings — any condition (a link you judge unestablished) goes in `conditions` with the card fact or missing ' +
-        'prerequisite it rests on — then brain_complete_work. The author of the revision may not review it: release the item if that is you.';
+  'prerequisite it rests on; against a price Brain’s planner establishes, name its `defect` (PERSON_WORD, CONTRADICTED or NOT_A_PURCHASE) or let it stand — ' +
+        'then brain_complete_work. The author of the revision may not review it: release the item if that is you.';
 
 /** The queue's work type for an independent plan review; one item per revision. */
 export const PLAN_REVIEW_WORK = 'PLAN_REVIEW';
@@ -990,7 +991,9 @@ export async function recordReview(input: { goalId: string; revisionId: string; 
   const conditions = input.conditions ?? [];
   if (conditions.length && input.verdict !== 'REVISE') throw new PlanningRefusal('only a REVISE review proposes conditions', 'planning:review');
   // A proposed condition names its supporting record or a genuinely absent prerequisite, or it is not recorded.
-  const wrong = conditionProblems(conditions, rev, await cardFactsOf([...new Set([...rev.strategy.opportunityIds, ...(rev.chain ?? []).map((c) => c.opportunityId)])]));
+  const lastRun = (await events(input.goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined;
+  const established = Object.fromEntries((lastRun?.openings ?? []).map((o) => [o.opportunityId, (o.links ?? []).filter((l) => l.ok).map((l) => l.link)]));
+  const wrong = conditionProblems(conditions, rev, await cardFactsOf([...new Set([...rev.strategy.opportunityIds, ...(rev.chain ?? []).map((c) => c.opportunityId)])]), established);
   if (wrong.length) throw new PlanningRefusal(`each proposed condition must identify its evidence or a missing prerequisite: ${wrong.join('; ')}`, 'planning:review');
   const review: PlanReview = { revisionId: rev.revisionId, revisionDigest: rev.digest, author: rev.author, reviewer: input.reviewer, verdict: input.verdict, reasons: input.reasons, findings: input.findings, resolution: input.resolution ?? null, at: new Date().toISOString() };
   await recordWorkstreamEvent({ workstreamId: input.goalId, kind: PLANNING_EVENTS.review, summary: `Review of ${rev.revisionId} by ${input.reviewer.kind} ${input.reviewer.id}: ${input.verdict}`, detail: { review, conditions, independent: !sameExecutor(rev.author, input.reviewer) }, actorRef: actorOf(input.reviewer) });

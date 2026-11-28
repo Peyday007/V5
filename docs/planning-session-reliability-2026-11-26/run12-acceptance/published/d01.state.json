@@ -1,0 +1,3195 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_98a08841a1a54a9c8995",
+   "words": "I want $1,000 of settled cash in my account within 14 days. I have no money to put in and I can give it at most 5 hours a week of my own time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 100000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": 0,
+    "preProofSpendCapCents": 0,
+    "exposureCapCents": 0,
+    "proofCondition": "a first buyer pays and the money settles in the owner's account",
+    "ownerHoursPerWeek": 5,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "d8f7294fdf80da7a1491270f"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_98a08841a1a54a9c8995",
+    "contractDigest": "d8f7294fdf80da7a1491270f",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+     "opportunityIds": [
+      "cop_b15196ba5bcc4b5aaddd"
+     ],
+     "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+      "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+     },
+     {
+      "title": "Fixed-price blog articles on Upwork",
+      "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note for each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price_range"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (no paid tool)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: one-time GBP optimization, $250, delivered in 48h, invoice paid by bank transfer/Zelle before work starts",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "priceCents": 25000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner answers replies and closes (Brain drafts replies)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [],
+      "ownerHours": 2,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Proof gate day 6: at least 1 paid of the 80 reached continues; 0 paid stops",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Owner applies the Brain-drafted profile changes for each paid buyer (4 x 1.5h)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Bank transfer/Zelle payments received before delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "first paid optimization",
+      "settlesDay": 5,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "second",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "third",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "fourth",
+      "settlesDay": 12,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price per optimization",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate of cold-emailed local business owners",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-6 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s_price_range"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "hours",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_range",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+      "population": "local businesses (Bay Area)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_basic_setup",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "A basic GBP setup in San Francisco might cost around $299",
+      "population": "local businesses (San Francisco)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_resume",
+      "url": "https://findmyprofession.com/?p=3193",
+      "dated": "2025",
+      "claim": "Entry-level resume writing averages about $220 across 100+ services",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6699a9b8613c4647bfc0"
+     },
+     {
+      "id": "s_upwork",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_db0a4ebf726847b1a38d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the 80 cold-emailed businesses pays $250 by bank transfer by day 6",
+     "stop": [
+      "0 paid of 80 reached by day 6: stop, no money was spent"
+     ],
+     "continue": [
+      "1 or more paid by day 6: send the remaining replies/closes and deliver; need 4 paid of 80 (5%) by day 12"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 80,
+      "reach": 80
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "deals": 4,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a208410ce13b_7799f4",
+    "digest": "a208410ce13bae3c408a0565",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:48.568Z"
+   },
+   {
+    "goalId": "wst_98a08841a1a54a9c8995",
+    "contractDigest": "d8f7294fdf80da7a1491270f",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+     "opportunityIds": [
+      "cop_b15196ba5bcc4b5aaddd"
+     ],
+     "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+      "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+     },
+     {
+      "title": "Fixed-price blog articles on Upwork",
+      "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note for each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price_range"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (no paid tool)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: one-time GBP optimization, $250, delivered in 48h, invoice paid by bank transfer/Zelle before work starts",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "priceCents": 25000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner answers replies and closes (Brain drafts replies)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Proof gate day 6: at least 1 paid of the 80 reached continues; 0 paid stops",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Owner applies the Brain-drafted profile changes for each paid buyer (4 x 1.5h)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [
+       "deals needed",
+       "owner hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Bank transfer/Zelle payments received before delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [
+       "price per optimization",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "first paid optimization",
+      "settlesDay": 5,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "second",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "third",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "fourth",
+      "settlesDay": 12,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price per optimization",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate of cold-emailed local business owners",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-6 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s_price_range"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "hours",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_range",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+      "population": "local businesses (Bay Area)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_basic_setup",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "A basic GBP setup in San Francisco might cost around $299",
+      "population": "local businesses (San Francisco)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_resume",
+      "url": "https://findmyprofession.com/?p=3193",
+      "dated": "2025",
+      "claim": "Entry-level resume writing averages about $220 across 100+ services",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6699a9b8613c4647bfc0"
+     },
+     {
+      "id": "s_upwork",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_db0a4ebf726847b1a38d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the 80 cold-emailed businesses pays $250 by bank transfer by day 6",
+     "stop": [
+      "0 paid of 80 reached by day 6: stop, no money was spent"
+     ],
+     "continue": [
+      "1 or more paid by day 6: send the remaining replies/closes and deliver; need 4 paid of 80 (5%) by day 12"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 80,
+      "reach": 80
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "deals": 4,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "deals": 7,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "deals": 10,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_592177c2ddf1_3cef72",
+    "digest": "592177c2ddf1d7ca56866b20",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:59.165Z"
+   },
+   {
+    "goalId": "wst_98a08841a1a54a9c8995",
+    "contractDigest": "d8f7294fdf80da7a1491270f",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+     "opportunityIds": [
+      "cop_b15196ba5bcc4b5aaddd"
+     ],
+     "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+      "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+     },
+     {
+      "title": "Fixed-price blog articles on Upwork",
+      "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note for each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price_range"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (no paid tool)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: one-time GBP optimization, $250, delivered in 48h, invoice paid by bank transfer/Zelle before work starts",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "priceCents": 25000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner answers replies and closes (Brain drafts replies)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Proof gate day 6: at least 1 paid of the 80 reached continues; 0 paid stops",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Owner applies the Brain-drafted profile changes for each paid buyer (4 x 1.5h)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [
+       "deals needed",
+       "owner hours"
+      ],
+      "ownerHours": 6,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Bank transfer/Zelle payments received before delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [
+       "price per optimization",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "first paid optimization",
+      "settlesDay": 5,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "second",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "third",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "fourth",
+      "settlesDay": 12,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price per optimization",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "needs": null
+     },
+     {
+      "name": "close rate of cold-emailed local business owners",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-6 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s_price_range"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "ESTIMATE",
+      "value": 10,
+      "unit": "hours",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_range",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+      "population": "local businesses (Bay Area)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_basic_setup",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "A basic GBP setup in San Francisco might cost around $299",
+      "population": "local businesses (San Francisco)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_resume",
+      "url": "https://findmyprofession.com/?p=3193",
+      "dated": "2025",
+      "claim": "Entry-level resume writing averages about $220 across 100+ services",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6699a9b8613c4647bfc0"
+     },
+     {
+      "id": "s_upwork",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_db0a4ebf726847b1a38d"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 of the 80 cold-emailed businesses pays $250 by bank transfer by day 6",
+     "stop": [
+      "0 paid of 80 reached by day 6: stop, no money was spent"
+     ],
+     "continue": [
+      "1 or more paid by day 6: send the remaining replies/closes and deliver; need 4 paid of 80 (5%) by day 12"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 80,
+      "reach": 80
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "deals": 4,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "deals": 7,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "deals": 10,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_592177c2ddf1_082f59",
+    "digest": "592177c2ddf1d7ca56866b20",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:45:04.902Z"
+   },
+   {
+    "goalId": "wst_98a08841a1a54a9c8995",
+    "contractDigest": "d8f7294fdf80da7a1491270f",
+    "parentRevisionId": "rev_592177c2ddf1_082f59",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+     "opportunityIds": [
+      "cop_b15196ba5bcc4b5aaddd"
+     ],
+     "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours; the $250 price is itself measured by the test (the published $150-$800 range is a list-rate roundup that does not match this population)."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+      "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+     },
+     {
+      "title": "Fixed-price blog articles on Upwork",
+      "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note and the full optimization copy for each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price_range"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (mail merge, no paid tool)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "owner hours"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: one-time GBP optimization for $250, done first and invoiced on delivery (pay by bank transfer/Zelle once the changes are live); the buyer adds the owner as a manager on the profile",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "price per optimization",
+       "s_gbp_manager"
+      ],
+      "priceCents": 25000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner answers replies and takes yeses (Brain drafts every reply), week 1: 1h, week 2: 1h",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof: owner applies Brain's copy to the first yes's profile via manager access, timed; no invoice until it is live",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_gbp_manager",
+       "owner hours per delivery"
+      ],
+      "ownerHours": 1.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Gate day 7: continue only if 4 of the 80 have said yes (5%, the rate that carries $1,000) and the first delivery took no more than 1.5h and was paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Owner delivers the other 3 yeses (3 x 1.5h): 1.5h on day 7, 3h in week 2",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "deals needed",
+       "owner hours per delivery"
+      ],
+      "ownerHours": 4.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Each buyer pays the $250 invoice by bank transfer/Zelle on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "price per optimization",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "first optimization paid on delivery",
+      "settlesDay": 6,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "second",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "third",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "fourth",
+      "settlesDay": 12,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per optimization",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "needs": "measured by the test: the price buyers accept; the $150-$800 list range is a Bay Area agency roundup the verifier ruled does not match this population"
+     },
+     {
+      "name": "close rate of cold-emailed local business owners",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-6 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s_price_range"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "hours (week 1: 1+1+1.5+1.5=5; week 2: 1+3=4)",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "owner hours per delivery",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "timed on the first delivery; the plan assumes 1.5h"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_range",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+      "population": "local businesses (Bay Area)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_basic_setup",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "A basic GBP setup in San Francisco might cost around $299",
+      "population": "local businesses (San Francisco)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_gbp_manager",
+      "url": "https://support.google.com/business/answer/3403100",
+      "dated": "retrieved 2026-11-28",
+      "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+      "population": "Google Business Profile owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_resume",
+      "url": "https://findmyprofession.com/?p=3193",
+      "dated": "2025",
+      "claim": "Entry-level resume writing averages about $220 across 100+ services",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6699a9b8613c4647bfc0"
+     },
+     {
+      "id": "s_upwork",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_db0a4ebf726847b1a38d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 7, 4 of the 80 cold-emailed businesses have said yes at $250 (5%), and the first one was delivered by the owner in no more than 1.5h and paid by bank transfer",
+     "stop": [
+      "fewer than 4 yeses of 80 by day 7: stop sending; deliver only the yeses already given and collect them; no money was spent",
+      "first delivery takes more than 1.5h or cannot get manager access: stop, the owner-hours limit cannot carry 4 deliveries"
+     ],
+     "continue": [
+      "4 or more yeses of 80 by day 7 with the first delivery paid: deliver the other 3 by day 12 inside week 2's 5 hours"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 80,
+      "reach": 80
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Test collects buyers' money before FULFILMENT is shown possible",
+      "resolution": "Accepted. Nothing is invoiced before delivery: the offer is done-first, invoiced on delivery; the buyer adds the owner as a manager (Google: owners can invite managers with mostly owner access, s_gbp_manager); the first delivery is the timed fulfilment proof (deliver1) and the gate stops if it exceeds 1.5h or access is not granted."
+     },
+     {
+      "finding": "MAJOR: Proof gate (>=1 paid of 80 by day 6) does not carry $1,000",
+      "resolution": "Accepted. The gate is now 4 yeses of 80 (5%) by day 7, the rate that carries 4 x $250; threshold {paid 4, of 80, reach 80} matches it; below it the plan stops."
+     },
+     {
+      "finding": "MAJOR: Owner hours exceed 5 h/week in week 1 and week 2 selling hours are uncounted",
+      "resolution": "Accepted. Reach cut to 1h (mail merge of Brain's drafts), selling 1h per week counted; week 1 = 1+1+1.5+1.5 = 5h, week 2 = 1+3 = 4h, 9h total."
+     },
+     {
+      "finding": "MINOR: members carries rejected openings",
+      "resolution": "Accepted. The resume and Upwork openings moved to excluded with their reasons; members holds only the GBP opening."
+     },
+     {
+      "finding": "NOTE: CURRENT_DEMAND rests on an 'incomplete listing', which is not a buying signal",
+      "resolution": "Agreed; CURRENT_DEMAND stays missing in the chain and is decided by the test."
+     },
+     {
+      "finding": "NOTE: same digest as rev_592177c2ddf1_3cef72",
+      "resolution": "Acknowledged; this revision changes the plan."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "why": "Rejected alternative: 7 buyers from an unmeasured personal network, an assumed subcontractor cost, and no buyer-side price evidence; not weighed in the ledger."
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "why": "Rejected alternative: up to 14 days of client review plus a 5-day security hold puts settlement past day 14, and Connects cost money the $0 budget does not have."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "deals": 4,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_48f1a7c02127_f72e38",
+    "digest": "48f1a7c02127864b5a30e55d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:49:14.942Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_98a08841a1a54a9c8995",
+   "contractDigest": "d8f7294fdf80da7a1491270f",
+   "parentRevisionId": "rev_592177c2ddf1_082f59",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+    "opportunityIds": [
+     "cop_b15196ba5bcc4b5aaddd"
+    ],
+    "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours; the $250 price is itself measured by the test (the published $150-$800 range is a list-rate roundup that does not match this population)."
+   },
+   "alternatives": [
+    {
+     "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+     "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+    },
+    {
+     "title": "Fixed-price blog articles on Upwork",
+     "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note and the full optimization copy for each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price_range"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (mail merge, no paid tool)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "r1",
+     "evidence": [
+      "owner hours"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer: one-time GBP optimization for $250, done first and invoiced on delivery (pay by bank transfer/Zelle once the changes are live); the buyer adds the owner as a manager on the profile",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "price per optimization",
+      "s_gbp_manager"
+     ],
+     "priceCents": 25000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Owner answers replies and takes yeses (Brain drafts every reply), week 1: 1h, week 2: 1h",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 4,
+     "dependsOn": "offer",
+     "evidence": [
+      "close rate of cold-emailed local business owners",
+      "owner hours"
+     ],
+     "ownerHours": 2,
+     "priceCents": 25000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver1",
+     "kind": "DELIVER",
+     "label": "Fulfilment proof: owner applies Brain's copy to the first yes's profile via manager access, timed; no invoice until it is live",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_gbp_manager",
+      "owner hours per delivery"
+     ],
+     "ownerHours": 1.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Gate day 7: continue only if 4 of the 80 have said yes (5%, the rate that carries $1,000) and the first delivery took no more than 1.5h and was paid",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "close rate of cold-emailed local business owners",
+      "deals needed"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Owner delivers the other 3 yeses (3 x 1.5h): 1.5h on day 7, 3h in week 2",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "test",
+     "evidence": [
+      "deals needed",
+      "owner hours per delivery"
+     ],
+     "ownerHours": 4.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Each buyer pays the $250 invoice by bank transfer/Zelle on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "price per optimization",
+      "deals needed"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "first optimization paid on delivery",
+     "settlesDay": 6,
+     "stepId": "collect"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "second",
+     "settlesDay": 8,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "third",
+     "settlesDay": 10,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "fourth",
+     "settlesDay": 12,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price per optimization",
+     "status": "ASSUMED",
+     "value": 250,
+     "unit": "USD",
+     "sources": [
+      "s_price_range",
+      "s_basic_setup"
+     ],
+     "needs": "measured by the test: the price buyers accept; the $150-$800 list range is a Bay Area agency roundup the verifier ruled does not match this population"
+    },
+    {
+     "name": "close rate of cold-emailed local business owners",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid / reached",
+     "sources": [],
+     "needs": "measured by the day-6 test"
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 4,
+     "unit": "deals",
+     "sources": [
+      "s_price_range"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours",
+     "status": "ESTIMATE",
+     "value": 9,
+     "unit": "hours (week 1: 1+1+1.5+1.5=5; week 2: 1+3=4)",
+     "sources": [],
+     "needs": null
+    },
+    {
+     "name": "owner hours per delivery",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours",
+     "sources": [],
+     "needs": "timed on the first delivery; the plan assumes 1.5h"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price_range",
+     "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+     "dated": "2026-05-24",
+     "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+     "population": "local businesses (Bay Area)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+    },
+    {
+     "id": "s_basic_setup",
+     "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+     "dated": "2026-05-24",
+     "claim": "A basic GBP setup in San Francisco might cost around $299",
+     "population": "local businesses (San Francisco)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+    },
+    {
+     "id": "s_gbp_manager",
+     "url": "https://support.google.com/business/answer/3403100",
+     "dated": "retrieved 2026-11-28",
+     "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+     "population": "Google Business Profile owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+    },
+    {
+     "id": "s_resume",
+     "url": "https://findmyprofession.com/?p=3193",
+     "dated": "2025",
+     "claim": "Entry-level resume writing averages about $220 across 100+ services",
+     "population": "US job seekers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6699a9b8613c4647bfc0"
+    },
+    {
+     "id": "s_upwork",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026",
+     "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_db0a4ebf726847b1a38d"
+    }
+   ],
+   "validation": {
+    "proof": "By day 7, 4 of the 80 cold-emailed businesses have said yes at $250 (5%), and the first one was delivered by the owner in no more than 1.5h and paid by bank transfer",
+    "stop": [
+     "fewer than 4 yeses of 80 by day 7: stop sending; deliver only the yeses already given and collect them; no money was spent",
+     "first delivery takes more than 1.5h or cannot get manager access: stop, the owner-hours limit cannot carry 4 deliveries"
+    ],
+    "continue": [
+     "4 or more yeses of 80 by day 7 with the first delivery paid: deliver the other 3 by day 12 inside week 2's 5 hours"
+    ],
+    "decides": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "CURRENT_DEMAND"
+    ],
+    "threshold": {
+     "paid": 4,
+     "of": 80,
+     "reach": 80
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MAJOR: Test collects buyers' money before FULFILMENT is shown possible",
+     "resolution": "Accepted. Nothing is invoiced before delivery: the offer is done-first, invoiced on delivery; the buyer adds the owner as a manager (Google: owners can invite managers with mostly owner access, s_gbp_manager); the first delivery is the timed fulfilment proof (deliver1) and the gate stops if it exceeds 1.5h or access is not granted."
+    },
+    {
+     "finding": "MAJOR: Proof gate (>=1 paid of 80 by day 6) does not carry $1,000",
+     "resolution": "Accepted. The gate is now 4 yeses of 80 (5%) by day 7, the rate that carries 4 x $250; threshold {paid 4, of 80, reach 80} matches it; below it the plan stops."
+    },
+    {
+     "finding": "MAJOR: Owner hours exceed 5 h/week in week 1 and week 2 selling hours are uncounted",
+     "resolution": "Accepted. Reach cut to 1h (mail merge of Brain's drafts), selling 1h per week counted; week 1 = 1+1+1.5+1.5 = 5h, week 2 = 1+3 = 4h, 9h total."
+    },
+    {
+     "finding": "MINOR: members carries rejected openings",
+     "resolution": "Accepted. The resume and Upwork openings moved to excluded with their reasons; members holds only the GBP opening."
+    },
+    {
+     "finding": "NOTE: CURRENT_DEMAND rests on an 'incomplete listing', which is not a buying signal",
+     "resolution": "Agreed; CURRENT_DEMAND stays missing in the chain and is decided by the test."
+    },
+    {
+     "finding": "NOTE: same digest as rev_592177c2ddf1_3cef72",
+     "resolution": "Acknowledged; this revision changes the plan."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_6699a9b8613c4647bfc0",
+     "why": "Rejected alternative: 7 buyers from an unmeasured personal network, an assumed subcontractor cost, and no buyer-side price evidence; not weighed in the ledger."
+    },
+    {
+     "opportunityId": "cop_db0a4ebf726847b1a38d",
+     "why": "Rejected alternative: up to 14 days of client review plus a 5-day security hold puts settlement past day 14, and Connects cost money the $0 budget does not have."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+     "deals": 4,
+     "price": null,
+     "directCost": null,
+     "capital": null,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_48f1a7c02127_f72e38",
+   "digest": "48f1a7c02127864b5a30e55d",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7a2722d9148e41c9b689/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:49:14.942Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_48f1a7c02127_f72e38",
+   "digest": "48f1a7c02127864b5a30e55d",
+   "contractDigest": "d8f7294fdf80da7a1491270f",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 25000,
+    "minCashDay": 6,
+    "collectedCents": 100000,
+    "collectedInWindowCents": 100000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 100000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 1000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Fixed-price AI-assisted blog articles on Upwork\" needs [figure withheld] and keeps [figure withheld], 90× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"AI-assisted resume rewrite sold direct to job seekers\" needs [figu), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_b15196ba5bcc4b5aaddd",
+     "cop_6699a9b8613c4647bfc0",
+     "cop_db0a4ebf726847b1a38d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 1000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "title": "One-off Google Business Profile optimization for local service businesses",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 250,
+      "card": {
+       "payer": "owner of a local small business with an incomplete Google Business Profile",
+       "reachableChannel": "Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice",
+       "offerScope": "one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h",
+       "priceCents": 25000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "local small businesses (home services, clinics, restaurants)",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Brain-drafted cold email from the owner's own mailbox to businesses whose public"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "5 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h to owner of a local small business with an incomplete Google Business Profile, reached through Brain-drafted cold email from the owner's own mailbox to businesses whose public Google listings are incomplete (found free on Google Maps); payment by bank transfer/Zelle invoice, at $250; the owner, using AI-drafted copy delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, using AI-drafted copy.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "one-time GBP audit and optimization: categories, services, description, photos captions, 10 scheduled posts, review-reply drafts; delivered in 48h",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "owner of a local small business with an incomplete Google Business Profile",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area; https://coloradowebimpressions.com/answers/how-much-does-google-business-profile-management-cost; https://whitespark.ca/google-my-business-management-service/; google business profile optimization one-time setup fee",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "title": "AI-assisted resume rewrite sold direct to job seekers",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 150,
+      "card": {
+       "payer": "individual job seeker",
+       "reachableChannel": "owner's personal network and free community posts; paid by Zelle/Venmo",
+       "offerScope": "resume + LinkedIn summary rewrite, 48h turnaround",
+       "priceCents": 15000,
+       "currency": "USD",
+       "fulfillmentOwner": "a resume writer hired per order on Fiverr, paid only after the buyer has paid",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "career services",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: owner's personal network and free community posts; paid by Zelle/Venmo"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 60, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "3 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "owner's personal network and free community posts; paid by Zelle/Venmo",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell resume + LinkedIn summary rewrite, 48h turnaround to individual job seeker, reached through owner's personal network and free community posts; paid by Zelle/Venmo, at $150; a resume writer hired per order on Fiverr, paid only after the buyer has paid delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$60",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "a resume writer hired per order on Fiverr, paid only after the buyer has paid.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "resume + LinkedIn summary rewrite, 48h turnaround",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "individual job seeker",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://findmyprofession.com/?p=3193; https://www.thumbtack.com/p/resume-writing-prices; https://topresume.com/career-advice/how-much-does-a-professional-resume-writing-service-cost; resume writing service price survey",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "title": "Fixed-price AI-assisted blog articles on Upwork",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 100,
+      "card": {
+       "payer": "Upwork client posting a fixed-price writing job",
+       "reachableChannel": "Upwork proposals",
+       "offerScope": "SEO blog article, 1,500 words",
+       "priceCents": 10000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 0.75,
+       "requiredCapabilities": [],
+       "industry": "content marketing",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Upwork proposals"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 100 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 10, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Upwork proposals",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell SEO blog article, 1,500 words to Upwork client posting a fixed-price writing job, reached through Upwork proposals, at $100; the owner, editing AI drafts delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner, editing AI drafts.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.75 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "SEO blog article, 1,500 words",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Upwork client posting a fixed-price writing job",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "upwork blog article fixed price; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 100000,
+     "daysLeft": 14,
+     "hoursCeiling": 10,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 5
+    },
+    "at": "2026-11-28T01:43:01.287Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_592177c2ddf1_3cef72",
+    "revisionDigest": "592177c2ddf1d7ca56866b20",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_753acc61af12471a9ece/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family (price, demand and close rate are unknowns a live sales test measures, $0 spend, bank-transfer settlement same day), but the plan as written cannot be let run. (1) The test takes paid orders before fulfilment is shown possible: the 'offer' step invoices $250 'paid before work starts' and the day-6 gate counts paid buyers, while Brain's FULFILMENT link is false ('nobody has established') and the card's fulfillment fact is only a RECOMMENDATION ('the owner, using AI-drafted copy'); nothing shows the owner can obtain manager access to a stranger's Google Business Profile and complete the listed scope (categories, services, description, captions, 10 scheduled posts, review-reply drafts) in 1.5 h within 48 h. (2) The proof gate passes at 1 paid of 80 by day 6, which does not carry the target: $1,000 / $250 = 4 sales, and the plan reaches only the same 80 businesses, so continuing on 1 of 80 (1.25%) projects ~$250, not $1,000; the threshold object (4 of 80) and the gate (1 of 80) disagree. (3) Owner hours do not fit the 5 h/week limit: week 1 (days 1-7) holds reach 2 h + sell 2 h + the first delivery 1.5 h on day 7 = 5.5 h; week 2 holds deliveries 2-4 (4.5 h) plus the continued replies/closes the 'continue' branch requires, which are not counted. (4) Price $250 is ASSUMED from a Bay Area agency list-rate roundup ($150-$800, basic SF setup ~$299) that I verified does not match this buyer population (research cnd_bacd16de88fd4c3abe29 was rejected by the gate); that is acceptable only as a price the test measures, which the plan should say. (5) members lists the resume and Upwork openings (7 and 10 deals) that the alternatives reject; the ledger should hold only the GBP opening.",
+    "findings": [
+     "MAJOR: Test collects buyers' money before FULFILMENT is shown possible; establish fulfilment first (e.g. owner completes one optimization end to end on a real listing with granted manager access, timed) or take only a non-binding yes before invoicing.",
+     "MAJOR: Proof gate (>=1 paid of 80 by day 6) passing at its threshold does not carry $1,000; the gate must be set at the rate that yields 4 sales in the window (4 of 80 = 5%, or a larger reach list with its own hours).",
+     "MAJOR: Owner hours exceed 5 h/week in week 1 (5.5 h) and week 2's selling hours are uncounted; reschedule or cut reach/sell hours.",
+     "MINOR: members carries rejected openings (cop_6699a9b8613c4647bfc0, cop_db0a4ebf726847b1a38d) with 7 and 10 deals; strategy names only cop_b15196ba5bcc4b5aaddd.",
+     "NOTE: CURRENT_DEMAND rests on an 'incomplete listing', which is not a buying signal; the test does decide it, as validation.decides states."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:16.995Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's fulfillment is a RECOMMENDATION only ('the owner, using AI-drafted copy'); no EVIDENCE fact shows the owner can get manager access to buyers' profiles and deliver the listed scope in 1.5 h, yet the test invoices buyers before work starts."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_592177c2ddf1_082f59",
+    "revisionDigest": "592177c2ddf1d7ca56866b20",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_753acc61af12471a9ece/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family (price, demand and close rate are unknowns a live sales test measures, $0 spend, bank-transfer settlement same day), but the plan as written cannot be let run. (1) The test takes paid orders before fulfilment is shown possible: the 'offer' step invoices $250 'paid before work starts' and the day-6 gate counts paid buyers, while Brain's FULFILMENT link is false ('nobody has established') and the card's fulfillment fact is only a RECOMMENDATION ('the owner, using AI-drafted copy'); nothing shows the owner can obtain manager access to a stranger's Google Business Profile and complete the listed scope (categories, services, description, captions, 10 scheduled posts, review-reply drafts) in 1.5 h within 48 h. (2) The proof gate passes at 1 paid of 80 by day 6, which does not carry the target: $1,000 / $250 = 4 sales, and the plan reaches only the same 80 businesses, so continuing on 1 of 80 (1.25%) projects ~$250, not $1,000; the threshold object (4 of 80) and the gate (1 of 80) disagree. (3) Owner hours do not fit the 5 h/week limit: week 1 (days 1-7) holds reach 2 h + sell 2 h + the first delivery 1.5 h on day 7 = 5.5 h; week 2 holds deliveries 2-4 (4.5 h) plus the continued replies/closes the 'continue' branch requires, which are not counted. (4) Price $250 is ASSUMED from a Bay Area agency list-rate roundup ($150-$800, basic SF setup ~$299) that I verified does not match this buyer population (research cnd_bacd16de88fd4c3abe29 was rejected by the gate); that is acceptable only as a price the test measures, which the plan should say. (5) members lists the resume and Upwork openings (7 and 10 deals) that the alternatives reject; the ledger should hold only the GBP opening.",
+    "findings": [
+     "MAJOR: Test collects buyers' money before FULFILMENT is shown possible; establish fulfilment first (e.g. owner completes one optimization end to end on a real listing with granted manager access, timed) or take only a non-binding yes before invoicing.",
+     "MAJOR: Proof gate (>=1 paid of 80 by day 6) passing at its threshold does not carry $1,000; the gate must be set at the rate that yields 4 sales in the window (4 of 80 = 5%, or a larger reach list with its own hours).",
+     "MAJOR: Owner hours exceed 5 h/week in week 1 (5.5 h) and week 2's selling hours are uncounted; reschedule or cut reach/sell hours.",
+     "MINOR: members carries rejected openings (cop_6699a9b8613c4647bfc0, cop_db0a4ebf726847b1a38d) with 7 and 10 deals; strategy names only cop_b15196ba5bcc4b5aaddd.",
+     "NOTE: CURRENT_DEMAND rests on an 'incomplete listing', which is not a buying signal; the test does decide it, as validation.decides states.",
+     "NOTE: This revision has the same digest (592177c2ddf1d7ca56866b20) as rev_592177c2ddf1_3cef72, reviewed REVISE with the same findings."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:46:38.100Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's fulfillment is a RECOMMENDATION only ('the owner, using AI-drafted copy'); no EVIDENCE fact shows the owner can get manager access to buyers' profiles and deliver the listed scope in 1.5 h, yet the test invoices buyers before work starts."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_48f1a7c02127_f72e38",
+    "revisionDigest": "48f1a7c02127864b5a30e55d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_753acc61af12471a9ece/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "All three MAJOR findings from my review of rev_592177c2ddf1_* are fixed, and the plan is a startable CONDITIONAL test with proof/stop/continue. (1) No buyer money is taken before fulfilment is shown: the offer is done-first and invoiced on delivery; the buyer adds the owner as a manager, which Google's help page (opened: 'you can invite users to become owners or managers'; managers have the same access except adding/removing users or removing the profile) supports; the first delivery is the timed fulfilment proof and the gate stops if it exceeds 1.5 h or access is refused. (2) The gate now carries the target at its threshold: 4 yeses of 80 (5%) x $250 = $1,000, threshold {4 of 80, reach 80} matches, below it the plan stops. (3) Owner hours recomputed: week 1 = reach 1 + sell 1 + first delivery 1.5 + second delivery 1.5 = 5 h <= 5; week 2 = sell 1 + 3 h deliveries = 4 h; total 9 h of the 10 allowed. Money: $0 spend, $0 exposure; receipts by Zelle/bank transfer on days 6, 8, 10, 12, all inside 14 days, ledger total $1,000 = target. Unknowns (close rate, price, demand, hours per delivery) are marked UNKNOWN/ASSUMED and are what the test decides; nothing unknown is treated as known. members now holds only the GBP opening.",
+    "findings": [
+     "NOTE: The gate counts 'yeses', but cash arrives only on payment after delivery; with exactly 4 needed and invoicing after work, one non-payer leaves $750. Counting the first delivery's payment (as the proof does) helps; continuing to send beyond the 80 if a yes defaults would need hours that week 2 still has (1 h).",
+     "NOTE: Price $250 remains an assumption the test measures; the cited Bay Area roundup does not match this population (as the revision now says)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:50:32.725Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_48f1a7c02127_f72e38",
+   "digest": "48f1a7c02127864b5a30e55d",
+   "contractDigest": "d8f7294fdf80da7a1491270f",
+   "plan": {
+    "goalId": "wst_98a08841a1a54a9c8995",
+    "contractDigest": "d8f7294fdf80da7a1491270f",
+    "parentRevisionId": "rev_592177c2ddf1_082f59",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time Google Business Profile optimizations to local businesses whose public listings are incomplete, owner-fulfilled with AI drafts, paid by bank transfer",
+     "opportunityIds": [
+      "cop_b15196ba5bcc4b5aaddd"
+     ],
+     "why": "It needs $0 (cold email from the owner's own mailbox, Brain drafts the copy, buyer pays a bank-transfer/Zelle invoice so no new-processor hold), the published one-time price range is $150-$800 per location (basic ~$299), and 4 sales at $250 carry the $1,000. The close rate of cold-reached owners is unmeasured, so the plan starts as a time-boxed sales test inside the 14 days and 10 owner hours; the $250 price is itself measured by the test (the published $150-$800 range is a list-rate roundup that does not match this population)."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted resume rewrite to job seekers via the owner's network",
+      "why": "Needs 7 buyers from a personal network nobody has measured; subcontracted writer cost is assumed, not established; weaker per-hour than GBP."
+     },
+     {
+      "title": "Fixed-price blog articles on Upwork",
+      "why": "Client review window of up to 14 days plus a 5-day security hold makes settlement inside 14 days unlikely, and proposals cost Connects, which a $0 budget cannot fund."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain lists 80 local businesses with visibly incomplete Google Business Profiles (public Google Maps) and drafts a personalised audit note and the full optimization copy for each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price_range"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner sends the 80 Brain-drafted emails from their own mailbox (mail merge, no paid tool)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "owner hours"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: one-time GBP optimization for $250, done first and invoiced on delivery (pay by bank transfer/Zelle once the changes are live); the buyer adds the owner as a manager on the profile",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "price per optimization",
+       "s_gbp_manager"
+      ],
+      "priceCents": 25000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner answers replies and takes yeses (Brain drafts every reply), week 1: 1h, week 2: 1h",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "owner hours"
+      ],
+      "ownerHours": 2,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof: owner applies Brain's copy to the first yes's profile via manager access, timed; no invoice until it is live",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_gbp_manager",
+       "owner hours per delivery"
+      ],
+      "ownerHours": 1.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Gate day 7: continue only if 4 of the 80 have said yes (5%, the rate that carries $1,000) and the first delivery took no more than 1.5h and was paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "close rate of cold-emailed local business owners",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Owner delivers the other 3 yeses (3 x 1.5h): 1.5h on day 7, 3h in week 2",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "deals needed",
+       "owner hours per delivery"
+      ],
+      "ownerHours": 4.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Each buyer pays the $250 invoice by bank transfer/Zelle on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "price per optimization",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "first optimization paid on delivery",
+      "settlesDay": 6,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "second",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "third",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "fourth",
+      "settlesDay": 12,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price per optimization",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [
+       "s_price_range",
+       "s_basic_setup"
+      ],
+      "needs": "measured by the test: the price buyers accept; the $150-$800 list range is a Bay Area agency roundup the verifier ruled does not match this population"
+     },
+     {
+      "name": "close rate of cold-emailed local business owners",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-6 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s_price_range"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "hours (week 1: 1+1+1.5+1.5=5; week 2: 1+3=4)",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "owner hours per delivery",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "timed on the first delivery; the plan assumes 1.5h"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price_range",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "One-time GBP setup/optimization projects typically cost $150-$800 per location",
+      "population": "local businesses (Bay Area)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_basic_setup",
+      "url": "https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area",
+      "dated": "2026-05-24",
+      "claim": "A basic GBP setup in San Francisco might cost around $299",
+      "population": "local businesses (San Francisco)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_gbp_manager",
+      "url": "https://support.google.com/business/answer/3403100",
+      "dated": "retrieved 2026-11-28",
+      "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+      "population": "Google Business Profile owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd"
+     },
+     {
+      "id": "s_resume",
+      "url": "https://findmyprofession.com/?p=3193",
+      "dated": "2025",
+      "claim": "Entry-level resume writing averages about $220 across 100+ services",
+      "population": "US job seekers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6699a9b8613c4647bfc0"
+     },
+     {
+      "id": "s_upwork",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026",
+      "claim": "Fixed-price: client has 14 days to approve, then a 5-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_db0a4ebf726847b1a38d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 7, 4 of the 80 cold-emailed businesses have said yes at $250 (5%), and the first one was delivered by the owner in no more than 1.5h and paid by bank transfer",
+     "stop": [
+      "fewer than 4 yeses of 80 by day 7: stop sending; deliver only the yeses already given and collect them; no money was spent",
+      "first delivery takes more than 1.5h or cannot get manager access: stop, the owner-hours limit cannot carry 4 deliveries"
+     ],
+     "continue": [
+      "4 or more yeses of 80 by day 7 with the first delivery paid: deliver the other 3 by day 12 inside week 2's 5 hours"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 80,
+      "reach": 80
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Test collects buyers' money before FULFILMENT is shown possible",
+      "resolution": "Accepted. Nothing is invoiced before delivery: the offer is done-first, invoiced on delivery; the buyer adds the owner as a manager (Google: owners can invite managers with mostly owner access, s_gbp_manager); the first delivery is the timed fulfilment proof (deliver1) and the gate stops if it exceeds 1.5h or access is not granted."
+     },
+     {
+      "finding": "MAJOR: Proof gate (>=1 paid of 80 by day 6) does not carry $1,000",
+      "resolution": "Accepted. The gate is now 4 yeses of 80 (5%) by day 7, the rate that carries 4 x $250; threshold {paid 4, of 80, reach 80} matches it; below it the plan stops."
+     },
+     {
+      "finding": "MAJOR: Owner hours exceed 5 h/week in week 1 and week 2 selling hours are uncounted",
+      "resolution": "Accepted. Reach cut to 1h (mail merge of Brain's drafts), selling 1h per week counted; week 1 = 1+1+1.5+1.5 = 5h, week 2 = 1+3 = 4h, 9h total."
+     },
+     {
+      "finding": "MINOR: members carries rejected openings",
+      "resolution": "Accepted. The resume and Upwork openings moved to excluded with their reasons; members holds only the GBP opening."
+     },
+     {
+      "finding": "NOTE: CURRENT_DEMAND rests on an 'incomplete listing', which is not a buying signal",
+      "resolution": "Agreed; CURRENT_DEMAND stays missing in the chain and is decided by the test."
+     },
+     {
+      "finding": "NOTE: same digest as rev_592177c2ddf1_3cef72",
+      "resolution": "Acknowledged; this revision changes the plan."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6699a9b8613c4647bfc0",
+      "why": "Rejected alternative: 7 buyers from an unmeasured personal network, an assumed subcontractor cost, and no buyer-side price evidence; not weighed in the ledger."
+     },
+     {
+      "opportunityId": "cop_db0a4ebf726847b1a38d",
+      "why": "Rejected alternative: up to 14 days of client review plus a 5-day security hold puts settlement past day 14, and Connects cost money the $0 budget does not have."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b15196ba5bcc4b5aaddd",
+      "deals": 4,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_48f1a7c02127_f72e38",
+    "digest": "48f1a7c02127864b5a30e55d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:49:14.942Z"
+   },
+   "review": {
+    "revisionId": "rev_48f1a7c02127_f72e38",
+    "revisionDigest": "48f1a7c02127864b5a30e55d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7a2722d9148e41c9b689/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_753acc61af12471a9ece/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "All three MAJOR findings from my review of rev_592177c2ddf1_* are fixed, and the plan is a startable CONDITIONAL test with proof/stop/continue. (1) No buyer money is taken before fulfilment is shown: the offer is done-first and invoiced on delivery; the buyer adds the owner as a manager, which Google's help page (opened: 'you can invite users to become owners or managers'; managers have the same access except adding/removing users or removing the profile) supports; the first delivery is the timed fulfilment proof and the gate stops if it exceeds 1.5 h or access is refused. (2) The gate now carries the target at its threshold: 4 yeses of 80 (5%) x $250 = $1,000, threshold {4 of 80, reach 80} matches, below it the plan stops. (3) Owner hours recomputed: week 1 = reach 1 + sell 1 + first delivery 1.5 + second delivery 1.5 = 5 h <= 5; week 2 = sell 1 + 3 h deliveries = 4 h; total 9 h of the 10 allowed. Money: $0 spend, $0 exposure; receipts by Zelle/bank transfer on days 6, 8, 10, 12, all inside 14 days, ledger total $1,000 = target. Unknowns (close rate, price, demand, hours per delivery) are marked UNKNOWN/ASSUMED and are what the test decides; nothing unknown is treated as known. members now holds only the GBP opening.",
+    "findings": [
+     "NOTE: The gate counts 'yeses', but cash arrives only on payment after delivery; with exactly 4 needed and invoicing after work, one non-payer leaves $750. Counting the first delivery's payment (as the proof does) helps; continuing to send beyond the 80 if a yes defaults would need hours that week 2 still has (1 h).",
+     "NOTE: Price $250 remains an assumption the test measures; the cited Bay Area roundup does not match this population (as the revision now says)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:50:32.725Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want $1,000 of settled cash in my account within 14 days. I have no money to put in and I can give it at most 5 hours a week of my own time.",
+    "terms": "07cd3b749034bb4d",
+    "openings": {
+     "cop_6699a9b8613c4647bfc0": "c695fbd6b8facc24",
+     "cop_b15196ba5bcc4b5aaddd": "c2a4d44dcac2b318",
+     "cop_db0a4ebf726847b1a38d": "bdaf30939abd4fa6"
+    }
+   },
+   "at": "2026-11-28T01:52:04.714Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

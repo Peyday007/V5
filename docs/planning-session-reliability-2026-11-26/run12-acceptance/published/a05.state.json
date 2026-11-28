@@ -1,0 +1,1312 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_54cec1755fc44275b4f3",
+   "words": "Collect $1,500 of settled cash within 10 days with at most $200 of capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 150000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 10,
+    "totalSpendCapCents": 20000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 20000,
+    "proofCondition": "$1,500 of settled cash in the owner's account within 10 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "b04c9fcb0804592ffeefdeb8"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_54cec1755fc44275b4f3",
+    "contractDigest": "b04c9fcb0804592ffeefdeb8",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the four signed $400 stall-map and vendor-fee ledger workbooks",
+     "opportunityIds": [
+      "cop_0e205ab3283142358b2e"
+     ],
+     "why": "Four farmers' market associations signed written orders at $400 each (signed orders 2026-11-25): $1,600 against the $1,500 target. Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), direct cost $8 per workbook ($32 total, inside the $200 capital cap), paid by card on delivery, 5 days to usable cash against 10 days left. No new buyers are needed."
+    },
+    "alternatives": [
+     {
+      "title": "Resell a pallet lot of commercial canopies to the vendors' buying group ($9,000 signed order)",
+      "why": "TentSource Wholesale requires $6,500 paid with the order before the buyer pays on delivery: $6,500 of capital against a $200 cap. Excluded."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the four signed orders with the four market managers by email and collect each association's stall list and vendor roster",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_agreements",
+       "src_reach"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the four season stall maps and vendor-fee ledger workbooks (within 3 days)",
+      "performer": "BRAIN",
+      "costCents": 3200,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect four $400 card payments on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_settle",
+       "src_offer"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 3200,
+      "label": "Direct cost $8 x 4 workbooks",
+      "stepId": "s2"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 1",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 2",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 3",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 4",
+      "settlesDay": 5,
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_price",
+       "src_agreements"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per workbook",
+      "status": "EVIDENCED",
+      "value": 40000,
+      "unit": "cents",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 800,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash",
+      "status": "EVIDENCED",
+      "value": 160000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_agreements"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#price",
+      "dated": "2026-11-25",
+      "claim": "Four farmers' market associations signed written orders at $400 per ledger workbook",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_agreements",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four WRITTEN_ACCEPTANCE agreements at $400 each, state AGREED",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "The four market managers who signed, by email",
+      "population": "four market managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_offer",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#offerScope",
+      "dated": "2026-11-25",
+      "claim": "Delivered within 3 days of the window opening; paid by card on delivery",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $8 per workbook; exposure $0",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "5 days to first cash",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_canopy_cost",
+      "url": "https://brain.local/card/cop_72c77d92b4eb42cb9419#exposure",
+      "dated": "2026-11-24",
+      "claim": "$6,500 exposure: TentSource requires payment with order",
+      "population": "one regional vendors' buying group",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72c77d92b4eb42cb9419"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0e205ab3283142358b2e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_72c77d92b4eb42cb9419",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_72c77d92b4eb42cb9419",
+      "why": "Needs $6,500 paid to TentSource with the order before the buyer pays on delivery (exposure $6,500), 32x the $200 capital cap."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0e205ab3283142358b2e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 8,
+      "capital": 32,
+      "settlesDay": 5
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_23e631b59a2b_d8994a",
+    "digest": "23e631b59a2b78922c36c648",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3af689672db346dd983b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:28.687Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_54cec1755fc44275b4f3",
+   "contractDigest": "b04c9fcb0804592ffeefdeb8",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the four signed $400 stall-map and vendor-fee ledger workbooks",
+    "opportunityIds": [
+     "cop_0e205ab3283142358b2e"
+    ],
+    "why": "Four farmers' market associations signed written orders at $400 each (signed orders 2026-11-25): $1,600 against the $1,500 target. Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), direct cost $8 per workbook ($32 total, inside the $200 capital cap), paid by card on delivery, 5 days to usable cash against 10 days left. No new buyers are needed."
+   },
+   "alternatives": [
+    {
+     "title": "Resell a pallet lot of commercial canopies to the vendors' buying group ($9,000 signed order)",
+     "why": "TentSource Wholesale requires $6,500 paid with the order before the buyer pays on delivery: $6,500 of capital against a $200 cap. Excluded."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "SELL",
+     "label": "Confirm the four signed orders with the four market managers by email and collect each association's stall list and vendor roster",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src_price",
+      "src_agreements",
+      "src_reach"
+     ],
+     "priceCents": 40000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "DELIVER",
+     "label": "Produce and deliver the four season stall maps and vendor-fee ledger workbooks (within 3 days)",
+     "performer": "BRAIN",
+     "costCents": 3200,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "COLLECT",
+     "label": "Collect four $400 card payments on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_settle",
+      "src_offer"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 3200,
+     "label": "Direct cost $8 x 4 workbooks",
+     "stepId": "s2"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Card payment on delivery, association 1",
+     "settlesDay": 5,
+     "stepId": "s3"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Card payment on delivery, association 2",
+     "settlesDay": 5,
+     "stepId": "s3"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Card payment on delivery, association 3",
+     "settlesDay": 5,
+     "stepId": "s3"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Card payment on delivery, association 4",
+     "settlesDay": 5,
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 5,
+   "quantities": [
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "src_price",
+      "src_agreements"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per workbook",
+     "status": "EVIDENCED",
+     "value": 40000,
+     "unit": "cents",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per workbook",
+     "status": "EVIDENCED",
+     "value": 800,
+     "unit": "cents",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "src_settle"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settled cash",
+     "status": "EVIDENCED",
+     "value": 160000,
+     "unit": "cents",
+     "sources": [
+      "src_price",
+      "src_agreements"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#price",
+     "dated": "2026-11-25",
+     "claim": "Four farmers' market associations signed written orders at $400 per ledger workbook",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_agreements",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#agreements",
+     "dated": "2026-11-25",
+     "claim": "Four WRITTEN_ACCEPTANCE agreements at $400 each, state AGREED",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_reach",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#reachableChannel",
+     "dated": "2026-11-25",
+     "claim": "The four market managers who signed, by email",
+     "population": "four market managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_offer",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#offerScope",
+     "dated": "2026-11-25",
+     "claim": "Delivered within 3 days of the window opening; paid by card on delivery",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#delivery",
+     "dated": "2026-11-25",
+     "claim": "A spreadsheet Brain produces",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct cost $8 per workbook; exposure $0",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_settle",
+     "url": "https://brain.local/card/cop_0e205ab3283142358b2e#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "5 days to first cash",
+     "population": "four farmers' market associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0e205ab3283142358b2e"
+    },
+    {
+     "id": "src_canopy_cost",
+     "url": "https://brain.local/card/cop_72c77d92b4eb42cb9419#exposure",
+     "dated": "2026-11-24",
+     "claim": "$6,500 exposure: TentSource requires payment with order",
+     "population": "one regional vendors' buying group",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72c77d92b4eb42cb9419"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_0e205ab3283142358b2e",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_72c77d92b4eb42cb9419",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_72c77d92b4eb42cb9419",
+     "why": "Needs $6,500 paid to TentSource with the order before the buyer pays on delivery (exposure $6,500), 32x the $200 capital cap."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_0e205ab3283142358b2e",
+     "deals": 4,
+     "price": 400,
+     "directCost": 8,
+     "capital": 32,
+     "settlesDay": 5
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_23e631b59a2b_d8994a",
+   "digest": "23e631b59a2b78922c36c648",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_3af689672db346dd983b/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:38:28.687Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_23e631b59a2b_d8994a",
+   "digest": "23e631b59a2b78922c36c648",
+   "contractDigest": "b04c9fcb0804592ffeefdeb8",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 3200,
+    "committedOpenCents": 0,
+    "preProofCents": 3200,
+    "maxExposureCents": 3200,
+    "minCashCents": 16800,
+    "minCashDay": 3,
+    "collectedCents": 160000,
+    "collectedInWindowCents": 160000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 156800
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (1 of 1 leg(s) have no reachable channel, offer, fulfiller or settled cash yet); Brain keeps constructing, combining and comparing strategies.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_0e205ab3283142358b2e"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+      "owner": "PERSON",
+      "cost": 8
+     },
+     {
+      "label": "Collect payment for \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_0e205ab3283142358b2e",
+      "title": "Stall-assignment and vendor-fee ledger workbook for farmers' market associations",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 1500,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "Farmers' market managers",
+       "reachableChannel": "The four market managers who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:28.805Z",
+       "offerScope": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+       "priceCents": 40000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "farmers' market associations",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 40000,
+        "currency": "USD",
+        "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 40000,
+        "currency": "USD",
+        "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 40000,
+        "currency": "USD",
+        "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 40000,
+        "currency": "USD",
+        "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four market managers who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 1600 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 1600 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 8, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 10 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$8",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Farmers' market managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four farmers' market associations signed written orders at $400 per ledger workbook (signed orders, 2026-11-25).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_72c77d92b4eb42cb9419",
+      "title": "Bulk resale of commercial pop-up canopies to market vendors",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 1500,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "A regional market vendors' buying group",
+       "reachableChannel": "The buying group's purchasing lead, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:28.805Z",
+       "offerScope": "One pallet lot of 10×10 commercial canopies, paid on delivery.",
+       "priceCents": 900000,
+       "currency": "USD",
+       "fulfillmentOwner": "TentSource Wholesale (quoted $6,500 per lot, freight included, payment with order)",
+       "peakFundingCents": 650000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "farmers' market associations",
+       "mechanism": "RESALE_OR_ASSET",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 900000,
+        "currency": "USD",
+        "deliverable": "One pallet lot of 10×10 commercial canopies, paid on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One pallet lot of 10×10 commercial canopies, paid on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6500",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$6500",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "TentSource Wholesale (quoted $6,500 per lot, freight included, payment with order) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "A regional market vendors' buying group",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "A market vendors' buying group signed a $9,000 order for one canopy lot, payable on delivery (signed order, 2026-11-24).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "8 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 150000,
+     "daysLeft": 10,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:37:13.023Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_23e631b59a2b_d8994a",
+    "revisionDigest": "23e631b59a2b78922c36c648",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3af689672db346dd983b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_86a3c18eb95f4d7abb91/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Price and demand rest on four WRITTEN_ACCEPTANCE agreements at $400 each for exactly this deliverable (state AGREED), so price is what these buyers agreed to pay, not a benchmark; 4 x $400 = $1,600 >= $1,500 with no new buyers needed. Fulfilment is a spreadsheet Brain has proved it produces; direct cost 4 x $8 = $32 spent day 3 before receipts settle, inside the $200 capital/exposure cap; card payment on delivery day 3, 5 days to usable cash, so cash is in by day 5 (worst case day 8) of 10. Net $1,568. The canopy resale is correctly excluded: $6,500 paid to TentSource with the order against a $200 cap.",
+    "findings": [
+     "Recomputed: 4 x $400 = $1,600; cost $32; net $1,568; peak capital $32 <= $200; settles day 5 (even counting 5 days from the day-3 payment, day 8) < 10. Ledger matches steps.",
+     "Margin is thin: one association not paying on delivery leaves $1,200 < $1,500. Payment is on delivery, not prepaid; the plan should chase all four promptly and confirm card payment links before delivery.",
+     "Delivery depends on each association sending its stall list and vendor roster (s1, day 0); a late roster delays delivery and cash, though there is slack to day 10.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected (or the owner sends the four confirmation emails/payment links) on day 0.",
+     "Brain's step list labels delivery PERSON while the plan says BRAIN; card says Brain produces the spreadsheet and PRODUCE_SPREADSHEET is proved, so BRAIN is supported."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:14.988Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_23e631b59a2b_d8994a",
+   "digest": "23e631b59a2b78922c36c648",
+   "contractDigest": "b04c9fcb0804592ffeefdeb8",
+   "plan": {
+    "goalId": "wst_54cec1755fc44275b4f3",
+    "contractDigest": "b04c9fcb0804592ffeefdeb8",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the four signed $400 stall-map and vendor-fee ledger workbooks",
+     "opportunityIds": [
+      "cop_0e205ab3283142358b2e"
+     ],
+     "why": "Four farmers' market associations signed written orders at $400 each (signed orders 2026-11-25): $1,600 against the $1,500 target. Brain produces the spreadsheet (PRODUCE_SPREADSHEET proved), direct cost $8 per workbook ($32 total, inside the $200 capital cap), paid by card on delivery, 5 days to usable cash against 10 days left. No new buyers are needed."
+    },
+    "alternatives": [
+     {
+      "title": "Resell a pallet lot of commercial canopies to the vendors' buying group ($9,000 signed order)",
+      "why": "TentSource Wholesale requires $6,500 paid with the order before the buyer pays on delivery: $6,500 of capital against a $200 cap. Excluded."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the four signed orders with the four market managers by email and collect each association's stall list and vendor roster",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_agreements",
+       "src_reach"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Produce and deliver the four season stall maps and vendor-fee ledger workbooks (within 3 days)",
+      "performer": "BRAIN",
+      "costCents": 3200,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect four $400 card payments on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_settle",
+       "src_offer"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 3200,
+      "label": "Direct cost $8 x 4 workbooks",
+      "stepId": "s2"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 1",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 2",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 3",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Card payment on delivery, association 4",
+      "settlesDay": 5,
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "src_price",
+       "src_agreements"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per workbook",
+      "status": "EVIDENCED",
+      "value": 40000,
+      "unit": "cents",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per workbook",
+      "status": "EVIDENCED",
+      "value": 800,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "src_settle"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash",
+      "status": "EVIDENCED",
+      "value": 160000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_agreements"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#price",
+      "dated": "2026-11-25",
+      "claim": "Four farmers' market associations signed written orders at $400 per ledger workbook",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_agreements",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four WRITTEN_ACCEPTANCE agreements at $400 each, state AGREED",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_reach",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#reachableChannel",
+      "dated": "2026-11-25",
+      "claim": "The four market managers who signed, by email",
+      "population": "four market managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_offer",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#offerScope",
+      "dated": "2026-11-25",
+      "claim": "Delivered within 3 days of the window opening; paid by card on delivery",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $8 per workbook; exposure $0",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_settle",
+      "url": "https://brain.local/card/cop_0e205ab3283142358b2e#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "5 days to first cash",
+      "population": "four farmers' market associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0e205ab3283142358b2e"
+     },
+     {
+      "id": "src_canopy_cost",
+      "url": "https://brain.local/card/cop_72c77d92b4eb42cb9419#exposure",
+      "dated": "2026-11-24",
+      "claim": "$6,500 exposure: TentSource requires payment with order",
+      "population": "one regional vendors' buying group",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72c77d92b4eb42cb9419"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0e205ab3283142358b2e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_72c77d92b4eb42cb9419",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_72c77d92b4eb42cb9419",
+      "why": "Needs $6,500 paid to TentSource with the order before the buyer pays on delivery (exposure $6,500), 32x the $200 capital cap."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_0e205ab3283142358b2e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 8,
+      "capital": 32,
+      "settlesDay": 5
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_23e631b59a2b_d8994a",
+    "digest": "23e631b59a2b78922c36c648",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3af689672db346dd983b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:38:28.687Z"
+   },
+   "review": {
+    "revisionId": "rev_23e631b59a2b_d8994a",
+    "revisionDigest": "23e631b59a2b78922c36c648",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3af689672db346dd983b/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_86a3c18eb95f4d7abb91/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right. Price and demand rest on four WRITTEN_ACCEPTANCE agreements at $400 each for exactly this deliverable (state AGREED), so price is what these buyers agreed to pay, not a benchmark; 4 x $400 = $1,600 >= $1,500 with no new buyers needed. Fulfilment is a spreadsheet Brain has proved it produces; direct cost 4 x $8 = $32 spent day 3 before receipts settle, inside the $200 capital/exposure cap; card payment on delivery day 3, 5 days to usable cash, so cash is in by day 5 (worst case day 8) of 10. Net $1,568. The canopy resale is correctly excluded: $6,500 paid to TentSource with the order against a $200 cap.",
+    "findings": [
+     "Recomputed: 4 x $400 = $1,600; cost $32; net $1,568; peak capital $32 <= $200; settles day 5 (even counting 5 days from the day-3 payment, day 8) < 10. Ledger matches steps.",
+     "Margin is thin: one association not paying on delivery leaves $1,200 < $1,500. Payment is on delivery, not prepaid; the plan should chase all four promptly and confirm card payment links before delivery.",
+     "Delivery depends on each association sending its stall list and vendor roster (s1, day 0); a late roster delays delivery and cash, though there is slack to day 10.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; they must be connected (or the owner sends the four confirmation emails/payment links) on day 0.",
+     "Brain's step list labels delivery PERSON while the plan says BRAIN; card says Brain produces the spreadsheet and PRODUCE_SPREADSHEET is proved, so BRAIN is supported."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:41:14.988Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $1,500 of settled cash within 10 days with at most $200 of capital.",
+    "terms": "64f5b449231389f7",
+    "openings": {
+     "cop_0e205ab3283142358b2e": "643b278c46fefe02",
+     "cop_72c77d92b4eb42cb9419": "da0b294531d13774"
+    }
+   },
+   "at": "2026-11-28T01:42:30.489Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

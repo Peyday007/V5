@@ -1,0 +1,259 @@
+{
+ "caseId": "ap-05-farmers-market-ledgers-short",
+ "keys": {
+  "cop_0e205ab3283142358b2e": "stallLedger",
+  "cop_72c77d92b4eb42cb9419": "canopies"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Every modelled opening at full reach\" (1 of 1 leg(s) have no reachable channel, offer, fulfiller or settled cash yet); Brain keeps constructing, combining and comparing strategies.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0e205ab3283142358b2e"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+    "owner": "PERSON",
+    "cost": 8
+   },
+   {
+    "label": "Collect payment for \"Stall-assignment and vendor-fee ledger workbook for farmers' market associations\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_0e205ab3283142358b2e",
+    "title": "Stall-assignment and vendor-fee ledger workbook for farmers' market associations",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 1500,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "Farmers' market managers",
+     "reachableChannel": "The four market managers who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:28.805Z",
+     "offerScope": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+     "priceCents": 40000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "farmers' market associations",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 40000,
+      "currency": "USD",
+      "deliverable": "A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four market managers who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 1600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 1600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 10 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A season stall map and vendor-fee ledger; delivered within 3 days of the window opening; paid by card on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Farmers' market managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four farmers' market associations signed written orders at $400 per ledger workbook (signed orders, 2026-11-25).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_72c77d92b4eb42cb9419",
+    "title": "Bulk resale of commercial pop-up canopies to market vendors",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 1500,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "A regional market vendors' buying group",
+     "reachableChannel": "The buying group's purchasing lead, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T01:33:28.805Z",
+     "offerScope": "One pallet lot of 10×10 commercial canopies, paid on delivery.",
+     "priceCents": 900000,
+     "currency": "USD",
+     "fulfillmentOwner": "TentSource Wholesale (quoted $6,500 per lot, freight included, payment with order)",
+     "peakFundingCents": 650000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "farmers' market associations",
+     "mechanism": "RESALE_OR_ASSET",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 900000,
+      "currency": "USD",
+      "deliverable": "One pallet lot of 10×10 commercial canopies, paid on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One pallet lot of 10×10 commercial canopies, paid on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6500",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$6500",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "TentSource Wholesale (quoted $6,500 per lot, freight included, payment with order) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "A regional market vendors' buying group",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "A market vendors' buying group signed a $9,000 order for one canopy lot, payable on delivery (signed order, 2026-11-24).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "8 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 10,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:37:13.023Z"
+ }
+}

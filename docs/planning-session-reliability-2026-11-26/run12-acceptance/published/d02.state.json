@@ -1,0 +1,4179 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_d88162c708e043cc9679",
+   "words": "Make $5,000 within 30 days selling to commercial printing shops only. I can put in up to $500.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "COLLECTED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": 50000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "a first commercial printing shop pays for the offer",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "buyers that are not commercial printing shops"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "62034b05a3a3a36fba008695"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_d88162c708e043cc9679",
+    "contractDigest": "62034b05a3a3a36fba008695",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+     "opportunityIds": [
+      "cop_68bb6003c9fa41c99f13"
+     ],
+     "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+    },
+    "alternatives": [
+     {
+      "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+      "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+     },
+     {
+      "title": "Outsourced preflight/prepress overflow",
+      "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 300 independent commercial print shops (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_bls_count"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner connects a sending mailbox to Instantly (one month, $37) and sends Brain's 3-step sequence to the 300 shops",
+      "performer": "OWNER",
+      "costCents": 3700,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes, report) for $600, paid by card/ACH invoice before work starts",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes the reply calls and closes (Brain drafts replies and the invoice)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "ownerHours": 9,
+      "priceCents": 60000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Proof gate day 12: at least 2 paid of the first 300 reached continues; fewer stops",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "sell",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "For each paid shop, subscribe it to theStacc Local SEO ($49) after its payment clears; owner reviews the output",
+      "performer": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output",
+      "costCents": 44100,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_stacc_49",
+       "fulfilment cost per shop"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect the $600 invoices (card/ACH) before each Stacc subscription is bought",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "price per shop",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 3700,
+      "label": "Instantly one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 1 pays $600",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 2 pays $600",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 3 pays $600",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 4 pays $600",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 5 pays $600",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 6 pays $600",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 7 pays $600",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 8 pays $600",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 9 pays $600",
+      "settlesDay": 28,
+      "stepId": "collect"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 9",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per shop",
+      "status": "ASSUMED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "needs": "a print shop paying it in the test"
+     },
+     {
+      "name": "close rate of cold-emailed print shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-12 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "deals",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "reach list size",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "s_bls_count"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilment cost per shop",
+      "status": "ASSUMED",
+      "value": 49,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_49"
+      ],
+      "needs": "the first subscription bought"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_stacc_49",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_managed",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Blog and Google Business Profile from $749/mo",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_agency_quote",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_bls_count",
+      "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+      "dated": "2024",
+      "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+      "population": "US commercial printing establishments",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_pixelops",
+      "url": "https://ppai.org/?p=55329",
+      "dated": "2026",
+      "claim": "Pixelops design subscription from $600/month",
+      "population": "promotional products / print companies",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+     },
+     {
+      "id": "s_prepress",
+      "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+      "dated": "2026",
+      "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+      "population": "freelance prepress technicians",
+      "matchesBuyer": false,
+      "opportunityId": "cop_042c9eef07c544248175"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 of the first 300 cold-emailed commercial print shops pay the $600 invoice by day 12 and the first Stacc subscription delivers",
+     "stop": [
+      "fewer than 2 paid of 300 reached by day 12: stop; at most $37 + $49 spent"
+     ],
+     "continue": [
+      "2 or more paid by day 12: keep sending to the remaining list; 9 paid of 300 (3%) by day 28 carries the $5,000"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 9,
+      "of": 300,
+      "reach": 300
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "deals": 9,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "deals": 6,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "deals": 34,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2e7553866835_106927",
+    "digest": "2e75538668353c23754ce412",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:46:00.808Z"
+   },
+   {
+    "goalId": "wst_d88162c708e043cc9679",
+    "contractDigest": "62034b05a3a3a36fba008695",
+    "parentRevisionId": "rev_2e7553866835_106927",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+     "opportunityIds": [
+      "cop_68bb6003c9fa41c99f13"
+     ],
+     "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+    },
+    "alternatives": [
+     {
+      "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+      "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+     },
+     {
+      "title": "Outsourced preflight/prepress overflow",
+      "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain builds a list of 300 independent commercial print shops (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_bls_count"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner connects a sending mailbox to Instantly (one month, $37) and sends Brain's 3-step sequence to the 300 shops",
+      "performer": "OWNER",
+      "costCents": 3700,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes, report) for $600, paid by card/ACH invoice before work starts",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes the reply calls and closes (Brain drafts replies and the invoice)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "ownerHours": 9,
+      "priceCents": 60000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Proof gate day 12: at least 2 paid of the first 300 reached continues; fewer stops",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "sell",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "For each paid shop, the owner subscribes it to theStacc Local SEO ($49) after its payment clears and reviews the output (1h per shop)",
+      "performer": "OWNER",
+      "ownerHours": 9,
+      "costCents": 44100,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_stacc_49",
+       "fulfilment cost per shop"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect the $600 invoices (card/ACH) before each Stacc subscription is bought",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "price per shop",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 3700,
+      "label": "Instantly one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 1 pays $600",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 2 pays $600",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 3 pays $600",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 4 pays $600",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 5 pays $600",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 6 pays $600",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 7 pays $600",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 8 pays $600",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 9 pays $600",
+      "settlesDay": 28,
+      "stepId": "collect"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 9",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per shop",
+      "status": "ASSUMED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "needs": "a print shop paying it in the test"
+     },
+     {
+      "name": "close rate of cold-emailed print shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-12 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "deals",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "reach list size",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "s_bls_count"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilment cost per shop",
+      "status": "ASSUMED",
+      "value": 49,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_49"
+      ],
+      "needs": "the first subscription bought"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_stacc_49",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_managed",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Blog and Google Business Profile from $749/mo",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_agency_quote",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_bls_count",
+      "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+      "dated": "2024",
+      "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+      "population": "US commercial printing establishments",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_pixelops",
+      "url": "https://ppai.org/?p=55329",
+      "dated": "2026",
+      "claim": "Pixelops design subscription from $600/month",
+      "population": "promotional products / print companies",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+     },
+     {
+      "id": "s_prepress",
+      "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+      "dated": "2026",
+      "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+      "population": "freelance prepress technicians",
+      "matchesBuyer": false,
+      "opportunityId": "cop_042c9eef07c544248175"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 of the first 300 cold-emailed commercial print shops pay the $600 invoice by day 12 and the first Stacc subscription delivers",
+     "stop": [
+      "fewer than 2 paid of 300 reached by day 12: stop; at most $37 + $49 spent"
+     ],
+     "continue": [
+      "2 or more paid by day 12: keep sending to the remaining list; 9 paid of 300 (3%) by day 28 carries the $5,000"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 9,
+      "of": 300,
+      "reach": 300
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "deals": 9,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "deals": 6,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "deals": 34,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_500654a275db_c5b12d",
+    "digest": "500654a275db0b0c82a3897f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:46:06.337Z"
+   },
+   {
+    "goalId": "wst_d88162c708e043cc9679",
+    "contractDigest": "62034b05a3a3a36fba008695",
+    "parentRevisionId": "rev_500654a275db_c5b12d",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+     "opportunityIds": [
+      "cop_68bb6003c9fa41c99f13"
+     ],
+     "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+    },
+    "alternatives": [
+     {
+      "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+      "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+     },
+     {
+      "title": "Outsourced preflight/prepress overflow",
+      "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain builds two lists of 150 independent commercial print shops each (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_bls_count",
+       "reach list size"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner connects a sending mailbox to Instantly (one month, $37, covers both waves) and sends Brain's 3-step sequence to wave 1 (150 shops) on day 2",
+      "performer": "OWNER",
+      "costCents": 3700,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes) for $600; the shop adds the owner as a profile manager; invoiced by bank transfer (ACH) only after the first week's work is live",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "price per shop",
+       "s_gbp_manager"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes the reply calls and records yeses (Brain drafts replies and invoices)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "ownerHours": 9,
+      "priceCents": 60000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof: on the first yes's profile, via manager access, the owner runs theStacc Local SEO on its free 3-day trial (no card) and checks the posts, review replies and profile fixes go live; no invoice before this works",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_stacc_trial",
+       "s_gbp_manager"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Gate day 12: continue to wave 2 only if 5 of wave 1's 150 shops have said yes (3.3%, at or above the 3% that carries $5,000) and the first delivery worked and was paid",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "close rate of cold-emailed print shops",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach2",
+      "kind": "REACH",
+      "label": "Owner sends the same sequence to wave 2 (150 shops) on the same Instantly month",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "test",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "For each paid shop, the owner subscribes it to theStacc Local SEO ($49) when the trial ends and reviews the output (1h per shop)",
+      "performer": "OWNER",
+      "ownerHours": 9,
+      "costCents": 44100,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s_stacc_49",
+       "fulfilment cost per shop"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect each $600 ACH invoice after that shop's first week is live",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "price per shop",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 3700,
+      "label": "Instantly one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 1 pays $600 by ACH",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 2 pays $600 by ACH",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 3 pays $600 by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 4 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 5 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 6 pays $600 by ACH",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 7 pays $600 by ACH",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 23,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 8 pays $600 by ACH",
+      "settlesDay": 26,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 9 pays $600 by ACH",
+      "settlesDay": 28,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per shop",
+      "status": "ASSUMED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "needs": "a print shop paying it in the test"
+     },
+     {
+      "name": "close rate of cold-emailed print shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-12 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "deals",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "reach list size",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "s_bls_count"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilment cost per shop",
+      "status": "ASSUMED",
+      "value": 49,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_49"
+      ],
+      "needs": "the first subscription bought"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_stacc_49",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_managed",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Blog and Google Business Profile from $749/mo",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_agency_quote",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_trial",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "A free 3-day trial requires no card; plans are month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_gbp_manager",
+      "url": "https://support.google.com/business/answer/3403100",
+      "dated": "retrieved 2026-11-28",
+      "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+      "population": "Google Business Profile owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_bls_count",
+      "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+      "dated": "2024",
+      "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+      "population": "US commercial printing establishments",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_pixelops",
+      "url": "https://ppai.org/?p=55329",
+      "dated": "2026",
+      "claim": "Pixelops design subscription from $600/month",
+      "population": "promotional products / print companies",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+     },
+     {
+      "id": "s_prepress",
+      "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+      "dated": "2026",
+      "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+      "population": "freelance prepress technicians",
+      "matchesBuyer": false,
+      "opportunityId": "cop_042c9eef07c544248175"
+     }
+    ],
+    "validation": {
+     "proof": "By day 12, 5 of wave 1's 150 commercial print shops (3.3%) have said yes at $600, and the first one's profile ran live on theStacc trial and its invoice was paid",
+     "stop": [
+      "fewer than 5 yeses of 150 by day 12: do not send wave 2; deliver and collect only the yeses given; at most $37 plus $49 per paid shop spent",
+      "the first delivery cannot get manager access or theStacc cannot run on the shop's profile: stop before any invoice"
+     ],
+     "continue": [
+      "5 or more yeses of 150 by day 12 with the first delivery paid: send wave 2; 9 paid of 300 (3%) by day 25 carries $5,400 collected"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 9,
+      "of": 300,
+      "reach": 300
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Paid orders are taken before FULFILMENT is shown",
+      "resolution": "Accepted. No shop is invoiced before its first week is live; the first yes's profile is run on theStacc's free 3-day no-card trial via manager access (Google lets owners add managers, s_gbp_manager) as the fulfilment proof (deliver1), and the plan stops before any invoice if that fails."
+     },
+     {
+      "finding": "MAJOR: Gate threshold (2 of 300) is far below the 9 of 300 the target needs and the whole list is sent on day 2",
+      "resolution": "Accepted. Reach is split into two waves of 150; the day-12 gate requires 5 of wave 1's 150 (3.3%, at or above the 3% needed) before wave 2 is sent; threshold {paid 9, of 300, reach 300}."
+     },
+     {
+      "finding": "MINOR: members lists rejected openings",
+      "resolution": "Accepted. The design and prepress openings are in excluded with reasons; members holds only the GBP opening."
+     },
+     {
+      "finding": "NOTE: Net after spend is $4,922",
+      "resolution": "The contract metric is COLLECTED_CASH ($5,400 collected meets it); if the owner meant profit, a 10th sale is needed, which the continue branch would show by day 25."
+     },
+     {
+      "finding": "NOTE: Price $600 is ASSUMED from vendor list prices; the same vendor sells the tool to print shops at $49/mo",
+      "resolution": "Agreed; OFFER_AND_PRICE stays missing and is measured by the test; the offer's value over $49 self-serve is the done-for-you operation, which the yes rate at $600 decides."
+     },
+     {
+      "finding": "NOTE: Card payouts on a new processor account are often held",
+      "resolution": "Accepted. Invoices are paid by ACH bank transfer rather than a new card processor; settlement is modelled at 3 days and SETTLES_IN_TIME stays missing until the first payment lands."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "why": "Rejected alternative: $600/mo Pixelops cost against $899 leaves thin margin, white-label resale rights unconfirmed, $600 per shop up front strains the $500 cap; not weighed in the ledger."
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "why": "Rejected alternative: $150 jobs need 34 sales in 30 days with no measured buyer volume or repeat rate; not weighed in the ledger."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "deals": 9,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_fb5528cab861_cce01c",
+    "digest": "fb5528cab861fe1d5d794906",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:49:43.819Z"
+   },
+   {
+    "goalId": "wst_d88162c708e043cc9679",
+    "contractDigest": "62034b05a3a3a36fba008695",
+    "parentRevisionId": "rev_fb5528cab861_cce01c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+     "opportunityIds": [
+      "cop_68bb6003c9fa41c99f13"
+     ],
+     "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+    },
+    "alternatives": [
+     {
+      "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+      "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+     },
+     {
+      "title": "Outsourced preflight/prepress overflow",
+      "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain builds two lists of 150 independent commercial print shops each (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_bls_count",
+       "reach list size"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner connects a sending mailbox to Instantly (one month, $37, covers both waves) and sends Brain's 3-step sequence to wave 1 (150 shops) on day 2",
+      "performer": "OWNER",
+      "costCents": 3700,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes) for $600; the shop adds the owner as a profile manager; invoiced by bank transfer (ACH) as soon as its first posts, review replies and profile fixes are live (end of the 3-day trial)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "price per shop",
+       "s_gbp_manager"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes the reply calls and records yeses (Brain drafts replies and invoices)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "ownerHours": 9,
+      "priceCents": 60000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof: on the first yes's profile, via manager access, the owner runs theStacc Local SEO on its free 3-day trial (no card) and checks the posts, review replies and profile fixes go live; no invoice before this works",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_stacc_trial",
+       "s_gbp_manager"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Gate day 13: continue to wave 2 only if 5 of wave 1's 150 shops have said yes (3.3%, at or above the 3% that carries $5,000) and the first delivery worked and its invoice (sent day 9) has settled (day 12)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "close rate of cold-emailed print shops",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach2",
+      "kind": "REACH",
+      "label": "Owner sends the same sequence to wave 2 (150 shops) on the same Instantly month; a yes later than day 22 cannot settle by day 30 and is not counted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "test",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "For each paid shop, the owner subscribes it to theStacc Local SEO ($49) when the trial ends and reviews the output (1h per shop)",
+      "performer": "OWNER",
+      "ownerHours": 9,
+      "costCents": 44100,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s_stacc_49",
+       "fulfilment cost per shop"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each shop $600 by ACH when its trial output is live (3 days after its yes), settling about 3 days later; last countable yes is day 22 (invoice day 26, settles day 29)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "price per shop",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 3700,
+      "label": "Instantly one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 1 pays $600 by ACH",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 2 pays $600 by ACH",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 3 pays $600 by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 4 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 5 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 6 pays $600 by ACH",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 7 pays $600 by ACH",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 8 pays $600 by ACH",
+      "settlesDay": 27,
+      "stepId": "collect"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 9 pays $600 by ACH",
+      "settlesDay": 29,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 13,
+    "quantities": [
+     {
+      "name": "price per shop",
+      "status": "ASSUMED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "needs": "a print shop paying it in the test"
+     },
+     {
+      "name": "close rate of cold-emailed print shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-12 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "deals",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "reach list size",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "s_bls_count"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilment cost per shop",
+      "status": "ASSUMED",
+      "value": 49,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_49"
+      ],
+      "needs": "the first subscription bought"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_stacc_49",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_managed",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Blog and Google Business Profile from $749/mo",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_agency_quote",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_trial",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "A free 3-day trial requires no card; plans are month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_gbp_manager",
+      "url": "https://support.google.com/business/answer/3403100",
+      "dated": "retrieved 2026-11-28",
+      "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+      "population": "Google Business Profile owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_bls_count",
+      "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+      "dated": "2024",
+      "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+      "population": "US commercial printing establishments",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_pixelops",
+      "url": "https://ppai.org/?p=55329",
+      "dated": "2026",
+      "claim": "Pixelops design subscription from $600/month",
+      "population": "promotional products / print companies",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+     },
+     {
+      "id": "s_prepress",
+      "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+      "dated": "2026",
+      "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+      "population": "freelance prepress technicians",
+      "matchesBuyer": false,
+      "opportunityId": "cop_042c9eef07c544248175"
+     }
+    ],
+    "validation": {
+     "proof": "By day 13, 5 of wave 1's 150 commercial print shops (3.3%) have said yes at $600, and the first one's profile ran live on theStacc trial and its day-9 ACH invoice settled (day 12)",
+     "stop": [
+      "fewer than 5 yeses of 150 by day 13: do not send wave 2; deliver and collect only the yeses given; at most $37 plus $49 per paid shop spent",
+      "the first delivery cannot get manager access or theStacc cannot run on the shop's profile: stop before any invoice"
+     ],
+     "continue": [
+      "5 or more yeses of 150 by day 13 with the first invoice settled: send wave 2 on day 14; 9 paid of 300 (3%), the last yes by day 22, settles by day 29 and carries $5,400 collected"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 9,
+      "of": 300,
+      "reach": 300
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Gate (day 12, first delivery paid) and ledger contradict the offer's term 'invoiced only after the first week's work is live'",
+      "resolution": "Accepted. Invoicing is now at the end of each shop's 3-day trial when its output is live (shop 1: yes ~day 5, trial days 6-9, invoice day 9, ACH settles day 12); the gate moved to day 13 and requires that settlement; ledger receipts are booked on the invoice day with settlesDay +3."
+     },
+     {
+      "finding": "NOTE: name the last yes day after which a sale cannot settle in 30 days",
+      "resolution": "Accepted. The last countable yes is day 22 (trial to day 26, invoice day 26, settles day 29); wave-2 receipts are booked days 20-26 settling 23-29."
+     },
+     {
+      "finding": "NOTE: The free trial is 3 days; theStacc's agencies page supports third-party operation",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "why": "Rejected alternative: $600/mo Pixelops cost against $899 leaves thin margin, white-label resale rights unconfirmed, $600 per shop up front strains the $500 cap; not weighed in the ledger."
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "why": "Rejected alternative: $150 jobs need 34 sales in 30 days with no measured buyer volume or repeat rate; not weighed in the ledger."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "deals": 9,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a6bd0f145156_ea9cb3",
+    "digest": "a6bd0f145156745ad63fdf7e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:52:05.122Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_d88162c708e043cc9679",
+   "contractDigest": "62034b05a3a3a36fba008695",
+   "parentRevisionId": "rev_fb5528cab861_cce01c",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+    "opportunityIds": [
+     "cop_68bb6003c9fa41c99f13"
+    ],
+    "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+   },
+   "alternatives": [
+    {
+     "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+     "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+    },
+    {
+     "title": "Outsourced preflight/prepress overflow",
+     "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Brain builds two lists of 150 independent commercial print shops each (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_bls_count",
+      "reach list size"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Owner connects a sending mailbox to Instantly (one month, $37, covers both waves) and sends Brain's 3-step sequence to wave 1 (150 shops) on day 2",
+     "performer": "OWNER",
+     "costCents": 3700,
+     "day": 2,
+     "dependsOn": "r1",
+     "evidence": [
+      "reach list size"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes) for $600; the shop adds the owner as a profile manager; invoiced by bank transfer (ACH) as soon as its first posts, review replies and profile fixes are live (end of the 3-day trial)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "price per shop",
+      "s_gbp_manager"
+     ],
+     "priceCents": 60000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Owner takes the reply calls and records yeses (Brain drafts replies and invoices)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "offer",
+     "evidence": [
+      "close rate of cold-emailed print shops"
+     ],
+     "ownerHours": 9,
+     "priceCents": 60000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver1",
+     "kind": "DELIVER",
+     "label": "Fulfilment proof: on the first yes's profile, via manager access, the owner runs theStacc Local SEO on its free 3-day trial (no card) and checks the posts, review replies and profile fixes go live; no invoice before this works",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_stacc_trial",
+      "s_gbp_manager"
+     ],
+     "ownerHours": 2,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Gate day 13: continue to wave 2 only if 5 of wave 1's 150 shops have said yes (3.3%, at or above the 3% that carries $5,000) and the first delivery worked and its invoice (sent day 9) has settled (day 12)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 13,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "close rate of cold-emailed print shops",
+      "deals needed"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "reach2",
+     "kind": "REACH",
+     "label": "Owner sends the same sequence to wave 2 (150 shops) on the same Instantly month; a yes later than day 22 cannot settle by day 30 and is not counted",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "test",
+     "evidence": [
+      "reach list size"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "For each paid shop, the owner subscribes it to theStacc Local SEO ($49) when the trial ends and reviews the output (1h per shop)",
+     "performer": "OWNER",
+     "ownerHours": 9,
+     "costCents": 44100,
+     "day": 9,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "s_stacc_49",
+      "fulfilment cost per shop"
+     ],
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Invoice each shop $600 by ACH when its trial output is live (3 days after its yes), settling about 3 days later; last countable yes is day 22 (invoice day 26, settles day 29)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 9,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "price per shop",
+      "deals needed"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "SPEND",
+     "amountCents": 3700,
+     "label": "Instantly one month",
+     "stepId": "reach"
+    },
+    {
+     "day": 9,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 1",
+     "stepId": "deliver"
+    },
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 1 pays $600 by ACH",
+     "settlesDay": 12,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 2",
+     "stepId": "deliver"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 2 pays $600 by ACH",
+     "settlesDay": 13,
+     "stepId": "collect"
+    },
+    {
+     "day": 11,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 3",
+     "stepId": "deliver"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 3 pays $600 by ACH",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 4",
+     "stepId": "deliver"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 4 pays $600 by ACH",
+     "settlesDay": 15,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 5",
+     "stepId": "deliver"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 5 pays $600 by ACH",
+     "settlesDay": 15,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 6",
+     "stepId": "deliver"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 6 pays $600 by ACH",
+     "settlesDay": 23,
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 7",
+     "stepId": "deliver"
+    },
+    {
+     "day": 22,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 7 pays $600 by ACH",
+     "settlesDay": 25,
+     "stepId": "collect"
+    },
+    {
+     "day": 24,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 8",
+     "stepId": "deliver"
+    },
+    {
+     "day": 24,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 8 pays $600 by ACH",
+     "settlesDay": 27,
+     "stepId": "collect"
+    },
+    {
+     "day": 26,
+     "kind": "SPEND",
+     "amountCents": 4900,
+     "label": "theStacc Local SEO for shop 9",
+     "stepId": "deliver"
+    },
+    {
+     "day": 26,
+     "kind": "RECEIPT",
+     "amountCents": 60000,
+     "label": "shop 9 pays $600 by ACH",
+     "settlesDay": 29,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 13,
+   "quantities": [
+    {
+     "name": "price per shop",
+     "status": "ASSUMED",
+     "value": 600,
+     "unit": "USD",
+     "sources": [
+      "s_stacc_managed",
+      "s_agency_quote"
+     ],
+     "needs": "a print shop paying it in the test"
+    },
+    {
+     "name": "close rate of cold-emailed print shops",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid / reached",
+     "sources": [],
+     "needs": "measured by the day-12 test"
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 9,
+     "unit": "deals",
+     "sources": [],
+     "needs": null
+    },
+    {
+     "name": "reach list size",
+     "status": "ESTIMATE",
+     "value": 300,
+     "unit": "shops",
+     "sources": [
+      "s_bls_count"
+     ],
+     "needs": null
+    },
+    {
+     "name": "fulfilment cost per shop",
+     "status": "ASSUMED",
+     "value": 49,
+     "unit": "USD",
+     "sources": [
+      "s_stacc_49"
+     ],
+     "needs": "the first subscription bought"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_stacc_49",
+     "url": "https://thestacc.com/for/printing-sign-shops/",
+     "dated": "undated page, retrieved 2026-11-28",
+     "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+     "population": "printing and sign shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_stacc_managed",
+     "url": "https://thestacc.com/for/printing-sign-shops/",
+     "dated": "undated page, retrieved 2026-11-28",
+     "claim": "Blog and Google Business Profile from $749/mo",
+     "population": "printing and sign shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_agency_quote",
+     "url": "https://thestacc.com/for/printing-sign-shops/",
+     "dated": "undated page, retrieved 2026-11-28",
+     "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+     "population": "printing and sign shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_stacc_trial",
+     "url": "https://thestacc.com/for/printing-sign-shops/",
+     "dated": "undated page, retrieved 2026-11-28",
+     "claim": "A free 3-day trial requires no card; plans are month to month",
+     "population": "printing and sign shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_gbp_manager",
+     "url": "https://support.google.com/business/answer/3403100",
+     "dated": "retrieved 2026-11-28",
+     "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+     "population": "Google Business Profile owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_bls_count",
+     "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+     "dated": "2024",
+     "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+     "population": "US commercial printing establishments",
+     "matchesBuyer": true,
+     "opportunityId": "cop_68bb6003c9fa41c99f13"
+    },
+    {
+     "id": "s_pixelops",
+     "url": "https://ppai.org/?p=55329",
+     "dated": "2026",
+     "claim": "Pixelops design subscription from $600/month",
+     "population": "promotional products / print companies",
+     "matchesBuyer": false,
+     "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+    },
+    {
+     "id": "s_prepress",
+     "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+     "dated": "2026",
+     "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+     "population": "freelance prepress technicians",
+     "matchesBuyer": false,
+     "opportunityId": "cop_042c9eef07c544248175"
+    }
+   ],
+   "validation": {
+    "proof": "By day 13, 5 of wave 1's 150 commercial print shops (3.3%) have said yes at $600, and the first one's profile ran live on theStacc trial and its day-9 ACH invoice settled (day 12)",
+    "stop": [
+     "fewer than 5 yeses of 150 by day 13: do not send wave 2; deliver and collect only the yeses given; at most $37 plus $49 per paid shop spent",
+     "the first delivery cannot get manager access or theStacc cannot run on the shop's profile: stop before any invoice"
+    ],
+    "continue": [
+     "5 or more yeses of 150 by day 13 with the first invoice settled: send wave 2 on day 14; 9 paid of 300 (3%), the last yes by day 22, settles by day 29 and carries $5,400 collected"
+    ],
+    "decides": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "CURRENT_DEMAND"
+    ],
+    "threshold": {
+     "paid": 9,
+     "of": 300,
+     "reach": 300
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MAJOR: Gate (day 12, first delivery paid) and ledger contradict the offer's term 'invoiced only after the first week's work is live'",
+     "resolution": "Accepted. Invoicing is now at the end of each shop's 3-day trial when its output is live (shop 1: yes ~day 5, trial days 6-9, invoice day 9, ACH settles day 12); the gate moved to day 13 and requires that settlement; ledger receipts are booked on the invoice day with settlesDay +3."
+    },
+    {
+     "finding": "NOTE: name the last yes day after which a sale cannot settle in 30 days",
+     "resolution": "Accepted. The last countable yes is day 22 (trial to day 26, invoice day 26, settles day 29); wave-2 receipts are booked days 20-26 settling 23-29."
+    },
+    {
+     "finding": "NOTE: The free trial is 3 days; theStacc's agencies page supports third-party operation",
+     "resolution": "Agreed; no change."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_68bb6003c9fa41c99f13",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+     "why": "Rejected alternative: $600/mo Pixelops cost against $899 leaves thin margin, white-label resale rights unconfirmed, $600 per shop up front strains the $500 cap; not weighed in the ledger."
+    },
+    {
+     "opportunityId": "cop_042c9eef07c544248175",
+     "why": "Rejected alternative: $150 jobs need 34 sales in 30 days with no measured buyer volume or repeat rate; not weighed in the ledger."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_68bb6003c9fa41c99f13",
+     "deals": 9,
+     "price": null,
+     "directCost": null,
+     "capital": null,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_a6bd0f145156_ea9cb3",
+   "digest": "a6bd0f145156745ad63fdf7e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_74454b88a7be4bdf8778/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:52:05.122Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_a6bd0f145156_ea9cb3",
+   "digest": "a6bd0f145156745ad63fdf7e",
+   "contractDigest": "62034b05a3a3a36fba008695",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 47800,
+    "committedOpenCents": 0,
+    "preProofCents": 28200,
+    "maxExposureCents": 18400,
+    "minCashCents": 31600,
+    "minCashDay": 11,
+    "collectedCents": 540000,
+    "collectedInWindowCents": 540000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 492200
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Google Business Profile and local SEO management for commerc\", \"White-label overflow design subscription for print shops\", \"Outsourced preflight / prepress overflow for commercial prin\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_68bb6003c9fa41c99f13",
+     "cop_aeb7143d9ddc4ecf964d",
+     "cop_042c9eef07c544248175"
+    ],
+    "integrity": [
+     {
+      "rule": "NO_FAVOURABLE_UNKNOWN",
+      "detail": "\"White-label overflow design subscription for print shops\" costs at least 600 a deal as modelled, not established, more than the 500 the goal may spend in all"
+     }
+    ],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dives on \"Google Business Profile and local SEO management for commerc\", \"White-label overflow design subscription for print shops\", \"Outsourced preflight / prepress overflow for commercial prin\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "title": "Google Business Profile and local SEO management for commercial print shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "owner/manager of an independent commercial print shop",
+       "reachableChannel": "cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories",
+       "offerScope": "setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output",
+       "peakFundingCents": 8600,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "commercial printing (NAICS 323111)",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to independent commercial printers via Instantly (7/mo) from lists bu"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "36 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "9 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 49, tied up 86"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "15,140 owner/manager of an independent commercial print shop (9 shops x 00 = ,400 collected; 15,140 NAICS 323111 establishments in 2023 (County Business Patterns via WhatTheyThink); agencies quote print shops 00-,500/mo (theStacc page, vendor claim))",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report to owner/manager of an independent commercial print shop, reached through cold email to independent commercial printers via Instantly (7/mo) from lists built free on Google Maps / PRINTING United Alliance directories, at $600; theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$49",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$86",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "theStacc Local SEO module for printing & sign shops (9/mo per shop), owner reviews output.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "setup plus first month of Google Business Profile management: 30 scheduled posts, review-reply drafts, profile optimization, monthly report",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "owner/manager of an independent commercial print shop",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://thestacc.com/for/printing-sign-shops/; https://www.humblehelp.studio/blog/google-business-profile-management-cost-bay-area; https://thestacc.com/for/printing-sign-shops/; https://inboundblogging.com/services/seo-agency-for-printing-companies/; https://whattheythink.com/industry-data/establishments/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "title": "White-label overflow design subscription for print shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "print shop that redesigns customer artwork in-house",
+       "reachableChannel": "cold email to independent commercial printers via Instantly",
+       "offerScope": "monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts",
+       "priceCents": 89900,
+       "currency": "USD",
+       "fulfillmentOwner": "Pixelops Design (PPAI-listed design subscription, from $600/mo)",
+       "peakFundingCents": 3700,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "commercial printing",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to independent commercial printers via Instantly"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 899 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "24 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "6 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 600, tied up 37"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to independent commercial printers via Instantly",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "15,140 print shop that redesigns customer artwork in-house (6 shops x $899 = $5,394 collected; buyer pays before the subcontractor month is bought)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts to print shop that redesigns customer artwork in-house, reached through cold email to independent commercial printers via Instantly, at $899; Pixelops Design (PPAI-listed design subscription, from $600/mo) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$37",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Pixelops Design (PPAI-listed design subscription, from $600/mo).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "monthly white-label design desk for customer jobs (flyers, business cards, signage), 24-48h drafts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "print shop that redesigns customer artwork in-house",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$899",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$899",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://ppai.org/?p=55329; https://www.manypixels.co/blog/get-a-designer/white-label-graphic-design; https://www.ppai.org/solution/shoreswitch/; https://whattheythink.com/industry-data/establishments/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "title": "Outsourced preflight / prepress overflow for commercial printers",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "commercial printer with prepress backlog",
+       "reachableChannel": "cold email to commercial printers via Instantly",
+       "offerScope": "preflight and print-ready file correction, per job (~3 hours of prepress)",
+       "priceCents": 15000,
+       "currency": "USD",
+       "fulfillmentOwner": "Upwork prepress freelancer at $15-35/hour",
+       "peakFundingCents": 3700,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "commercial printing",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to commercial printers via Instantly"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 150 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "136 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "34 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 75, tied up 37"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to commercial printers via Instantly",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "15,140 commercial printer with prepress backlog (34 jobs x $150 = $5,100; freelancer rates from Upwork prepress listings)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell preflight and print-ready file correction, per job (~3 hours of prepress) to commercial printer with prepress backlog, reached through cold email to commercial printers via Instantly, at $150; Upwork prepress freelancer at $15-35/hour delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$75",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$37",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Upwork prepress freelancer at $15-35/hour.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "preflight and print-ready file correction, per job (~3 hours of prepress)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "commercial printer with prepress backlog",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.upwork.com/hire/pre-press-freelancers/in/; https://fiverr.com/georgesaad/a-prepress-specialist-for-your-company-regularly; https://www.outsource2india.com/creative-services/case-studies/prepress-services-to-a-digital-printer.asp; https://whattheythink.com/industry-data/establishments/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:44:47.560Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_500654a275db_c5b12d",
+    "revisionDigest": "500654a275db0b0c82a3897f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8c1911ace9f34d8bbb8f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right family (price, demand, conversion and volume are unknowns only selling measures; spend fits: $37 Instantly + 9 x $49 = $478 <= $500; 9 x $600 = $5,400 collected by day 28 inside 30 days; buyers limited to commercial print shops). But it cannot run as written. (1) The test takes buyers' money before fulfilment is shown possible: the offer invoices $600 'paid before work starts' from day 2, while Brain's FULFILMENT link is false and the card's fulfillment fact is only a RECOMMENDATION. theStacc's page (which I opened) sells a $49/mo self-serve Local SEO plan with '30 planned Google posts a month' and review-reply drafts, but nothing shows it can be bought and operated by a third party on a shop's profile, or that it covers 'profile optimization' and a monthly report; one $49 subscription run on a real listing before the first invoice would show it inside the spend cap. (2) The proof gate does not carry the target at its threshold: it continues on 2 paid of 300 by day 12 (0.67%), but the target needs 9 of 300 (3%), and the reach step already sends the whole 300-shop list on day 2, so 'keep sending to the remaining list' has no remaining list; at the gate's own rate the plan collects about $1,200. The gate should be the rate that yields 9 sales (e.g. >= 4-5 paid of 300 by day 12 with a named second list and its cost), or the stop must fire below it. (3) members still carries the two rejected alternatives (cop_aeb7143d9ddc4ecf964d 6 deals, cop_042c9eef07c544248175 34 deals) although the strategy names only cop_68bb6003c9fa41c99f13.",
+    "findings": [
+     "MAJOR: Paid orders are taken before FULFILMENT is shown; buy and run one theStacc Local SEO subscription on a real listing (<= $49, inside the cap) before invoicing any shop.",
+     "MAJOR: Gate threshold (2 of 300) is far below the 9 of 300 (3%) the target needs and the whole list is sent on day 2, so passing the gate does not carry $5,000.",
+     "MINOR: members lists rejected openings; ledger should hold only the GBP opening.",
+     "NOTE: Net after spend is $4,922 (trace netCents 492200); the contract metric is collected cash so $5,400 meets it, but if the owner means 'make' as profit, 9 sales fall $78 short and a 10th sale is needed.",
+     "NOTE: Price $600 is ASSUMED from a vendor's own list price and an uncited vendor claim about agency quotes, which I verified are not print-shop payments; and the same vendor sells the tool to print shops directly at $49/mo, which the price test must face.",
+     "NOTE: Card payouts on a new processor account are often held several days; the 2-day settlement per receipt is an assumption."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:47:27.101Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "The card's fulfillment ('theStacc Local SEO module ... owner reviews output') is a RECOMMENDATION with no EVIDENCE fact that a reseller can operate it on a shop's profile and deliver the offer's scope, yet the test invoices shops before work starts."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_fb5528cab861_cce01c",
+    "revisionDigest": "fb5528cab861fe1d5d794906",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8c1911ace9f34d8bbb8f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The three fixes I asked for are in, and they are sound: no invoice before fulfilment is shown (theStacc's page, opened, says 'Free for 3 days. No card needed.' and Local SEO 'runs straight from the listing'; its agencies page offers a project per client; Google lets owners add managers); the gate (5 of wave 1's 150 = 3.3% >= the 3% that gives 9 of 300) now carries the target, with wave 2 held back until it passes; members holds only the GBP opening. Spend recomputed: $37 + 9 x $49 = $478 <= $500; 9 x $600 = $5,400 collected. One defect remains, and it is in the gate the owner acts on: the offer invoices each shop 'only after the first week's work is live', but the ledger books shop 1 paid on day 9 and shops 2-5 paid days 10-12, and the day-12 gate requires 'the first delivery worked and was paid'. Shop 1's yes comes no earlier than ~day 5 and its work starts day 6 (deliver1), so a week live is day 13 and ACH settles ~day 16: the gate cannot be passed on day 12 as written, and shops 2-5 cannot be paid by day 12 either. Either invoice when the trial's output is live (day ~9) or move the gate/ledger: with invoicing at a week live, wave-1 receipts settle about days 16-20 and wave-2 shops (yeses from ~day 15) settle about days 25-30, which still fits 30 days but with almost no slack, so state the latest yes date that still settles in the window.",
+    "findings": [
+     "MAJOR: Gate (day 12, first delivery paid) and ledger (shop 1 paid day 9, shops 2-5 by day 12) contradict the offer's own term 'invoiced only after the first week's work is live' (work from day 6 -> invoice day 13 -> ACH ~day 16). Make the invoicing point, the gate condition and the ledger days agree.",
+     "NOTE: With week-live invoicing, wave-2 receipts land ~days 25-30; name the last yes day (about day 19) after which a sale cannot settle in 30 days.",
+     "NOTE: The free trial is 3 days; the $49 subscription per shop is bought 'when the trial ends', consistent with the spend cap, and theStacc's agencies page ('a project per client') supports third-party operation."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:51:17.483Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_a6bd0f145156_ea9cb3",
+    "revisionDigest": "a6bd0f145156745ad63fdf7e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8c1911ace9f34d8bbb8f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The remaining defect from my review of rev_fb5528cab861_cce01c is fixed: invoicing is now at the end of each shop's 3-day trial when its output is live, and the offer, gate and ledger agree. Recomputed timeline: shop 1 yes ~day 5, trial days 6-9, invoice day 9, ACH settles day 12; shops 2-5 invoiced days 10-12 from yeses on days 6-9; the day-13 gate (5 of wave 1's 150 = 3.3% >= the 3% that gives 9 of 300, plus shop 1's settled invoice) can be met as written; wave 2 goes day 14 with the last countable yes day 22 -> invoice day 26 -> settles day 29 inside 30. Money: $37 + 9 x $49 = $478 <= $500 cap; each $49 is spent on the invoice day, so owner money out before receipts peaks at $37 + 5 x $49 = $282 (trace maxExposure $184 net of receipts), inside the cap; 9 x $600 = $5,400 collected (COLLECTED_CASH metric). Fulfilment is shown before any invoice (free no-card trial on the shop's profile via manager access; stop before any invoice if access or the tool fails). Buyers are limited to commercial print shops, as the contract requires. Unknowns (price, close rate, demand) are marked and decided by the test; nothing unknown is treated as known.",
+    "findings": [
+     "NOTE: The plan assumes a fresh free 3-day trial for each shop; theStacc's page shows a trial per shop's listing but does not say an agency gets one per client project. If only one trial is allowed, each later shop's $49 must be bought before its invoice settles (still inside the $500 cap: $37 + 9 x $49 = $478).",
+     "NOTE: Net after spend is $4,922; meets the collected-cash contract, short of $5,000 only if the owner meant profit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:52:51.879Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_a6bd0f145156_ea9cb3",
+   "digest": "a6bd0f145156745ad63fdf7e",
+   "contractDigest": "62034b05a3a3a36fba008695",
+   "plan": {
+    "goalId": "wst_d88162c708e043cc9679",
+    "contractDigest": "62034b05a3a3a36fba008695",
+    "parentRevisionId": "rev_fb5528cab861_cce01c",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell Google Business Profile setup + first month of management to independent commercial print shops by cold email, fulfilled on theStacc's print-shop Local SEO module",
+     "opportunityIds": [
+      "cop_68bb6003c9fa41c99f13"
+     ],
+     "why": "It sells only to commercial print shops, a vendor publishes exactly this service for printing and sign shops (self-serve $49/mo, managed from $749/mo) and states agencies quote print shops $800-$2,500/mo, so a $600 setup+month undercuts both; fulfilment costs $49 per shop and is bought only after the shop pays, so total spend is $37 + 9 x $49 = $478 within the $500. Price, demand and close rate are not established (the verifier rejected the vendor pages as not showing what print shops actually pay), so the plan is a sales test that measures them in the first 12 days."
+    },
+    "alternatives": [
+     {
+      "title": "White-label overflow design subscription for print shops (Pixelops-fulfilled)",
+      "why": "$600/mo subcontractor cost against an $899 price leaves little margin, white-label resale rights are unconfirmed, and demand is unmeasured."
+     },
+     {
+      "title": "Outsourced preflight/prepress overflow",
+      "why": "$150 jobs need 34 sales in 30 days; buyer volume and repeat frequency are unmeasured."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Brain builds two lists of 150 independent commercial print shops each (Google Maps / PRINTING United Alliance directories) and notes each one's Google Business Profile gaps",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_bls_count",
+       "reach list size"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Owner connects a sending mailbox to Instantly (one month, $37, covers both waves) and sends Brain's 3-step sequence to wave 1 (150 shops) on day 2",
+      "performer": "OWNER",
+      "costCents": 3700,
+      "day": 2,
+      "dependsOn": "r1",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: GBP setup + first month of management (30 posts, review-reply drafts, profile fixes) for $600; the shop adds the owner as a profile manager; invoiced by bank transfer (ACH) as soon as its first posts, review replies and profile fixes are live (end of the 3-day trial)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "price per shop",
+       "s_gbp_manager"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes the reply calls and records yeses (Brain drafts replies and invoices)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "close rate of cold-emailed print shops"
+      ],
+      "ownerHours": 9,
+      "priceCents": 60000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof: on the first yes's profile, via manager access, the owner runs theStacc Local SEO on its free 3-day trial (no card) and checks the posts, review replies and profile fixes go live; no invoice before this works",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_stacc_trial",
+       "s_gbp_manager"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Gate day 13: continue to wave 2 only if 5 of wave 1's 150 shops have said yes (3.3%, at or above the 3% that carries $5,000) and the first delivery worked and its invoice (sent day 9) has settled (day 12)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "close rate of cold-emailed print shops",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach2",
+      "kind": "REACH",
+      "label": "Owner sends the same sequence to wave 2 (150 shops) on the same Instantly month; a yes later than day 22 cannot settle by day 30 and is not counted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "test",
+      "evidence": [
+       "reach list size"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "For each paid shop, the owner subscribes it to theStacc Local SEO ($49) when the trial ends and reviews the output (1h per shop)",
+      "performer": "OWNER",
+      "ownerHours": 9,
+      "costCents": 44100,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "s_stacc_49",
+       "fulfilment cost per shop"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each shop $600 by ACH when its trial output is live (3 days after its yes), settling about 3 days later; last countable yes is day 22 (invoice day 26, settles day 29)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "price per shop",
+       "deals needed"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 3700,
+      "label": "Instantly one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 1 pays $600 by ACH",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 2 pays $600 by ACH",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 3 pays $600 by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 4 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 5 pays $600 by ACH",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 6 pays $600 by ACH",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 7 pays $600 by ACH",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 8 pays $600 by ACH",
+      "settlesDay": 27,
+      "stepId": "collect"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 4900,
+      "label": "theStacc Local SEO for shop 9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 60000,
+      "label": "shop 9 pays $600 by ACH",
+      "settlesDay": 29,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 13,
+    "quantities": [
+     {
+      "name": "price per shop",
+      "status": "ASSUMED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_managed",
+       "s_agency_quote"
+      ],
+      "needs": "a print shop paying it in the test"
+     },
+     {
+      "name": "close rate of cold-emailed print shops",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid / reached",
+      "sources": [],
+      "needs": "measured by the day-12 test"
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 9,
+      "unit": "deals",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "reach list size",
+      "status": "ESTIMATE",
+      "value": 300,
+      "unit": "shops",
+      "sources": [
+       "s_bls_count"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilment cost per shop",
+      "status": "ASSUMED",
+      "value": 49,
+      "unit": "USD",
+      "sources": [
+       "s_stacc_49"
+      ],
+      "needs": "the first subscription bought"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_stacc_49",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "$49 a month for Local SEO (GBP) for printing and sign shops, month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_managed",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Blog and Google Business Profile from $749/mo",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_agency_quote",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "Vendor states local agencies commonly quote print and sign shops $800-$2,500 a month for profile management (unsourced vendor claim)",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_stacc_trial",
+      "url": "https://thestacc.com/for/printing-sign-shops/",
+      "dated": "undated page, retrieved 2026-11-28",
+      "claim": "A free 3-day trial requires no card; plans are month to month",
+      "population": "printing and sign shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_gbp_manager",
+      "url": "https://support.google.com/business/answer/3403100",
+      "dated": "retrieved 2026-11-28",
+      "claim": "A Business Profile owner can invite users as managers, who have mostly the same access as owners",
+      "population": "Google Business Profile owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_bls_count",
+      "url": "https://data.bls.gov/cew/data/api/2024/a/industry/323111.csv",
+      "dated": "2024",
+      "claim": "18,318 private establishments in NAICS 323111, 2024 annual average",
+      "population": "US commercial printing establishments",
+      "matchesBuyer": true,
+      "opportunityId": "cop_68bb6003c9fa41c99f13"
+     },
+     {
+      "id": "s_pixelops",
+      "url": "https://ppai.org/?p=55329",
+      "dated": "2026",
+      "claim": "Pixelops design subscription from $600/month",
+      "population": "promotional products / print companies",
+      "matchesBuyer": false,
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d"
+     },
+     {
+      "id": "s_prepress",
+      "url": "https://www.upwork.com/hire/pre-press-freelancers/in/",
+      "dated": "2026",
+      "claim": "Prepress freelancers listed at roughly $15-$35/hour",
+      "population": "freelance prepress technicians",
+      "matchesBuyer": false,
+      "opportunityId": "cop_042c9eef07c544248175"
+     }
+    ],
+    "validation": {
+     "proof": "By day 13, 5 of wave 1's 150 commercial print shops (3.3%) have said yes at $600, and the first one's profile ran live on theStacc trial and its day-9 ACH invoice settled (day 12)",
+     "stop": [
+      "fewer than 5 yeses of 150 by day 13: do not send wave 2; deliver and collect only the yeses given; at most $37 plus $49 per paid shop spent",
+      "the first delivery cannot get manager access or theStacc cannot run on the shop's profile: stop before any invoice"
+     ],
+     "continue": [
+      "5 or more yeses of 150 by day 13 with the first invoice settled: send wave 2 on day 14; 9 paid of 300 (3%), the last yes by day 22, settles by day 29 and carries $5,400 collected"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 9,
+      "of": 300,
+      "reach": 300
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MAJOR: Gate (day 12, first delivery paid) and ledger contradict the offer's term 'invoiced only after the first week's work is live'",
+      "resolution": "Accepted. Invoicing is now at the end of each shop's 3-day trial when its output is live (shop 1: yes ~day 5, trial days 6-9, invoice day 9, ACH settles day 12); the gate moved to day 13 and requires that settlement; ledger receipts are booked on the invoice day with settlesDay +3."
+     },
+     {
+      "finding": "NOTE: name the last yes day after which a sale cannot settle in 30 days",
+      "resolution": "Accepted. The last countable yes is day 22 (trial to day 26, invoice day 26, settles day 29); wave-2 receipts are booked days 20-26 settling 23-29."
+     },
+     {
+      "finding": "NOTE: The free trial is 3 days; theStacc's agencies page supports third-party operation",
+      "resolution": "Agreed; no change."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_aeb7143d9ddc4ecf964d",
+      "why": "Rejected alternative: $600/mo Pixelops cost against $899 leaves thin margin, white-label resale rights unconfirmed, $600 per shop up front strains the $500 cap; not weighed in the ledger."
+     },
+     {
+      "opportunityId": "cop_042c9eef07c544248175",
+      "why": "Rejected alternative: $150 jobs need 34 sales in 30 days with no measured buyer volume or repeat rate; not weighed in the ledger."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_68bb6003c9fa41c99f13",
+      "deals": 9,
+      "price": null,
+      "directCost": null,
+      "capital": null,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a6bd0f145156_ea9cb3",
+    "digest": "a6bd0f145156745ad63fdf7e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:52:05.122Z"
+   },
+   "review": {
+    "revisionId": "rev_a6bd0f145156_ea9cb3",
+    "revisionDigest": "a6bd0f145156745ad63fdf7e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_74454b88a7be4bdf8778/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8c1911ace9f34d8bbb8f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The remaining defect from my review of rev_fb5528cab861_cce01c is fixed: invoicing is now at the end of each shop's 3-day trial when its output is live, and the offer, gate and ledger agree. Recomputed timeline: shop 1 yes ~day 5, trial days 6-9, invoice day 9, ACH settles day 12; shops 2-5 invoiced days 10-12 from yeses on days 6-9; the day-13 gate (5 of wave 1's 150 = 3.3% >= the 3% that gives 9 of 300, plus shop 1's settled invoice) can be met as written; wave 2 goes day 14 with the last countable yes day 22 -> invoice day 26 -> settles day 29 inside 30. Money: $37 + 9 x $49 = $478 <= $500 cap; each $49 is spent on the invoice day, so owner money out before receipts peaks at $37 + 5 x $49 = $282 (trace maxExposure $184 net of receipts), inside the cap; 9 x $600 = $5,400 collected (COLLECTED_CASH metric). Fulfilment is shown before any invoice (free no-card trial on the shop's profile via manager access; stop before any invoice if access or the tool fails). Buyers are limited to commercial print shops, as the contract requires. Unknowns (price, close rate, demand) are marked and decided by the test; nothing unknown is treated as known.",
+    "findings": [
+     "NOTE: The plan assumes a fresh free 3-day trial for each shop; theStacc's page shows a trial per shop's listing but does not say an agency gets one per client project. If only one trial is allowed, each later shop's $49 must be bought before its invoice settles (still inside the $500 cap: $37 + 9 x $49 = $478).",
+     "NOTE: Net after spend is $4,922; meets the collected-cash contract, short of $5,000 only if the owner meant profit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:52:51.879Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Make $5,000 within 30 days selling to commercial printing shops only. I can put in up to $500.",
+    "terms": "22ec0849026890b9",
+    "openings": {
+     "cop_042c9eef07c544248175": "4518530ae13422af",
+     "cop_68bb6003c9fa41c99f13": "53c8c03dde02de1b",
+     "cop_aeb7143d9ddc4ecf964d": "caf2c2b051ee35b8"
+    }
+   },
+   "at": "2026-11-28T01:54:11.332Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

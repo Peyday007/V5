@@ -1,0 +1,1092 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_91c55d5ac5c8457c84f8",
+   "words": "Collect $6,000 of settled cash within 21 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$6,000 of settled cash received in the owner's account within 21 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "fb2c115489425e17a1893635"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_91c55d5ac5c8457c84f8",
+    "contractDigest": "7422520cd6d4e4ddc70c7c7b",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Fulfil the three signed playground-inspection purchase orders through PlaySafe Inspections",
+     "opportunityIds": [
+      "cop_84ce3ccac4c34cc698d3"
+     ],
+     "why": "Three parks directors signed purchase orders at $2,400 each ($7,200, above the $6,000 target). PlaySafe quoted $900 per park system in writing, completes all three by day 10 and invoices net 60 (due day 70); the cities pay net 45 after the reports (day 55). Cash arrives before the supplier is paid, so no owner capital is advanced, and all $7,200 settles by day 55, inside the 75-day window."
+    },
+    "alternatives": [
+     {
+      "title": "Look for further openings",
+      "why": "Not needed: the signed orders alone carry the target with $1,200 margin over it."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the three signed purchase orders ($2,400 each) with the three parks directors by email and schedule inspections",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-price",
+       "src-agreements"
+      ],
+      "priceCents": 240000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "PlaySafe Inspections performs the three certified inspections and issues the reports (done by day 10; $900 per park system, invoiced net 60)",
+      "performer": "PlaySafe Inspections",
+      "costCents": 270000,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "src-fulfil",
+       "src-cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "PlaySafe Inspections",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Invoice each city on report delivery (day 10); collect $2,400 x 3 net 45, settled by day 55",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "src-price",
+       "src-ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "City 1 pays $2,400 net 45",
+      "settlesDay": 55,
+      "stepId": "s3"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "City 2 pays $2,400 net 45",
+      "settlesDay": 55,
+      "stepId": "s3"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 240000,
+      "label": "City 3 pays $2,400 net 45",
+      "settlesDay": 55,
+      "stepId": "s3"
+     },
+     {
+      "day": 70,
+      "kind": "SPEND",
+      "amountCents": 270000,
+      "label": "Pay PlaySafe's $2,700 invoice (3 x $900), net 60 from day 10, out of the cities' payments",
+      "stepId": "s2"
+     }
+    ],
+    "proofDay": 55,
+    "quantities": [
+     {
+      "name": "price per report",
+      "status": "EVIDENCED",
+      "value": 240000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "deals",
+      "sources": [
+       "src-price",
+       "src-agreements"
+      ],
+      "needs": null
+     },
+     {
+      "name": "supplier cost per park system",
+      "status": "EVIDENCED",
+      "value": 90000,
+      "unit": "cents",
+      "sources": [
+       "src-cost",
+       "src-fulfil"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 55,
+      "unit": "days",
+      "sources": [
+       "src-ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak owner capital",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "cents",
+      "sources": [
+       "src-exposure"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#price",
+      "dated": "2026-11-20",
+      "claim": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt.",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-agreements",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#agreements",
+      "dated": "2026-11-20",
+      "claim": "Three written acceptances at $2,400 each are recorded against the opening.",
+      "population": "The three signing parks directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-fulfil",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "PlaySafe Inspections (certified) quoted $900 per park system in writing, completes all three by day 10, invoices net 60.",
+      "population": "Supplier",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-cost",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $900 per deal.",
+      "population": "Supplier",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-ttc",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "55 days to first cash.",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-exposure",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0.",
+      "population": "Supplier",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "deals": 3,
+      "price": 2400,
+      "directCost": 900,
+      "capital": 0,
+      "settlesDay": 55
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_d8d0ccf7b6b3_fc677b",
+    "digest": "d8d0ccf7b6b3f54e1c601ab0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:37:52.557Z"
+   },
+   {
+    "goalId": "wst_91c55d5ac5c8457c84f8",
+    "contractDigest": "fb2c115489425e17a1893635",
+    "parentRevisionId": "rev_d8d0ccf7b6b3_fc677b",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan inside 21 days: the signed inspection orders settle on day 55",
+     "opportunityIds": [],
+     "why": "The owner's window is now 21 days. The three signed $2,400 purchase orders ($7,200) pay net 45 after the reports, and PlaySafe finishes the reports by day 10, so the cities' cash settles on day 55 (the card's measured time to first cash is 55 days). No dollar of it lands inside 21 days, and no other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Fulfil the signed orders anyway",
+      "why": "All $7,200 settles on day 55, 34 days after the 21-day deadline: $0 counts toward the goal."
+     },
+     {
+      "title": "Ask the cities to pay on receipt",
+      "why": "Would need each city to pay within 11 days of the day-10 report instead of net 45; nothing on the record says any city will."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the owner to move the deadline to at least day 55, or ask the three directors whether they will pay within 11 days of the report",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-ttc",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 55,
+      "unit": "days",
+      "sources": [
+       "src-ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per report",
+      "status": "EVIDENCED",
+      "value": 240000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#price",
+      "dated": "2026-11-20",
+      "claim": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt.",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-ttc",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "55 days to first cash (reports by day 10, then net 45).",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement time: the only opening's cash settles on day 55 (reports by day 10 + net 45), after the 21-day deadline, so it brings $0 inside the window.",
+     "resolution": "Move the deadline to at least 55 days, when the three signed $2,400 orders ($7,200) settle with no owner capital; or get the three cities to pay within 11 days of the day-10 reports, which would make the same plan executable inside 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "NOTE: Net retained after the day-70 supplier payment is $4,500 (trace netCents 450000), below $6,000.",
+      "resolution": "Moot under the new 21-day window: no cash settles inside it, so the plan is withdrawn to NO_PLAN."
+     },
+     {
+      "finding": "NOTE: Zero-capital holds only if every city pays on its net-45 terms.",
+      "resolution": "Moot: with a 21-day window the net-45 receipts fall outside it; the revision now names settlement time as the decisive gap."
+     },
+     {
+      "finding": "NOTE: Brain's own step list labels the DELIVER step owner PERSON; the plan and card name PlaySafe as performer.",
+      "resolution": "Agreed; no delivery step remains in this NO_PLAN revision."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "why": "Its cash settles on day 55, after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Extend the window to at least 55 days, when the three signed orders' $7,200 settles (net 45 after day-10 reports).",
+      "basis": [
+       {
+        "opportunityId": "cop_84ce3ccac4c34cc698d3",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_cc57cac742f6_f08e3b",
+    "digest": "cc57cac742f600a2b115bbca",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:19.905Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_91c55d5ac5c8457c84f8",
+   "contractDigest": "fb2c115489425e17a1893635",
+   "parentRevisionId": "rev_d8d0ccf7b6b3_fc677b",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan inside 21 days: the signed inspection orders settle on day 55",
+    "opportunityIds": [],
+    "why": "The owner's window is now 21 days. The three signed $2,400 purchase orders ($7,200) pay net 45 after the reports, and PlaySafe finishes the reports by day 10, so the cities' cash settles on day 55 (the card's measured time to first cash is 55 days). No dollar of it lands inside 21 days, and no other opening is held."
+   },
+   "alternatives": [
+    {
+     "title": "Fulfil the signed orders anyway",
+     "why": "All $7,200 settles on day 55, 34 days after the 21-day deadline: $0 counts toward the goal."
+    },
+    {
+     "title": "Ask the cities to pay on receipt",
+     "why": "Would need each city to pay within 11 days of the day-10 report instead of net 45; nothing on the record says any city will."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the owner to move the deadline to at least day 55, or ask the three directors whether they will pay within 11 days of the report",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src-ttc",
+      "src-price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 55,
+     "unit": "days",
+     "sources": [
+      "src-ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per report",
+     "status": "EVIDENCED",
+     "value": 240000,
+     "unit": "cents",
+     "sources": [
+      "src-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "deals",
+     "sources": [
+      "src-price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src-price",
+     "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#price",
+     "dated": "2026-11-20",
+     "claim": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt.",
+     "population": "Municipal parks and recreation directors",
+     "matchesBuyer": true,
+     "opportunityId": "cop_84ce3ccac4c34cc698d3"
+    },
+    {
+     "id": "src-ttc",
+     "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "55 days to first cash (reports by day 10, then net 45).",
+     "population": "Municipal parks and recreation directors",
+     "matchesBuyer": true,
+     "opportunityId": "cop_84ce3ccac4c34cc698d3"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement time: the only opening's cash settles on day 55 (reports by day 10 + net 45), after the 21-day deadline, so it brings $0 inside the window.",
+    "resolution": "Move the deadline to at least 55 days, when the three signed $2,400 orders ($7,200) settle with no owner capital; or get the three cities to pay within 11 days of the day-10 reports, which would make the same plan executable inside 21 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "NOTE: Net retained after the day-70 supplier payment is $4,500 (trace netCents 450000), below $6,000.",
+     "resolution": "Moot under the new 21-day window: no cash settles inside it, so the plan is withdrawn to NO_PLAN."
+    },
+    {
+     "finding": "NOTE: Zero-capital holds only if every city pays on its net-45 terms.",
+     "resolution": "Moot: with a 21-day window the net-45 receipts fall outside it; the revision now names settlement time as the decisive gap."
+    },
+    {
+     "finding": "NOTE: Brain's own step list labels the DELIVER step owner PERSON; the plan and card name PlaySafe as performer.",
+     "resolution": "Agreed; no delivery step remains in this NO_PLAN revision."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_84ce3ccac4c34cc698d3",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_84ce3ccac4c34cc698d3",
+     "why": "Its cash settles on day 55, after the 21-day deadline."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Extend the window to at least 55 days, when the three signed orders' $7,200 settles (net 45 after day-10 reports).",
+     "basis": [
+      {
+       "opportunityId": "cop_84ce3ccac4c34cc698d3",
+       "field": "timeToFirstCash"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_cc57cac742f6_f08e3b",
+   "digest": "cc57cac742f600a2b115bbca",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T01:44:19.905Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_cc57cac742f6_f08e3b",
+   "digest": "cc57cac742f600a2b115bbca",
+   "contractDigest": "fb2c115489425e17a1893635",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $6,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 55 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_84ce3ccac4c34cc698d3"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "title": "Playground-equipment safety-inspection reports for municipal parks departments",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Municipal parks and recreation directors",
+       "reachableChannel": "The three directors who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T01:33:47.564Z",
+       "offerScope": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+       "priceCents": 240000,
+       "currency": "USD",
+       "fulfillmentOwner": "PlaySafe Inspections (certified playground inspector; written quote $900 per park system; completes all three inspections by day 10; invoices us net 60)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "municipal parks departments",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three directors who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 7200 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 7200 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by PlaySafe Inspections (certified playground inspector; written quote $900 per par (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 900, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "55 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A certified playground safety-inspection report per park system; each city pays net 45 after receiving the report. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$900",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "PlaySafe Inspections (certified playground inspector; written quote $900 per park system; completes all three inspections by day 10; invoices us net 60) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Municipal parks and recreation directors",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt (signed purchase orders, 2026-11-20).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "55 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_9c390d0deedc4af4a5fc"
+    ],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T01:43:48.476Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_d8d0ccf7b6b3_fc677b",
+    "revisionDigest": "d8d0ccf7b6b3f54e1c601ab0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3371ef5bfba049609291/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is the right stance: three WRITTEN_ACCEPTANCE agreements at $2,400 each (price fact is EVIDENCE: signed purchase orders dated 2026-11-20) from the payer itself, so price is this buyer's real purchase price and 3 x $2,400 = $7,200 >= $6,000 target. Fulfilment is the recorded fulfiller: PlaySafe Inspections (certified) quoted $900 per park system in writing, finishes by day 10; cost $2,700 total, well below price. Capital: cities pay net 45 after reports (day 10 + 45 = day 55); PlaySafe invoices net 60 from day 10 (day 70), so receipts precede the only spend; peak owner capital $0, inside the zero up-front limit. Ledger matches steps (3 receipts settling day 55, one spend day 70). Window: all $7,200 settles by day 55 < 75. After paying the supplier inside the window the account keeps $4,500; the objective is collected settled cash (not profit), and $7,200 is collected, so the target is met on its own terms. Owner hours: card says 1 human hour, no hours ceiling in the contract.",
+    "findings": [
+     "[object Object]",
+     "[object Object]",
+     "[object Object]"
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:39:34.023Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_d8d0ccf7b6b3_fc677b",
+    "revisionDigest": "d8d0ccf7b6b3f54e1c601ab0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3371ef5bfba049609291/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is the right stance: three WRITTEN_ACCEPTANCE agreements at $2,400 each (price fact is EVIDENCE: signed purchase orders dated 2026-11-20) from the payer itself, so price is this buyer's real purchase price and 3 x $2,400 = $7,200 >= $6,000 target. Fulfilment is the recorded fulfiller: PlaySafe Inspections (certified) quoted $900 per park system in writing, finishes by day 10; cost $2,700 total, well below price. Capital: cities pay net 45 after reports (day 10 + 45 = day 55); PlaySafe invoices net 60 from day 10 (day 70), so receipts precede the only spend; peak owner capital $0, inside the zero up-front limit. Ledger matches steps (3 receipts settling day 55, one spend day 70). Window: all $7,200 settles by day 55 < 75. After paying the supplier inside the window the account keeps $4,500; the objective is collected settled cash (not profit), and $7,200 is collected, so the target is met on its own terms. Owner hours: card says 1 human hour, no hours ceiling in the contract.",
+    "findings": [
+     "NOTE: Net retained after the day-70 supplier payment is $4,500 (trace netCents 450000), below $6,000. Passed because the contract metric is collected settled cash, not profit; if the owner meant money kept, this plan falls short by $1,500.",
+     "NOTE: Zero-capital holds only if every city pays on its net-45 terms; a city paying >15 days late would put the owner on the hook for PlaySafe's day-70 invoice. Confirm the POs' payment terms on s1.",
+     "NOTE: Brain's own step list labels the DELIVER step owner PERSON; the plan and card name PlaySafe as performer, which is correct."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:39:38.945Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_cc57cac742f6_f08e3b",
+    "revisionDigest": "cc57cac742f600a2b115bbca",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3371ef5bfba049609291/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The contract window is now 21 days. NO_PLAN is right and the decisive gap is a true DEADLINE constraint: the only opening's signed POs (3 x $2,400 = $7,200) pay net 45 after the reports, PlaySafe finishes by day 10, so cash settles day 55 (card timeToFirstCash 55 days, EVIDENCE); even if the reports were delivered on day 0, net 45 lands on day 45, still after day 21, so $0 counts. Every other link stays established; Brain's SETTLES_IN_TIME is the only false link and matches decisiveLinks. The resolution is arithmetically right: the deadline must be at least day 55, or the cities must pay within 11 days of the day-10 reports (by day 21), in which case the supplier's net-60 invoice (day 70) still falls after the receipts and peak capital stays $0. It responds to my earlier findings correctly (moot under the new window).",
+    "findings": [
+     "NOTE: Paying within 11 days changes the signed net-45 terms; nothing on the record says a municipal buyer will, so that branch is a request, not a plan, as the revision says."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:45:11.898Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_cc57cac742f6_f08e3b",
+   "digest": "cc57cac742f600a2b115bbca",
+   "contractDigest": "fb2c115489425e17a1893635",
+   "plan": {
+    "goalId": "wst_91c55d5ac5c8457c84f8",
+    "contractDigest": "fb2c115489425e17a1893635",
+    "parentRevisionId": "rev_d8d0ccf7b6b3_fc677b",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan inside 21 days: the signed inspection orders settle on day 55",
+     "opportunityIds": [],
+     "why": "The owner's window is now 21 days. The three signed $2,400 purchase orders ($7,200) pay net 45 after the reports, and PlaySafe finishes the reports by day 10, so the cities' cash settles on day 55 (the card's measured time to first cash is 55 days). No dollar of it lands inside 21 days, and no other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Fulfil the signed orders anyway",
+      "why": "All $7,200 settles on day 55, 34 days after the 21-day deadline: $0 counts toward the goal."
+     },
+     {
+      "title": "Ask the cities to pay on receipt",
+      "why": "Would need each city to pay within 11 days of the day-10 report instead of net 45; nothing on the record says any city will."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the owner to move the deadline to at least day 55, or ask the three directors whether they will pay within 11 days of the report",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src-ttc",
+       "src-price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 55,
+      "unit": "days",
+      "sources": [
+       "src-ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per report",
+      "status": "EVIDENCED",
+      "value": 240000,
+      "unit": "cents",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "deals",
+      "sources": [
+       "src-price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src-price",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#price",
+      "dated": "2026-11-20",
+      "claim": "Three municipal parks departments signed purchase orders at $2,400 per inspection report, payable net 45 after receipt.",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     },
+     {
+      "id": "src-ttc",
+      "url": "https://brain.local/card/cop_84ce3ccac4c34cc698d3#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "55 days to first cash (reports by day 10, then net 45).",
+      "population": "Municipal parks and recreation directors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_84ce3ccac4c34cc698d3"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement time: the only opening's cash settles on day 55 (reports by day 10 + net 45), after the 21-day deadline, so it brings $0 inside the window.",
+     "resolution": "Move the deadline to at least 55 days, when the three signed $2,400 orders ($7,200) settle with no owner capital; or get the three cities to pay within 11 days of the day-10 reports, which would make the same plan executable inside 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "NOTE: Net retained after the day-70 supplier payment is $4,500 (trace netCents 450000), below $6,000.",
+      "resolution": "Moot under the new 21-day window: no cash settles inside it, so the plan is withdrawn to NO_PLAN."
+     },
+     {
+      "finding": "NOTE: Zero-capital holds only if every city pays on its net-45 terms.",
+      "resolution": "Moot: with a 21-day window the net-45 receipts fall outside it; the revision now names settlement time as the decisive gap."
+     },
+     {
+      "finding": "NOTE: Brain's own step list labels the DELIVER step owner PERSON; the plan and card name PlaySafe as performer.",
+      "resolution": "Agreed; no delivery step remains in this NO_PLAN revision."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_84ce3ccac4c34cc698d3",
+      "why": "Its cash settles on day 55, after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Extend the window to at least 55 days, when the three signed orders' $7,200 settles (net 45 after day-10 reports).",
+      "basis": [
+       {
+        "opportunityId": "cop_84ce3ccac4c34cc698d3",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_cc57cac742f6_f08e3b",
+    "digest": "cc57cac742f600a2b115bbca",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T01:44:19.905Z"
+   },
+   "review": {
+    "revisionId": "rev_cc57cac742f6_f08e3b",
+    "revisionDigest": "cc57cac742f600a2b115bbca",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_fc3d91806e154e2ab8c4/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3371ef5bfba049609291/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The contract window is now 21 days. NO_PLAN is right and the decisive gap is a true DEADLINE constraint: the only opening's signed POs (3 x $2,400 = $7,200) pay net 45 after the reports, PlaySafe finishes by day 10, so cash settles day 55 (card timeToFirstCash 55 days, EVIDENCE); even if the reports were delivered on day 0, net 45 lands on day 45, still after day 21, so $0 counts. Every other link stays established; Brain's SETTLES_IN_TIME is the only false link and matches decisiveLinks. The resolution is arithmetically right: the deadline must be at least day 55, or the cities must pay within 11 days of the day-10 reports (by day 21), in which case the supplier's net-60 invoice (day 70) still falls after the receipts and peak capital stays $0. It responds to my earlier findings correctly (moot under the new window).",
+    "findings": [
+     "NOTE: Paying within 11 days changes the signed net-45 terms; nothing on the record says a municipal buyer will, so that branch is a request, not a plan, as the revision says."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T01:45:11.898Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 21 days using no up-front capital.",
+    "terms": "3b821fa81d4dfa2e",
+    "openings": {
+     "cop_84ce3ccac4c34cc698d3": "53d70352f5540aa7"
+    }
+   },
+   "at": "2026-11-28T01:47:42.788Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

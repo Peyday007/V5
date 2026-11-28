@@ -1,0 +1,315 @@
+{
+ "caseId": "aq-04-2500-21d-hands-off",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"One-time Google Business Profile optimization for local busi\" needs [figure withheld] and keeps [figure withheld], 150× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Website rebuild for US local service businesses, sol), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_9f38af0ae8614ccf8a86",
+   "cop_1d9d526c1ca4404f893b"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_9f38af0ae8614ccf8a86",
+    "title": "Website rebuild for US local service businesses, sold by free cold email, paid up front, built by a hired freelancer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "Owners of US local service businesses with no or outdated website",
+     "reachableChannel": "Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools)",
+     "offerScope": "Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [],
+     "industry": "Small-business web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email sent by Brain from a free mailbox to businesses listed in public dire"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 600, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged to Owners of US local service businesses with no or outdated website, reached through Cold email sent by Brain from a free mailbox to businesses listed in public directories (no paid tools), at $1,500; Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance web designer hired per site on Fiverr/Upwork, paid from the buyer's payment.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-scope 5-page website rebuild in 7 days, paid 100% up front via a Stripe payment link before the freelancer is engaged",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of US local service businesses with no or outdated website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://webfx.com/blog/web-design/how-much-does-it-cost-to-build-a-website-for-a-small-business; https://fitsmallbusiness.com/website-costs/; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://docs.stripe.com/payouts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_1d9d526c1ca4404f893b",
+    "title": "One-time Google Business Profile optimization for local businesses, paid up front, done by a hired specialist",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "US single-location local businesses with incomplete Google Business Profiles",
+     "reachableChannel": "Cold email sent by Brain from a free mailbox (no paid tools)",
+     "offerScope": "One-time Google Business Profile audit and optimization, paid up front",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance local-SEO specialist hired per listing, paid from the buyer's payment",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email sent by Brain from a free mailbox (no paid tools)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 100, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email sent by Brain from a free mailbox (no paid tools)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time Google Business Profile audit and optimization, paid up front to US single-location local businesses with incomplete Google Business Profiles, reached through Cold email sent by Brain from a free mailbox (no paid tools), at $250; Freelance local-SEO specialist hired per listing, paid from the buyer's payment delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance local-SEO specialist hired per listing, paid from the buyer's payment.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time Google Business Profile audit and optimization, paid up front",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US single-location local businesses with incomplete Google Business Profiles",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://contra.com/s/L6somrvP-local-seo-google-profile-optimization-dollar250month; https://whitespark.ca/google-my-business-management-service/; https://docs.stripe.com/payouts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T01:52:08.513Z"
+ }
+}

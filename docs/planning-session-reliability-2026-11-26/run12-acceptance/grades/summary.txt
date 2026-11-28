@@ -1,0 +1,39 @@
+{
+  "cases": 12,
+  "passed": 9,
+  "reliability": 0.75,
+  "wilson95": {
+    "low": 0.4676896608793401,
+    "high": 0.9110599603710388
+  },
+  "criticalFailures": 0,
+  "published": 12,
+  "usable": 9,
+  "e2e": 9,
+  "e2eFailures": {
+    "VERDICT_INCORRECT": 3
+  },
+  "failures": [
+    {
+      "id": "ap-01-bike-shop-service-workbook",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ap-03-cinema-supplier-cost-rises",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    },
+    {
+      "id": "ap-04-dive-shop-owner-hours",
+      "failures": [
+        "UNJUSTIFIED_REFUSAL"
+      ],
+      "critical": []
+    }
+  ]
+}
