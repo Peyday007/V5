@@ -337,4 +337,22 @@ const stateTool: McpTool = {
   },
 };
 
-export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, researchTool, verifyResearchTool, revisionTool, reviewTool, finalizeTool, stateTool];
+/*
+ * What one call returns must fit what the Claude app reads in one tool result (about 25k tokens), not only Brain's own
+ * 256 KB transport cap (production, 2026-11-28, Cash Mode 1: brain_planning_context returned 158,464 characters, which
+ * the app saved to a file instead of reading, and brain_planning_state and brain_planning_submit_revision hit the
+ * 256 KB cap). Every planning tool's value is fitted to that budget, each cut named in `compacted`; the records stay
+ * whole in Brain, which the checks read.
+ */
+export const APP_RESULT_BUDGET_BYTES = 80 * 1024;
+export const fitted = (tool: McpTool): McpTool => ({
+  ...tool,
+  run: async (args, ctx) => {
+    const out = await tool.run(args, ctx);
+    if (!out || typeof out !== 'object' || !('value' in out)) return out;
+    const { fitContext } = await import('../services/planning/sessionPlanning.ts');
+    const value = (out as { value: unknown }).value;
+    return value && typeof value === 'object' && !Array.isArray(value) ? { ...out, value: fitContext(value as Record<string, unknown>, APP_RESULT_BUDGET_BYTES) } : out;
+  },
+});
+export const PLANNING_TOOLS: readonly McpTool[] = [contractTool, contextTool, routesTool, brainTool, researchTool, verifyResearchTool, revisionTool, reviewTool, finalizeTool, stateTool].map(fitted);
