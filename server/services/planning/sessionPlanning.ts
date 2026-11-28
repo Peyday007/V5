@@ -33,6 +33,7 @@ import {
   contractMismatches,
   cashTrace,
   revisionDigest,
+  REVISION_SCHEMA,
   type BrainFacts,
   type CardFacts,
   type ReviewCondition,
@@ -867,6 +868,31 @@ export function shapeProblems(r: Partial<PlanRevisionInput>): string[] {
   (r.excluded ?? []).forEach((x, i) => { if (!x || typeof x.opportunityId !== 'string') out.push(`excluded[${i}] must be {opportunityId, why}`); });
   if (r.resolves !== undefined && r.resolves !== null && !strings(r.resolves)) out.push('resolves must be an array of chain links');
   if (r.validation && typeof r.validation === 'object' && r.validation.decides !== undefined && !strings(r.validation.decides)) out.push('validation.decides must be an array of chain links');
+  // Then every nested field the checks read, against the schema the tool states (production, 2026-11-28, Cash Mode 1:
+  // req_pV0ETX4AxVMv and req_Cq3hdNIVYhto sent a validation with no proof, and the check threw reading it).
+  if (out.length === 0) out.push(...schemaProblems(r, REVISION_SCHEMA as unknown as Schema, '', true));
+  return out;
+}
+
+interface Schema { type?: string | readonly string[]; enum?: readonly unknown[]; required?: readonly string[]; properties?: Record<string, Schema>; items?: Schema }
+
+/** A value against the revision schema's types, enums, required fields and items; the top level's absent fields are INCOMPLETE_OUTPUT, not malformed. */
+function schemaProblems(v: unknown, schema: Schema, path: string, top = false, required = false): string[] {
+  const types = schema.type === undefined ? [] : Array.isArray(schema.type) ? schema.type : [schema.type as string];
+  const kind = v === null ? 'null' : Array.isArray(v) ? 'array' : typeof v;
+  const at = path || 'the revision';
+  // Structure always (an object or a list the checks walk), a primitive's type only where the checks read it
+  // (a required field); an unfamiliar enum value is the checks' business, never a crash.
+  const structural = types.includes('object') || types.includes('array');
+  if (types.length && !types.includes(kind) && (structural || required)) return [`${at} must be ${types.join(' or ')}`];
+  const out: string[] = [];
+  if (kind === 'object' && v !== null) {
+    const o = v as Record<string, unknown>;
+    const req = new Set(top ? [] : (schema.required ?? []));
+    for (const k of req) if (o[k] === undefined) out.push(`${path ? `${path}.` : ''}${k} is required`);
+    for (const [k, sub] of Object.entries(schema.properties ?? {})) if (o[k] !== undefined) out.push(...schemaProblems(o[k], sub, path ? `${path}.${k}` : k, false, req.has(k)));
+  }
+  if (kind === 'array' && schema.items) (v as unknown[]).forEach((x, i) => out.push(...schemaProblems(x, schema.items!, `${path}[${i}]`, false, true)));
   return out;
 }
 

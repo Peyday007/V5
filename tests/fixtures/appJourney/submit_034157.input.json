@@ -1,0 +1,29 @@
+{
+ "model": "claude-opus-5-5",
+ "revision": {
+  "chain": [],
+  "excluded": [],
+  "goalId": "wst_5e3a85b8ae854e2a9cc4",
+  "stance": "CONDITIONAL",
+  "steps": [],
+  "strategy": {
+   "opportunityIds": [
+    "cop_85b24ac574514934a2bc",
+    "cop_46482981850f44ab8570"
+   ],
+   "title": "Cold-email-sold fixed-price setup services for US local businesses, fulfilled by freelancers after payment",
+   "why": "Brain does prospecting, outreach and replies through the connected Instantly account; buyers pay up front by payment link; freelancers are paid only from collected cash, so pre-proof spend stays at email infrastructure (under $300) and there is no owner physical work."
+  },
+  "validation": {
+   "decides": [
+    "CONVERSION"
+   ],
+   "threshold": {
+    "of": 300,
+    "paid": 1,
+    "reach": 0.9
+   }
+  }
+ },
+ "session_id": "session_01QF5Tk5xe3HiYmE8YKwtMJ5"
+}
