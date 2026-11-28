@@ -92,6 +92,7 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
+import { readOperatePermission } from '../sources/acquisition.ts';
 import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
@@ -603,7 +604,75 @@ async function fillStatedChannel(opportunity: CashOpportunity): Promise<CashOppo
   const channel = statedChannel(claim.claim);
   if (!channel) return opportunity;
   const written = await writeEvidenceAnswer({ opportunity, field: 'access', claim: { ...claim, claim: channel }, needId: null });
-  return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
+  if (!written) return opportunity;
+  await askOperatePermission(opportunity, channel);
+  return (await getOpportunity(opportunity.id)) ?? opportunity;
+}
+
+/**
+ * The host a stated channel ("HackerOne (hackerone.com/github)") is reached
+ * at, lowercased and without scheme or path, or null. Pure.
+ */
+export function channelHost(channel: string | null | undefined): string | null {
+  const inside = /\(([^()\s]+)\)\s*$/.exec(channel ?? '')?.[1];
+  const host = inside?.replace(/^https?:\/\//i, '').split('/')[0]?.toLowerCase() ?? '';
+  return /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(host) ? host : null;
+}
+
+/** The request key of the person-held need to operate a host for one opening. */
+export function operateKey(opportunityId: string, host: string): string {
+  return `operate:${opportunityId}:${host}`;
+}
+
+/**
+ * A stated channel is a platform's own interface, so reaching anyone through
+ * it means submitting there under an account — and permission to operate a
+ * site under a named account is produced only by a person at a terminal
+ * (`sources/operatePermissionCli.ts`). Review round 1 (F2, access-for-v):
+ * filling Access from the source answered where the channel is, and left the
+ * opening reading as reachable with nobody able to use it. Unless a standing
+ * permission for the host is already recorded, one person-held need says so
+ * (blocker `PERSON`, so it is a person's review and never a research slot).
+ * It is settled by `settleOperatePermissionNeeds` once the grant row exists.
+ */
+async function askOperatePermission(opportunity: CashOpportunity, channel: string): Promise<void> {
+  const host = channelHost(channel);
+  if (!host) return;
+  if ((await readOperatePermission(host)).permitted) return;
+  const grant = `npx tsx server/services/sources/operatePermissionCli.ts grant --host ${host} --account "<account reference>" --by <name>`;
+  await raiseNeed({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    actorRef: BRAIN,
+    blockedAction: `Operate ${host} for "${opportunity.title}"`,
+    whyItMatters:
+      `The channel its source states, ${channel}, is a platform's own interface: reaching anyone through it means ` +
+      'submitting there under an account, and only a person can grant Brain permission to operate a site under a named account.',
+    recommendedPath: `The person who holds an account on ${host} grants it at a terminal: ${grant}`,
+    setupEffort: 'One terminal command by the person who holds the account.',
+    nextStep: grant,
+    completionCondition: `A standing OPERATE_PERMISSION for ${host} is recorded.`,
+    blocksState: 'EXECUTING',
+    requestKey: operateKey(opportunity.id, host),
+    blockerKey: parseBlockerKey('PERSON'),
+  });
+}
+
+/** Settle each open operate need whose host now reads a standing permission, by reading the row. */
+async function settleOperatePermissionNeeds(open: readonly CashNeed[]): Promise<void> {
+  for (const need of open) {
+    if (!need.requestKey?.startsWith('operate:')) continue;
+    const host = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const permission = await readOperatePermission(host);
+    if (!permission.permitted) continue;
+    await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: `${host} now reads a standing permission to operate it under "${permission.accountRef}", granted by ${permission.grantedBy ?? 'a person'}.`,
+      actorUserId: BRAIN,
+      verifiedBy: 'BRAIN_READ_THE_ROW',
+    });
+  }
 }
 
 /**
@@ -654,6 +723,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
   const openByKey = new Map(open.filter((one) => !!one.requestKey).map((one) => [one.requestKey!, one]));
+  await settleOperatePermissionNeeds(open);
 
   for (const listed of await listOpportunities({
     projectId,

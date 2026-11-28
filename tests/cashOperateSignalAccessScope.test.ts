@@ -28,9 +28,13 @@ import { parseBlockerKey } from '../server/domain/types.ts';
 import {
   reconcileDiscoverableGaps,
   signalQuestionsUnanswerable,
+  channelHost,
+  operateKey,
   startNeedWork,
   statedChannel,
 } from '../server/services/cash/operate.ts';
+import { needExecutionOwner } from '../server/services/cash/needs.ts';
+import { recordOperatePermission } from '../server/services/sources/acquisition.ts';
 import { QUESTION_SKIPPED_EVENT } from '../server/services/cash/screenMetrics.ts';
 
 const TCG =
@@ -215,5 +219,57 @@ describe('a channel the source states', () => {
     await harvestedFrom(github.id, GITHUB, { sourceUrl: null });
     await reconcileDiscoverableGaps(projectId);
     expect((await getOpportunity(github.id))!.reachableChannel).toBeNull();
+  });
+});
+
+/*
+ * Review round 1 (F2): a channel read from the source is a platform's own
+ * interface, and submitting there needs an account only a person can let Brain
+ * operate. Filling Access must not leave the opening reading as reachable with
+ * nobody able to use the channel: the remaining blocker is a person's, typed.
+ */
+describe('a stated platform channel needs a person to grant operating it', () => {
+  it('reads the host a stated channel is reached at', () => {
+    expect(channelHost('HackerOne (hackerone.com/github)')).toBe('hackerone.com');
+    expect(channelHost('Bugcrowd (https://Bugcrowd.com/acme)')).toBe('bugcrowd.com');
+    expect(channelHost('HackerOne')).toBeNull();
+  });
+
+  it('raises one person-held need to operate the host, never a research slot', async () => {
+    const github = await signal(GITHUB);
+    await harvestedFrom(github.id, GITHUB);
+    await reconcileDiscoverableGaps(projectId);
+    await reconcileDiscoverableGaps(projectId);
+    const operate = (await listNeeds({ projectId, states: ['OPEN'] })).filter(
+      (one) => one.requestKey === operateKey(github.id, 'hackerone.com'),
+    );
+    expect(operate).toHaveLength(1);
+    expect(operate[0]!.blockerKey).toBe('PERSON');
+    expect(needExecutionOwner(operate[0]!.blockerKey).route).toBe('PERSON');
+    expect(operate[0]!.nextStep).toContain('operatePermissionCli.ts grant --host hackerone.com');
+  });
+
+  it('settles that need as RESOLVED once a person records the grant', async () => {
+    const github = await signal(GITHUB);
+    await harvestedFrom(github.id, GITHUB);
+    await reconcileDiscoverableGaps(projectId);
+    const key = operateKey(github.id, 'hackerone.com');
+    expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === key)).toBe(true);
+    await recordOperatePermission({ host: 'hackerone.com', granted: true, accountRef: 'owner hackerone login', grantedBy: 'owner' });
+    await reconcileDiscoverableGaps(projectId);
+    expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === key)).toBe(false);
+    expect((await listNeeds({ projectId, states: ['RESOLVED'] })).map((one) => one.requestKey)).toContain(key);
+  });
+
+  it('asks nothing when a standing permission for the host is already recorded', async () => {
+    await recordOperatePermission({ host: 'hackerone.com', granted: true, accountRef: 'owner hackerone login', grantedBy: 'owner' });
+    const github = await signal(GITHUB);
+    await harvestedFrom(github.id, GITHUB);
+    await reconcileDiscoverableGaps(projectId);
+    expect((await getOpportunity(github.id))!.reachableChannel).toBe('HackerOne (hackerone.com/github)');
+    const keys = [...(await listNeeds({ projectId, states: ['OPEN'] })), ...(await listNeeds({ projectId, states: ['RESOLVED'] }))].map(
+      (one) => one.requestKey,
+    );
+    expect(keys).not.toContain(operateKey(github.id, 'hackerone.com'));
   });
 });
