@@ -22,3 +22,15 @@ describe('run 16, ay-04: "keep $X after all direct costs" is a contribution targ
     expect(read('I want $5,000 of settled cash in 30 days and keep $500 aside as a buffer.')).toMatchObject({ metric: 'SETTLED_CASH', amount: 5000 });
   });
 });
+
+describe('production app journey (2026-11-28, 09:29Z): a cash outflow names its step through a field the app is shown', () => {
+  it('the submit schema offers cash.stepId; the app had written "s1: …" into the label, leaving 5 outflows unlinked', async () => {
+    const { REVISION_SCHEMA } = await import('../server/domain/sessionPlanning.ts');
+    const cash = (REVISION_SCHEMA as unknown as { properties: { cash: { items: { properties: Record<string, unknown> } } } }).properties.cash.items.properties;
+    expect(cash.stepId).toBeDefined();
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    const fs = await import('node:fs');
+    const plan = (JSON.parse(fs.readFileSync('docs/planning-session-reliability-2026-11-26/run15-acceptance/published/a04.state.json', 'utf8')) as { value: { final: { plan: Record<string, unknown> } } }).value.final.plan;
+    expect(shapeProblems(plan as never)).toEqual([]);
+  });
+});

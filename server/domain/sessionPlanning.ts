@@ -307,7 +307,7 @@ export const REVISION_SCHEMA = {
     },
     cash: {
       type: 'array',
-      items: { type: 'object', required: ['day', 'kind', 'amountCents'], properties: { day: { type: 'number' }, kind: { type: 'string', enum: ['SPEND', 'FEE', 'COMMIT', 'RELEASE', 'RECEIPT', 'REFUND', 'FUNDING'] }, amountCents: { type: 'number' }, label: { type: 'string' } } },
+      items: { type: 'object', required: ['day', 'kind', 'amountCents'], properties: { day: { type: 'number' }, kind: { type: 'string', enum: ['SPEND', 'FEE', 'COMMIT', 'RELEASE', 'RECEIPT', 'REFUND', 'FUNDING'] }, amountCents: { type: 'number' }, label: { type: 'string' }, stepId: { type: ['string', 'null'], description: 'the id of the step whose cost or obligation this outflow pays; every SPEND, FEE and COMMIT names one' } } },
     },
     proofDay: num,
     quantities: {
@@ -850,14 +850,14 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     const linked = new Map<string, number>();
     for (const e of r.cash) {
       if (e.kind === 'RECEIPT' || e.kind === 'REFUND' || e.kind === 'FUNDING') continue;
-      if (!e.stepId) { add('CASH_UNLINKED', `outflow "${e.label}" (${e.kind} ${e.amountCents / 100}) names no step whose cost or obligation it pays`, `day ${e.day}`); continue; }
+      if (!e.stepId) { add('CASH_UNLINKED', `outflow "${e.label}" (${e.kind} ${e.amountCents / 100}) names no step whose cost or obligation it pays (set its stepId)`, `day ${e.day}`); continue; }
       if (!stepIds.has(e.stepId)) { add('CASH_UNLINKED', `outflow "${e.label}" names step ${e.stepId}, which the plan does not have`, `day ${e.day}`); continue; }
       linked.set(e.stepId, (linked.get(e.stepId) ?? 0) + (e.kind === 'RELEASE' ? -e.amountCents : e.amountCents));
     }
     for (const s of r.steps) {
       const paid = linked.get(s.id) ?? 0;
       if (s.costCents === null) continue;
-      if (s.costCents > 0 && paid === 0) add('STEP_COST_UNRECONCILED', `the step costs ${s.costCents / 100} but no cash entry pays or commits it: the expense is omitted from the ledger`, s.id);
+      if (s.costCents > 0 && paid === 0) add('STEP_COST_UNRECONCILED', `the step costs ${s.costCents / 100} but no cash entry pays or commits it: the expense is omitted from the ledger (a cash outflow with stepId ${s.id})`, s.id);
       else if (paid !== s.costCents) add('STEP_COST_UNRECONCILED', `the step costs ${s.costCents / 100} but its linked outflows total ${paid / 100}${paid > s.costCents ? ': counted twice' : ': part of it is omitted'}`, s.id);
     }
     const stepCost = r.steps.reduce((sum, s) => sum + (s.costCents ?? 0), 0);
