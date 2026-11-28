@@ -275,6 +275,65 @@ export interface PlanRevisionInput {
 
 /** The chain links a cash plan rests on (the planner's `CHAIN_LINKS`). */
 export const CHAIN_LINKS = ['REACHABLE_BUYER', 'CURRENT_DEMAND', 'OFFER_AND_PRICE', 'CONVERSION', 'MARKET_VOLUME', 'FULFILMENT', 'ECONOMICS', 'SETTLES_IN_TIME'] as const;
+const LINKS = { type: 'array', items: { type: 'string', enum: [...CHAIN_LINKS] } } as const;
+const num = { type: ['number', 'null'] } as const;
+/** The revision's JSON schema: stated to the caller by the submit tool, and enforced by `shapeProblems` before any check. */
+export const REVISION_SCHEMA = {
+  type: 'object',
+  description: 'One plan revision for the goal. Read brain_planning_context first: it names the contract digest and every opening id to account for.',
+  required: ['goalId', 'contractDigest', 'stance', 'strategy', 'chain'],
+  properties: {
+    goalId: { type: 'string' },
+    contractDigest: { type: 'string', description: 'The current contract digest from brain_planning_context.' },
+    parentRevisionId: { type: ['string', 'null'], description: 'The revision this one revises (after a REVISE review), else null.' },
+    stance: { type: 'string', enum: ['EXECUTABLE', 'CONDITIONAL', 'NO_PLAN'] },
+    strategy: {
+      type: 'object', required: ['title', 'opportunityIds', 'why'],
+      properties: { title: { type: 'string' }, opportunityIds: { type: 'array', items: { type: 'string' }, description: 'The openings the plan executes (empty for NO_PLAN).' }, why: { type: 'string' } },
+    },
+    alternatives: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, why: { type: 'string' } } } },
+    chain: {
+      type: 'array', description: 'Every opening weighed, with the chain links its evidence does not establish (empty when all are).',
+      items: { type: 'object', required: ['opportunityId', 'missing'], properties: { opportunityId: { type: 'string' }, missing: LINKS } },
+    },
+    excluded: { type: 'array', items: { type: 'object', required: ['opportunityId', 'why'], properties: { opportunityId: { type: 'string' }, why: { type: 'string' } } } },
+    members: {
+      type: 'array',
+      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num, ownerHours: { type: ['number', 'null'], description: 'Owner hours the deals take in all; required when the goal limits owner hours.' } } },
+    },
+    steps: {
+      type: 'array',
+      items: { type: 'object', required: ['id', 'kind', 'evidence'], properties: { evidence: { type: 'array', items: { type: 'string' }, description: 'The quantity names or source ids the step rests on.' }, ownerHours: num, id: { type: 'string' }, kind: { type: 'string', enum: ['REACH', 'OFFER', 'SELL', 'ORDER', 'DELIVER', 'COLLECT', 'RESEARCH', 'TEST', 'OTHER'] }, label: { type: 'string' }, performer: { type: ['string', 'null'] }, costCents: num, day: num, dependsOn: { type: ['string', 'null'] } } },
+    },
+    cash: {
+      type: 'array',
+      items: { type: 'object', required: ['day', 'kind', 'amountCents'], properties: { day: { type: 'number' }, kind: { type: 'string', enum: ['SPEND', 'FEE', 'COMMIT', 'RELEASE', 'RECEIPT', 'REFUND', 'FUNDING'] }, amountCents: { type: 'number' }, label: { type: 'string' } } },
+    },
+    proofDay: num,
+    quantities: {
+      type: 'array',
+      items: { type: 'object', required: ['name', 'status', 'sources'], properties: { name: { type: 'string' }, status: { type: 'string', enum: ['EVIDENCED', 'ESTIMATE', 'ASSUMED', 'UNKNOWN'] }, value: num, unit: { type: 'string' }, sources: { type: 'array', items: { type: 'string' } }, needs: { type: ['string', 'null'] } } },
+    },
+    sources: {
+      type: 'array',
+      items: { type: 'object', required: ['id', 'url'], properties: { id: { type: 'string' }, url: { type: 'string' }, dated: { type: ['string', 'null'] }, claim: { type: 'string' }, population: { type: 'string' }, matchesBuyer: { type: 'boolean' }, opportunityId: { type: ['string', 'null'] } } },
+    },
+    validation: {
+      type: ['object', 'null'], required: ['proof', 'stop'],
+      properties: {
+        proof: { type: 'string' }, stop: { type: 'array', items: { type: 'string' } }, continue: { type: 'array', items: { type: 'string' } }, decides: LINKS,
+        threshold: { type: 'object', required: ['paid', 'of', 'reach'], properties: { paid: { type: 'number' }, of: { type: 'number' }, reach: { type: 'number' } } },
+      },
+    },
+    noPlan: { type: ['object', 'null'], required: ['decisiveGap', 'resolution'], properties: { decisiveGap: { type: 'string' }, resolution: { type: 'string' }, decisiveLinks: LINKS } },
+    reach: { type: ['object', 'null'], properties: { value: { type: 'number' }, calibrated: { type: 'boolean' }, presentedAs: { type: 'string', enum: ['PROBABILITY', 'COVERAGE'] } } },
+    resolves: LINKS,
+    answers: { type: 'array', items: { type: 'object', properties: { finding: { type: 'string' }, resolution: { type: 'string' }, condition: { type: 'number' }, decision: { type: 'string', enum: ['ACCEPTED', 'REBUTTED'] }, records: { type: 'array', items: { type: 'string' } } } } },
+    disagreements: { type: 'array', items: { type: 'object', required: ['opportunityId', 'link'], properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, reason: { type: 'string' } } } },
+    constraints: { type: 'array', items: { type: 'object', required: ['constraint'], properties: { constraint: { type: 'string', enum: ['DEADLINE', 'CAPITAL', 'TARGET', 'OWNER_HOURS'] }, suggestion: { type: 'string' }, basis: { type: 'array', items: { type: 'object', properties: { opportunityId: { type: 'string' }, field: { type: 'string' } } } } } } },
+  },
+} as const;
+
 export const PLAN_CONSTRAINTS = ['DEADLINE', 'CAPITAL', 'TARGET', 'OWNER_HOURS'] as const;
 
 /**

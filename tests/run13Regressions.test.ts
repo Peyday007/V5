@@ -68,3 +68,57 @@ describe('run 13, as-02: under an owner-hours limit every weighed opening states
     expect(ownerHourGaps({})).toEqual([]);
   });
 });
+
+describe('production app journey (2026-11-28, Cash Mode 1): no revision can crash the check', () => {
+  it('the two submits that failed with server errors (req_pV0ETX4AxVMv, req_Cq3hdNIVYhto: a validation with no proof) are refused by path', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    for (const f of ['submit_034157', 'submit_040143']) {
+      const input = JSON.parse(fs.readFileSync(`tests/fixtures/appJourney/${f}.input.json`, 'utf8')) as { revision: Record<string, unknown> };
+      expect(shapeProblems(input.revision as never)).toEqual(['validation.proof is required', 'validation.stop is required']);
+    }
+  });
+
+  it('every revision stored by acceptance runs passes the shape gate (it refuses only what the checks cannot read)', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    const root = 'docs/planning-session-reliability-2026-11-26';
+    let n = 0;
+    for (const run of fs.readdirSync(root)) {
+      const dir = `${root}/${run}/published`;
+      if (!fs.existsSync(dir)) continue;
+      for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.state.json'))) {
+        const v = (JSON.parse(fs.readFileSync(`${dir}/${f}`, 'utf8')) as { value?: { revisions?: Partial<PlanRevisionInput>[] } }).value;
+        for (const r of v?.revisions ?? []) { n += 1; expect(shapeProblems(r), `${run}/${f}`).toEqual([]); }
+      }
+    }
+    expect(n).toBeGreaterThan(300);
+  });
+
+  it('removing or nulling any field of a real published revision is refused by path or checked cleanly, never thrown', async () => {
+    const { shapeProblems } = await import('../server/services/planning/sessionPlanning.ts');
+    const s = read('d02');
+    const base = s.final.plan as unknown as Record<string, unknown>;
+    const paths: (string | number)[][] = [];
+    const walk = (v: unknown, p: (string | number)[]) => {
+      // Fields Brain writes itself (each step's executor, the record's identity) are never the caller's to send.
+      if (p.includes('executor') || ['revisionId', 'digest', 'author', 'createdAt'].includes(String(p[0]))) return;
+      if (p.length) paths.push(p);
+      if (Array.isArray(v)) v.slice(0, 2).forEach((x, i) => walk(x, [...p, i]));
+      else if (v && typeof v === 'object') for (const k of Object.keys(v)) walk((v as Record<string, unknown>)[k], [...p, k]);
+    };
+    walk(base, []);
+    expect(paths.length).toBeGreaterThan(100);
+    for (const p of paths) {
+      for (const mode of ['delete', 'null'] as const) {
+        const r = structuredClone(base);
+        let o: Record<string | number, unknown> = r;
+        for (const k of p.slice(0, -1)) o = o[k] as Record<string | number, unknown>;
+        const last = p[p.length - 1]!;
+        if (mode === 'delete') { if (Array.isArray(o)) (o as unknown[]).splice(Number(last), 1); else delete o[last]; } else o[last] = null;
+        if (shapeProblems(r as never).length) continue;
+        // As submitRevision fills an absent or null section (`??`) before the checks run.
+        const filled = { stance: 'NO_PLAN', strategy: { title: '', opportunityIds: [], why: '' }, alternatives: [], steps: [], cash: [], proofDay: null, quantities: [], sources: [], validation: null, noPlan: null, reach: null, answers: [], parentRevisionId: null, contractDigest: s.contract.digest, ...Object.fromEntries(Object.entries(r).filter(([, x]) => x !== undefined && x !== null)) } as unknown as PlanRevisionInput;
+        expect(() => checkRevision(s.contract, filled, brainFor(filled, { hoursCeiling: 17, rejectedSources: { [SBA]: SBA_REASON } }), '2026-11-28'), `${mode} ${p.join('.')}`).not.toThrow();
+      }
+    }
+  });
+});
