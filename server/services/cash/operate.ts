@@ -558,6 +558,90 @@ async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpport
   return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
 }
 
+/**
+ * The channel an opening's own source sentence names outright, or null.
+ *
+ * ORIGINATED:UNMET_NEED:access-for-v: the GitHub bounty's accepted claim says
+ * its bounty "is run through HackerOne (hackerone.com/github)", yet the
+ * opening's "Access for …" question waited on a research slot to rediscover a
+ * channel Brain already held. Only explicit forms that name both a party and
+ * the address it is reached at are read ("run through X (domain)",
+ * "submit(ted) via/through X (domain)", "reported through X at domain");
+ * anything looser is left to research, because a channel guessed from grammar
+ * is a wrong load-bearing field. Pure.
+ */
+const DOMAIN = String.raw`(?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[\w./-]*[\w/])?`;
+const STATED_CHANNEL = new RegExp(
+  String.raw`\b(?:is\s+run|run|submit(?:ted)?|reported|are\s+reported|is\s+reported)\s+(?:via|through)\s+${NAME}\s*(?:\((${DOMAIN})\)|\s+at\s+(${DOMAIN}))`,
+  'i',
+);
+export function statedChannel(text: string | null | undefined): string | null {
+  const found = STATED_CHANNEL.exec(text ?? '');
+  if (!found) return null;
+  const name = found[1]?.trim().replace(/[.'’-]+$/, '');
+  const where = (found[2] ?? found[3])?.replace(/[.,;:]+$/, '');
+  if (!name || !where || NOT_A_NAME.test(name)) return null;
+  return `${name} (${where})`;
+}
+
+/**
+ * Write the channel an opening's accepted source claim states outright, through
+ * the same evidence write `fillStatedPayer` uses. Unchanged when nothing was
+ * written — an unaccepted or unsourced claim never becomes a load-bearing field.
+ */
+async function fillStatedChannel(opportunity: CashOpportunity): Promise<CashOpportunity> {
+  if (opportunity.reachableChannel !== null || !opportunity.sourceClaimId) return opportunity;
+  const claim = await getClaim(opportunity.sourceClaimId);
+  if (!claim || !claim.accepted || !claim.sourceUrl) return opportunity;
+  const channel = statedChannel(claim.claim);
+  if (!channel) return opportunity;
+  const written = await writeEvidenceAnswer({ opportunity, field: 'access', claim: { ...claim, claim: channel }, needId: null });
+  return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
+}
+
+/**
+ * The card questions a signal's own fact rules out, keyed by field, with why.
+ *
+ * ORIGINATED:UNMET_NEED:access-for-v: withholding only the payer left the
+ * access question asked of the same openings — "establish a channel that
+ * actually reaches them" when the fact names nobody to reach. A resale quote
+ * or a supplier's own price names no party that would pay Brain, so there is
+ * no "them" and neither question has an answer research can find. The rule is
+ * the one `payerQuestionUnanswerable` already states; this only says which
+ * fields it covers.
+ */
+export const NO_PAYER_FIELDS = Object.freeze(['payer', 'access'] as const);
+export function signalQuestionsUnanswerable(
+  opportunity: Pick<CashOpportunity, 'title' | 'payer'>,
+): { fields: readonly string[]; why: string } | null {
+  const noPayer = payerQuestionUnanswerable(opportunity);
+  return noPayer ? { fields: NO_PAYER_FIELDS, why: noPayer } : null;
+}
+
+/**
+ * Whether an open question need asks something its opening's own fact rules
+ * out, read the way the raising pass reads it (a SIGNAL opening only). Used at
+ * the launch, so a need raised before the rule existed is not turned into work.
+ */
+async function needQuestionUnanswerable(
+  projectId: string,
+  opportunity: CashOpportunity,
+  need: Pick<CashNeed, 'requestKey'>,
+): Promise<string | null> {
+  const ruled = signalQuestionsUnanswerable(opportunity);
+  if (!ruled || !need.requestKey) return null;
+  const field = ruled.fields.find((one) => questionKey(opportunity.id, one) === need.requestKey);
+  if (!field) return null;
+  const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+  const reading = cashTier({
+    opportunity,
+    card: engine,
+    readiness: evidenceCard(opportunity).readiness,
+    policy: await executionPolicyForProject(projectId),
+  });
+  return reading.tier === 'SIGNAL' ? ruled.why : null;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
@@ -579,7 +663,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * and no "Payer for …" need is raised to rediscover it — and one already
      * open is settled by the filled-gap pass below, as any filled field is.
      */
-    const opportunity = await fillStatedPayer(listed);
+    const opportunity = await fillStatedChannel(await fillStatedPayer(listed));
     /*
      * Only for something Brain has a reason to spend on.
      *
@@ -666,21 +750,25 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * already open on it is withdrawn — nothing was established, so never
      * resolved — which frees the research slot it held.
      */
-    const noPayer = reading.tier === 'SIGNAL' ? payerQuestionUnanswerable(opportunity) : null;
+    const noPayer = reading.tier === 'SIGNAL' ? signalQuestionsUnanswerable(opportunity) : null;
     if (noPayer) {
-      asking = asking.filter((one) => one.key !== 'payer');
+      asking = asking.filter((one) => !noPayer.fields.includes(one.key));
+      const skipped = card.fields
+        .filter((one) => noPayer.fields.includes(one.key) && one.value === null)
+        .map((one) => one.key);
       await recordQuestionsSkipped({
         projectId,
         opportunityId: opportunity.id,
-        fields: ['payer'],
-        why: `No payer to look up: ${noPayer}.`,
+        fields: skipped,
+        why: `No payer to look up, and nobody to reach: ${noPayer.why}.`,
       });
-      const stale = openByKey.get(questionKey(opportunity.id, 'payer'));
-      if (stale) {
+      for (const field of noPayer.fields) {
+        const stale = openByKey.get(questionKey(opportunity.id, field));
+        if (!stale) continue;
         const closed = await closeNeed({
           needId: stale.id,
           to: 'WITHDRAWN',
-          resolution: `Not researched: ${noPayer}. Nothing was established, so this is withdrawn rather than resolved.`,
+          resolution: `Not researched: ${noPayer.why}. Nothing was established, so this is withdrawn rather than resolved.`,
           actorUserId: BRAIN,
         });
         if (closed.ok) openByKey.delete(stale.requestKey!);
@@ -1230,6 +1318,8 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       continue;
     }
+    // A question the opening's own fact rules out is never launched (access-for-v).
+    if (await needQuestionUnanswerable(projectId, opportunity, need)) continue;
     const candidate = await createCandidate({
       projectId,
       visibility: 'SHARED',
@@ -1325,6 +1415,8 @@ export async function startNeedWork(need: CashNeed, route: AcquiringRoute): Prom
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       return { kind: 'REFUSED', needId: need.id, reason: 'its opening is ruled out by its own card' };
     }
+    const unanswerable = await needQuestionUnanswerable(need.projectId, opportunity, need);
+    if (unanswerable) return { kind: 'REFUSED', needId: need.id, reason: `its question has no answer to find: ${unanswerable}` };
   }
   const ask = acquisitionAsk(need, route);
   const candidate = await createCandidate({
