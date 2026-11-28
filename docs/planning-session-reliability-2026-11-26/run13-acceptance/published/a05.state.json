@@ -1,0 +1,1408 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_83669dcbd2a44d0798a6",
+   "words": "Collect $15,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "settled cash received reaches the target within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "f45db104fa92038329d01702"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_83669dcbd2a44d0798a6",
+    "contractDigest": "273d5004cc63c1074dc6cc18",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the hot-shop safety compliance pack to 9 of the 46 guild studios",
+     "opportunityIds": [
+      "cop_98017b9c6c8c42e1bee3"
+     ],
+     "why": "Same pack, same buyer type: 9 of 20 owners paid $240 after one email. Need 9 of 46 (19.6%) against a measured 45%; $2,160 gross, $36 direct cost paid from receipts, card payouts settle 3 days after payment, well inside 30 days; no capital tied up."
+    },
+    "alternatives": [
+     {
+      "title": "Wait for more openings",
+      "why": "Unnecessary: this single opening covers the target with margin inside every limit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the pack offer to the 46 studio owners listed in the state glass guild directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $240 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 9 paid orders at $240",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 9 buyers (direct cost $4 each)",
+      "performer": "BRAIN",
+      "costCents": 3600,
+      "day": 8,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 9 x $240 = $2160, settled by day 10",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 216000,
+      "label": "9 payments of $240",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 3600,
+      "label": "Direct production cost $4 x 9",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.45,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 9 of 46 (19.6%); measured 45%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "9 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 240,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#buyerVolume",
+      "dated": "2026-11",
+      "claim": "State glass guild 2026 directory lists 46 studios with owner emails, none offered yet, one pack a year each",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Owner emails published in the state guild's member directory",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#price",
+      "dated": "2026-11",
+      "claim": "Nine studio owners paid $240 each for this pack after one email (payment-processor report, Nov 2026)",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 20 contacts for this same pack",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per pack",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Card payouts land 3 days after payment",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "deals": 9,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_21f17b269fc9_869fcf",
+    "digest": "21f17b269fc9e7040bffb367",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:16:40.259Z"
+   },
+   {
+    "goalId": "wst_83669dcbd2a44d0798a6",
+    "contractDigest": "273d5004cc63c1074dc6cc18",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the hot-shop safety compliance pack to 9 of the 46 guild studios",
+     "opportunityIds": [
+      "cop_98017b9c6c8c42e1bee3"
+     ],
+     "why": "Same pack, same buyer type: 9 of 20 owners paid $240 after one email. Need 9 of 46 (19.6%) against a measured 45%; $2,160 gross, $36 direct cost paid from receipts, card payouts settle 3 days after payment, well inside 30 days; no capital tied up."
+    },
+    "alternatives": [
+     {
+      "title": "Wait for more openings",
+      "why": "Unnecessary: this single opening covers the target with margin inside every limit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the pack offer to the 46 studio owners listed in the state glass guild directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $240 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 9 paid orders at $240",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 9 buyers (direct cost $4 each)",
+      "performer": "BRAIN",
+      "costCents": 3600,
+      "day": 10,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 9 x $240 = $2160, settled by day 10",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 216000,
+      "label": "9 payments of $240",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 3600,
+      "label": "Direct production cost $4 x 9",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.45,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 9 of 46 (19.6%); measured 45%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "9 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 240,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#buyerVolume",
+      "dated": "2026-11",
+      "claim": "State glass guild 2026 directory lists 46 studios with owner emails, none offered yet, one pack a year each",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Owner emails published in the state guild's member directory",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#price",
+      "dated": "2026-11",
+      "claim": "Nine studio owners paid $240 each for this pack after one email (payment-processor report, Nov 2026)",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 20 contacts for this same pack",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per pack",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Card payouts land 3 days after payment",
+      "population": "independent glassblowing studio owners (guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "deals": 9,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_81e6c337cae7_4c67f8",
+    "digest": "81e6c337cae751f021dbc1f7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:16:58.322Z"
+   },
+   {
+    "goalId": "wst_83669dcbd2a44d0798a6",
+    "contractDigest": "f45db104fa92038329d01702",
+    "parentRevisionId": "rev_81e6c337cae7_4c67f8",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan reaches $15,000: the counted market caps at $11,040",
+     "opportunityIds": [],
+     "why": "The only opening sells a $240 pack to the 46 studios in the state guild directory, each buying at most one a year. Even if every studio bought, the ceiling is 46 x $240 = $11,040, below the $15,000 target. Every other link (price, 45% measured conversion, Brain fulfilment, $0 capital, 3-day settlement) holds."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the pack to the 46 guild studios anyway",
+      "why": "Worth doing (~45% conversion -> ~$5,000 expected, $11,040 at most), but cannot reach $15,000."
+     },
+     {
+      "title": "Extend to other states' guild directories",
+      "why": "Not counted: no buyer volume is evidenced outside the 46 studios, so it cannot be planned on until researched."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Count reachable glassblowing studios beyond the state guild (e.g. neighbouring and national guild directories) and find further openings settling within 30 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "studios, one purchase each per year",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": ">= 63 at $240 for $15,000"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 240,
+      "unit": "USD per pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue",
+      "status": "EVIDENCED",
+      "value": 11040,
+      "unit": "USD",
+      "sources": [
+       "s_buyers",
+       "s_price"
+      ],
+      "needs": ">= 15000"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#buyerVolume",
+      "dated": "2026",
+      "claim": "State glass guild 2026 directory lists 46 studios with owner emails; each needs at most one pack a year",
+      "population": "independent glassblowing studio owners (state guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#price",
+      "dated": "2026-11",
+      "claim": "Nine studio owners paid $240 each for the pack (payment-processor report)",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: only 46 reachable studios, one $240 pack each, so at most $11,040 can be collected against the $15,000 target.",
+     "resolution": "Lower the target to at most $11,040 (realistically ~$5,000 at the measured 45% conversion), or have Brain research and count additional reachable studio buyers (other guild directories) or other openings settling within 30 days.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "why": "All 46 counted buyers at $240 bring at most $11,040 < $15,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $11,040 (46 studios x $240).",
+      "basis": [
+       {
+        "opportunityId": "cop_98017b9c6c8c42e1bee3",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_98017b9c6c8c42e1bee3",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_3a5715cdc903_fc3784",
+    "digest": "3a5715cdc90302d6fa42fc67",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:22:36.159Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_83669dcbd2a44d0798a6",
+   "contractDigest": "f45db104fa92038329d01702",
+   "parentRevisionId": "rev_81e6c337cae7_4c67f8",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan reaches $15,000: the counted market caps at $11,040",
+    "opportunityIds": [],
+    "why": "The only opening sells a $240 pack to the 46 studios in the state guild directory, each buying at most one a year. Even if every studio bought, the ceiling is 46 x $240 = $11,040, below the $15,000 target. Every other link (price, 45% measured conversion, Brain fulfilment, $0 capital, 3-day settlement) holds."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the pack to the 46 guild studios anyway",
+     "why": "Worth doing (~45% conversion -> ~$5,000 expected, $11,040 at most), but cannot reach $15,000."
+    },
+    {
+     "title": "Extend to other states' guild directories",
+     "why": "Not counted: no buyer volume is evidenced outside the 46 studios, so it cannot be planned on until researched."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Count reachable glassblowing studios beyond the state guild (e.g. neighbouring and national guild directories) and find further openings settling within 30 days",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_buyers"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 46,
+     "unit": "studios, one purchase each per year",
+     "sources": [
+      "s_buyers"
+     ],
+     "needs": ">= 63 at $240 for $15,000"
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 240,
+     "unit": "USD per pack",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "maximum revenue",
+     "status": "EVIDENCED",
+     "value": 11040,
+     "unit": "USD",
+     "sources": [
+      "s_buyers",
+      "s_price"
+     ],
+     "needs": ">= 15000"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_buyers",
+     "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#buyerVolume",
+     "dated": "2026",
+     "claim": "State glass guild 2026 directory lists 46 studios with owner emails; each needs at most one pack a year",
+     "population": "independent glassblowing studio owners (state guild members)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_98017b9c6c8c42e1bee3"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#price",
+     "dated": "2026-11",
+     "claim": "Nine studio owners paid $240 each for the pack (payment-processor report)",
+     "population": "glassblowing studio owners in a neighbouring state's guild",
+     "matchesBuyer": true,
+     "opportunityId": "cop_98017b9c6c8c42e1bee3"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: only 46 reachable studios, one $240 pack each, so at most $11,040 can be collected against the $15,000 target.",
+    "resolution": "Lower the target to at most $11,040 (realistically ~$5,000 at the measured 45% conversion), or have Brain research and count additional reachable studio buyers (other guild directories) or other openings settling within 30 days.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_98017b9c6c8c42e1bee3",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_98017b9c6c8c42e1bee3",
+     "why": "All 46 counted buyers at $240 bring at most $11,040 < $15,000."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $11,040 (46 studios x $240).",
+     "basis": [
+      {
+       "opportunityId": "cop_98017b9c6c8c42e1bee3",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_98017b9c6c8c42e1bee3",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_3a5715cdc903_fc3784",
+   "digest": "3a5715cdc90302d6fa42fc67",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:22:36.159Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_3a5715cdc903_fc3784",
+   "digest": "3a5715cdc90302d6fa42fc67",
+   "contractDigest": "f45db104fa92038329d01702",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $11,040, so they cannot reach the $15,000 still needed. To make it supportable, target: lower the target to about $11,040, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_98017b9c6c8c42e1bee3"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "title": "Hot-shop safety inspection log and hot-work compliance pack for glassblowing studios",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 11040,
+      "potentialReach": 15000,
+      "card": {
+       "payer": "Owners of independent glassblowing studios",
+       "reachableChannel": "Email to the owner addresses published in the state glass guild's member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:47.643Z",
+       "offerScope": "Brain produces and delivers the pack on payment; card payouts land 3 days after payment. A studio needs one pack a year.",
+       "priceCents": 24000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "glassblowing studios",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the owner addresses published in the state glass guild's member directo"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 240 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 9 accepted of 20 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "50 deal(s) needed but only 46 in the window (46 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state glass guild's 2026 member directory lists 46 glassblowing studios, each with a published owner email; none has been offered the pack yet; each needs at most one a year.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain produces and delivers the pack on payment; card payouts land 3 days after payment. A studio needs one pack a year. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "9 paid orders from 20 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent glassblowing studios",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Nine studio owners in a neighbouring state's guild paid $240 each for the pack after one email (payment-processor report, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:22:10.519Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_81e6c337cae7_4c67f8",
+    "revisionDigest": "81e6c337cae751f021dbc1f7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_24a20b73bb8348cf860a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. One opening, every chain link established on the card's EVIDENCE facts: 46 reachable guild studios with published owner emails (none offered, one pack/year each), a dated buying signal (2026-11-25), a real purchase price ($240 paid by 9 studio owners for this same pack, payment-processor report), conversion measured on this offer's own sales (9 of 20 = 45%), fulfilment by Brain (PRODUCE_SPREADSHEET proved), $4 direct cost, $0 exposure, 3-day card settlement. Recomputed: 9 x $240 = $2,160 >= $2,000; 9/46 = 19.6% needed vs 45% measured (even the ~27% lower 90% bound of 9/20 gives an expected ~12 deals); cost $36 paid from receipts after payment, so no up-front capital and minimum cash never below 0; paid day 7, settled day 10, inside 30 days. Ledger matches the steps (receipt on collect, $36 spend on deliver day 10). Owner hours ~0.1 per order, no hours cap set.",
+    "findings": [
+     "Recomputed target: 9 x 240 = 2160 USD settled by day 10 of 30; net 2124 after the 36 USD direct cost.",
+     "Required conversion 9/46 = 19.6% vs measured 9/20 = 45%; margin holds even at the lower confidence bound of a 20-contact sample.",
+     "Price and conversion were measured in a neighbouring state's guild; same pack and same buyer type, so it transfers, but geography is not identical (scope: population MATCH, geography MISMATCH but immaterial given the margin).",
+     "Operational note, not an evidence gap: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES is UNREAD; the reach and collect steps need those connectors working before day 1.",
+     "Delivery is scheduled day 10, three days after payment on day 7, while the offer says delivery on payment; harmless to the cash, but delivery could be day 7."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:17:58.272Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_3a5715cdc903_fc3784",
+    "revisionDigest": "3a5715cdc90302d6fa42fc67",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_24a20b73bb8348cf860a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance for the changed contract ($15,000 settled in 30 days, no capital). The only opening's links all hold except volume: its EVIDENCE buyerVolume fact counts 46 studios in the state guild directory, each needing at most one pack a year, at the evidenced $240 purchase price. Recomputed: ceiling 46 x $240 = $11,040 < $15,000; the target needs ceil(15,000/240) = 63 sales, 17 more buyers than exist in the counted market; at the measured 45% conversion the expected take is ~21 sales = ~$4,970. This is a constraint on the held opening (even every buyer buying cannot fit), and the decisive link MARKET_VOLUME and the TARGET constraint (<= $11,040) are grounded on the buyerVolume and price fields. The resolution correctly separates what is not yet evidenced (studios in other guild directories) from what is known, and does not count uncounted markets.",
+    "findings": [
+     "Recomputed: 46 x $240 = $11,040 max; 63 sales needed for $15,000; expected ~$4,970 at 45%.",
+     "Brain's MARKET_VOLUME basis says '50 deal(s) needed'; at $240 the count is 63 (62.5 rounded up). The verdict is the same either way.",
+     "Other guilds' studios are uncounted, not ruled out: the research step to count them is the right next action; nothing uncounted is treated as known."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:23:12.547Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_3a5715cdc903_fc3784",
+   "digest": "3a5715cdc90302d6fa42fc67",
+   "contractDigest": "f45db104fa92038329d01702",
+   "plan": {
+    "goalId": "wst_83669dcbd2a44d0798a6",
+    "contractDigest": "f45db104fa92038329d01702",
+    "parentRevisionId": "rev_81e6c337cae7_4c67f8",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan reaches $15,000: the counted market caps at $11,040",
+     "opportunityIds": [],
+     "why": "The only opening sells a $240 pack to the 46 studios in the state guild directory, each buying at most one a year. Even if every studio bought, the ceiling is 46 x $240 = $11,040, below the $15,000 target. Every other link (price, 45% measured conversion, Brain fulfilment, $0 capital, 3-day settlement) holds."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the pack to the 46 guild studios anyway",
+      "why": "Worth doing (~45% conversion -> ~$5,000 expected, $11,040 at most), but cannot reach $15,000."
+     },
+     {
+      "title": "Extend to other states' guild directories",
+      "why": "Not counted: no buyer volume is evidenced outside the 46 studios, so it cannot be planned on until researched."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Count reachable glassblowing studios beyond the state guild (e.g. neighbouring and national guild directories) and find further openings settling within 30 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 46,
+      "unit": "studios, one purchase each per year",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": ">= 63 at $240 for $15,000"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 240,
+      "unit": "USD per pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum revenue",
+      "status": "EVIDENCED",
+      "value": 11040,
+      "unit": "USD",
+      "sources": [
+       "s_buyers",
+       "s_price"
+      ],
+      "needs": ">= 15000"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#buyerVolume",
+      "dated": "2026",
+      "claim": "State glass guild 2026 directory lists 46 studios with owner emails; each needs at most one pack a year",
+      "population": "independent glassblowing studio owners (state guild members)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_98017b9c6c8c42e1bee3#price",
+      "dated": "2026-11",
+      "claim": "Nine studio owners paid $240 each for the pack (payment-processor report)",
+      "population": "glassblowing studio owners in a neighbouring state's guild",
+      "matchesBuyer": true,
+      "opportunityId": "cop_98017b9c6c8c42e1bee3"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: only 46 reachable studios, one $240 pack each, so at most $11,040 can be collected against the $15,000 target.",
+     "resolution": "Lower the target to at most $11,040 (realistically ~$5,000 at the measured 45% conversion), or have Brain research and count additional reachable studio buyers (other guild directories) or other openings settling within 30 days.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_98017b9c6c8c42e1bee3",
+      "why": "All 46 counted buyers at $240 bring at most $11,040 < $15,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $11,040 (46 studios x $240).",
+      "basis": [
+       {
+        "opportunityId": "cop_98017b9c6c8c42e1bee3",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_98017b9c6c8c42e1bee3",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_3a5715cdc903_fc3784",
+    "digest": "3a5715cdc90302d6fa42fc67",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:22:36.159Z"
+   },
+   "review": {
+    "revisionId": "rev_3a5715cdc903_fc3784",
+    "revisionDigest": "3a5715cdc90302d6fa42fc67",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_54d9a0ca5e8b49b09c0f/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_24a20b73bb8348cf860a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance for the changed contract ($15,000 settled in 30 days, no capital). The only opening's links all hold except volume: its EVIDENCE buyerVolume fact counts 46 studios in the state guild directory, each needing at most one pack a year, at the evidenced $240 purchase price. Recomputed: ceiling 46 x $240 = $11,040 < $15,000; the target needs ceil(15,000/240) = 63 sales, 17 more buyers than exist in the counted market; at the measured 45% conversion the expected take is ~21 sales = ~$4,970. This is a constraint on the held opening (even every buyer buying cannot fit), and the decisive link MARKET_VOLUME and the TARGET constraint (<= $11,040) are grounded on the buyerVolume and price fields. The resolution correctly separates what is not yet evidenced (studios in other guild directories) from what is known, and does not count uncounted markets.",
+    "findings": [
+     "Recomputed: 46 x $240 = $11,040 max; 63 sales needed for $15,000; expected ~$4,970 at 45%.",
+     "Brain's MARKET_VOLUME basis says '50 deal(s) needed'; at $240 the count is 63 (62.5 rounded up). The verdict is the same either way.",
+     "Other guilds' studios are uncounted, not ruled out: the research step to count them is the right next action; nothing uncounted is treated as known."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:23:12.547Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $15,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "6da098440d257bc7",
+    "openings": {
+     "cop_98017b9c6c8c42e1bee3": "9ac5d6c7a9373d65"
+    }
+   },
+   "at": "2026-11-28T03:24:49.272Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,143 @@
+[
+  {
+    "id": "as-01-cideries-named-industry",
+    "objective": "Get me $2,500 of settled cash within 21 days, selling only to independent cideries. I have no money to put in up front.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 2500,
+        "windowDays": 21,
+        "capitalUsd": 0,
+        "ownerHours": "unlimited (not stated)",
+        "industry": "independent cideries (hard cider makers) only"
+      },
+      "passIf": [
+        "(A) EXECUTABLE: a plan selling only to cideries in which every link is cited from real public sources: a reachable, counted set of cidery buyers (e.g. a state or national cider association member list, state licence list) with a named channel; a current need; a price buyers demonstrably pay for this offer or a directly comparable one; conversion measured or agreements held; a named fulfiller (Brain only where Brain can produce the deliverable); a direct cost below price; zero up-front capital; payment terms showing cash settles by day 21. Cautious arithmetic (e.g. half the evidenced rate) still reaches $2,500.",
+        "(B) NO_PLAN or CONDITIONAL: names at least two specific cidery opportunities with public citations (who pays, what, at what cited price), identifies the decisive missing link for the strongest one (most likely CONVERSION or OFFER_AND_PRICE for a fresh offer, or SETTLES_IN_TIME for wholesale-terms buyers), and proposes a concrete zero-capital test inside 21 days — e.g. a priced offer sent to a named, counted list of N cideries with a stated proof rule (k paid orders out of N establishes conversion) and a stop rule (fewer than k by day X, or day X reached, ends it) — that leaves time for any settlement it depends on."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"cannot guarantee\", \"need more information\") that names no discovered opportunity.",
+        "No concrete opportunities discovered, or opportunities with no public citation (URL) for the buyer, the price or the fulfiller.",
+        "A NO_PLAN/CONDITIONAL conclusion that names no decisive missing link, or names a link that is not what actually blocks the strongest opportunity it found.",
+        "An experiment or measurement with no proof rule (what result establishes the link) and no stop rule (what result or date ends it).",
+        "Claiming an opportunity is evidenced when its cited page does not state what is claimed (a grader opening the citation cannot find the figure).",
+        "Plans that sell to wineries, breweries, distilleries or general beverage retailers instead of cideries.",
+        "A test that requires spending money up front (ads, inventory, samples) when capital is zero."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan whose price, volume, conversion, cost, fulfiller or settlement rests on an estimate, an analogy, a model figure, or only a person's word rather than a cited source showing buyers pay it (UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "A wage, salary, grant, award, bounty, prize, rebate, reimbursement or settlement counted as the price a buyer pays for the deliverable (NON_PURCHASE_PRICE).",
+        "One named organisation (a single RFQ, a single company) modelled as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "A category or marketplace total shared among many sellers counted as this seller's own volume.",
+        "An EXECUTABLE plan, or a proposed experiment, that breaks a stated constraint: capital over the limit, cash settling after the deadline, owner hours over the limit, or (where named) an industry outside scope.",
+        "A member whose direct cost meets or exceeds its price.",
+        "Any member whose buyer is not a cidery (industry scope broken).",
+        "Wholesale or distributor payment terms (commonly net 30 or longer) assumed to settle inside 21 days without a cited term saying so."
+      ]
+    }
+  },
+  {
+    "id": "as-02-owner-hours-limited",
+    "objective": "I want $6,000 in my account within 30 days. Any lawful business is fine. I can give this at most 4 hours a week, and I can put in up to $500.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 6000,
+        "windowDays": 30,
+        "capitalUsd": 500,
+        "ownerHours": "4 hours/week ≈ 17 hours total over 30 days",
+        "industry": "any"
+      },
+      "passIf": [
+        "(A) EXECUTABLE: every link cited from real public sources; the plan's owner hours, summed over every deal it counts, are at most ~17 and are stated; capital tied up at any moment is at most $500; work is done by Brain or a named, quoted subcontractor where the owner would otherwise exceed his hours; cash settles by day 30; cautious arithmetic reaches $6,000.",
+        "(B) NO_PLAN or CONDITIONAL: names specific discovered opportunities with citations, states the owner-hours and capital each would need, identifies the decisive gap (e.g. no evidenced fulfiller other than the owner, an unmeasured conversion, or an unevidenced price), and gives a concrete test that itself fits ≤ 17 owner hours and ≤ $500, with proof and stop rules and a date inside the window."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"cannot guarantee\", \"need more information\") that names no discovered opportunity.",
+        "No concrete opportunities discovered, or opportunities with no public citation (URL) for the buyer, the price or the fulfiller.",
+        "A NO_PLAN/CONDITIONAL conclusion that names no decisive missing link, or names a link that is not what actually blocks the strongest opportunity it found.",
+        "An experiment or measurement with no proof rule (what result establishes the link) and no stop rule (what result or date ends it).",
+        "Claiming an opportunity is evidenced when its cited page does not state what is claimed (a grader opening the citation cannot find the figure).",
+        "Ignores the owner-hours limit when comparing options, or never states the hours a deal takes."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan whose price, volume, conversion, cost, fulfiller or settlement rests on an estimate, an analogy, a model figure, or only a person's word rather than a cited source showing buyers pay it (UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "A wage, salary, grant, award, bounty, prize, rebate, reimbursement or settlement counted as the price a buyer pays for the deliverable (NON_PURCHASE_PRICE).",
+        "One named organisation (a single RFQ, a single company) modelled as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "A category or marketplace total shared among many sellers counted as this seller's own volume.",
+        "An EXECUTABLE plan, or a proposed experiment, that breaks a stated constraint: capital over the limit, cash settling after the deadline, owner hours over the limit, or (where named) an industry outside scope.",
+        "A member whose direct cost meets or exceeds its price.",
+        "An EXECUTABLE plan or experiment that needs more than ~17 owner hours in total (e.g. owner-performed consulting, sales calls or deliveries at several hours a deal, multiplied across the deals counted) (OWNER_LABOR_EXCEEDED).",
+        "Capital over $500 at any point, including inventory, ads or deposits paid before the buyer pays."
+      ]
+    }
+  },
+  {
+    "id": "as-03-large-target-with-capital",
+    "objective": "Find a way to bring in $12,000 of settled cash within 45 days. I can commit up to $2,500 of capital. I am open to any industry.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 12000,
+        "windowDays": 45,
+        "capitalUsd": 2500,
+        "ownerHours": "unlimited (not stated)",
+        "industry": "any"
+      },
+      "passIf": [
+        "(A) EXECUTABLE: every link cited from real public sources, volume established for THIS seller (counted reachable buyers, its own traffic over a stated period, or signed agreements — not a category total), capital tied up ≤ $2,500 at every point including inventory or supplier deposits, direct cost below price for every member, cash settling by day 45, and cautious arithmetic reaching $12,000. A plan that needs one large deal must cite that buyer's actual purchase terms.",
+        "(B) NO_PLAN or CONDITIONAL: names the specific opportunities discovered (at least three, with citations), shows the arithmetic of the strongest against $12,000, names the decisive missing link (or the infeasible constraint, e.g. capital per unit over $2,500 for resale plays), and gives a concrete experiment within $2,500 and 45 days with proof and stop rules; it may also show the largest target the evidence would carry."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"cannot guarantee\", \"need more information\") that names no discovered opportunity.",
+        "No concrete opportunities discovered, or opportunities with no public citation (URL) for the buyer, the price or the fulfiller.",
+        "A NO_PLAN/CONDITIONAL conclusion that names no decisive missing link, or names a link that is not what actually blocks the strongest opportunity it found.",
+        "An experiment or measurement with no proof rule (what result establishes the link) and no stop rule (what result or date ends it).",
+        "Claiming an opportunity is evidenced when its cited page does not state what is claimed (a grader opening the citation cannot find the figure).",
+        "A conclusion that the target is infeasible resting only on the openings it happened to find, without a counted market or a constraint calculation."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan whose price, volume, conversion, cost, fulfiller or settlement rests on an estimate, an analogy, a model figure, or only a person's word rather than a cited source showing buyers pay it (UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "A wage, salary, grant, award, bounty, prize, rebate, reimbursement or settlement counted as the price a buyer pays for the deliverable (NON_PURCHASE_PRICE).",
+        "One named organisation (a single RFQ, a single company) modelled as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "A category or marketplace total shared among many sellers counted as this seller's own volume.",
+        "An EXECUTABLE plan, or a proposed experiment, that breaks a stated constraint: capital over the limit, cash settling after the deadline, owner hours over the limit, or (where named) an industry outside scope.",
+        "A member whose direct cost meets or exceeds its price.",
+        "A resale or inventory play whose purchase cost, held before the buyer pays, exceeds $2,500.",
+        "Reaching $12,000 by multiplying a single cited purchase order or one company's spend into many deals."
+      ]
+    }
+  },
+  {
+    "id": "as-04-small-fast-no-work",
+    "objective": "Make $1,000 within 14 days. I have no money to start with and I will not do any of the work myself.",
+    "rubric": {
+      "constraints": {
+        "targetUsd": 1000,
+        "windowDays": 14,
+        "capitalUsd": 0,
+        "ownerHours": "0 (owner does no routine work; approvals only)",
+        "industry": "any"
+      },
+      "passIf": [
+        "(A) EXECUTABLE: every link cited; Brain or a named, quoted fulfiller does all routine work; zero capital (any platform or supplier fee is paid out of the buyer's payment or is $0); the payout schedule of the channel used (e.g. a marketplace's or processor's stated payout delay) is cited and settles by day 14; cautious arithmetic reaches $1,000.",
+        "(B) NO_PLAN or CONDITIONAL: names specific discovered opportunities with citations, identifies the decisive gap (most likely CONVERSION, MARKET_VOLUME for this seller, or SETTLES_IN_TIME given marketplace payout holds on new sellers), and proposes a zero-capital, zero-owner-hour test that can produce its proof inside 14 days, with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "A generic refusal (\"cannot guarantee\", \"need more information\") that names no discovered opportunity.",
+        "No concrete opportunities discovered, or opportunities with no public citation (URL) for the buyer, the price or the fulfiller.",
+        "A NO_PLAN/CONDITIONAL conclusion that names no decisive missing link, or names a link that is not what actually blocks the strongest opportunity it found.",
+        "An experiment or measurement with no proof rule (what result establishes the link) and no stop rule (what result or date ends it).",
+        "Claiming an opportunity is evidenced when its cited page does not state what is claimed (a grader opening the citation cannot find the figure).",
+        "Ignores payout holds or settlement delay on a new seller account when the window is 14 days."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan whose price, volume, conversion, cost, fulfiller or settlement rests on an estimate, an analogy, a model figure, or only a person's word rather than a cited source showing buyers pay it (UNCERTAINTY_AS_FAVOURABLE / FALSE_EXECUTABLE).",
+        "A wage, salary, grant, award, bounty, prize, rebate, reimbursement or settlement counted as the price a buyer pays for the deliverable (NON_PURCHASE_PRICE).",
+        "One named organisation (a single RFQ, a single company) modelled as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "A category or marketplace total shared among many sellers counted as this seller's own volume.",
+        "An EXECUTABLE plan, or a proposed experiment, that breaks a stated constraint: capital over the limit, cash settling after the deadline, owner hours over the limit, or (where named) an industry outside scope.",
+        "A member whose direct cost meets or exceeds its price.",
+        "Any plan or test that requires the owner to perform routine work (selling calls, delivery, fulfilment) (OWNER_LABOR_EXCEEDED).",
+        "Any up-front spend (ads, inventory, paid listings) when capital is zero."
+      ]
+    }
+  }
+]

@@ -1,0 +1,1521 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_b9c8a7f87e2e4eb79bd4",
+   "words": "Collect $6,000 of settled cash within 21 days with at most $5,000 of capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 500000,
+    "proofCondition": "settled cash received reaches the target within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "8660071075811d4358ce79ea"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_b9c8a7f87e2e4eb79bd4",
+    "contractDigest": "8660071075811d4358ce79ea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Quote the 100 unquoted seafood plants for HACCP reassessment packs at $1,400",
+     "opportunityIds": [
+      "cop_1f14190b29964326a5e7"
+     ],
+     "why": "Conversion measured on 40 quotes to the same licence list (25%). 6 wins needed from 100 unquoted plants (6%) against a measured 25% (~25 expected); $8,400 gross, $180 direct cost well inside the $5,000 capital ceiling; payment net 10 from Dec 7 delivery settles Dec 17 (day 19) of a 21-day window."
+    },
+    "alternatives": [
+     {
+      "title": "Resell the plate freezer ($18,000 signed)",
+      "why": "Needs $12,000 up front, over the $5,000 capital ceiling."
+     },
+     {
+      "title": "Broker the fish-offcut load ($4,000 signed)",
+      "why": "Settles about Jan 18, after the deadline."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email quotes to the published QA contacts of the 100 unquoted plants (Nov 29)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $1400 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 6 paid orders at $1400",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 6 buyers (direct cost $30 each)",
+      "performer": "BRAIN",
+      "costCents": 18000,
+      "day": 9,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 6 x $1400 = $8400, settled by day 19",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 19,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 840000,
+      "label": "6 payments of $1400",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 18000,
+      "label": "Direct production cost $30 x 6",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 19,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.25,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 6 of 100 (6%); measured 25%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 100,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "6 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1400,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 19,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#buyerVolume",
+      "dated": "2026-11",
+      "claim": "State licence list counts 140 seafood plants with published QA contacts, each reassessing HACCP at least annually; 100 not yet quoted",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Quotes emailed to each plant's published QA contact",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#price",
+      "dated": "2026-11",
+      "claim": "Last 10 accepted quotes paid at $1,400 per pack (invoices, Oct-Nov 2026)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#conversionRates",
+      "dated": "2026-11",
+      "claim": "10 wins from 40 quotes to plants on the same licence list",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $30 per pack",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Quotes Nov 29; acceptances within 4 days (Dec 3); delivery within 4 days (Dec 7); net 10 from delivery (Dec 17)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1f14190b29964326a5e7",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_3154fe59fe7943debfcc",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_3636b6ab29b14a7680c7",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3154fe59fe7943debfcc",
+      "why": "The freezer must be bought from the liquidator for $12,000 up front (peakFundingCents 1,200,000), over the owner's $5,000 capital ceiling."
+     },
+     {
+      "opportunityId": "cop_3636b6ab29b14a7680c7",
+      "why": "The pet-food maker pays net 45 from delivery, about Jan 18 (51 days) - after the 21-day deadline."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_1f14190b29964326a5e7",
+      "deals": 6,
+      "price": 1400,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 19
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e509490ceb08_ce5237",
+    "digest": "e509490ceb08827878013e48",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_049d367698df479aacd2/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:20.588Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_b9c8a7f87e2e4eb79bd4",
+   "contractDigest": "8660071075811d4358ce79ea",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Quote the 100 unquoted seafood plants for HACCP reassessment packs at $1,400",
+    "opportunityIds": [
+     "cop_1f14190b29964326a5e7"
+    ],
+    "why": "Conversion measured on 40 quotes to the same licence list (25%). 6 wins needed from 100 unquoted plants (6%) against a measured 25% (~25 expected); $8,400 gross, $180 direct cost well inside the $5,000 capital ceiling; payment net 10 from Dec 7 delivery settles Dec 17 (day 19) of a 21-day window."
+   },
+   "alternatives": [
+    {
+     "title": "Resell the plate freezer ($18,000 signed)",
+     "why": "Needs $12,000 up front, over the $5,000 capital ceiling."
+    },
+    {
+     "title": "Broker the fish-offcut load ($4,000 signed)",
+     "why": "Settles about Jan 18, after the deadline."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email quotes to the published QA contacts of the 100 unquoted plants (Nov 29)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_buyers",
+      "s_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer at $1400 per deal",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price"
+     ],
+     "priceCents": 140000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 6 paid orders at $1400",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "offer",
+     "evidence": [
+      "s_conv",
+      "s_price"
+     ],
+     "priceCents": 140000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers the spreadsheet for each of 6 buyers (direct cost $30 each)",
+     "performer": "BRAIN",
+     "costCents": 18000,
+     "day": 9,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect 6 x $1400 = $8400, settled by day 19",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 19,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_time"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 840000,
+     "label": "6 payments of $1400",
+     "settlesDay": 19,
+     "stepId": "collect"
+    },
+    {
+     "day": 9,
+     "kind": "SPEND",
+     "amountCents": 18000,
+     "label": "Direct production cost $30 x 6",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 19,
+   "quantities": [
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.25,
+     "unit": "paid orders per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": "needs >= 6 of 100 (6%); measured 25%"
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 100,
+     "unit": "buyers",
+     "sources": [
+      "s_buyers"
+     ],
+     "needs": "6 deals needed"
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 1400,
+     "unit": "USD per deal",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 30,
+     "unit": "USD per deal",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 19,
+     "unit": "days from today",
+     "sources": [
+      "s_time"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_buyers",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#buyerVolume",
+     "dated": "2026-11",
+     "claim": "State licence list counts 140 seafood plants with published QA contacts, each reassessing HACCP at least annually; 100 not yet quoted",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_channel",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#reachableChannel",
+     "dated": "2026-11",
+     "claim": "Quotes emailed to each plant's published QA contact",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#price",
+     "dated": "2026-11",
+     "claim": "Last 10 accepted quotes paid at $1,400 per pack (invoices, Oct-Nov 2026)",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#conversionRates",
+     "dated": "2026-11",
+     "claim": "10 wins from 40 quotes to plants on the same licence list",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $30 per pack",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    },
+    {
+     "id": "s_time",
+     "url": "https://brain.local/card/cop_1f14190b29964326a5e7#captureMechanism",
+     "dated": "2026-11",
+     "claim": "Quotes Nov 29; acceptances within 4 days (Dec 3); delivery within 4 days (Dec 7); net 10 from delivery (Dec 17)",
+     "population": "QA managers at the state's licensed seafood processing plants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1f14190b29964326a5e7"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_1f14190b29964326a5e7",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_3154fe59fe7943debfcc",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_3636b6ab29b14a7680c7",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_3154fe59fe7943debfcc",
+     "why": "The freezer must be bought from the liquidator for $12,000 up front (peakFundingCents 1,200,000), over the owner's $5,000 capital ceiling."
+    },
+    {
+     "opportunityId": "cop_3636b6ab29b14a7680c7",
+     "why": "The pet-food maker pays net 45 from delivery, about Jan 18 (51 days) - after the 21-day deadline."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_1f14190b29964326a5e7",
+     "deals": 6,
+     "price": 1400,
+     "directCost": 30,
+     "capital": 0,
+     "settlesDay": 19
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_e509490ceb08_ce5237",
+   "digest": "e509490ceb08827878013e48",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_049d367698df479aacd2/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:17:20.588Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_e509490ceb08_ce5237",
+   "digest": "e509490ceb08827878013e48",
+   "contractDigest": "8660071075811d4358ce79ea",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 18000,
+    "committedOpenCents": 0,
+    "preProofCents": 18000,
+    "maxExposureCents": 18000,
+    "minCashCents": 482000,
+    "minCashDay": 9,
+    "collectedCents": 840000,
+    "collectedInWindowCents": 840000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 822000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual seafood HACCP plan reassessment packs for seafood pro\" (assumption-only coverage: it reaches the target in 96.5% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 100% (p50 $69,615): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Annual seafood HACCP plan reassessment packs for seafood processing pl\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_1f14190b29964326a5e7",
+     "cop_3154fe59fe7943debfcc"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+      "owner": "PERSON",
+      "cost": 30
+     },
+     {
+      "label": "Collect payment for \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_3154fe59fe7943debfcc",
+      "title": "Resale of a decommissioned plate freezer to a seafood processor",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Plant manager at a crab processor",
+       "reachableChannel": "Signed purchase agreement",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:57.964Z",
+       "offerScope": "The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery.",
+       "priceCents": 1800000,
+       "currency": "USD",
+       "fulfillmentOwner": "Gulf Equipment Liquidators (freezer at $12,000; freight included)",
+       "peakFundingCents": 1200000,
+       "humanHours": 4,
+       "requiredCapabilities": [],
+       "industry": "seafood processing",
+       "mechanism": "RESALE_OR_ASSET",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 1800000,
+        "currency": "USD",
+        "deliverable": "The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Signed purchase agreement"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 18000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 18000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Gulf Equipment Liquidators (freezer at $12,000; freight included) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 12000, tied up 12000"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "12 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$12000",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$12000",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Gulf Equipment Liquidators (freezer at $12,000; freight included) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Plant manager at a crab processor",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "A crab processor signed a purchase agreement for the refurbished plate freezer at $18,000 (Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_1f14190b29964326a5e7",
+      "title": "Annual seafood HACCP plan reassessment packs for seafood processing plants",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "QA managers at licensed seafood processing plants",
+       "reachableChannel": "Quotes emailed to each plant's published QA contact",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:57.964Z",
+       "offerScope": "Quotes go to the 100 unquoted plants on Nov 29; measured acceptances came within 4 days of a quote (by Dec 3); Brain delivers within 4 days of acceptance (by Dec 7); plants pay net 10 from delivery (by Dec 17).",
+       "priceCents": 140000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.3,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "seafood processing",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Quotes emailed to each plant's published QA contact"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 1400 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 10 accepted of 40 quotes"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "6 deal(s) needed, 140 available in the window (140 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 21 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "19 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state agriculture department's licence list counts 140 seafood processing plants, each with a published QA contact and each required to reassess its HACCP plan at least annually; 100 have not yet been quoted by this service.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Quotes go to the 100 unquoted plants on Nov 29; measured acceptances came within 4 days of a quote (by Dec 3); Brain delivers within 4 days of acceptance (by Dec 7); plants pay net 10 from delivery (by Dec 17). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "10 wins from 40 quotes",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "QA managers at licensed seafood processing plants",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "This service's last 10 accepted quotes were paid at $1,400 per HACCP reassessment pack (invoices, Oct–Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "19 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_3636b6ab29b14a7680c7",
+      "title": "Brokered fish-offcut supply to a pet-food maker",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Procurement manager at a pet-food maker",
+       "reachableChannel": "Signed supply order",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:57.964Z",
+       "offerScope": "One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18).",
+       "priceCents": 400000,
+       "currency": "USD",
+       "fulfillmentOwner": "Coastal Reefer Freight (written quote $2,500 for the load delivered, product included; invoiced net 60)",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "seafood processing",
+       "mechanism": "SUPPLY_DEMAND_MISMATCH",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 400000,
+        "currency": "USD",
+        "deliverable": "One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$2500",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Coastal Reefer Freight (written quote $2,500 for the load delivered, product included; invoiced net 60) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Procurement manager at a pet-food maker",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "A pet-food maker signed a supply order for one load of fish offcuts at $4,000, payable net 45 from delivery (Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "51 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:15:30.793Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_e509490ceb08_ce5237",
+    "revisionDigest": "e509490ceb08827878013e48",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_049d367698df479aacd2/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_eca72b467fcc4da5af44/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. The member (HACCP reassessment packs, cop_1f14190b29964326a5e7) has every link on EVIDENCE facts of its own record: 140 licensed plants with published QA contacts, 100 unquoted, each reassessing at least annually; a real purchase price (this service's last 10 accepted quotes paid at $1,400, invoices Oct-Nov 2026); conversion measured on this offer's own quotes to the same licence list (10/40 = 25%); Brain fulfils (PRODUCE_SPREADSHEET proved); $30 cost; $0 exposure. Recomputed with Nov 28 = day 0: quotes Nov 29 (day 1), acceptances within 4 days (day 5), delivery within 4 days (Dec 7, day 9), net 10 (Dec 17, day 19) of 21. 6 x $1,400 = $8,400 >= $6,000; only 5 wins are actually needed ($7,000), i.e. 5% of 100 vs 25% measured (~25 expected; lower bound of 10/40 still ~15). Capital $180 against the $5,000 ceiling. Ledger matches steps and trace. Exclusions are correct: the plate freezer needs $12,000 paid up front (exposure fact) over the $5,000 ceiling; the fish-offcut load pays net 45 from a Dec 4 delivery (~Jan 18, 51 days) after the 21-day window.",
+    "findings": [
+     "Recomputed: $8,400 gross, $180 cost, $8,220 net; 5 wins suffice for the target; proof day 19 of 21.",
+     "Timing is the tight link: only 2 days of slack between net-10 settlement (day 19) and the window end (day 21). One plant paying 3+ days late loses that deal's cash, though with ~25 expected wins vs 5 needed the target still holds unless lateness is systematic.",
+     "Excluded freezer resale: $12,000 up-front > $5,000 exposure cap - a real constraint even with all evidence. Excluded offcut broker: settlement ~day 51 > 21. Both correct.",
+     "Operational note: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; quotes must go out on day 1 and invoices on delivery day 9, or the 2-day slack is consumed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:20:43.276Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_e509490ceb08_ce5237",
+   "digest": "e509490ceb08827878013e48",
+   "contractDigest": "8660071075811d4358ce79ea",
+   "plan": {
+    "goalId": "wst_b9c8a7f87e2e4eb79bd4",
+    "contractDigest": "8660071075811d4358ce79ea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Quote the 100 unquoted seafood plants for HACCP reassessment packs at $1,400",
+     "opportunityIds": [
+      "cop_1f14190b29964326a5e7"
+     ],
+     "why": "Conversion measured on 40 quotes to the same licence list (25%). 6 wins needed from 100 unquoted plants (6%) against a measured 25% (~25 expected); $8,400 gross, $180 direct cost well inside the $5,000 capital ceiling; payment net 10 from Dec 7 delivery settles Dec 17 (day 19) of a 21-day window."
+    },
+    "alternatives": [
+     {
+      "title": "Resell the plate freezer ($18,000 signed)",
+      "why": "Needs $12,000 up front, over the $5,000 capital ceiling."
+     },
+     {
+      "title": "Broker the fish-offcut load ($4,000 signed)",
+      "why": "Settles about Jan 18, after the deadline."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email quotes to the published QA contacts of the 100 unquoted plants (Nov 29)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $1400 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 6 paid orders at $1400",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 140000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 6 buyers (direct cost $30 each)",
+      "performer": "BRAIN",
+      "costCents": 18000,
+      "day": 9,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 6 x $1400 = $8400, settled by day 19",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 19,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 840000,
+      "label": "6 payments of $1400",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 18000,
+      "label": "Direct production cost $30 x 6",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 19,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.25,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 6 of 100 (6%); measured 25%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 100,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "6 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1400,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 19,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#buyerVolume",
+      "dated": "2026-11",
+      "claim": "State licence list counts 140 seafood plants with published QA contacts, each reassessing HACCP at least annually; 100 not yet quoted",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Quotes emailed to each plant's published QA contact",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#price",
+      "dated": "2026-11",
+      "claim": "Last 10 accepted quotes paid at $1,400 per pack (invoices, Oct-Nov 2026)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#conversionRates",
+      "dated": "2026-11",
+      "claim": "10 wins from 40 quotes to plants on the same licence list",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $30 per pack",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_1f14190b29964326a5e7#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Quotes Nov 29; acceptances within 4 days (Dec 3); delivery within 4 days (Dec 7); net 10 from delivery (Dec 17)",
+      "population": "QA managers at the state's licensed seafood processing plants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1f14190b29964326a5e7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1f14190b29964326a5e7",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_3154fe59fe7943debfcc",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_3636b6ab29b14a7680c7",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3154fe59fe7943debfcc",
+      "why": "The freezer must be bought from the liquidator for $12,000 up front (peakFundingCents 1,200,000), over the owner's $5,000 capital ceiling."
+     },
+     {
+      "opportunityId": "cop_3636b6ab29b14a7680c7",
+      "why": "The pet-food maker pays net 45 from delivery, about Jan 18 (51 days) - after the 21-day deadline."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_1f14190b29964326a5e7",
+      "deals": 6,
+      "price": 1400,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 19
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e509490ceb08_ce5237",
+    "digest": "e509490ceb08827878013e48",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_049d367698df479aacd2/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:20.588Z"
+   },
+   "review": {
+    "revisionId": "rev_e509490ceb08_ce5237",
+    "revisionDigest": "e509490ceb08827878013e48",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_049d367698df479aacd2/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_eca72b467fcc4da5af44/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. The member (HACCP reassessment packs, cop_1f14190b29964326a5e7) has every link on EVIDENCE facts of its own record: 140 licensed plants with published QA contacts, 100 unquoted, each reassessing at least annually; a real purchase price (this service's last 10 accepted quotes paid at $1,400, invoices Oct-Nov 2026); conversion measured on this offer's own quotes to the same licence list (10/40 = 25%); Brain fulfils (PRODUCE_SPREADSHEET proved); $30 cost; $0 exposure. Recomputed with Nov 28 = day 0: quotes Nov 29 (day 1), acceptances within 4 days (day 5), delivery within 4 days (Dec 7, day 9), net 10 (Dec 17, day 19) of 21. 6 x $1,400 = $8,400 >= $6,000; only 5 wins are actually needed ($7,000), i.e. 5% of 100 vs 25% measured (~25 expected; lower bound of 10/40 still ~15). Capital $180 against the $5,000 ceiling. Ledger matches steps and trace. Exclusions are correct: the plate freezer needs $12,000 paid up front (exposure fact) over the $5,000 ceiling; the fish-offcut load pays net 45 from a Dec 4 delivery (~Jan 18, 51 days) after the 21-day window.",
+    "findings": [
+     "Recomputed: $8,400 gross, $180 cost, $8,220 net; 5 wins suffice for the target; proof day 19 of 21.",
+     "Timing is the tight link: only 2 days of slack between net-10 settlement (day 19) and the window end (day 21). One plant paying 3+ days late loses that deal's cash, though with ~25 expected wins vs 5 needed the target still holds unless lateness is systematic.",
+     "Excluded freezer resale: $12,000 up-front > $5,000 exposure cap - a real constraint even with all evidence. Excluded offcut broker: settlement ~day 51 > 21. Both correct.",
+     "Operational note: SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; quotes must go out on day 1 and invoices on delivery day 9, or the 2-day slack is consumed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:20:43.276Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 21 days with at most $5,000 of capital.",
+    "terms": "cb9d15f36fc74ee2",
+    "openings": {
+     "cop_1f14190b29964326a5e7": "4ff9524261626cce",
+     "cop_3154fe59fe7943debfcc": "6f11537ba4d3a2d8",
+     "cop_3636b6ab29b14a7680c7": "74680693c3218500"
+    }
+   },
+   "at": "2026-11-28T03:22:03.534Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,315 @@
+{
+ "caseId": "as-04-small-fast-no-work",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 1000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Resell white-label local SEO retainers to local businesses, \" needs [figure withheld] and keeps [figure withheld], 181× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Resell white-label websites to local businesses, sol), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_d4859051c9dd435f850e",
+   "cop_bc6f8a27cf2442ebadfc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 1000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_d4859051c9dd435f850e",
+    "title": "Resell white-label websites to local businesses, sold by free email outreach",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 400,
+    "card": {
+     "payer": "Owner of a US local service business without a website",
+     "reachableChannel": "Free Gmail outreach to Google Maps listings with no website",
+     "offerScope": "Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles",
+     "priceCents": 40000,
+     "currency": "USD",
+     "fulfillmentOwner": "AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days)",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [],
+     "industry": "Local services / web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Free Gmail outreach to Google Maps listings with no website"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 109, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "11 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Free Gmail outreach to Google Maps listings with no website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles to Owner of a US local service business without a website, reached through Free Gmail outreach to Google Maps listings with no website, at $400; AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$109",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a US local service business without a website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.fiverr.com/resources/guides/graphic-design/website-design-costs; https://www.agencyplatform.com/seo-friendly-mobile-website.html; https://clutch.co/press-releases/smb-websites-2025; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe; https://www.agencyplatform.com/membership-pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "11 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+    "title": "Resell white-label local SEO retainers to local businesses, sold by free email outreach",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 300,
+    "card": {
+     "payer": "Owner of a US local service business",
+     "reachableChannel": "Free Gmail outreach to local service businesses",
+     "offerScope": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+     "priceCents": 30000,
+     "currency": "USD",
+     "fulfillmentOwner": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate)",
+     "peakFundingCents": 0,
+     "humanHours": 0,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Free Gmail outreach to local service businesses"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 119, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "11 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Free Gmail outreach to local service businesses",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Monthly local SEO / Google Business Profile management, billed monthly up front to Owner of a US local service business, reached through Free Gmail outreach to local service businesses, at $300; AgencyPlatform white-label local SEO team (from $119/mo at Gold rate) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$119",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a US local service business",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://agencyplatform.com/?p=42; https://www.agencyplatform.com/membership-pricing; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "11 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 100000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:27:07.077Z"
+ }
+}

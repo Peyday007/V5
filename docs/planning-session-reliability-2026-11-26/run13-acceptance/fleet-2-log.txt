@@ -1,0 +1,25 @@
+a09 PLAN_REVIEW PASS rev_a77d83f78a2b_32ccfa
+a10 PLAN_REVIEW PASS rev_03299ee58777_4c1aba
+a11 PLAN_REVIEW PASS rev_e3a91ed5ae57_90164e
+a12 PLAN_REVIEW PASS rev_b5e75155cc7c_007d58
+d03 PLAN_VERIFY cnd_d83867927af4475d924b SUFFICIENT: UENI and ManyPixels claims supported verbatim and in scope (accepted); Hostinger claim supported but last updated Feb 2024 (timeframe MISMATCH, rejected). Geography UNSTATED on all three.
+d04 PLAN_VERIFY cnd_7f86654d11194ad195c3 DEFECTIVE VERDICT: a schema probe by this verifier was recorded as the verification (verdict keyed claim_id instead of claimId, sufficiency INSUFFICIENT), so all three claims were rejected as 'no verdict'. The intended reading: UENI and ManyPixels supported and in scope, Hostinger supported but dated Feb 2024. The research needs resubmission to be judged properly.
+d01 PLAN_VERIFY cnd_685d50e4011744b5a1eb verdicts keyed to the claim ids in the item payload (clm_7dd4..., clm_34b1..., clm_442f...), but the researcher had resubmitted under new ids (clm_49d3..., clm_b1ad..., clm_747d...) before the verdict landed, so the gate saw no verdict. Intended reading: INSUFFICIENT - wpzoom and dev.to supported verbatim but generic small businesses, not independent cideries (population MISMATCH); Vin Agency is one winery agency's undated list price (population/definitions MISMATCH).
+d02 PLAN_VERIFY cnd_98727cd43d0a4edb8cf8 verdicts keyed to payload claim ids (clm_6c94..., clm_299d...) but the researcher had resubmitted as clm_bbfa..., clm_a522...; the gate saw no verdict. Intended reading: SUFFICIENT - wpzoom (,500-,000; 5-10 pages ,500-,000, updated Sep 2026) and dev.to (00-,000, 2026) supported verbatim, population MATCH small businesses, geography UNSTATED. Needs resubmission to be judged.
+d01 PLAN_VERIFY cnd_c36c7ac390094733b11f: Wikipedia list (~850 entries) supported but does not mark independence and mixes breweries/wineries (population UNSTATED); Orbit lifespan is agency clients/top brands, a lifespan proxy (population, definitions MISMATCH). Gate blocked both.
+d02 PLAN_VERIFY cnd_1d535ff016714d71ba07 INSUFFICIENT: SBA 36,207,130 (confirmed via search; page 403) is all US small businesses incl. 29.8M nonemployers, not a reachable count of the buyer; Orbit lifespan proxy mismatched.
+d03 PLAN_VERIFY cnd_407ca2cb326e4d25a0ff INSUFFICIENT: Clutch shares (17% offline, 28% of those no presence, 12% launched last year) supported verbatim, but shares with no base count or channel, US not stated; once-per-business frequency is an inference.
+d04 PLAN_VERIFY cnd_58e35934da9d44e6a54d INSUFFICIENT: same Clutch shares as d03; supported verbatim, but not a count of reachable buyers; US not stated.
+d01 PLAN_VERIFY cnd_685d50e4011744b5a1eb not recorded: refused 'already judged' (the earlier verdict was keyed to superseded claim ids). Reading of the current claims: INSUFFICIENT - wpzoom/dev.to supported verbatim but generic small businesses, not independent cideries; Vin Agency undated winery-agency list price. Researcher must resubmit for a new judgement.
+d02 PLAN_VERIFY cnd_98727cd43d0a4edb8cf8 not recorded: refused 'already judged' (earlier verdict keyed to superseded claim ids). Reading of the current claims: SUFFICIENT - wpzoom ,500-,000 (5-10 pages ,500-,000, updated Sep 2026) and dev.to 00-,000 (2026) supported verbatim, small-business population MATCH, geography UNSTATED. Researcher must resubmit.
+d03 PLAN_REVIEW REVISE rev_1015ff710e7e_1c1313
+d04 PLAN_REVIEW REVISE rev_3a790687d2c8_853055
+d01 PLAN_VERIFY cnd_c36c7ac390094733b11f INSUFFICIENT: Wikipedia claim false on 'each linked to its own site' (~1% external links), list mixes breweries/wineries/closed entries; ACA 'about a third' quote verbatim but no count.
+d03 PLAN_REVIEW REVISE rev_931958f6e1c0_bb0032
+d01 PLAN_REVIEW REVISE rev_5732492e547e_4b5241
+d02 PLAN_REVIEW REVISE rev_8121ce6be8a3_850459
+d01 PLAN_REVIEW PASS rev_651a0431d6fc_37ea95
+d03 PLAN_REVIEW PASS rev_5268c3c84788_04d563
+d04 PLAN_REVIEW REVISE rev_863d381e59e6_78484b
+d04 PLAN_REVIEW PASS rev_4a57be6539fb_7b8a08
+d02 PLAN_REVIEW PASS rev_ee2ac1bf7374_4e8a43

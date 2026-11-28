@@ -166,6 +166,10 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     // the question is settled and the planner reruns on it.
     const good = await svc.answerResearch({ goalId, needId: q.needId, actor: AUTHOR, method: 'state board directory read', claims: [{ claim: statement, sourceUrl: 'https://example.test/dental-board/directory', sourceTitle: 'Licensed practices', sourcePublisher: 'State Dental Board', sourceDate: '2026-10-01', evidenceExcerpt: statement, evidenceLocator: 'Directory summary, paragraph 1', primarySource: true }] });
     expect(good.claims[0]!.sourced).toBe(true);
+    // Run 13 (fleet-2): a verdict keyed `claim_id`, or keyed to the claims of a submission since replaced, judged nothing
+    // and the gate blocked the research. Each is refused, nothing is recorded, and the real verdict below still lands.
+    await expect(svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claim_id: good.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, note: 'x' } as never], sufficiency: 'INSUFFICIENT' })).rejects.toThrow(/a verdict with no claimId.*nothing was recorded/);
+    await expect(svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claimId: bad.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, note: 'x' }], sufficiency: 'SUFFICIENT' })).rejects.toThrow(new RegExp(`not among them: ${bad.claims[0]!.claimId}`));
     const accepted = await svc.verifyResearch({ goalId, needId: q.needId, verifier: REVIEWER, verdicts: [{ claimId: good.claims[0]!.claimId, supportsClaim: true, scopeMatch: match, scopeBasis: { geography: 'any market', population: 'Independent dental practices', timeframe: 'current', definitions: q.field }, note: 'the directory states it' }], sufficiency: 'SUFFICIENT' });
     expect(accepted.claims[0]!.accepted).toBe(true);
     expect(accepted.answered).not.toBeNull();
@@ -186,6 +190,17 @@ describe('the app-session goal-to-plan path on real Brain services', () => {
     expect(later.completed).toBe(true);
     expect(later.running).toBeUndefined();
     expect((await svc.planningState(goalId)).revisions.length).toBe(before);
+
+    // A read begun before the session's latest contribution cannot have seen it, so it is not joined: the next call
+    // gets a reading begun after the contribution (production, 2026-11-28: a reading begun before the session filed its
+    // routes was handed back to the next call and weighed none of them).
+    const stale = await svc.runBrain({ goalId, actor: AUTHOR, budgetMs: 0 });
+    expect(stale.running).toBe(true);
+    const { recordWorkstreamEvent } = await import('../server/repos/register.ts');
+    const contribution = await recordWorkstreamEvent({ workstreamId: goalId, kind: svc.PLANNING_EVENTS.contribution, summary: 'routes filed', detail: {}, actorRef: 'test' });
+    const fresh = await svc.runBrain({ goalId, actor: AUTHOR });
+    expect(fresh.completed).toBe(true);
+    expect(fresh.at >= contribution.createdAt).toBe(true);
   }, 180_000);
 
   it('control 1: a feasible, fully evidenced objective returns a complete plan that is reviewed and published', async () => {

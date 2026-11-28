@@ -1,0 +1,2805 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_994348957545484baf03",
+   "words": "Get me $2,500 of settled cash within 21 days, selling only to independent cideries. I have no money to put in up front.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "first cidery payment settled in the owner's account",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "buyers other than independent cideries"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "6b5740e50eb08ca81883e766"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_994348957545484baf03",
+    "contractDigest": "6b5740e50eb08ca81883e766",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell three $1,500 cidery website rebuilds, paid in full up front, built by a subcontracted freelance WordPress designer paid only from settled client money",
+     "opportunityIds": [
+      "cop_674bca003be54c0daf4e"
+     ],
+     "why": "Independent cideries are a published, reachable population (Wikipedia's state-by-state list of ~850 US cideries, each with its own site; ACA says a third of US cideries are members). A 5-page site at $1,500 sits at the bottom of published freelancer prices for small-business sites ($1,500-$7,000, WPZOOM 2026-09-28) and well below a winery agency's $5,000 entry package. A freelancer can build it for ~$500 (dev.to 2026 range $500-$5,000), so three paid-in-full orders settle $4,500 and leave $2,869 after the $1,500 subcontract and Stripe fees, with zero owner money at risk because the designer is paid only after the client's payment settles. What no source establishes is whether cideries buy this from a cold email at this price (demand, price acceptance, conversion), and the designer's written quote; the first-week test measures exactly those before any cost is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Cider label design subcontracted to a freelance designer ($1,000 per SKU)",
+      "why": "Only one agency list price ($1,000 per beer label, 6-week delivery) supports the price, designer cost is unknown, and the 6-week delivery plus a deposit-only model makes $2,500 settled in 21 days with zero owner capital unlikely; kept as the fallback offer to cideries that decline a website."
+     },
+     {
+      "title": "Monthly social media content management for cideries ($399/month)",
+      "why": "Needs seven paying cideries in 21 days, the only price evidence is one non-cider freelancer's limited-time rate, and the subcontractor cost is unknown; dominated by the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Get a written fixed quote (<= $500, 5 pages, 7-day delivery, paid on start) from a freelance WordPress designer before any offer is sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev",
+       "src_wpzoom"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Compile 150 independent cideries with dated or missing websites from Wikipedia's state list and their own sites, and send a personalised cold email from the owner's existing mailbox",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a 5-page cidery website (hours, menu, events, club signup, shop link) for $1,500 paid in full by card/ACH invoice, built within 3 weeks of order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_wpzoom",
+       "src_vin"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 8, at least 1 of the 150 cideries emailed pays the $1,500 invoice in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a 30-minute call with each interested cidery and confirms scope; three orders closed by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice; card fees 2.9% + 30c each",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 10,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer only after that client's payment has settled (3 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 150000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site on the cidery's hosting; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 27,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 1 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 2 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 3 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 13140,
+      "label": "Stripe card fees 3 x (2.9% + 30c)",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 150000,
+      "label": "Pay freelance designer 3 x $500 from settled client money",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev",
+       "src_vin"
+      ],
+      "needs": "a cidery actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 150 cideries emailed",
+      "sources": [],
+      "needs": "the first-week cold-email test"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "buyers",
+      "status": "ESTIMATE",
+      "value": 850,
+      "unit": "US cideries listed",
+      "sources": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "needs": "count of independent cideries with an outdated site"
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net",
+      "status": "ESTIMATE",
+      "value": 2869,
+      "unit": "USD settled after costs",
+      "sources": [
+       "src_stripe_fee"
+      ],
+      "needs": "3 paid orders"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "A state-by-state list of ~850 US cideries (854 entries), each a reachable buyer with its own site",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_aca",
+      "url": "https://thebrewermagazine.com/cidercon26-recap-american-cider-association-outlines-priorities-amid-modest-growth-industry-pressure/",
+      "dated": "2026-02-11",
+      "claim": "ACA CEO: about a third of US cideries are ACA members",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_vin",
+      "url": "https://vinagency.com/services/wine-website-design",
+      "dated": "2026-11-28",
+      "claim": "Winery web agency's Builder package is $5,000; bespoke $10K-$100K+",
+      "population": "wineries",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_674bca003be54c0daf4e#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 cidery website, subcontracted",
+      "population": "independent cidery owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks",
+      "population": "craft beverage brands",
+      "matchesBuyer": false,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_label_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "Cideries that would buy label design exist (~850 listed)",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_social",
+      "url": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312",
+      "dated": "2026-11-28",
+      "claim": "Freelancer social media management at $399/month (founding-client rate)",
+      "population": "small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     },
+     {
+      "id": "src_social_aca",
+      "url": "https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/",
+      "dated": "2026-11-28",
+      "claim": "ACA guidance on cideries using social media channels",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     }
+    ],
+    "validation": {
+     "proof": "By day 8, at least 1 of 150 independent cideries emailed pays the $1,500 website invoice in full, and a freelance designer has given a written quote of <= $500 for the 5-page build",
+     "stop": [
+      "No cidery has paid by day 8 out of 150 emailed: stop, nothing spent",
+      "No freelancer quotes <= $500 in writing by day 2: do not send offers",
+      "Fewer than 3 paid orders by day 11: stop selling; cash already received still settles by day 21 and refunds are not needed because each paid site is still delivered"
+     ],
+     "continue": [
+      "1 or more paid by day 8: email the next 150 cideries and close to 3 orders by day 11"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 150,
+      "reach": 150
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 0,
+      "settlesDay": 20
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "MARKET_VOLUME",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b013208d7a5b_4dfb1b",
+    "digest": "b013208d7a5bc9c6444e4771",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:29:48.260Z"
+   },
+   {
+    "goalId": "wst_994348957545484baf03",
+    "contractDigest": "6b5740e50eb08ca81883e766",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell three $1,500 cidery website rebuilds, paid in full at order (instead of the card's 50/50 split, so all cash settles in the window), built by a subcontracted freelance WordPress designer paid only from settled client money",
+     "opportunityIds": [
+      "cop_674bca003be54c0daf4e"
+     ],
+     "why": "Independent cideries are a published, reachable population (Wikipedia's state-by-state list of ~850 US cideries, each with its own site; ACA says a third of US cideries are members). A 5-page site at $1,500 sits at the bottom of published freelancer prices for small-business sites ($1,500-$7,000, WPZOOM 2026-09-28) and well below a winery agency's $5,000 entry package. A freelancer can build it for ~$500 (dev.to 2026 range $500-$5,000), so three paid-in-full orders settle $4,500 and leave $2,869 after the $1,500 subcontract and Stripe fees, with zero owner money at risk because the designer is paid only after the client's payment settles. What no source establishes is whether cideries buy this from a cold email at this price (demand, price acceptance, conversion), and the designer's written quote; the first-week test measures exactly those before any cost is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Cider label design subcontracted to a freelance designer ($1,000 per SKU)",
+      "why": "Only one agency list price ($1,000 per beer label, 6-week delivery) supports the price, designer cost is unknown, and the 6-week delivery plus a deposit-only model makes $2,500 settled in 21 days with zero owner capital unlikely; kept as the fallback offer to cideries that decline a website."
+     },
+     {
+      "title": "Monthly social media content management for cideries ($399/month)",
+      "why": "Needs seven paying cideries in 21 days, the only price evidence is one non-cider freelancer's limited-time rate, and the subcontractor cost is unknown; dominated by the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Get a written fixed quote (<= $500, 5 pages, 7-day delivery, paid on start) from a freelance WordPress designer before any offer is sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev",
+       "src_wpzoom"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Compile 450 independent cideries with dated or missing websites from Wikipedia's state list and their own sites, and send a personalised cold email from the owner's existing mailbox",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a 5-page cidery website (hours, menu, events, club signup, shop link) for $1,500 paid in full by card/ACH invoice, built within 3 weeks of order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_wpzoom",
+       "src_vin"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 10, at least 3 of the 450 cideries emailed pay the $1,500 invoice in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a 30-minute call with each interested cidery and confirms scope; three orders closed by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice; card fees 2.9% + 30c each",
+      "performer": "BRAIN",
+      "costCents": 13140,
+      "day": 10,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer only after that client's payment has settled (3 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 150000,
+      "day": 20,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site on the cidery's hosting; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 27,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 1 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 2 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Cidery 3 pays website in full",
+      "settlesDay": 20,
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 13140,
+      "label": "Stripe card fees 3 x (2.9% + 30c), deducted from the payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 150000,
+      "label": "Pay freelance designer 3 x $500 from settled client money",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev",
+       "src_vin"
+      ],
+      "needs": "a cidery actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 450 cideries emailed",
+      "sources": [],
+      "needs": "the first-week cold-email test"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "buyers",
+      "status": "ESTIMATE",
+      "value": 850,
+      "unit": "US cideries listed",
+      "sources": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "needs": "count of independent cideries with an outdated site"
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net",
+      "status": "ESTIMATE",
+      "value": 2869,
+      "unit": "USD settled after costs",
+      "sources": [
+       "src_stripe_fee"
+      ],
+      "needs": "3 paid orders"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "A state-by-state list of ~850 US cideries (854 entries), each a reachable buyer with its own site",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_aca",
+      "url": "https://thebrewermagazine.com/cidercon26-recap-american-cider-association-outlines-priorities-amid-modest-growth-industry-pressure/",
+      "dated": "2026-02-11",
+      "claim": "ACA CEO: about a third of US cideries are ACA members",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_vin",
+      "url": "https://vinagency.com/services/wine-website-design",
+      "dated": "2026-11-28",
+      "claim": "Winery web agency's Builder package is $5,000; bespoke $10K-$100K+",
+      "population": "wineries",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_674bca003be54c0daf4e#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 cidery website, subcontracted",
+      "population": "independent cidery owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks",
+      "population": "craft beverage brands",
+      "matchesBuyer": false,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_label_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "Cideries that would buy label design exist (~850 listed)",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_social",
+      "url": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312",
+      "dated": "2026-11-28",
+      "claim": "Freelancer social media management at $399/month (founding-client rate)",
+      "population": "small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     },
+     {
+      "id": "src_social_aca",
+      "url": "https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/",
+      "dated": "2026-11-28",
+      "claim": "ACA guidance on cideries using social media channels",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 3 of 450 independent cideries emailed have paid the $1,500 website invoice in full, and a freelance designer has given a written quote of <= $500 for the 5-page build",
+     "stop": [
+      "No cidery has paid by day 7 out of 450 emailed: stop, nothing spent",
+      "No freelancer quotes <= $500 in writing by day 2: do not send offers",
+      "Fewer than 3 paid orders by day 10: stop selling; each paid site is still delivered from its own settled payment, and the shortfall against $2,500 is reported"
+     ],
+     "continue": [
+      "3 or more paid by day 10: order the builds as each payment settles"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 450,
+      "reach": 450
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 0,
+      "settlesDay": 20
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "deals": 3,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "deals": 7,
+      "price": 399,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "MARKET_VOLUME",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5732492e547e_4b5241",
+    "digest": "5732492e547e58cc7d4ecf3a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:30:07.510Z"
+   },
+   {
+    "goalId": "wst_994348957545484baf03",
+    "contractDigest": "6b5740e50eb08ca81883e766",
+    "parentRevisionId": "rev_5732492e547e_4b5241",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: first count the independent cideries a website offer can actually reach",
+     "opportunityIds": [],
+     "why": "The best route (a $1,500 subcontracted cidery website, paid in full, zero owner money at risk) only carries $2,500 if 3 cideries pay, which at any plausible cold-email rate needs several hundred independent cideries with dated or missing sites and a findable email. No source counts them: the Wikipedia list (~854 entries) mixes breweries, vineyards, closed and corporate-owned producers and carries a website for ~1% of entries, and the ACA gives only a share (a third are members), not a number. Until that count exists there is no plan to judge, and a cold-email test sized on a guessed pool would be uninterpretable."
+    },
+    "alternatives": [
+     {
+      "title": "Subcontracted cidery website at $1,500 (the plan this count unlocks)",
+      "why": "Three paid-in-full orders net $2,868.60 after $1,500 designer cost and $131.40 Stripe fees with $0 owner exposure; it becomes a CONDITIONAL plan once at least 450 qualifying cideries are counted."
+     },
+     {
+      "title": "Cider label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost, 6-week delivery; same unknown buyer pool."
+     },
+     {
+      "title": "Monthly social media for cideries ($399/month)",
+      "why": "Needs 7 paying cideries in 21 days from the same uncounted pool; weaker price evidence."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Count reachable independent cideries: from the Wikipedia state list, state cider association member pages and each producer's own website, keep only operating, independently owned cideries, and record whether each has a findable email and a dated or missing website",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "RESEARCH",
+      "label": "Decide: >= 450 qualifying cideries -> resubmit as the CONDITIONAL website plan with a 3-of-450 paid test by day 10; 150-449 -> resubmit with the test resized to the counted pool and say whether 3 paid remains reachable; < 150 -> stop the cidery website route",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_reachable"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 3,
+    "quantities": [
+     {
+      "name": "q_reachable",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "operating independent US cideries with a findable email and a dated or missing website",
+      "sources": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "needs": "the count in step s1"
+     },
+     {
+      "name": "listed",
+      "status": "ESTIMATE",
+      "value": 854,
+      "unit": "entries in Wikipedia's list of US cideries (mixed, unfiltered)",
+      "sources": [
+       "src_wiki"
+      ],
+      "needs": "filtering to independent, operating cideries"
+     },
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev",
+       "src_vin"
+      ],
+      "needs": "a cidery paying it"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "A state-by-state list of ~854 entries of US cider producers, mixing breweries, vineyards, closed and corporate-owned producers; few entries link a website",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_aca",
+      "url": "https://thebrewermagazine.com/cidercon26-recap-american-cider-association-outlines-priorities-amid-modest-growth-industry-pressure/",
+      "dated": "2026-02-11",
+      "claim": "ACA CEO: about a third of US cideries are ACA members",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_vin",
+      "url": "https://vinagency.com/services/wine-website-design",
+      "dated": "2026-11-28",
+      "claim": "Winery web agency's Builder package is $5,000; bespoke $10K-$100K+",
+      "population": "wineries",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_674bca003be54c0daf4e#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 cidery website, subcontracted",
+      "population": "independent cidery owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks",
+      "population": "craft beverage brands",
+      "matchesBuyer": false,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_label_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "Cideries that would buy label design exist (~850 listed)",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_social",
+      "url": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312",
+      "dated": "2026-11-28",
+      "claim": "Freelancer social media management at $399/month (founding-client rate)",
+      "population": "small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     },
+     {
+      "id": "src_social_aca",
+      "url": "https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/",
+      "dated": "2026-11-28",
+      "claim": "ACA guidance on cideries using social media channels",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, Brain's count shows at least 450 operating independent cideries with a findable email and a dated or missing website",
+     "stop": [
+      "Fewer than 150 qualifying cideries: stop the cidery website route (no money is spent either way)"
+     ],
+     "continue": [
+      "450 or more: resubmit the CONDITIONAL website plan with a 3-paid-of-450 test by day 10",
+      "150-449: resubmit with the test resized to the counted pool"
+     ],
+     "decides": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "noPlan": {
+     "decisiveGap": "How many operating, independently owned US cideries with a findable email and a dated or missing website exist to receive the offer; no source counts them (the Wikipedia list is unfiltered and mostly lacks sites; the ACA gives only a share)",
+     "resolution": "Brain counts them in 2 days at $0 (step s1): >= 450 -> CONDITIONAL plan with a 3-of-450 paid test by day 10; 150-449 -> resized test; < 150 -> stop",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MARKET_VOLUME unestablished: 450 qualifying independent cideries is not shown; the strategy repeats the rejected claim that each listed cidery has its own site.",
+      "resolution": "Accepted: MARKET_VOLUME is not established; the plan is now NO_PLAN with that as the decisive gap, and the false 'each with its own site' wording is removed."
+     },
+     {
+      "finding": "Arithmetic checks: $4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net; 3 sales are required.",
+      "resolution": "Accepted: the arithmetic ($4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net, 3 sales required) is kept as the target the count must support."
+     },
+     {
+      "finding": "Settlement has no slack: payout of the day-7 payment lands day 14-21 under Stripe's first-payout wait; a day-10 payment settles in time only if subsequent payouts are on the 2-business-day schedule.",
+      "resolution": "Accepted: settlement has no slack under Stripe's 7-14 day first payout; the resized plan will close the first order by day 7 at the latest or not proceed."
+     },
+     {
+      "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; obtaining a quote needs a marketplace post or message (SEND_A_MESSAGE is NOT_CONNECTED), so the gate's executor cannot perform it as stated.",
+      "resolution": "Accepted: the freelancer-quote step needed messaging Brain lacks; it is removed from this no-plan and the only step is a read-only count Brain can perform (CHEAP_MODEL_READS)."
+     },
+     {
+      "finding": "Price $1,500 rests on generic small-business freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000) and one winery agency's list price, none about cideries; correctly left to the test.",
+      "resolution": "Accepted: the $1,500 price rests on generic ranges, not cideries; it stays an ESTIMATE to be tested only after the pool is counted."
+     },
+     {
+      "finding": "PAY_A_SUPPLIER is NOT_DECLARED and ISSUE_AN_INVOICE NOT_CONNECTED for the collect/order steps.",
+      "resolution": "Accepted: invoicing and supplier payment are not connected; no collect/order step is in this revision."
+     },
+     {
+      "finding": "Label and social-media members carry null costs and settlement and are fallbacks only; they add nothing to the target.",
+      "resolution": "Accepted: label and social-media members carry null settlement and are listed only as alternatives."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "deals": 3,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "deals": 7,
+      "price": 399,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_651a0431d6fc_37ea95",
+    "digest": "651a0431d6fc2e0beefa9946",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:33:35.025Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_994348957545484baf03",
+   "contractDigest": "6b5740e50eb08ca81883e766",
+   "parentRevisionId": "rev_5732492e547e_4b5241",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: first count the independent cideries a website offer can actually reach",
+    "opportunityIds": [],
+    "why": "The best route (a $1,500 subcontracted cidery website, paid in full, zero owner money at risk) only carries $2,500 if 3 cideries pay, which at any plausible cold-email rate needs several hundred independent cideries with dated or missing sites and a findable email. No source counts them: the Wikipedia list (~854 entries) mixes breweries, vineyards, closed and corporate-owned producers and carries a website for ~1% of entries, and the ACA gives only a share (a third are members), not a number. Until that count exists there is no plan to judge, and a cold-email test sized on a guessed pool would be uninterpretable."
+   },
+   "alternatives": [
+    {
+     "title": "Subcontracted cidery website at $1,500 (the plan this count unlocks)",
+     "why": "Three paid-in-full orders net $2,868.60 after $1,500 designer cost and $131.40 Stripe fees with $0 owner exposure; it becomes a CONDITIONAL plan once at least 450 qualifying cideries are counted."
+    },
+    {
+     "title": "Cider label design subcontracted ($1,000 per SKU)",
+     "why": "Single agency list price, unknown designer cost, 6-week delivery; same unknown buyer pool."
+    },
+    {
+     "title": "Monthly social media for cideries ($399/month)",
+     "why": "Needs 7 paying cideries in 21 days from the same uncounted pool; weaker price evidence."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Count reachable independent cideries: from the Wikipedia state list, state cider association member pages and each producer's own website, keep only operating, independently owned cideries, and record whether each has a findable email and a dated or missing website",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_wiki",
+      "src_aca"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "RESEARCH",
+     "label": "Decide: >= 450 qualifying cideries -> resubmit as the CONDITIONAL website plan with a 3-of-450 paid test by day 10; 150-449 -> resubmit with the test resized to the counted pool and say whether 3 paid remains reachable; < 150 -> stop the cidery website route",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "q_reachable"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": 3,
+   "quantities": [
+    {
+     "name": "q_reachable",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "operating independent US cideries with a findable email and a dated or missing website",
+     "sources": [
+      "src_wiki",
+      "src_aca"
+     ],
+     "needs": "the count in step s1"
+    },
+    {
+     "name": "listed",
+     "status": "ESTIMATE",
+     "value": 854,
+     "unit": "entries in Wikipedia's list of US cideries (mixed, unfiltered)",
+     "sources": [
+      "src_wiki"
+     ],
+     "needs": "filtering to independent, operating cideries"
+    },
+    {
+     "name": "price",
+     "status": "ESTIMATE",
+     "value": 1500,
+     "unit": "USD per site",
+     "sources": [
+      "src_wpzoom",
+      "src_dev",
+      "src_vin"
+     ],
+     "needs": "a cidery paying it"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_wiki",
+     "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+     "dated": "2026-11-28",
+     "claim": "A state-by-state list of ~854 entries of US cider producers, mixing breweries, vineyards, closed and corporate-owned producers; few entries link a website",
+     "population": "US cideries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_aca",
+     "url": "https://thebrewermagazine.com/cidercon26-recap-american-cider-association-outlines-priorities-amid-modest-growth-industry-pressure/",
+     "dated": "2026-02-11",
+     "claim": "ACA CEO: about a third of US cideries are ACA members",
+     "population": "US cideries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_wpzoom",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+     "population": "US small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_dev",
+     "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+     "dated": "2026-06-03",
+     "claim": "Freelance web designer: $500 to $5,000 one time",
+     "population": "US small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_vin",
+     "url": "https://vinagency.com/services/wine-website-design",
+     "dated": "2026-11-28",
+     "claim": "Winery web agency's Builder package is $5,000; bespoke $10K-$100K+",
+     "population": "wineries",
+     "matchesBuyer": false,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_stripe_payout",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+     "population": "Stripe US accounts",
+     "matchesBuyer": false,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_stripe_fee",
+     "url": "https://stripe.com/pricing",
+     "dated": "2026-11-28",
+     "claim": "2.9% + 30c per successful domestic card transaction",
+     "population": "Stripe US accounts",
+     "matchesBuyer": false,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_card_web",
+     "url": "https://brain.local/card/cop_674bca003be54c0daf4e#price",
+     "dated": "2026-11-28",
+     "claim": "Route card: $1,500 cidery website, subcontracted",
+     "population": "independent cidery owner",
+     "matchesBuyer": true,
+     "opportunityId": "cop_674bca003be54c0daf4e"
+    },
+    {
+     "id": "src_pinewatt",
+     "url": "https://dribbble.com/pinewatt/services",
+     "dated": "2026-11-28",
+     "claim": "Beer Label Design $1,000, 6 weeks",
+     "population": "craft beverage brands",
+     "matchesBuyer": false,
+     "opportunityId": "cop_329e81abe4e8458188a2"
+    },
+    {
+     "id": "src_label_wiki",
+     "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+     "dated": "2026-11-28",
+     "claim": "Cideries that would buy label design exist (~850 listed)",
+     "population": "US cideries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_329e81abe4e8458188a2"
+    },
+    {
+     "id": "src_social",
+     "url": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312",
+     "dated": "2026-11-28",
+     "claim": "Freelancer social media management at $399/month (founding-client rate)",
+     "population": "small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_1c3c6d263b984b2aae50"
+    },
+    {
+     "id": "src_social_aca",
+     "url": "https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/",
+     "dated": "2026-11-28",
+     "claim": "ACA guidance on cideries using social media channels",
+     "population": "US cideries",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1c3c6d263b984b2aae50"
+    }
+   ],
+   "validation": {
+    "proof": "By day 3, Brain's count shows at least 450 operating independent cideries with a findable email and a dated or missing website",
+    "stop": [
+     "Fewer than 150 qualifying cideries: stop the cidery website route (no money is spent either way)"
+    ],
+    "continue": [
+     "450 or more: resubmit the CONDITIONAL website plan with a 3-paid-of-450 test by day 10",
+     "150-449: resubmit with the test resized to the counted pool"
+    ],
+    "decides": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "noPlan": {
+    "decisiveGap": "How many operating, independently owned US cideries with a findable email and a dated or missing website exist to receive the offer; no source counts them (the Wikipedia list is unfiltered and mostly lacks sites; the ACA gives only a share)",
+    "resolution": "Brain counts them in 2 days at $0 (step s1): >= 450 -> CONDITIONAL plan with a 3-of-450 paid test by day 10; 150-449 -> resized test; < 150 -> stop",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "MARKET_VOLUME unestablished: 450 qualifying independent cideries is not shown; the strategy repeats the rejected claim that each listed cidery has its own site.",
+     "resolution": "Accepted: MARKET_VOLUME is not established; the plan is now NO_PLAN with that as the decisive gap, and the false 'each with its own site' wording is removed."
+    },
+    {
+     "finding": "Arithmetic checks: $4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net; 3 sales are required.",
+     "resolution": "Accepted: the arithmetic ($4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net, 3 sales required) is kept as the target the count must support."
+    },
+    {
+     "finding": "Settlement has no slack: payout of the day-7 payment lands day 14-21 under Stripe's first-payout wait; a day-10 payment settles in time only if subsequent payouts are on the 2-business-day schedule.",
+     "resolution": "Accepted: settlement has no slack under Stripe's 7-14 day first payout; the resized plan will close the first order by day 7 at the latest or not proceed."
+    },
+    {
+     "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; obtaining a quote needs a marketplace post or message (SEND_A_MESSAGE is NOT_CONNECTED), so the gate's executor cannot perform it as stated.",
+     "resolution": "Accepted: the freelancer-quote step needed messaging Brain lacks; it is removed from this no-plan and the only step is a read-only count Brain can perform (CHEAP_MODEL_READS)."
+    },
+    {
+     "finding": "Price $1,500 rests on generic small-business freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000) and one winery agency's list price, none about cideries; correctly left to the test.",
+     "resolution": "Accepted: the $1,500 price rests on generic ranges, not cideries; it stays an ESTIMATE to be tested only after the pool is counted."
+    },
+    {
+     "finding": "PAY_A_SUPPLIER is NOT_DECLARED and ISSUE_AN_INVOICE NOT_CONNECTED for the collect/order steps.",
+     "resolution": "Accepted: invoicing and supplier payment are not connected; no collect/order step is in this revision."
+    },
+    {
+     "finding": "Label and social-media members carry null costs and settlement and are fallbacks only; they add nothing to the target.",
+     "resolution": "Accepted: label and social-media members carry null settlement and are listed only as alternatives."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "buyerVolume",
+      "brain:MARKET_VOLUME"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_674bca003be54c0daf4e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_329e81abe4e8458188a2",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_1c3c6d263b984b2aae50",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_674bca003be54c0daf4e",
+     "deals": 3,
+     "price": 1500,
+     "directCost": 500,
+     "capital": 0,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_329e81abe4e8458188a2",
+     "deals": 3,
+     "price": 1000,
+     "directCost": null,
+     "capital": 0,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_1c3c6d263b984b2aae50",
+     "deals": 7,
+     "price": 399,
+     "directCost": null,
+     "capital": 0,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_651a0431d6fc_37ea95",
+   "digest": "651a0431d6fc2e0beefa9946",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_22ab8081b9504aaab82b/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:33:35.025Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_651a0431d6fc_37ea95",
+   "digest": "651a0431d6fc2e0beefa9946",
+   "contractDigest": "6b5740e50eb08ca81883e766",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Cidery website build / rebuild (WordPress or Shopify) with D\", \"Cider label design subcontracted to a freelance designer\", \"Monthly social media content management for cideries\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3000× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Cidery website build / rebuild (WordPress or Shopify) with D\" needs [figure withheld] and keeps [figure withheld], 1000× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_674bca003be54c0daf4e",
+     "cop_329e81abe4e8458188a2",
+     "cop_1c3c6d263b984b2aae50"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dives on \"Cidery website build / rebuild (WordPress or Shopify) with D\", \"Cider label design subcontracted to a freelance designer\", \"Monthly social media content management for cideries\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "title": "Cidery website build / rebuild (WordPress or Shopify) with DTC and events pages",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "independent cidery owner",
+       "reachableChannel": "cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries",
+       "offerScope": "5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit",
+       "peakFundingCents": 0,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "craft cider",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to cideries with dated or missing websites found via Wikipedia list a"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 500, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1,300 independent cidery owner (2 sales at ,500 = ,000 >= ,500)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell 5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch to independent cidery owner, reached through cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries, at $1,500; freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "independent cidery owner",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://seahawkmedia.com/solutions/winery-website-design-and-development/; https://websitesetup.org/website-cost/; https://www.wpzoom.com/blog/business-website-cost/; https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k; https://kingstoncreative.net/cider-marketing-ultimate-guide/; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "title": "Cider label design subcontracted to a freelance designer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "independent cidery launching a new cider",
+       "reachableChannel": "cold email to cideries announcing new releases on social media",
+       "offerScope": "New can/bottle label design for one cider SKU",
+       "priceCents": 100000,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance label designer (Dribbble / 99designs)",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "craft cider",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to cideries announcing new releases on social media"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "costs or money tied up are not established"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to cideries announcing new releases on social media",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1,300 independent cidery launching a new cider (3 labels at ,000 = ,000)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell New can/bottle label design for one cider SKU to independent cidery launching a new cider, reached through cold email to cideries announcing new releases on social media, at $1,000; freelance label designer (Dribbble / 99designs) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance label designer (Dribbble / 99designs).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "New can/bottle label design for one cider SKU",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "independent cidery launching a new cider",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://dribbble.com/pinewatt/services; https://thebrewermagazine.com/?p=11353; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "title": "Monthly social media content management for cideries",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "independent cidery",
+       "reachableChannel": "cold email / Instagram DM to cideries",
+       "offerScope": "Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos",
+       "priceCents": 39900,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance social media manager hired per client",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "craft cider",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email / Instagram DM to cideries"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 399 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "28 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "7 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "costs or money tied up are not established"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email / Instagram DM to cideries",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "1,300 independent cidery (7 clients x 99 first month = ,793)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos to independent cidery, reached through cold email / Instagram DM to cideries, at $399; freelance social media manager hired per client delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance social media manager hired per client.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "independent cidery",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$399",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$399",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312; https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:33:34.446Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_5732492e547e_4b5241",
+    "revisionDigest": "5732492e547e58cc7d4ecf3a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_5ff62dfad9654f2e9762/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The shape is sound: CONDITIONAL on demand, price acceptance and conversion; no offer goes out until a written designer quote of <= $500 exists (s1 gate), the designer is paid only from settled client money, and exposure is $0. Recomputed: 3 x $1,500 = $4,500; Stripe 3 x ($43.50 + $0.30) = $131.40; designer 3 x $500 = $1,500; net $2,868.60 (2 sales net only $1,912.40, so 3 are needed); threshold 3 paid of 450 carries the target. Settlement: first live payment day 7, first payout 7-14 days later = day 14-21, so the ledger's day 20 is inside the window only at the short end and lands on day 21 at the long end - no slack. The decisive problem is market volume: the plan needs 450 independent cideries with dated or missing websites and a reachable email, and its only basis is the Wikipedia list it describes as '~850 US cideries, each with its own site'. I verified that list for this goal's buyerVolume question: entries are city wiki links or plain text (about 1% link to an external site), the list includes breweries, vineyards, entries marked CLOSED and corporate-owned brands, and independence is not marked; that research was blocked. Filtering ~850 listed producers to independent cideries, then to those with dated or missing sites, then to those with a findable email, is unlikely to leave 450, and at fewer contacts the 3-of-450 rate no longer reaches the target. The ACA quote ('about a third ... are in our membership') gives no count either.",
+    "findings": [
+     "MARKET_VOLUME unestablished: 450 qualifying independent cideries is not shown; the strategy repeats the rejected claim that each listed cidery has its own site.",
+     "Arithmetic checks: $4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net; 3 sales are required.",
+     "Settlement has no slack: payout of the day-7 payment lands day 14-21 under Stripe's first-payout wait; a day-10 payment settles in time only if subsequent payouts are on the 2-business-day schedule.",
+     "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; obtaining a quote needs a marketplace post or message (SEND_A_MESSAGE is NOT_CONNECTED), so the gate's executor cannot perform it as stated.",
+     "Price $1,500 rests on generic small-business freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000) and one winery agency's list price, none about cideries; correctly left to the test.",
+     "PAY_A_SUPPLIER is NOT_DECLARED and ISSUE_AN_INVOICE NOT_CONNECTED for the collect/order steps.",
+     "Label and social-media members carry null costs and settlement and are fallbacks only; they add nothing to the target."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:32:44.405Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "link": "MARKET_VOLUME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "buyerVolume",
+      "why": "The plan emails 450 independent cideries with dated or missing websites and needs 3 paid; the card's buyerVolume is a RECOMMENDATION ('1,300') and the research to count reachable independent cideries was blocked (the Wikipedia list mixes non-cideries and closed entries and carries no site or email for ~99% of entries)."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_651a0431d6fc_37ea95",
+    "revisionDigest": "651a0431d6fc2e0beefa9946",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_5ff62dfad9654f2e9762/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with MARKET_VOLUME as the decisive gap is right and answers the prior review. Only independent cideries may be sold to, and no source counts them: the Wikipedia list (~854 entries) mixes breweries, vineyards, closed and corporate-owned producers and links a site for ~1% of entries (I verified this), and the ACA quote gives only a share. The website route needs 3 paid orders (net $2,868.60 after $131.40 Stripe fees and $1,500 designer cost; 2 orders net only $1,912.40), so the size of the reachable pool decides whether any cold-email test can carry $2,500 in 21 days. That count is a research question Brain can answer at $0 with reads (CHEAP_MODEL_READS present), so it precedes the conversion test rather than being guessed into it. The decision rule (>=450 -> 3-of-450 test; 150-449 -> resized test; <150 -> stop) is coherent, spends nothing and takes no orders. The false 'each with its own site' claim is removed.",
+    "findings": [
+     "Decisive gap correctly named: count of operating, independently owned cideries with a findable email and a dated or missing site.",
+     "Arithmetic carried forward correctly: 3 sales, $4,500 gross, $2,868.60 net.",
+     "Time budget: the count takes days 1-3 of 21; the follow-on plan must close its first order by about day 7 to clear Stripe's 7-14 day first-payout wait, as the answer notes.",
+     "When the CONDITIONAL plan is resubmitted it must restore a fulfilment gate (a written designer quote <= $500) with an executor that can obtain it (messaging is NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:35:15.910Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_651a0431d6fc_37ea95",
+   "digest": "651a0431d6fc2e0beefa9946",
+   "contractDigest": "6b5740e50eb08ca81883e766",
+   "plan": {
+    "goalId": "wst_994348957545484baf03",
+    "contractDigest": "6b5740e50eb08ca81883e766",
+    "parentRevisionId": "rev_5732492e547e_4b5241",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: first count the independent cideries a website offer can actually reach",
+     "opportunityIds": [],
+     "why": "The best route (a $1,500 subcontracted cidery website, paid in full, zero owner money at risk) only carries $2,500 if 3 cideries pay, which at any plausible cold-email rate needs several hundred independent cideries with dated or missing sites and a findable email. No source counts them: the Wikipedia list (~854 entries) mixes breweries, vineyards, closed and corporate-owned producers and carries a website for ~1% of entries, and the ACA gives only a share (a third are members), not a number. Until that count exists there is no plan to judge, and a cold-email test sized on a guessed pool would be uninterpretable."
+    },
+    "alternatives": [
+     {
+      "title": "Subcontracted cidery website at $1,500 (the plan this count unlocks)",
+      "why": "Three paid-in-full orders net $2,868.60 after $1,500 designer cost and $131.40 Stripe fees with $0 owner exposure; it becomes a CONDITIONAL plan once at least 450 qualifying cideries are counted."
+     },
+     {
+      "title": "Cider label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost, 6-week delivery; same unknown buyer pool."
+     },
+     {
+      "title": "Monthly social media for cideries ($399/month)",
+      "why": "Needs 7 paying cideries in 21 days from the same uncounted pool; weaker price evidence."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Count reachable independent cideries: from the Wikipedia state list, state cider association member pages and each producer's own website, keep only operating, independently owned cideries, and record whether each has a findable email and a dated or missing website",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "RESEARCH",
+      "label": "Decide: >= 450 qualifying cideries -> resubmit as the CONDITIONAL website plan with a 3-of-450 paid test by day 10; 150-449 -> resubmit with the test resized to the counted pool and say whether 3 paid remains reachable; < 150 -> stop the cidery website route",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_reachable"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 3,
+    "quantities": [
+     {
+      "name": "q_reachable",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "operating independent US cideries with a findable email and a dated or missing website",
+      "sources": [
+       "src_wiki",
+       "src_aca"
+      ],
+      "needs": "the count in step s1"
+     },
+     {
+      "name": "listed",
+      "status": "ESTIMATE",
+      "value": 854,
+      "unit": "entries in Wikipedia's list of US cideries (mixed, unfiltered)",
+      "sources": [
+       "src_wiki"
+      ],
+      "needs": "filtering to independent, operating cideries"
+     },
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev",
+       "src_vin"
+      ],
+      "needs": "a cidery paying it"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "A state-by-state list of ~854 entries of US cider producers, mixing breweries, vineyards, closed and corporate-owned producers; few entries link a website",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_aca",
+      "url": "https://thebrewermagazine.com/cidercon26-recap-american-cider-association-outlines-priorities-amid-modest-growth-industry-pressure/",
+      "dated": "2026-02-11",
+      "claim": "ACA CEO: about a third of US cideries are ACA members",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_vin",
+      "url": "https://vinagency.com/services/wine-website-design",
+      "dated": "2026-11-28",
+      "claim": "Winery web agency's Builder package is $5,000; bespoke $10K-$100K+",
+      "population": "wineries",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_674bca003be54c0daf4e#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 cidery website, subcontracted",
+      "population": "independent cidery owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_674bca003be54c0daf4e"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks",
+      "population": "craft beverage brands",
+      "matchesBuyer": false,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_label_wiki",
+      "url": "https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "dated": "2026-11-28",
+      "claim": "Cideries that would buy label design exist (~850 listed)",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_329e81abe4e8458188a2"
+     },
+     {
+      "id": "src_social",
+      "url": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312",
+      "dated": "2026-11-28",
+      "claim": "Freelancer social media management at $399/month (founding-client rate)",
+      "population": "small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     },
+     {
+      "id": "src_social_aca",
+      "url": "https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/",
+      "dated": "2026-11-28",
+      "claim": "ACA guidance on cideries using social media channels",
+      "population": "US cideries",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c3c6d263b984b2aae50"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, Brain's count shows at least 450 operating independent cideries with a findable email and a dated or missing website",
+     "stop": [
+      "Fewer than 150 qualifying cideries: stop the cidery website route (no money is spent either way)"
+     ],
+     "continue": [
+      "450 or more: resubmit the CONDITIONAL website plan with a 3-paid-of-450 test by day 10",
+      "150-449: resubmit with the test resized to the counted pool"
+     ],
+     "decides": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "noPlan": {
+     "decisiveGap": "How many operating, independently owned US cideries with a findable email and a dated or missing website exist to receive the offer; no source counts them (the Wikipedia list is unfiltered and mostly lacks sites; the ACA gives only a share)",
+     "resolution": "Brain counts them in 2 days at $0 (step s1): >= 450 -> CONDITIONAL plan with a 3-of-450 paid test by day 10; 150-449 -> resized test; < 150 -> stop",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "MARKET_VOLUME unestablished: 450 qualifying independent cideries is not shown; the strategy repeats the rejected claim that each listed cidery has its own site.",
+      "resolution": "Accepted: MARKET_VOLUME is not established; the plan is now NO_PLAN with that as the decisive gap, and the false 'each with its own site' wording is removed."
+     },
+     {
+      "finding": "Arithmetic checks: $4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net; 3 sales are required.",
+      "resolution": "Accepted: the arithmetic ($4,500 gross, $131.40 fees, $1,500 designer, $2,868.60 net, 3 sales required) is kept as the target the count must support."
+     },
+     {
+      "finding": "Settlement has no slack: payout of the day-7 payment lands day 14-21 under Stripe's first-payout wait; a day-10 payment settles in time only if subsequent payouts are on the 2-business-day schedule.",
+      "resolution": "Accepted: settlement has no slack under Stripe's 7-14 day first payout; the resized plan will close the first order by day 7 at the latest or not proceed."
+     },
+     {
+      "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; obtaining a quote needs a marketplace post or message (SEND_A_MESSAGE is NOT_CONNECTED), so the gate's executor cannot perform it as stated.",
+      "resolution": "Accepted: the freelancer-quote step needed messaging Brain lacks; it is removed from this no-plan and the only step is a read-only count Brain can perform (CHEAP_MODEL_READS)."
+     },
+     {
+      "finding": "Price $1,500 rests on generic small-business freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000) and one winery agency's list price, none about cideries; correctly left to the test.",
+      "resolution": "Accepted: the $1,500 price rests on generic ranges, not cideries; it stays an ESTIMATE to be tested only after the pool is counted."
+     },
+     {
+      "finding": "PAY_A_SUPPLIER is NOT_DECLARED and ISSUE_AN_INVOICE NOT_CONNECTED for the collect/order steps.",
+      "resolution": "Accepted: invoicing and supplier payment are not connected; no collect/order step is in this revision."
+     },
+     {
+      "finding": "Label and social-media members carry null costs and settlement and are fallbacks only; they add nothing to the target.",
+      "resolution": "Accepted: label and social-media members carry null settlement and are listed only as alternatives."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_674bca003be54c0daf4e",
+      "deals": 3,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_329e81abe4e8458188a2",
+      "deals": 3,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_1c3c6d263b984b2aae50",
+      "deals": 7,
+      "price": 399,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_651a0431d6fc_37ea95",
+    "digest": "651a0431d6fc2e0beefa9946",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:33:35.025Z"
+   },
+   "review": {
+    "revisionId": "rev_651a0431d6fc_37ea95",
+    "revisionDigest": "651a0431d6fc2e0beefa9946",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_22ab8081b9504aaab82b/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_5ff62dfad9654f2e9762/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with MARKET_VOLUME as the decisive gap is right and answers the prior review. Only independent cideries may be sold to, and no source counts them: the Wikipedia list (~854 entries) mixes breweries, vineyards, closed and corporate-owned producers and links a site for ~1% of entries (I verified this), and the ACA quote gives only a share. The website route needs 3 paid orders (net $2,868.60 after $131.40 Stripe fees and $1,500 designer cost; 2 orders net only $1,912.40), so the size of the reachable pool decides whether any cold-email test can carry $2,500 in 21 days. That count is a research question Brain can answer at $0 with reads (CHEAP_MODEL_READS present), so it precedes the conversion test rather than being guessed into it. The decision rule (>=450 -> 3-of-450 test; 150-449 -> resized test; <150 -> stop) is coherent, spends nothing and takes no orders. The false 'each with its own site' claim is removed.",
+    "findings": [
+     "Decisive gap correctly named: count of operating, independently owned cideries with a findable email and a dated or missing site.",
+     "Arithmetic carried forward correctly: 3 sales, $4,500 gross, $2,868.60 net.",
+     "Time budget: the count takes days 1-3 of 21; the follow-on plan must close its first order by about day 7 to clear Stripe's 7-14 day first-payout wait, as the answer notes.",
+     "When the CONDITIONAL plan is resubmitted it must restore a fulfilment gate (a written designer quote <= $500) with an executor that can obtain it (messaging is NOT_CONNECTED)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:35:15.910Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Get me $2,500 of settled cash within 21 days, selling only to independent cideries. I have no money to put in up front.",
+    "terms": "49edd70022cff553",
+    "openings": {
+     "cop_1c3c6d263b984b2aae50": "6c74a11e59fc0412",
+     "cop_329e81abe4e8458188a2": "cfb4deb989a518ac",
+     "cop_674bca003be54c0daf4e": "f3dd71bdfeeab500"
+    }
+   },
+   "at": "2026-11-28T03:40:13.146Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

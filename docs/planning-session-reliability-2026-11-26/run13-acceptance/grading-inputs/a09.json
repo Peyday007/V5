@@ -1,0 +1,216 @@
+{
+ "caseId": "ar-09-farrier-price-contested",
+ "keys": {
+  "cop_0708b408a5884ef59385": "farrierWorkbook"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 3000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 12455× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Route-planning and client-invoicing workbook for farriers\" needs [figure withheld] and keeps [figure withheld], 219× the [figure withheld] behind the plan (bound ×20), on a price no buyer), so none of its figures is shown or adopted. The plan's steps are for \"Self-employed farriers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0708b408a5884ef59385"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Route-planning and client-invoicing workbook for farriers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Route-planning and client-invoicing workbook for farriers\"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Self-employed farriers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Self-employed farriers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 7.9866272750137055
+   },
+   {
+    "label": "Collect payment for \"Route-planning and client-invoicing workbook for farriers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_0708b408a5884ef59385",
+    "title": "Route-planning and client-invoicing workbook for farriers",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Self-employed farriers",
+     "reachableChannel": "Email to members listed in the state farriers' association directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:12:08.024Z",
+     "offerScope": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+     "priceCents": 35000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "farriery",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to members listed in the state farriers' association directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 7 accepted of 100 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "33 deal(s) needed at the measured rate means asking 795 prospects, but the market holds only 310 (310 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 12.8"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state farriers' association lists 310 member farriers with published emails; 100 were contacted in a first send, leaving 210.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain produces the workbook on payment; card payouts land 3 days after payment. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "7 paid orders from 100 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Self-employed farriers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$95",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:35.558Z"
+ }
+}

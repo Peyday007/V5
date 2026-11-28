@@ -1,0 +1,16 @@
+a01 ar-01-phone-repair-owner-hours step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a02 ar-02-aerial-applicator-short-window step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a03 ar-03-coworking-acoustic-net step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a04 ar-04-allergen-lab-requote step=1 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a05 ar-05-glassblowing-target-raised step=1 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a06 ar-06-quilt-shops-one-sound step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a07 ar-07-seafood-capital-and-terms step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a08 ar-08-electric-coop-pays-late step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a09 ar-09-farrier-price-contested step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a10 ar-10-lan-centers-volume-estimated step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a11 ar-11-pottery-grant-as-price step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a12 ar-12-audiobook-owner-hours-exceeded step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+d01 as-01-cideries-named-industry stance=NO_PLAN pass=False critical=False
+d02 as-02-owner-hours-limited stance=CONDITIONAL pass=False critical=False
+d03 as-03-large-target-with-capital stance=CONDITIONAL pass=True critical=False
+d04 as-04-small-fast-no-work stance=CONDITIONAL pass=True critical=False

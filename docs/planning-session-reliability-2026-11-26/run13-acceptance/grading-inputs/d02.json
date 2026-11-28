@@ -1,0 +1,450 @@
+{
+ "caseId": "as-02-owner-hours-limited",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 6000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0d50136c66294ceca674",
+   "cop_a72c8e947393448e801e",
+   "cop_73de776464f8461c9baa"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_0d50136c66294ceca674",
+    "title": "Small-business website builds sold by cold email, built by Brain",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "local small-business owner with an outdated or missing website",
+     "reachableChannel": "cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool",
+     "offerScope": "5-page website built and launched in 7 days, paid 50% upfront / 50% at launch",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit",
+     "peakFundingCents": 15000,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "local services (trades, clinics, restaurants)",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to businesses found on Google Maps with no/outdated site, sent from a"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 500, tied up 150"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell 5-page website built and launched in 7 days, paid 50% upfront / 50% at launch to local small-business owner with an outdated or missing website, reached through cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool, at $1,500; freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "5-page website built and launched in 7 days, paid 50% upfront / 50% at launch",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "local small-business owner with an outdated or missing website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://websitesetup.org/website-cost/; https://www.upwork.com/resources/how-much-does-it-cost-to-build-website; https://www.wpzoom.com/blog/business-website-cost/; https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k; https://websitesetup.org/website-cost/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_a72c8e947393448e801e",
+    "title": "Craft beverage label design subcontracted to a freelance designer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1000,
+    "card": {
+     "payer": "small craft beverage producer launching a new SKU",
+     "reachableChannel": "cold email to cideries announcing new releases on social media",
+     "offerScope": "New can/bottle label design for one cider SKU",
+     "priceCents": 100000,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance label designer (Dribbble / 99designs)",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "craft beer / wine / cider / spirits",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to cideries announcing new releases on social media"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "costs or money tied up are not established"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to cideries announcing new releases on social media",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell New can/bottle label design for one cider SKU to small craft beverage producer launching a new SKU, reached through cold email to cideries announcing new releases on social media, at $1,000; freelance label designer (Dribbble / 99designs) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance label designer (Dribbble / 99designs).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "New can/bottle label design for one cider SKU",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "small craft beverage producer launching a new SKU",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://dribbble.com/pinewatt/services; https://thebrewermagazine.com/?p=11353; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_73de776464f8461c9baa",
+    "title": "Upwork fixed-price web / automation projects answered from posted jobs",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1000,
+    "card": {
+     "payer": "Upwork client who posted a fixed-price job",
+     "reachableChannel": "Upwork proposals (Connects /bin/bash.15 each)",
+     "offerScope": "Fixed-price delivery of the posted website / automation job",
+     "priceCents": 100000,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance developer subcontracted per job, paid from the Upwork milestone",
+     "peakFundingCents": 3000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "freelance marketplace (web dev, automation)",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Upwork proposals (Connects /bin/bash.15 each)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 400, tied up 30"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Upwork proposals (Connects /bin/bash.15 each)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-price delivery of the posted website / automation job to Upwork client who posted a fixed-price job, reached through Upwork proposals (Connects /bin/bash.15 each), at $1,000; freelance developer subcontracted per job, paid from the Upwork milestone delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$30",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance developer subcontracted per job, paid from the Upwork milestone.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-price delivery of the posted website / automation job",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Upwork client who posted a fixed-price job",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee; https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": 17,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-28T03:36:55.156Z"
+ }
+}

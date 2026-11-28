@@ -1,0 +1,3889 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_13d38a0208774b618014",
+   "words": "I want $6,000 in my account within 30 days. Any lawful business is fine. I can give this at most 4 hours a week, and I can put in up to $500.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 50000,
+    "proofCondition": "first paid order settled in the owner's account",
+    "ownerHoursPerWeek": 4,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "unlawful business"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "9294025df47c9d68a7455708"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_13d38a0208774b618014",
+    "contractDigest": "8765e6622bc3ea3e251ddc17",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell seven $1,500 five-page websites to local small businesses with missing or outdated sites, paid in full at order, built by a subcontracted freelance WordPress designer paid from settled client money",
+     "opportunityIds": [
+      "cop_0d50136c66294ceca674"
+     ],
+     "why": "There are 36.2 million US small businesses (SBA Office of Advocacy 2026), so the buyer pool is not the constraint. $1,500 is at the bottom of published freelancer prices for a small-business site ($1,500-$7,000, WPZOOM updated 2026-09-28; $500-$5,000, dev.to 2026), and a freelancer can build it for about $500, leaving ~$956 per site after the subcontract and Stripe's 2.9% + 30c. Seven paid orders settle $10,500 and keep $6,543 after $3,500 subcontracting, $307 fees and $150 of sending tools, inside the $500 capital cap and ~10.5 owner hours (1.5 per sale) of the 17 allowed. Brain finds the prospects and writes and sends the outreach; the owner only takes the closing calls. What no source establishes is whether these buyers pay $1,500 from a cold email and how many do (demand, price, conversion), plus the designer's written quote; the first 300-contact wave measures those before the subcontract money is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price web/automation jobs at ~$1,000, subcontracted",
+      "why": "Answers posted paid requests, but a new profile's win rate is unknown, fees are 0-15%, and six wins plus Upwork's payment holds inside 30 days on 17 owner hours is less likely than direct sales; kept as a parallel channel if cold email under-delivers."
+     },
+     {
+      "title": "Craft beverage label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost and a 6-week delivery; cash would mostly be deposits and is weaker than the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Get a written fixed quote (<= $500, 5 pages, 7-day delivery) from a freelance WordPress designer before any offer is sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Buy a sending domain/mailbox and prospect tool, list 1,050 local businesses with missing or outdated sites from map listings, and send personalised cold email in waves of 300",
+      "performer": "BRAIN",
+      "costCents": 15000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_sba",
+       "q_tools"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a 5-page website for $1,500 paid in full at order by Stripe invoice, built within 2 weeks of payment settling",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 10, at least 2 of the first 300 businesses emailed have paid $1,500 in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a 30-60 minute scoping/closing call with each interested buyer; 7 orders closed by day 16",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 10.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice (2.9% + 30c each, deducted at payout)",
+      "performer": "BRAIN",
+      "costCents": 30660,
+      "day": 16,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer after that client's payment settles (7 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 350000,
+      "day": 22,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 29,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 15000,
+      "label": "Sending domain, mailbox and prospecting tool, one month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 1 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 2 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 3 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 4 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 5 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 6 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 7 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 30660,
+      "label": "Stripe card fees 7 x (2.9% + 30c)",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 350000,
+      "label": "Pay freelance designer 7 x $500 from settled client money",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "needs": "buyers actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 300 businesses emailed",
+      "sources": [],
+      "needs": "the first 300-contact wave"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "q_tools",
+      "status": "ESTIMATE",
+      "value": 150,
+      "unit": "USD for sending domain, mailbox and prospect data",
+      "sources": [],
+      "needs": "vendor checkout prices"
+     },
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "US small businesses",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner_hours",
+      "status": "ESTIMATE",
+      "value": 10.5,
+      "unit": "owner hours in the window",
+      "sources": [],
+      "needs": "call length per buyer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "There are 36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_orbit",
+      "url": "https://www.orbitmedia.com/blog/website-lifespan-and-you/",
+      "dated": "2026-06-30",
+      "claim": "Average website lifespan 2y1m (top brands) to 6y4m (agency clients): websites are replaced periodically",
+      "population": "businesses with websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_0d50136c66294ceca674#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 small-business website, subcontracted",
+      "population": "local small-business owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_upfee",
+      "url": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee",
+      "dated": "2026-11-28",
+      "claim": "Upwork freelancer service fee is variable 0-15% per contract; Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_upjobs",
+      "url": "https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+      "dated": "2026-11-28",
+      "claim": "Upwork publishes website-build cost guidance for clients hiring freelancers on its marketplace",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks; Wine $1,500; Spirits $2,000",
+      "population": "craft beverage brands",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a72c8e947393448e801e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 of the first 300 local businesses emailed have paid the $1,500 website invoice in full, and a freelance designer has quoted <= $500 in writing",
+     "stop": [
+      "No freelancer quotes <= $500 in writing by day 2: do not send offers (only the $150 tools are spent)",
+      "Fewer than 2 paid of the first 300 by day 10: stop outreach; deliver any paid site from its own settled payment",
+      "Owner hours reach 15 before 7 orders: stop selling"
+     ],
+     "continue": [
+      "2 or more paid of 300 by day 10: send the remaining 750 contacts in waves and close to 7 orders by day 16"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1050
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "deals": 7,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 150,
+      "settlesDay": 22
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "deals": 6,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 400,
+      "capital": 30,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a95313a9e7bd_ddd364",
+    "digest": "a95313a9e7bd76d93377ee51",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:30:55.653Z"
+   },
+   {
+    "goalId": "wst_13d38a0208774b618014",
+    "contractDigest": "9294025df47c9d68a7455708",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell seven $1,500 five-page websites to local small businesses with missing or outdated sites, paid in full at order, built by a subcontracted freelance WordPress designer paid from settled client money",
+     "opportunityIds": [
+      "cop_0d50136c66294ceca674"
+     ],
+     "why": "There are 36.2 million US small businesses (SBA Office of Advocacy 2026), so the buyer pool is not the constraint. $1,500 is at the bottom of published freelancer prices for a small-business site ($1,500-$7,000, WPZOOM updated 2026-09-28; $500-$5,000, dev.to 2026), and a freelancer can build it for about $500, leaving ~$956 per site after the subcontract and Stripe's 2.9% + 30c. Seven paid orders settle $10,500 and keep $6,543 after $3,500 subcontracting, $307 fees and $150 of sending tools, inside the $500 capital cap and ~10.5 owner hours (1.5 per sale) of the 17 allowed. Brain finds the prospects and writes and sends the outreach; the owner only takes the closing calls. What no source establishes is whether these buyers pay $1,500 from a cold email and how many do (demand, price, conversion), plus the designer's written quote; the first 300-contact wave measures those before the subcontract money is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price web/automation jobs at ~$1,000, subcontracted",
+      "why": "Answers posted paid requests, but a new profile's win rate is unknown, fees are 0-15%, and six wins plus Upwork's payment holds inside 30 days on 17 owner hours is less likely than direct sales; kept as a parallel channel if cold email under-delivers."
+     },
+     {
+      "title": "Craft beverage label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost and a 6-week delivery; cash would mostly be deposits and is weaker than the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Get a written fixed quote (<= $500, 5 pages, 7-day delivery) from a freelance WordPress designer before any offer is sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Buy a sending domain/mailbox and prospect tool, list 1,050 local businesses with missing or outdated sites from map listings, and send personalised cold email in waves of 300",
+      "performer": "BRAIN",
+      "costCents": 15000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_sba",
+       "q_tools"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Offer a 5-page website for $1,500 paid in full at order by Stripe invoice, built within 2 weeks of payment settling",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 10, at least 2 of the first 300 businesses emailed have paid $1,500 in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a 30-60 minute scoping/closing call with each interested buyer; 7 orders closed by day 16",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 10.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice (2.9% + 30c each, deducted at payout)",
+      "performer": "BRAIN",
+      "costCents": 30660,
+      "day": 16,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer after that client's payment settles (7 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 350000,
+      "day": 22,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 29,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "SPEND",
+      "amountCents": 15000,
+      "label": "Sending domain, mailbox and prospecting tool, one month",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 1 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 2 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 3 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 4 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 5 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 6 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 7 pays website in full",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 30660,
+      "label": "Stripe card fees 7 x (2.9% + 30c)",
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 350000,
+      "label": "Pay freelance designer 7 x $500 from settled client money",
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "needs": "buyers actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 300 businesses emailed",
+      "sources": [],
+      "needs": "the first 300-contact wave"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "q_tools",
+      "status": "ESTIMATE",
+      "value": 150,
+      "unit": "USD for sending domain, mailbox and prospect data",
+      "sources": [],
+      "needs": "vendor checkout prices"
+     },
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "US small businesses",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner_hours",
+      "status": "ESTIMATE",
+      "value": 10.5,
+      "unit": "owner hours in the window",
+      "sources": [],
+      "needs": "call length per buyer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "There are 36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_orbit",
+      "url": "https://www.orbitmedia.com/blog/website-lifespan-and-you/",
+      "dated": "2026-06-30",
+      "claim": "Average website lifespan 2y1m (top brands) to 6y4m (agency clients): websites are replaced periodically",
+      "population": "businesses with websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_0d50136c66294ceca674#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 small-business website, subcontracted",
+      "population": "local small-business owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_upfee",
+      "url": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee",
+      "dated": "2026-11-28",
+      "claim": "Upwork freelancer service fee is variable 0-15% per contract; Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_upjobs",
+      "url": "https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+      "dated": "2026-11-28",
+      "claim": "Upwork publishes website-build cost guidance for clients hiring freelancers on its marketplace",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks; Wine $1,500; Spirits $2,000",
+      "population": "craft beverage brands",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a72c8e947393448e801e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 of the first 300 local businesses emailed have paid the $1,500 website invoice in full, and a freelance designer has quoted <= $500 in writing",
+     "stop": [
+      "No freelancer quotes <= $500 in writing by day 2: do not send offers (only the $150 tools are spent)",
+      "Fewer than 2 paid of the first 300 by day 10: stop outreach; deliver any paid site from its own settled payment",
+      "Owner hours reach 15 before 7 orders: stop selling"
+     ],
+     "continue": [
+      "2 or more paid of 300 by day 10: send the remaining 750 contacts in waves and close to 7 orders by day 16"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1050
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "deals": 7,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 150,
+      "settlesDay": 22
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "deals": 6,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 400,
+      "capital": 30,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8121ce6be8a3_850459",
+    "digest": "8121ce6be8a38dace8094696",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:31:04.396Z"
+   },
+   {
+    "goalId": "wst_13d38a0208774b618014",
+    "contractDigest": "9294025df47c9d68a7455708",
+    "parentRevisionId": "rev_8121ce6be8a3_850459",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell seven $1,500 five-page websites to local small businesses with missing or outdated sites, paid in full at order, built by a subcontracted freelance WordPress designer paid from settled client money",
+     "opportunityIds": [
+      "cop_0d50136c66294ceca674"
+     ],
+     "why": "There are 36.2 million US small businesses (SBA Office of Advocacy 2026), so the buyer pool is not the constraint. $1,500 is at the bottom of published freelancer prices for a small-business site ($1,500-$7,000, WPZOOM updated 2026-09-28; $500-$5,000, dev.to 2026), and a freelancer can build it for about $500, leaving ~$956 per site after the subcontract and Stripe's 2.9% + 30c. Seven paid orders settle $10,500 and keep $6,543 after $3,500 subcontracting, $307 fees and $150 of sending tools, inside the $500 capital cap and at most 3.5 owner hours in any week (10.5 in all, under the 4 h/week limit). Brain finds the prospects and writes and sends the outreach; the owner requests the designer quote and takes short closing calls, capped per week. What no source establishes is whether these buyers pay $1,500 from a cold email and how many do (demand, price, conversion), plus the designer's written quote; the first 300-contact wave measures those before the subcontract money is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price web/automation jobs at ~$1,000, subcontracted",
+      "why": "Answers posted paid requests, but a new profile's win rate is unknown, fees are 0-15%, and six wins plus Upwork's payment holds inside 30 days on 17 owner hours is less likely than direct sales; kept as a parallel channel if cold email under-delivers."
+     },
+     {
+      "title": "Craft beverage label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost and a 6-week delivery; cash would mostly be deposits and is weaker than the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Owner posts the fixed-scope brief (5 pages, 7-day delivery, <= $500, paid on start) on a freelance marketplace and accepts a written quote before any offer is sent",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "RESEARCH",
+      "label": "Count and list 1,050 local businesses with a missing or outdated website and a findable email from public map/business listings; fewer than 1,050 found -> resize the reach and the threshold before sending",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_sba",
+       "q_reachable"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Buy a sending domain/mailbox and send personalised cold email to the listed businesses in waves of 300",
+      "performer": "BRAIN",
+      "costCents": 15000,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_tools"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Offer a 5-page website for $1,500 paid in full at order by Stripe invoice, scope agreed by email, built within 2 weeks of payment settling",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Validation: by day 11, at least 2 of the first 300 businesses emailed have paid $1,500 in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6a",
+      "kind": "SELL",
+      "label": "Week 1 (days 1-7): owner takes up to 2 h of 20-minute closing calls; scope otherwise settled by email",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6b",
+      "kind": "SELL",
+      "label": "Week 2 (days 8-14): owner takes up to 3.5 h of closing calls, including calls that do not close",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s6a",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6c",
+      "kind": "SELL",
+      "label": "Week 3 (days 15-21): owner takes up to 3.5 h of closing calls",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 17,
+      "dependsOn": "s6b",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6d",
+      "kind": "SELL",
+      "label": "Week 4 (days 22-24): owner takes up to 1 h for the last close",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 22,
+      "dependsOn": "s6c",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 1,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice (2.9% + 30c each, deducted at payout)",
+      "performer": "BRAIN",
+      "costCents": 30660,
+      "day": 22,
+      "dependsOn": "s6d",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer after that client's payment settles (7 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 350000,
+      "day": 24,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 30,
+      "dependsOn": "s8",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 15000,
+      "label": "Sending domain, mailbox and prospecting tool, one month",
+      "stepId": "s3"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 1 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 2 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 3 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 4 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 5 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 6 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 7 pays website in full",
+      "settlesDay": 24,
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 30660,
+      "label": "Stripe card fees 7 x (2.9% + 30c)",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 350000,
+      "label": "Pay freelance designer 7 x $500 from settled client money",
+      "stepId": "s8"
+     }
+    ],
+    "proofDay": 11,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "needs": "buyers actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 300 businesses emailed",
+      "sources": [],
+      "needs": "the first 300-contact wave"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "q_tools",
+      "status": "ESTIMATE",
+      "value": 150,
+      "unit": "USD for sending domain, mailbox and prospect data",
+      "sources": [],
+      "needs": "vendor checkout prices"
+     },
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "US small businesses (all, incl. nonemployers; not a count of reachable prospects)",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner_hours",
+      "status": "ESTIMATE",
+      "value": 10.5,
+      "unit": "owner hours, capped at 3.5 in any week (calls with non-buyers included in the cap)",
+      "sources": [],
+      "needs": "call count per close, measured in week 1"
+     },
+     {
+      "name": "q_reachable",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "local businesses with missing/outdated site and findable email listed by Brain",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": "step s2 count"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "There are 36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_orbit",
+      "url": "https://www.orbitmedia.com/blog/website-lifespan-and-you/",
+      "dated": "2026-06-30",
+      "claim": "Average website lifespan 2y1m (top brands) to 6y4m (agency clients): websites are replaced periodically",
+      "population": "businesses with websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_0d50136c66294ceca674#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 small-business website, subcontracted",
+      "population": "local small-business owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_upfee",
+      "url": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee",
+      "dated": "2026-11-28",
+      "claim": "Upwork freelancer service fee is variable 0-15% per contract; Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_upjobs",
+      "url": "https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+      "dated": "2026-11-28",
+      "claim": "Upwork publishes website-build cost guidance for clients hiring freelancers on its marketplace",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks; Wine $1,500; Spirits $2,000",
+      "population": "craft beverage brands",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a72c8e947393448e801e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 11, at least 2 of the first 300 local businesses emailed have paid the $1,500 website invoice in full, a freelance designer has quoted <= $500 in writing, and Brain has listed at least 1,050 qualifying businesses",
+     "stop": [
+      "No written freelancer quote <= $500 by day 3: do not send offers (only the $150 tools may be spent)",
+      "Fewer than 2 paid of the first 300 by day 11: stop outreach; deliver any paid site from its own settled payment",
+      "Owner call time reaches 3.5 h in a week: no more calls that week; close by email or wait for next week",
+      "Fewer than 1,050 qualifying businesses listed: resize reach so that threshold x reach still gives 7, or stop"
+     ],
+     "continue": [
+      "2 or more paid of 300 by day 11 and 1,050 listed: send the remaining 750 in waves and close the rest by day 22 inside the weekly hour cap"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1050
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Owner hours: limit is 4 h/week (~17 h over 30 days), but ~7.5 h of calls land in days 8-14; spread the closes over at least three weeks or replace calls with email closing.",
+      "resolution": "Accepted: owner calls are now capped at 3.5 h per week (2 / 3.5 / 3.5 / 1 h across weeks 1-4), closes are spread to days 9-22, and scope is settled by email."
+     },
+     {
+      "finding": "Calls with non-buyers are owner time; total owner hours are unknown, not 10.5.",
+      "resolution": "Accepted: calls with non-buyers count inside the weekly cap; total owner time is an ESTIMATE measured in week 1, and the stop rule now tests the weekly limit."
+     },
+     {
+      "finding": "Arithmetic checks: $10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net; capital $150 <= $500.",
+      "resolution": "Agreed: arithmetic unchanged ($10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net)."
+     },
+     {
+      "finding": "Buyer volume: SBA's 36.2M is all US small businesses incl. 29.8M nonemployers, not a count of reachable businesses with outdated sites (that research was blocked); 1,050 contacts is small against that population but the count is not evidenced, and Brain's 'one-off needs its one buyer' basis does not fit a 7-deal offer.",
+      "resolution": "Accepted: MARKET_VOLUME is now marked missing (disagreeing with Brain's one-off basis); Brain must list 1,050 qualifying businesses before sending (step s2), with a resize/stop rule."
+     },
+     {
+      "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; getting a quote needs a marketplace post or message, and SEND_A_MESSAGE is NOT_CONNECTED.",
+      "resolution": "Accepted: the freelancer quote is now an OWNER step (0.5 h, marketplace post), not a Brain step."
+     },
+     {
+      "finding": "Price $1,500 rests on generic freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000); correctly left to the test. q_tools $150 is an unpriced estimate.",
+      "resolution": "Accepted: price and the $150 tools stay ESTIMATE; tools spend is capped at $150 and is the only pre-proof money."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "missing": [
+       "CONVERSION",
+       "CURRENT_DEMAND",
+       "ECONOMICS",
+       "FULFILMENT",
+       "MARKET_VOLUME",
+       "OFFER_AND_PRICE",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "deals": 7,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 150,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "deals": 6,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 400,
+      "capital": 30,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "MARKET_VOLUME",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain treats this as a one-off needing one buyer, but the plan needs 7 buyers from 1,050 qualifying prospects; SBA's 36,207,130 small businesses (2026 FAQ) include nonemployers and are not a count of reachable businesses with outdated sites, so the reachable count is unestablished until step s2 lists them"
+     }
+    ],
+    "revisionId": "rev_ee2ac1bf7374_4e8a43",
+    "digest": "ee2ac1bf7374ec197b635ba2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:36:58.421Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_13d38a0208774b618014",
+   "contractDigest": "9294025df47c9d68a7455708",
+   "parentRevisionId": "rev_8121ce6be8a3_850459",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell seven $1,500 five-page websites to local small businesses with missing or outdated sites, paid in full at order, built by a subcontracted freelance WordPress designer paid from settled client money",
+    "opportunityIds": [
+     "cop_0d50136c66294ceca674"
+    ],
+    "why": "There are 36.2 million US small businesses (SBA Office of Advocacy 2026), so the buyer pool is not the constraint. $1,500 is at the bottom of published freelancer prices for a small-business site ($1,500-$7,000, WPZOOM updated 2026-09-28; $500-$5,000, dev.to 2026), and a freelancer can build it for about $500, leaving ~$956 per site after the subcontract and Stripe's 2.9% + 30c. Seven paid orders settle $10,500 and keep $6,543 after $3,500 subcontracting, $307 fees and $150 of sending tools, inside the $500 capital cap and at most 3.5 owner hours in any week (10.5 in all, under the 4 h/week limit). Brain finds the prospects and writes and sends the outreach; the owner requests the designer quote and takes short closing calls, capped per week. What no source establishes is whether these buyers pay $1,500 from a cold email and how many do (demand, price, conversion), plus the designer's written quote; the first 300-contact wave measures those before the subcontract money is committed."
+   },
+   "alternatives": [
+    {
+     "title": "Upwork fixed-price web/automation jobs at ~$1,000, subcontracted",
+     "why": "Answers posted paid requests, but a new profile's win rate is unknown, fees are 0-15%, and six wins plus Upwork's payment holds inside 30 days on 17 owner hours is less likely than direct sales; kept as a parallel channel if cold email under-delivers."
+    },
+    {
+     "title": "Craft beverage label design subcontracted ($1,000 per SKU)",
+     "why": "Single agency list price, unknown designer cost and a 6-week delivery; cash would mostly be deposits and is weaker than the website route."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Owner posts the fixed-scope brief (5 pages, 7-day delivery, <= $500, paid on start) on a freelance marketplace and accepts a written quote before any offer is sent",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_subcost",
+      "src_dev"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "RESEARCH",
+     "label": "Count and list 1,050 local businesses with a missing or outdated website and a findable email from public map/business listings; fewer than 1,050 found -> resize the reach and the threshold before sending",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "src_sba",
+      "q_reachable"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "REACH",
+     "label": "Buy a sending domain/mailbox and send personalised cold email to the listed businesses in waves of 300",
+     "performer": "BRAIN",
+     "costCents": 15000,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "q_tools"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "OFFER",
+     "label": "Offer a 5-page website for $1,500 paid in full at order by Stripe invoice, scope agreed by email, built within 2 weeks of payment settling",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_wpzoom",
+      "src_dev"
+     ],
+     "priceCents": 150000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "TEST",
+     "label": "Validation: by day 11, at least 2 of the first 300 businesses emailed have paid $1,500 in full; otherwise stop",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 11,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_conversion"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6a",
+     "kind": "SELL",
+     "label": "Week 1 (days 1-7): owner takes up to 2 h of 20-minute closing calls; scope otherwise settled by email",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 2,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6b",
+     "kind": "SELL",
+     "label": "Week 2 (days 8-14): owner takes up to 3.5 h of closing calls, including calls that do not close",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "s6a",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 3.5,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6c",
+     "kind": "SELL",
+     "label": "Week 3 (days 15-21): owner takes up to 3.5 h of closing calls",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 17,
+     "dependsOn": "s6b",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 3.5,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6d",
+     "kind": "SELL",
+     "label": "Week 4 (days 22-24): owner takes up to 1 h for the last close",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 22,
+     "dependsOn": "s6c",
+     "evidence": [
+      "q_conversion"
+     ],
+     "ownerHours": 1,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Collect $1,500 in full per order via Stripe invoice (2.9% + 30c each, deducted at payout)",
+     "performer": "BRAIN",
+     "costCents": 30660,
+     "day": 22,
+     "dependsOn": "s6d",
+     "evidence": [
+      "src_stripe_fee",
+      "src_stripe_payout"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s8",
+     "kind": "ORDER",
+     "label": "Order each site from the quoted freelance designer after that client's payment settles (7 x $500)",
+     "performer": "freelance WordPress designer",
+     "costCents": 350000,
+     "day": 24,
+     "dependsOn": "s7",
+     "evidence": [
+      "q_subcost"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "freelance WordPress designer",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s9",
+     "kind": "DELIVER",
+     "label": "Designer builds and launches each 5-page site; Brain checks content and links",
+     "performer": "freelance WordPress designer",
+     "costCents": 0,
+     "day": 30,
+     "dependsOn": "s8",
+     "evidence": [
+      "q_subcost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "freelance WordPress designer",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "SPEND",
+     "amountCents": 15000,
+     "label": "Sending domain, mailbox and prospecting tool, one month",
+     "stepId": "s3"
+    },
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 1 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 2 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 3 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 16,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 4 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 18,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 5 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 6 pays website in full",
+     "settlesDay": 23,
+     "stepId": "s7"
+    },
+    {
+     "day": 22,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Business 7 pays website in full",
+     "settlesDay": 24,
+     "stepId": "s7"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 30660,
+     "label": "Stripe card fees 7 x (2.9% + 30c)",
+     "stepId": "s7"
+    },
+    {
+     "day": 24,
+     "kind": "SPEND",
+     "amountCents": 350000,
+     "label": "Pay freelance designer 7 x $500 from settled client money",
+     "stepId": "s8"
+    }
+   ],
+   "proofDay": 11,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "ESTIMATE",
+     "value": 1500,
+     "unit": "USD per site",
+     "sources": [
+      "src_wpzoom",
+      "src_dev"
+     ],
+     "needs": "buyers actually paying it (test s4)"
+    },
+    {
+     "name": "q_conversion",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per 300 businesses emailed",
+     "sources": [],
+     "needs": "the first 300-contact wave"
+    },
+    {
+     "name": "q_subcost",
+     "status": "ESTIMATE",
+     "value": 500,
+     "unit": "USD per site",
+     "sources": [
+      "src_dev"
+     ],
+     "needs": "a written freelancer quote (step s1)"
+    },
+    {
+     "name": "q_tools",
+     "status": "ESTIMATE",
+     "value": 150,
+     "unit": "USD for sending domain, mailbox and prospect data",
+     "sources": [],
+     "needs": "vendor checkout prices"
+    },
+    {
+     "name": "buyers",
+     "status": "EVIDENCED",
+     "value": 36207130,
+     "unit": "US small businesses (all, incl. nonemployers; not a count of reachable prospects)",
+     "sources": [
+      "src_sba"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settlement",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days max from first live payment to first Stripe payout",
+     "sources": [
+      "src_stripe_payout"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner_hours",
+     "status": "ESTIMATE",
+     "value": 10.5,
+     "unit": "owner hours, capped at 3.5 in any week (calls with non-buyers included in the cap)",
+     "sources": [],
+     "needs": "call count per close, measured in week 1"
+    },
+    {
+     "name": "q_reachable",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "local businesses with missing/outdated site and findable email listed by Brain",
+     "sources": [
+      "src_sba"
+     ],
+     "needs": "step s2 count"
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_sba",
+     "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+     "dated": "2026-02-03",
+     "claim": "There are 36,207,130 small businesses in the United States",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_wpzoom",
+     "url": "https://www.wpzoom.com/blog/business-website-cost/",
+     "dated": "2026-09-28",
+     "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_dev",
+     "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+     "dated": "2026-06-03",
+     "claim": "Freelance web designer: $500 to $5,000 one time",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_orbit",
+     "url": "https://www.orbitmedia.com/blog/website-lifespan-and-you/",
+     "dated": "2026-06-30",
+     "claim": "Average website lifespan 2y1m (top brands) to 6y4m (agency clients): websites are replaced periodically",
+     "population": "businesses with websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_stripe_payout",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+     "population": "Stripe US accounts",
+     "matchesBuyer": false,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_stripe_fee",
+     "url": "https://stripe.com/pricing",
+     "dated": "2026-11-28",
+     "claim": "2.9% + 30c per successful domestic card transaction",
+     "population": "Stripe US accounts",
+     "matchesBuyer": false,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_card_web",
+     "url": "https://brain.local/card/cop_0d50136c66294ceca674#price",
+     "dated": "2026-11-28",
+     "claim": "Route card: $1,500 small-business website, subcontracted",
+     "population": "local small-business owner",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0d50136c66294ceca674"
+    },
+    {
+     "id": "src_upfee",
+     "url": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee",
+     "dated": "2026-11-28",
+     "claim": "Upwork freelancer service fee is variable 0-15% per contract; Connects $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_73de776464f8461c9baa"
+    },
+    {
+     "id": "src_upjobs",
+     "url": "https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+     "dated": "2026-11-28",
+     "claim": "Upwork publishes website-build cost guidance for clients hiring freelancers on its marketplace",
+     "population": "Upwork clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_73de776464f8461c9baa"
+    },
+    {
+     "id": "src_pinewatt",
+     "url": "https://dribbble.com/pinewatt/services",
+     "dated": "2026-11-28",
+     "claim": "Beer Label Design $1,000, 6 weeks; Wine $1,500; Spirits $2,000",
+     "population": "craft beverage brands",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a72c8e947393448e801e"
+    }
+   ],
+   "validation": {
+    "proof": "By day 11, at least 2 of the first 300 local businesses emailed have paid the $1,500 website invoice in full, a freelance designer has quoted <= $500 in writing, and Brain has listed at least 1,050 qualifying businesses",
+    "stop": [
+     "No written freelancer quote <= $500 by day 3: do not send offers (only the $150 tools may be spent)",
+     "Fewer than 2 paid of the first 300 by day 11: stop outreach; deliver any paid site from its own settled payment",
+     "Owner call time reaches 3.5 h in a week: no more calls that week; close by email or wait for next week",
+     "Fewer than 1,050 qualifying businesses listed: resize reach so that threshold x reach still gives 7, or stop"
+    ],
+    "continue": [
+     "2 or more paid of 300 by day 11 and 1,050 listed: send the remaining 750 in waves and close the rest by day 22 inside the weekly hour cap"
+    ],
+    "decides": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "threshold": {
+     "paid": 2,
+     "of": 300,
+     "reach": 1050
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Owner hours: limit is 4 h/week (~17 h over 30 days), but ~7.5 h of calls land in days 8-14; spread the closes over at least three weeks or replace calls with email closing.",
+     "resolution": "Accepted: owner calls are now capped at 3.5 h per week (2 / 3.5 / 3.5 / 1 h across weeks 1-4), closes are spread to days 9-22, and scope is settled by email."
+    },
+    {
+     "finding": "Calls with non-buyers are owner time; total owner hours are unknown, not 10.5.",
+     "resolution": "Accepted: calls with non-buyers count inside the weekly cap; total owner time is an ESTIMATE measured in week 1, and the stop rule now tests the weekly limit."
+    },
+    {
+     "finding": "Arithmetic checks: $10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net; capital $150 <= $500.",
+     "resolution": "Agreed: arithmetic unchanged ($10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net)."
+    },
+    {
+     "finding": "Buyer volume: SBA's 36.2M is all US small businesses incl. 29.8M nonemployers, not a count of reachable businesses with outdated sites (that research was blocked); 1,050 contacts is small against that population but the count is not evidenced, and Brain's 'one-off needs its one buyer' basis does not fit a 7-deal offer.",
+     "resolution": "Accepted: MARKET_VOLUME is now marked missing (disagreeing with Brain's one-off basis); Brain must list 1,050 qualifying businesses before sending (step s2), with a resize/stop rule."
+    },
+    {
+     "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; getting a quote needs a marketplace post or message, and SEND_A_MESSAGE is NOT_CONNECTED.",
+     "resolution": "Accepted: the freelancer quote is now an OWNER step (0.5 h, marketplace post), not a Brain step."
+    },
+    {
+     "finding": "Price $1,500 rests on generic freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000); correctly left to the test. q_tools $150 is an unpriced estimate.",
+     "resolution": "Accepted: price and the $150 tools stay ESTIMATE; tools spend is capped at $150 and is the only pre-proof money."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_0d50136c66294ceca674",
+     "missing": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "ECONOMICS",
+      "FULFILMENT",
+      "MARKET_VOLUME",
+      "OFFER_AND_PRICE",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_a72c8e947393448e801e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_73de776464f8461c9baa",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_0d50136c66294ceca674",
+     "deals": 7,
+     "price": 1500,
+     "directCost": 500,
+     "capital": 150,
+     "settlesDay": 24
+    },
+    {
+     "opportunityId": "cop_a72c8e947393448e801e",
+     "deals": 6,
+     "price": 1000,
+     "directCost": null,
+     "capital": 0,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_73de776464f8461c9baa",
+     "deals": 7,
+     "price": 1000,
+     "directCost": 400,
+     "capital": 30,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "ECONOMICS",
+    "FULFILMENT",
+    "MARKET_VOLUME",
+    "OFFER_AND_PRICE",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_0d50136c66294ceca674",
+     "link": "MARKET_VOLUME",
+     "reason": "Brain treats this as a one-off needing one buyer, but the plan needs 7 buyers from 1,050 qualifying prospects; SBA's 36,207,130 small businesses (2026 FAQ) include nonemployers and are not a count of reachable businesses with outdated sites, so the reachable count is unestablished until step s2 lists them"
+    }
+   ],
+   "revisionId": "rev_ee2ac1bf7374_4e8a43",
+   "digest": "ee2ac1bf7374ec197b635ba2",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_28b3e98639ea4750b21f/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:36:58.421Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_ee2ac1bf7374_4e8a43",
+   "digest": "ee2ac1bf7374ec197b635ba2",
+   "contractDigest": "9294025df47c9d68a7455708",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 395660,
+    "committedOpenCents": 0,
+    "preProofCents": 15000,
+    "maxExposureCents": 15000,
+    "minCashCents": 35000,
+    "minCashDay": 3,
+    "collectedCents": 1050000,
+    "collectedInWindowCents": 1050000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 654340
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 6000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_0d50136c66294ceca674",
+     "cop_a72c8e947393448e801e",
+     "cop_73de776464f8461c9baa"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "title": "Small-business website builds sold by cold email, built by Brain",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "local small-business owner with an outdated or missing website",
+       "reachableChannel": "cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool",
+       "offerScope": "5-page website built and launched in 7 days, paid 50% upfront / 50% at launch",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit",
+       "peakFundingCents": 15000,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "local services (trades, clinics, restaurants)",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to businesses found on Google Maps with no/outdated site, sent from a"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 500, tied up 150"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell 5-page website built and launched in 7 days, paid 50% upfront / 50% at launch to local small-business owner with an outdated or missing website, reached through cold email to businesses found on Google Maps with no/outdated site, sent from a cold-email tool, at $1,500; freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "5-page website built and launched in 7 days, paid 50% upfront / 50% at launch",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "local small-business owner with an outdated or missing website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://websitesetup.org/website-cost/; https://www.upwork.com/resources/how-much-does-it-cost-to-build-website; https://www.wpzoom.com/blog/business-website-cost/; https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k; https://websitesetup.org/website-cost/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "title": "Craft beverage label design subcontracted to a freelance designer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1000,
+      "card": {
+       "payer": "small craft beverage producer launching a new SKU",
+       "reachableChannel": "cold email to cideries announcing new releases on social media",
+       "offerScope": "New can/bottle label design for one cider SKU",
+       "priceCents": 100000,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance label designer (Dribbble / 99designs)",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "craft beer / wine / cider / spirits",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email to cideries announcing new releases on social media"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "costs or money tied up are not established"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email to cideries announcing new releases on social media",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell New can/bottle label design for one cider SKU to small craft beverage producer launching a new SKU, reached through cold email to cideries announcing new releases on social media, at $1,000; freelance label designer (Dribbble / 99designs) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance label designer (Dribbble / 99designs).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "New can/bottle label design for one cider SKU",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "small craft beverage producer launching a new SKU",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://dribbble.com/pinewatt/services; https://thebrewermagazine.com/?p=11353; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "title": "Upwork fixed-price web / automation projects answered from posted jobs",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1000,
+      "card": {
+       "payer": "Upwork client who posted a fixed-price job",
+       "reachableChannel": "Upwork proposals (Connects /bin/bash.15 each)",
+       "offerScope": "Fixed-price delivery of the posted website / automation job",
+       "priceCents": 100000,
+       "currency": "USD",
+       "fulfillmentOwner": "freelance developer subcontracted per job, paid from the Upwork milestone",
+       "peakFundingCents": 3000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "freelance marketplace (web dev, automation)",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Upwork proposals (Connects /bin/bash.15 each)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 400, tied up 30"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Upwork proposals (Connects /bin/bash.15 each)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-price delivery of the posted website / automation job to Upwork client who posted a fixed-price job, reached through Upwork proposals (Connects /bin/bash.15 each), at $1,000; freelance developer subcontracted per job, paid from the Upwork milestone delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$400",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$30",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "freelance developer subcontracted per job, paid from the Upwork milestone.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-price delivery of the posted website / automation job",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Upwork client who posted a fixed-price job",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee; https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": 17,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 4
+    },
+    "at": "2026-11-28T03:36:55.156Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_8121ce6be8a3_850459",
+    "revisionDigest": "8121ce6be8a38dace8094696",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_997d7e6fec25428b8f3f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right shape (demand, price acceptance and conversion are only measurable by selling; no offer before a written designer quote; designer paid from settled money). Recomputed: 7 x $1,500 = $10,500; Stripe 7 x $43.80 = $306.60; designer 7 x $500 = $3,500; tools $150; net $6,543.40, so 7 sales carry $6,000 (6 sales net ~$5,589 do not). Capital at risk is $150, inside the $500 cap. Threshold 2 of 300 scaled to 1,050 contacts gives 7 sales, and the ledger books exactly 2 by day 10, consistent with it. Settlement: first payment day 8, first payout within 7-14 days = by day 22, inside 30. The plan breaks the owner-time limit, which is 4 hours a week, not 17 hours pooled: the 10.5 hours of closing calls (1.5 per sale) fall on days 7-16, with five of the seven sales on days 8-14, i.e. ~7.5 owner hours in one week, nearly double the limit. Calls with interested buyers who do not buy are also owner time and are not counted (1.5 h per closed sale assumes every call closes). The stop rule ('owner hours reach 15') tests the wrong limit.",
+    "findings": [
+     "Owner hours: limit is 4 h/week (~17 h over 30 days), but ~7.5 h of calls land in days 8-14; spread the closes over at least three weeks or replace calls with email closing.",
+     "Calls with non-buyers are owner time; total owner hours are unknown, not 10.5.",
+     "Arithmetic checks: $10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net; capital $150 <= $500.",
+     "Buyer volume: SBA's 36.2M is all US small businesses incl. 29.8M nonemployers, not a count of reachable businesses with outdated sites (that research was blocked); 1,050 contacts is small against that population but the count is not evidenced, and Brain's 'one-off needs its one buyer' basis does not fit a 7-deal offer.",
+     "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; getting a quote needs a marketplace post or message, and SEND_A_MESSAGE is NOT_CONNECTED.",
+     "Price $1,500 rests on generic freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000); correctly left to the test. q_tools $150 is an unpriced estimate."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:33:09.150Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_ee2ac1bf7374_4e8a43",
+    "revisionDigest": "ee2ac1bf7374ec197b635ba2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_997d7e6fec25428b8f3f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "This revision answers each prior finding and fits every limit. Recomputed: 7 x $1,500 = $10,500; Stripe 7 x $43.80 = $306.60; designer 7 x $500 = $3,500; tools $150; net $6,543.40 >= $6,000 (6 sales would net ~$5,589, so 7 are needed). Capital at risk is the $150 of tools, inside the $500 cap; the designer is paid only from settled client money. Owner time: quote post 0.5 h + week-1 calls 2 h = 2.5 h; weeks 2 and 3 capped at 3.5 h (3 closes each, days 9-13 and 16-20); week 4 1 h (day 22) - every week is under 4 h, and calls with non-buyers now count inside the cap with a weekly stop rule. Threshold 2 paid of 300 (0.67%) x 1,050 = 7; the ledger books exactly 2 by the day-11 gate and 5 more from the remaining 750 by day 22. Settlement: first payment day 9 + Stripe's up-to-14-day first-payout wait = day 23, later payouts ~2 business days, all inside 30. MARKET_VOLUME is now measured before sending (Brain lists 1,050 qualifying businesses with a findable email, else resize or stop), and the freelancer quote is an owner marketplace post gated before any offer. Price, demand and conversion are left to the live test, as a CONDITIONAL plan should.",
+    "findings": [
+     "Arithmetic checks: $10,500 gross, $3,956.60 out, $6,543.40 net; capital $150 <= $500 cap.",
+     "Owner hours per week: 2.5 / 3.5 / 3.5 / 1, all under 4.",
+     "Buyers wait long for delivery: payment day 9, designer ordered on the day-23/24 payout, site within 2 weeks after - up to ~4 weeks from payment; refund requests in that period would reduce settled cash and have no stop rule.",
+     "Stripe account setup (owner KYC) is owner time not listed; small, and the weekly caps leave room for it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:38:14.241Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_ee2ac1bf7374_4e8a43",
+   "digest": "ee2ac1bf7374ec197b635ba2",
+   "contractDigest": "9294025df47c9d68a7455708",
+   "plan": {
+    "goalId": "wst_13d38a0208774b618014",
+    "contractDigest": "9294025df47c9d68a7455708",
+    "parentRevisionId": "rev_8121ce6be8a3_850459",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell seven $1,500 five-page websites to local small businesses with missing or outdated sites, paid in full at order, built by a subcontracted freelance WordPress designer paid from settled client money",
+     "opportunityIds": [
+      "cop_0d50136c66294ceca674"
+     ],
+     "why": "There are 36.2 million US small businesses (SBA Office of Advocacy 2026), so the buyer pool is not the constraint. $1,500 is at the bottom of published freelancer prices for a small-business site ($1,500-$7,000, WPZOOM updated 2026-09-28; $500-$5,000, dev.to 2026), and a freelancer can build it for about $500, leaving ~$956 per site after the subcontract and Stripe's 2.9% + 30c. Seven paid orders settle $10,500 and keep $6,543 after $3,500 subcontracting, $307 fees and $150 of sending tools, inside the $500 capital cap and at most 3.5 owner hours in any week (10.5 in all, under the 4 h/week limit). Brain finds the prospects and writes and sends the outreach; the owner requests the designer quote and takes short closing calls, capped per week. What no source establishes is whether these buyers pay $1,500 from a cold email and how many do (demand, price, conversion), plus the designer's written quote; the first 300-contact wave measures those before the subcontract money is committed."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price web/automation jobs at ~$1,000, subcontracted",
+      "why": "Answers posted paid requests, but a new profile's win rate is unknown, fees are 0-15%, and six wins plus Upwork's payment holds inside 30 days on 17 owner hours is less likely than direct sales; kept as a parallel channel if cold email under-delivers."
+     },
+     {
+      "title": "Craft beverage label design subcontracted ($1,000 per SKU)",
+      "why": "Single agency list price, unknown designer cost and a 6-week delivery; cash would mostly be deposits and is weaker than the website route."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Owner posts the fixed-scope brief (5 pages, 7-day delivery, <= $500, paid on start) on a freelance marketplace and accepts a written quote before any offer is sent",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_dev"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "RESEARCH",
+      "label": "Count and list 1,050 local businesses with a missing or outdated website and a findable email from public map/business listings; fewer than 1,050 found -> resize the reach and the threshold before sending",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "src_sba",
+       "q_reachable"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Buy a sending domain/mailbox and send personalised cold email to the listed businesses in waves of 300",
+      "performer": "BRAIN",
+      "costCents": 15000,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_tools"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Offer a 5-page website for $1,500 paid in full at order by Stripe invoice, scope agreed by email, built within 2 weeks of payment settling",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Validation: by day 11, at least 2 of the first 300 businesses emailed have paid $1,500 in full; otherwise stop",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6a",
+      "kind": "SELL",
+      "label": "Week 1 (days 1-7): owner takes up to 2 h of 20-minute closing calls; scope otherwise settled by email",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 2,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6b",
+      "kind": "SELL",
+      "label": "Week 2 (days 8-14): owner takes up to 3.5 h of closing calls, including calls that do not close",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s6a",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6c",
+      "kind": "SELL",
+      "label": "Week 3 (days 15-21): owner takes up to 3.5 h of closing calls",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 17,
+      "dependsOn": "s6b",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 3.5,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6d",
+      "kind": "SELL",
+      "label": "Week 4 (days 22-24): owner takes up to 1 h for the last close",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 22,
+      "dependsOn": "s6c",
+      "evidence": [
+       "q_conversion"
+      ],
+      "ownerHours": 1,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect $1,500 in full per order via Stripe invoice (2.9% + 30c each, deducted at payout)",
+      "performer": "BRAIN",
+      "costCents": 30660,
+      "day": 22,
+      "dependsOn": "s6d",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "ORDER",
+      "label": "Order each site from the quoted freelance designer after that client's payment settles (7 x $500)",
+      "performer": "freelance WordPress designer",
+      "costCents": 350000,
+      "day": 24,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "DELIVER",
+      "label": "Designer builds and launches each 5-page site; Brain checks content and links",
+      "performer": "freelance WordPress designer",
+      "costCents": 0,
+      "day": 30,
+      "dependsOn": "s8",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "freelance WordPress designer",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 15000,
+      "label": "Sending domain, mailbox and prospecting tool, one month",
+      "stepId": "s3"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 1 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 2 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 3 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 4 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 5 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 6 pays website in full",
+      "settlesDay": 23,
+      "stepId": "s7"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Business 7 pays website in full",
+      "settlesDay": 24,
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 30660,
+      "label": "Stripe card fees 7 x (2.9% + 30c)",
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 350000,
+      "label": "Pay freelance designer 7 x $500 from settled client money",
+      "stepId": "s8"
+     }
+    ],
+    "proofDay": 11,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_wpzoom",
+       "src_dev"
+      ],
+      "needs": "buyers actually paying it (test s4)"
+     },
+     {
+      "name": "q_conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per 300 businesses emailed",
+      "sources": [],
+      "needs": "the first 300-contact wave"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD per site",
+      "sources": [
+       "src_dev"
+      ],
+      "needs": "a written freelancer quote (step s1)"
+     },
+     {
+      "name": "q_tools",
+      "status": "ESTIMATE",
+      "value": 150,
+      "unit": "USD for sending domain, mailbox and prospect data",
+      "sources": [],
+      "needs": "vendor checkout prices"
+     },
+     {
+      "name": "buyers",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "US small businesses (all, incl. nonemployers; not a count of reachable prospects)",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max from first live payment to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner_hours",
+      "status": "ESTIMATE",
+      "value": 10.5,
+      "unit": "owner hours, capped at 3.5 in any week (calls with non-buyers included in the cap)",
+      "sources": [],
+      "needs": "call count per close, measured in week 1"
+     },
+     {
+      "name": "q_reachable",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "local businesses with missing/outdated site and findable email listed by Brain",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": "step s2 count"
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "There are 36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_wpzoom",
+      "url": "https://www.wpzoom.com/blog/business-website-cost/",
+      "dated": "2026-09-28",
+      "claim": "Freelancers typically charge $1,500 to $7,000 for a small business website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_dev",
+      "url": "https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k",
+      "dated": "2026-06-03",
+      "claim": "Freelance web designer: $500 to $5,000 one time",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_orbit",
+      "url": "https://www.orbitmedia.com/blog/website-lifespan-and-you/",
+      "dated": "2026-06-30",
+      "claim": "Average website lifespan 2y1m (top brands) to 6y4m (agency clients): websites are replaced periodically",
+      "population": "businesses with websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout typically within 7-14 days of first live payment; US settlement 2 business days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "2.9% + 30c per successful domestic card transaction",
+      "population": "Stripe US accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_card_web",
+      "url": "https://brain.local/card/cop_0d50136c66294ceca674#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 small-business website, subcontracted",
+      "population": "local small-business owner",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0d50136c66294ceca674"
+     },
+     {
+      "id": "src_upfee",
+      "url": "https://www.elevatepay.co/blog/upwork-freelancer-service-fee",
+      "dated": "2026-11-28",
+      "claim": "Upwork freelancer service fee is variable 0-15% per contract; Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_upjobs",
+      "url": "https://www.upwork.com/resources/how-much-does-it-cost-to-build-website",
+      "dated": "2026-11-28",
+      "claim": "Upwork publishes website-build cost guidance for clients hiring freelancers on its marketplace",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_73de776464f8461c9baa"
+     },
+     {
+      "id": "src_pinewatt",
+      "url": "https://dribbble.com/pinewatt/services",
+      "dated": "2026-11-28",
+      "claim": "Beer Label Design $1,000, 6 weeks; Wine $1,500; Spirits $2,000",
+      "population": "craft beverage brands",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a72c8e947393448e801e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 11, at least 2 of the first 300 local businesses emailed have paid the $1,500 website invoice in full, a freelance designer has quoted <= $500 in writing, and Brain has listed at least 1,050 qualifying businesses",
+     "stop": [
+      "No written freelancer quote <= $500 by day 3: do not send offers (only the $150 tools may be spent)",
+      "Fewer than 2 paid of the first 300 by day 11: stop outreach; deliver any paid site from its own settled payment",
+      "Owner call time reaches 3.5 h in a week: no more calls that week; close by email or wait for next week",
+      "Fewer than 1,050 qualifying businesses listed: resize reach so that threshold x reach still gives 7, or stop"
+     ],
+     "continue": [
+      "2 or more paid of 300 by day 11 and 1,050 listed: send the remaining 750 in waves and close the rest by day 22 inside the weekly hour cap"
+     ],
+     "decides": [
+      "CONVERSION",
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1050
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Owner hours: limit is 4 h/week (~17 h over 30 days), but ~7.5 h of calls land in days 8-14; spread the closes over at least three weeks or replace calls with email closing.",
+      "resolution": "Accepted: owner calls are now capped at 3.5 h per week (2 / 3.5 / 3.5 / 1 h across weeks 1-4), closes are spread to days 9-22, and scope is settled by email."
+     },
+     {
+      "finding": "Calls with non-buyers are owner time; total owner hours are unknown, not 10.5.",
+      "resolution": "Accepted: calls with non-buyers count inside the weekly cap; total owner time is an ESTIMATE measured in week 1, and the stop rule now tests the weekly limit."
+     },
+     {
+      "finding": "Arithmetic checks: $10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net; capital $150 <= $500.",
+      "resolution": "Agreed: arithmetic unchanged ($10,500 gross, $306.60 fees, $3,500 designer, $150 tools, $6,543.40 net)."
+     },
+     {
+      "finding": "Buyer volume: SBA's 36.2M is all US small businesses incl. 29.8M nonemployers, not a count of reachable businesses with outdated sites (that research was blocked); 1,050 contacts is small against that population but the count is not evidenced, and Brain's 'one-off needs its one buyer' basis does not fit a 7-deal offer.",
+      "resolution": "Accepted: MARKET_VOLUME is now marked missing (disagreeing with Brain's one-off basis); Brain must list 1,050 qualifying businesses before sending (step s2), with a resize/stop rule."
+     },
+     {
+      "finding": "Step s1 (written freelancer quote) is assigned to BRAIN with only CHEAP_MODEL_READS; getting a quote needs a marketplace post or message, and SEND_A_MESSAGE is NOT_CONNECTED.",
+      "resolution": "Accepted: the freelancer quote is now an OWNER step (0.5 h, marketplace post), not a Brain step."
+     },
+     {
+      "finding": "Price $1,500 rests on generic freelancer ranges (WPZOOM $1,500-$7,000; dev.to $500-$5,000); correctly left to the test. q_tools $150 is an unpriced estimate.",
+      "resolution": "Accepted: price and the $150 tools stay ESTIMATE; tools spend is capped at $150 and is the only pre-proof money."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "missing": [
+       "CONVERSION",
+       "CURRENT_DEMAND",
+       "ECONOMICS",
+       "FULFILMENT",
+       "MARKET_VOLUME",
+       "OFFER_AND_PRICE",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "deals": 7,
+      "price": 1500,
+      "directCost": 500,
+      "capital": 150,
+      "settlesDay": 24
+     },
+     {
+      "opportunityId": "cop_a72c8e947393448e801e",
+      "deals": 6,
+      "price": 1000,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_73de776464f8461c9baa",
+      "deals": 7,
+      "price": 1000,
+      "directCost": 400,
+      "capital": 30,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "MARKET_VOLUME",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_0d50136c66294ceca674",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain treats this as a one-off needing one buyer, but the plan needs 7 buyers from 1,050 qualifying prospects; SBA's 36,207,130 small businesses (2026 FAQ) include nonemployers and are not a count of reachable businesses with outdated sites, so the reachable count is unestablished until step s2 lists them"
+     }
+    ],
+    "revisionId": "rev_ee2ac1bf7374_4e8a43",
+    "digest": "ee2ac1bf7374ec197b635ba2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:36:58.421Z"
+   },
+   "review": {
+    "revisionId": "rev_ee2ac1bf7374_4e8a43",
+    "revisionDigest": "ee2ac1bf7374ec197b635ba2",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_28b3e98639ea4750b21f/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_997d7e6fec25428b8f3f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "This revision answers each prior finding and fits every limit. Recomputed: 7 x $1,500 = $10,500; Stripe 7 x $43.80 = $306.60; designer 7 x $500 = $3,500; tools $150; net $6,543.40 >= $6,000 (6 sales would net ~$5,589, so 7 are needed). Capital at risk is the $150 of tools, inside the $500 cap; the designer is paid only from settled client money. Owner time: quote post 0.5 h + week-1 calls 2 h = 2.5 h; weeks 2 and 3 capped at 3.5 h (3 closes each, days 9-13 and 16-20); week 4 1 h (day 22) - every week is under 4 h, and calls with non-buyers now count inside the cap with a weekly stop rule. Threshold 2 paid of 300 (0.67%) x 1,050 = 7; the ledger books exactly 2 by the day-11 gate and 5 more from the remaining 750 by day 22. Settlement: first payment day 9 + Stripe's up-to-14-day first-payout wait = day 23, later payouts ~2 business days, all inside 30. MARKET_VOLUME is now measured before sending (Brain lists 1,050 qualifying businesses with a findable email, else resize or stop), and the freelancer quote is an owner marketplace post gated before any offer. Price, demand and conversion are left to the live test, as a CONDITIONAL plan should.",
+    "findings": [
+     "Arithmetic checks: $10,500 gross, $3,956.60 out, $6,543.40 net; capital $150 <= $500 cap.",
+     "Owner hours per week: 2.5 / 3.5 / 3.5 / 1, all under 4.",
+     "Buyers wait long for delivery: payment day 9, designer ordered on the day-23/24 payout, site within 2 weeks after - up to ~4 weeks from payment; refund requests in that period would reduce settled cash and have no stop rule.",
+     "Stripe account setup (owner KYC) is owner time not listed; small, and the weekly caps leave room for it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:38:14.241Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want $6,000 in my account within 30 days. Any lawful business is fine. I can give this at most 4 hours a week, and I can put in up to $500.",
+    "terms": "0f098330c0c71142",
+    "openings": {
+     "cop_0d50136c66294ceca674": "40f88a61757fcd97",
+     "cop_73de776464f8461c9baa": "958b516511e1f6ef",
+     "cop_a72c8e947393448e801e": "9a915d905dbbacb8"
+    }
+   },
+   "at": "2026-11-28T03:38:23.901Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

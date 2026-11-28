@@ -1,0 +1,353 @@
+{
+ "caseId": "ar-07-seafood-capital-and-terms",
+ "keys": {
+  "cop_1f14190b29964326a5e7": "haccpReassess",
+  "cop_3154fe59fe7943debfcc": "freezerResale",
+  "cop_3636b6ab29b14a7680c7": "offcutSupply"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Annual seafood HACCP plan reassessment packs for seafood pro\" (assumption-only coverage: it reaches the target in 96.5% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 100% (p50 $69,615): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Annual seafood HACCP plan reassessment packs for seafood processing pl\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_1f14190b29964326a5e7",
+   "cop_3154fe59fe7943debfcc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+    "owner": "PERSON",
+    "cost": 30
+   },
+   {
+    "label": "Collect payment for \"Annual seafood HACCP plan reassessment packs for seafood processing plants\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_3154fe59fe7943debfcc",
+    "title": "Resale of a decommissioned plate freezer to a seafood processor",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Plant manager at a crab processor",
+     "reachableChannel": "Signed purchase agreement",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:57.964Z",
+     "offerScope": "The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery.",
+     "priceCents": 1800000,
+     "currency": "USD",
+     "fulfillmentOwner": "Gulf Equipment Liquidators (freezer at $12,000; freight included)",
+     "peakFundingCents": 1200000,
+     "humanHours": 4,
+     "requiredCapabilities": [],
+     "industry": "seafood processing",
+     "mechanism": "RESALE_OR_ASSET",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 1800000,
+      "currency": "USD",
+      "deliverable": "The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Signed purchase agreement"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 18000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 18000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Gulf Equipment Liquidators (freezer at $12,000; freight included) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 12000, tied up 12000"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "12 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$12000",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$12000",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Gulf Equipment Liquidators (freezer at $12,000; freight included) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Plant manager at a crab processor",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "A crab processor signed a purchase agreement for the refurbished plate freezer at $18,000 (Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_1f14190b29964326a5e7",
+    "title": "Annual seafood HACCP plan reassessment packs for seafood processing plants",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "QA managers at licensed seafood processing plants",
+     "reachableChannel": "Quotes emailed to each plant's published QA contact",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:57.964Z",
+     "offerScope": "Quotes go to the 100 unquoted plants on Nov 29; measured acceptances came within 4 days of a quote (by Dec 3); Brain delivers within 4 days of acceptance (by Dec 7); plants pay net 10 from delivery (by Dec 17).",
+     "priceCents": 140000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.3,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "seafood processing",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Quotes emailed to each plant's published QA contact"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 1400 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 10 accepted of 40 quotes"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "6 deal(s) needed, 140 available in the window (140 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 21 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "19 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state agriculture department's licence list counts 140 seafood processing plants, each with a published QA contact and each required to reassess its HACCP plan at least annually; 100 have not yet been quoted by this service.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Quotes go to the 100 unquoted plants on Nov 29; measured acceptances came within 4 days of a quote (by Dec 3); Brain delivers within 4 days of acceptance (by Dec 7); plants pay net 10 from delivery (by Dec 17). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "10 wins from 40 quotes",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "QA managers at licensed seafood processing plants",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "This service's last 10 accepted quotes were paid at $1,400 per HACCP reassessment pack (invoices, Oct–Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "19 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_3636b6ab29b14a7680c7",
+    "title": "Brokered fish-offcut supply to a pet-food maker",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Procurement manager at a pet-food maker",
+     "reachableChannel": "Signed supply order",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:57.964Z",
+     "offerScope": "One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18).",
+     "priceCents": 400000,
+     "currency": "USD",
+     "fulfillmentOwner": "Coastal Reefer Freight (written quote $2,500 for the load delivered, product included; invoiced net 60)",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "seafood processing",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 400000,
+      "currency": "USD",
+      "deliverable": "One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$2500",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Coastal Reefer Freight (written quote $2,500 for the load delivered, product included; invoiced net 60) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Procurement manager at a pet-food maker",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "A pet-food maker signed a supply order for one load of fish offcuts at $4,000, payable net 45 from delivery (Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "51 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:30.793Z"
+ }
+}

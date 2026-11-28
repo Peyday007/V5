@@ -784,6 +784,23 @@ describe('Brain keeps looking until a plan is realistic, and digs into what it h
     expect(reading.considered.every((one) => Array.isArray(one.missing))).toBe(true);
   });
 
+  it("weighs the goal's own routes before the engine's cut, never behind the project's other openings (production, 2026-11-28)", async () => {
+    // Cash Mode 1: the routes an app session filed for its goal carried only hypotheses, ranked behind the project's
+    // evidenced openings and could be cut at eight, so Brain's reading never weighed the session's own routes.
+    for (let i = 0; i < MAX_MODEL_OPPORTUNITIES + 2; i += 1) await oneOff({ title: `Project opening ${i}`, priceCents: 200_000 + i });
+    const route = await oneOff({ title: 'The goal’s own route', priceCents: 50_000 });
+    const control = await oneOff({ title: 'An unrouted opening like it', priceCents: 50_000 });
+    const id = await goal(1_000_000);
+    const { goalRoutePrefix } = await import('../server/domain/routeOrigin.ts');
+    await getDb().run('UPDATE cash_opportunities SET external_record_id = ? WHERE id = ?', [`${goalRoutePrefix(id)}r1`, route.id]);
+    const reading = (await readGoalPlan({ goalId: id, evaluations: 2_000 }))!;
+    const modelled = new Set(reading.considered.filter((one) => one.modelled).map((one) => one.opportunityId));
+    expect(modelled.size).toBe(MAX_MODEL_OPPORTUNITIES);
+    expect(modelled.has(route.id)).toBe(true);
+    // Control: the same opening without the goal's route record is still cut behind the higher-reach openings.
+    expect(modelled.has(control.id)).toBe(false);
+  }, 180_000);
+
   it('sells an opening a responsible offer can be made on, with no market-test phase first (SQUEEZE, owner 2026-11-06)', async () => {
     const o = await oneOff({ title: 'Arrange a load for a shipper', priceCents: 40_000, capitalCents: 0 });
     const id = await goal(1_000_000);

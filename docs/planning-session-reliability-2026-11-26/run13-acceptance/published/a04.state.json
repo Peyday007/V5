@@ -1,0 +1,1341 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_bda779cc56ae4d26aca3",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "At least $3,000 of settled cash received within 30 days, with no up-front capital.",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "383fb2cfeb8390211ada6758"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_bda779cc56ae4d26aca3",
+    "contractDigest": "383fb2cfeb8390211ada6758",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Broker the twelve signed allergen-panel orders through Keystone Food Lab and collect $3,840 by day 12",
+     "opportunityIds": [
+      "cop_22e9bd4a1d7442348270"
+     ],
+     "why": "Twelve snack makers signed orders at $320 per panel (EVIDENCE, Nov 21-27). Keystone Food Lab (ISO 17025) quoted $180 per panel in writing, results 5 business days from receipt, invoiced net 15. Samples reach the lab Dec 1, results Dec 8, makers pay within 2 days: $3,840 of settled cash by Dec 10 (day 12), above the $3,000 target. The lab is paid by Dec 23 (day 25), after the makers have paid, so no up-front capital is needed (exposure $0) and the margin is $140 per panel ($1,680 kept after the lab). Market volume is not a gap: the twelve buyers are already signed, so the parked buyerVolume question does not decide this plan."
+    },
+    "alternatives": [],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the twelve signed orders at $320 per eight-allergen panel and the Nov 30 sample shipment to Keystone Food Lab",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_scope"
+      ],
+      "priceCents": 32000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Keystone Food Lab tests the 12 samples (received Dec 1, results Dec 8) at $180 per panel, invoiced net 15 from results",
+      "performer": "Keystone Food Lab",
+      "costCents": 216000,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_ful",
+       "s_cost",
+       "s_exp"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Keystone Food Lab",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Send each maker its results and invoice $320; each pays within 2 days (by Dec 10, day 12)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_price",
+       "s_cash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 1: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 2: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 3: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 4: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 5: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 6: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 7: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 8: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 9: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 10: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 11: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 32000,
+      "label": "Panel 12: maker pays on receipt of results",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 216000,
+      "label": "Keystone Food Lab invoice, 12 panels x $180, net 15 from results (by Dec 23)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 320,
+      "unit": "USD per panel",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed buyers",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "signed orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "lab cost",
+      "status": "EVIDENCED",
+      "value": 180,
+      "unit": "USD per panel",
+      "sources": [
+       "s_ful",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "up-front capital",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "s_exp",
+       "s_scope"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash",
+      "status": "EVIDENCED",
+      "value": 3840,
+      "unit": "USD by day 12",
+      "sources": [
+       "s_price",
+       "s_scope"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#price",
+      "dated": "2026-11-27",
+      "claim": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21-27, 2026), payable on receipt of results.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#captureMechanism",
+      "dated": "2026-11-27",
+      "claim": "Samples ship Mon Nov 30, reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#fulfillment",
+      "dated": "2026-11-27",
+      "claim": "Keystone Food Lab (ISO 17025 accredited) written quote $180 per panel; results 5 business days from receipt; invoices net 15.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#directCosts",
+      "dated": "2026-11-27",
+      "claim": "Direct cost $180 per panel.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#exposure",
+      "dated": "2026-11-27",
+      "claim": "Exposure $0: the lab is paid after the makers pay.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_cash",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#timeToFirstCash",
+      "dated": "2026-11-27",
+      "claim": "12 days to usable cash.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "deals": 12,
+      "price": 320,
+      "directCost": 180,
+      "capital": 0,
+      "settlesDay": 12
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_90bba3ac4a00_3e47df",
+    "digest": "90bba3ac4a0054ae542e93fd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:19:12.318Z"
+   },
+   {
+    "goalId": "wst_bda779cc56ae4d26aca3",
+    "contractDigest": "383fb2cfeb8390211ada6758",
+    "parentRevisionId": "rev_90bba3ac4a00_3e47df",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the allergen-panel opening's direct cost is contradicted and the latest record puts it above the price",
+     "opportunityIds": [],
+     "why": "The opening's record changed after publication: directCosts is now $340 per panel (EVIDENCE) while the price the twelve makers signed is $320 and the fulfilment record still cites Keystone's written quote of $180. Two sourced figures for the same cost disagree, so the cost is not established; and if $340 is right every panel loses $20 (12 x $340 = $4,080 owed to the lab against $3,840 collected), so the owner would have to fund the $240 gap, which the no-up-front-capital limit forbids. The ECONOMICS link therefore is not established and the earlier EXECUTABLE plan is withdrawn. Price, buyers, fulfiller and timing are otherwise unchanged."
+    },
+    "alternatives": [
+     {
+      "title": "Proceed at the $180 quote",
+      "why": "Rejected: the card's current directCosts EVIDENCE fact contradicts the $180 quote; a contradicted figure is not established."
+     },
+     {
+      "title": "Reprice the panels above cost",
+      "why": "Not available inside the plan: the twelve makers signed at $320; a new price would need new buyer acceptance."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Obtain Keystone Food Lab's current itemized written quote for the eight-allergen panel (per-panel cost including any shipping, rush or accreditation surcharges) to settle whether the direct cost is $180 or $340",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_cost",
+       "s_ful"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 320,
+      "unit": "USD per panel",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per panel",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per panel",
+      "sources": [
+       "s_cost",
+       "s_ful"
+      ],
+      "needs": "Keystone's current written per-panel cost: $180 (quote in fulfillment fact) or $340 (directCosts fact)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#price",
+      "dated": "2026-11-27",
+      "claim": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21-27, 2026), payable on receipt of results.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#directCosts",
+      "dated": "2026-11-28",
+      "claim": "Direct cost now recorded as $340 per panel (EVIDENCE), above the $320 price.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#fulfillment",
+      "dated": "2026-11-28",
+      "claim": "Keystone Food Lab written quote $180 per panel; results 5 business days from receipt; invoices net 15.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#captureMechanism",
+      "dated": "2026-11-28",
+      "claim": "Makers pay on receipt of results by Dec 10; lab invoices net 15 from results (paid by Dec 23).",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The per-panel direct cost is contradicted on the card ($180 written quote in the fulfillment record vs $340 in the directCosts record) and the $340 figure is above the $320 signed price, so whether each deal makes or loses money (ECONOMICS) is not established.",
+     "resolution": "Get Keystone Food Lab's current itemized written quote per panel and record it on the card. If it is $180 the twelve signed orders yield $3,840 settled by Dec 10 with the lab paid after, and the plan can be re-published as executable; if it is $340 (or anything at or above $320), find a lab quoting below $320 per panel for the same ISO 17025 eight-allergen panel or re-quote the makers above cost before proceeding.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4bd45c7b22e4_6e7d7e",
+    "digest": "4bd45c7b22e4484cb5f09e1c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:27:04.320Z"
+   },
+   {
+    "goalId": "wst_bda779cc56ae4d26aca3",
+    "contractDigest": "383fb2cfeb8390211ada6758",
+    "parentRevisionId": "rev_90bba3ac4a00_3e47df",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the allergen-panel opening's direct cost is contradicted and the latest record puts it above the price",
+     "opportunityIds": [],
+     "why": "The opening's record changed after publication: directCosts is now $340 per panel (EVIDENCE) while the price the twelve makers signed is $320 and the fulfilment record still cites Keystone's written quote of $180. Two sourced figures for the same cost disagree, so the cost is not established; and if $340 is right every panel loses $20 (12 x $340 = $4,080 owed to the lab against $3,840 collected), so the owner would have to fund the $240 gap, which the no-up-front-capital limit forbids. The ECONOMICS link therefore is not established and the earlier EXECUTABLE plan is withdrawn. Price, buyers, fulfiller and timing are otherwise unchanged."
+    },
+    "alternatives": [
+     {
+      "title": "Proceed at the $180 quote",
+      "why": "Rejected: the card's current directCosts EVIDENCE fact contradicts the $180 quote; a contradicted figure is not established."
+     },
+     {
+      "title": "Reprice the panels above cost",
+      "why": "Not available inside the plan: the twelve makers signed at $320; a new price would need new buyer acceptance."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Obtain Keystone Food Lab's current itemized written quote for the eight-allergen panel (per-panel cost including any shipping, rush or accreditation surcharges) to settle whether the direct cost is $180 or $340",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_cost",
+       "s_ful"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 320,
+      "unit": "USD per panel",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per panel",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per panel",
+      "sources": [
+       "s_cost",
+       "s_ful"
+      ],
+      "needs": "Keystone's current written per-panel cost: $180 (quote in fulfillment fact) or $340 (directCosts fact)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#price",
+      "dated": "2026-11-27",
+      "claim": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21-27, 2026), payable on receipt of results.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#directCosts",
+      "dated": "2026-11-28",
+      "claim": "Direct cost now recorded as $340 per panel (EVIDENCE), above the $320 price.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#fulfillment",
+      "dated": "2026-11-28",
+      "claim": "Keystone Food Lab written quote $180 per panel; results 5 business days from receipt; invoices net 15.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#captureMechanism",
+      "dated": "2026-11-28",
+      "claim": "Makers pay on receipt of results by Dec 10; lab invoices net 15 from results (paid by Dec 23).",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The per-panel direct cost is contradicted on the card ($180 written quote in the fulfillment record vs $340 in the directCosts record) and the $340 figure is above the $320 signed price, so whether each deal makes or loses money (ECONOMICS) is not established.",
+     "resolution": "Get Keystone Food Lab's current itemized written quote per panel and record it on the card. If it is $180 the twelve signed orders yield $3,840 settled by Dec 10 with the lab paid after, and the plan can be re-published as executable; if it is $340 (or anything at or above $320), find a lab quoting below $320 per panel for the same ISO 17025 eight-allergen panel or re-quote the makers above cost before proceeding.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "deals": 10,
+      "price": 320,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": 12
+     }
+    ],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_795cdc7435e8_fa6f2e",
+    "digest": "795cdc7435e80ac4c3069078",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:27:09.102Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_bda779cc56ae4d26aca3",
+   "contractDigest": "383fb2cfeb8390211ada6758",
+   "parentRevisionId": "rev_90bba3ac4a00_3e47df",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the allergen-panel opening's direct cost is contradicted and the latest record puts it above the price",
+    "opportunityIds": [],
+    "why": "The opening's record changed after publication: directCosts is now $340 per panel (EVIDENCE) while the price the twelve makers signed is $320 and the fulfilment record still cites Keystone's written quote of $180. Two sourced figures for the same cost disagree, so the cost is not established; and if $340 is right every panel loses $20 (12 x $340 = $4,080 owed to the lab against $3,840 collected), so the owner would have to fund the $240 gap, which the no-up-front-capital limit forbids. The ECONOMICS link therefore is not established and the earlier EXECUTABLE plan is withdrawn. Price, buyers, fulfiller and timing are otherwise unchanged."
+   },
+   "alternatives": [
+    {
+     "title": "Proceed at the $180 quote",
+     "why": "Rejected: the card's current directCosts EVIDENCE fact contradicts the $180 quote; a contradicted figure is not established."
+    },
+    {
+     "title": "Reprice the panels above cost",
+     "why": "Not available inside the plan: the twelve makers signed at $320; a new price would need new buyer acceptance."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Obtain Keystone Food Lab's current itemized written quote for the eight-allergen panel (per-panel cost including any shipping, rush or accreditation surcharges) to settle whether the direct cost is $180 or $340",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_cost",
+      "s_ful"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 320,
+     "unit": "USD per panel",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per panel",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per panel",
+     "sources": [
+      "s_cost",
+      "s_ful"
+     ],
+     "needs": "Keystone's current written per-panel cost: $180 (quote in fulfillment fact) or $340 (directCosts fact)"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#price",
+     "dated": "2026-11-27",
+     "claim": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21-27, 2026), payable on receipt of results.",
+     "population": "Food-safety and QA leads at small-batch snack manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_22e9bd4a1d7442348270"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#directCosts",
+     "dated": "2026-11-28",
+     "claim": "Direct cost now recorded as $340 per panel (EVIDENCE), above the $320 price.",
+     "population": "Food-safety and QA leads at small-batch snack manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_22e9bd4a1d7442348270"
+    },
+    {
+     "id": "s_ful",
+     "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#fulfillment",
+     "dated": "2026-11-28",
+     "claim": "Keystone Food Lab written quote $180 per panel; results 5 business days from receipt; invoices net 15.",
+     "population": "Food-safety and QA leads at small-batch snack manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_22e9bd4a1d7442348270"
+    },
+    {
+     "id": "s_scope",
+     "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#captureMechanism",
+     "dated": "2026-11-28",
+     "claim": "Makers pay on receipt of results by Dec 10; lab invoices net 15 from results (paid by Dec 23).",
+     "population": "Food-safety and QA leads at small-batch snack manufacturers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_22e9bd4a1d7442348270"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "The per-panel direct cost is contradicted on the card ($180 written quote in the fulfillment record vs $340 in the directCosts record) and the $340 figure is above the $320 signed price, so whether each deal makes or loses money (ECONOMICS) is not established.",
+    "resolution": "Get Keystone Food Lab's current itemized written quote per panel and record it on the card. If it is $180 the twelve signed orders yield $3,840 settled by Dec 10 with the lab paid after, and the plan can be re-published as executable; if it is $340 (or anything at or above $320), find a lab quoting below $320 per panel for the same ISO 17025 eight-allergen panel or re-quote the makers above cost before proceeding.",
+    "decisiveLinks": [
+     "ECONOMICS"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_22e9bd4a1d7442348270",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_22e9bd4a1d7442348270",
+     "deals": 10,
+     "price": 320,
+     "directCost": null,
+     "capital": 0,
+     "settlesDay": 12
+    }
+   ],
+   "resolves": [
+    "ECONOMICS"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_795cdc7435e8_fa6f2e",
+   "digest": "795cdc7435e80ac4c3069078",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:27:09.102Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_795cdc7435e8_fa6f2e",
+   "digest": "795cdc7435e80ac4c3069078",
+   "contractDigest": "383fb2cfeb8390211ada6758",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Brokered eight-allergen lab test panels for small-batch snac\", and what it is missing first is known costs and money tied up, inside the limits. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 392× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Food-safety and QA leads at small-batch snack m\" needs [figure withheld] and keeps [figure withheld], 151× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted. The plan's steps are for \"Brokered eight-allergen lab test panels for small-batch snack makers\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_22e9bd4a1d7442348270"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+      "owner": "PERSON",
+      "cost": 340
+     },
+     {
+      "label": "Collect payment for \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish the direct cost and money tied up for \"Brokered eight-allergen lab test panels for small-batch snack makers\" from published figures.",
+    "openings": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "title": "Brokered eight-allergen lab test panels for small-batch snack makers",
+      "missing": [
+       "ECONOMICS"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Food-safety and QA leads at small-batch snack manufacturers",
+       "reachableChannel": "Signed orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:42.241Z",
+       "offerScope": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+       "priceCents": 32000,
+       "currency": "USD",
+       "fulfillmentOwner": "Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 business days from receipt; invoices net 15)",
+       "peakFundingCents": 0,
+       "humanHours": 0.3,
+       "requiredCapabilities": [],
+       "industry": "small-batch snack food manufacturing",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 32000,
+        "currency": "USD",
+        "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Signed orders"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3840 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3840 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "each deal loses money: a cost of 340 against a price of 320"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$340",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 business days from receipt; invoices net 15) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Food-safety and QA leads at small-batch snack manufacturers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21–27, 2026), payable on receipt of results.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_9122955cb6e84f8596f3"
+    ],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:26:33.347Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_90bba3ac4a00_3e47df",
+    "revisionDigest": "90bba3ac4a0054ae542e93fd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3451ba1cd5ea4920ba1a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. Twelve snack makers signed orders at $320 per eight-allergen panel, payable on receipt of results (price fact EVIDENCE, twelve WRITTEN_ACCEPTANCE agreements); fulfilment is by the recorded fulfiller, Keystone Food Lab (ISO 17025, written quote $180/panel, 5 business days, net 15), so the lab is paid after the makers and exposure is $0 as the contract requires. Recomputed with Nov 28 = day 0: samples reach the lab Tue Dec 1 (day 3); 5 business days = Tue Dec 8 (day 10); makers pay within 2 days = Dec 10 (day 12); lab net 15 from results = Dec 23 (day 25). Settled cash 12 x $320 = $3,840 >= $3,000 by day 12 of 30; ten of the twelve would already reach $3,200, so two orders can fall away. Lab cost 12 x $180 = $2,160 paid day 25 from receipts; margin $1,680. Ledger matches the steps and the trace (collected $3,840 in window, max exposure $0, pre-proof spend $0). The parked buyerVolume question does not decide a plan whose buyers are signed.",
+    "findings": [
+     "Recomputed: $3,840 settled by day 12; $2,160 lab bill paid day 25; $1,680 kept. The contract's metric is SETTLED_CASH received, which the plan meets; the owner should know the account holds $1,680 after the lab is paid.",
+     "Slack: 10 of 12 orders reach the target ($3,200), so the plan tolerates two non-payers.",
+     "Timing depends on the makers shipping samples Mon Nov 30 (day 2); a one-week slip still settles by ~day 19.",
+     "Operational note: ISSUE_AN_INVOICE is NOT_CONNECTED; invoicing on results (day 10) must be connected."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:56.739Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_795cdc7435e8_fa6f2e",
+    "revisionDigest": "795cdc7435e80ac4c3069078",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3451ba1cd5ea4920ba1a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance after the card changed. The opening's directCosts EVIDENCE fact now reads $340 per panel while its fulfillment EVIDENCE fact still cites Keystone's written quote of $180; two sourced figures for the same cost disagree, so the cost is contradicted and ECONOMICS is not established. Recomputed: at $180, 12 x ($320 - $180) = $1,680 margin and $3,840 settled by day 12; at $340, 12 x $340 = $4,080 owed to the lab against $3,840 collected, a $240 loss the owner would fund on day 25, which breaks cost-below-price and the $0 exposure limit. Which figure is right decides the plan, and the author names exactly that (decisiveLinks ECONOMICS, resolution: obtain Keystone's current itemised written quote). Not CONDITIONAL: a supplier quote is obtainable evidence, not an unknown only a live sales test measures. The earlier EXECUTABLE plan is correctly withdrawn; price, buyers, timing and fulfiller are otherwise unchanged.",
+    "findings": [
+     "Recomputed both readings: $180 -> +$1,680 kept; $340 -> -$240 (12 x -$20). The gross settled cash ($3,840) would exceed the target either way, but a loss-making deal funded by the owner after collection is not inside a no-capital plan.",
+     "The decisive missing evidence is Keystone's current per-panel quote; resolution and research step are correct.",
+     "Minor: the NO_PLAN revision still lists a member with deals 10 and directCost null; harmless but inconsistent with a no-plan stance."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:28:15.952Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_795cdc7435e8_fa6f2e",
+   "digest": "795cdc7435e80ac4c3069078",
+   "contractDigest": "383fb2cfeb8390211ada6758",
+   "plan": {
+    "goalId": "wst_bda779cc56ae4d26aca3",
+    "contractDigest": "383fb2cfeb8390211ada6758",
+    "parentRevisionId": "rev_90bba3ac4a00_3e47df",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the allergen-panel opening's direct cost is contradicted and the latest record puts it above the price",
+     "opportunityIds": [],
+     "why": "The opening's record changed after publication: directCosts is now $340 per panel (EVIDENCE) while the price the twelve makers signed is $320 and the fulfilment record still cites Keystone's written quote of $180. Two sourced figures for the same cost disagree, so the cost is not established; and if $340 is right every panel loses $20 (12 x $340 = $4,080 owed to the lab against $3,840 collected), so the owner would have to fund the $240 gap, which the no-up-front-capital limit forbids. The ECONOMICS link therefore is not established and the earlier EXECUTABLE plan is withdrawn. Price, buyers, fulfiller and timing are otherwise unchanged."
+    },
+    "alternatives": [
+     {
+      "title": "Proceed at the $180 quote",
+      "why": "Rejected: the card's current directCosts EVIDENCE fact contradicts the $180 quote; a contradicted figure is not established."
+     },
+     {
+      "title": "Reprice the panels above cost",
+      "why": "Not available inside the plan: the twelve makers signed at $320; a new price would need new buyer acceptance."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Obtain Keystone Food Lab's current itemized written quote for the eight-allergen panel (per-panel cost including any shipping, rush or accreditation surcharges) to settle whether the direct cost is $180 or $340",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_cost",
+       "s_ful"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 320,
+      "unit": "USD per panel",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per panel",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per panel",
+      "sources": [
+       "s_cost",
+       "s_ful"
+      ],
+      "needs": "Keystone's current written per-panel cost: $180 (quote in fulfillment fact) or $340 (directCosts fact)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#price",
+      "dated": "2026-11-27",
+      "claim": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21-27, 2026), payable on receipt of results.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#directCosts",
+      "dated": "2026-11-28",
+      "claim": "Direct cost now recorded as $340 per panel (EVIDENCE), above the $320 price.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_ful",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#fulfillment",
+      "dated": "2026-11-28",
+      "claim": "Keystone Food Lab written quote $180 per panel; results 5 business days from receipt; invoices net 15.",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_22e9bd4a1d7442348270#captureMechanism",
+      "dated": "2026-11-28",
+      "claim": "Makers pay on receipt of results by Dec 10; lab invoices net 15 from results (paid by Dec 23).",
+      "population": "Food-safety and QA leads at small-batch snack manufacturers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_22e9bd4a1d7442348270"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The per-panel direct cost is contradicted on the card ($180 written quote in the fulfillment record vs $340 in the directCosts record) and the $340 figure is above the $320 signed price, so whether each deal makes or loses money (ECONOMICS) is not established.",
+     "resolution": "Get Keystone Food Lab's current itemized written quote per panel and record it on the card. If it is $180 the twelve signed orders yield $3,840 settled by Dec 10 with the lab paid after, and the plan can be re-published as executable; if it is $340 (or anything at or above $320), find a lab quoting below $320 per panel for the same ISO 17025 eight-allergen panel or re-quote the makers above cost before proceeding.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_22e9bd4a1d7442348270",
+      "deals": 10,
+      "price": 320,
+      "directCost": null,
+      "capital": 0,
+      "settlesDay": 12
+     }
+    ],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_795cdc7435e8_fa6f2e",
+    "digest": "795cdc7435e80ac4c3069078",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:27:09.102Z"
+   },
+   "review": {
+    "revisionId": "rev_795cdc7435e8_fa6f2e",
+    "revisionDigest": "795cdc7435e80ac4c3069078",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0d212d88fcca4cf4bb2d/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3451ba1cd5ea4920ba1a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance after the card changed. The opening's directCosts EVIDENCE fact now reads $340 per panel while its fulfillment EVIDENCE fact still cites Keystone's written quote of $180; two sourced figures for the same cost disagree, so the cost is contradicted and ECONOMICS is not established. Recomputed: at $180, 12 x ($320 - $180) = $1,680 margin and $3,840 settled by day 12; at $340, 12 x $340 = $4,080 owed to the lab against $3,840 collected, a $240 loss the owner would fund on day 25, which breaks cost-below-price and the $0 exposure limit. Which figure is right decides the plan, and the author names exactly that (decisiveLinks ECONOMICS, resolution: obtain Keystone's current itemised written quote). Not CONDITIONAL: a supplier quote is obtainable evidence, not an unknown only a live sales test measures. The earlier EXECUTABLE plan is correctly withdrawn; price, buyers, timing and fulfiller are otherwise unchanged.",
+    "findings": [
+     "Recomputed both readings: $180 -> +$1,680 kept; $340 -> -$240 (12 x -$20). The gross settled cash ($3,840) would exceed the target either way, but a loss-making deal funded by the owner after collection is not inside a no-capital plan.",
+     "The decisive missing evidence is Keystone's current per-panel quote; resolution and research step are correct.",
+     "Minor: the NO_PLAN revision still lists a member with deals 10 and directCost null; harmless but inconsistent with a no-plan stance."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:28:15.952Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_22e9bd4a1d7442348270": "ad56f648a7876d6d"
+    }
+   },
+   "at": "2026-11-28T03:31:19.149Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

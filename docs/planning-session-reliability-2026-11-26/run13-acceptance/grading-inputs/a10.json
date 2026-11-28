@@ -1,0 +1,165 @@
+{
+ "caseId": "ar-10-lan-centers-volume-estimated",
+ "keys": {
+  "cop_261b61ad66e744a38609": "lanLeague"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: League-fee and tournament-bracket workbook for LAN gaming ce\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8763× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"League-fee and tournament-bracket workbook for LAN gaming centers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_261b61ad66e744a38609"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+    "owner": "PERSON",
+    "cost": 2
+   },
+   {
+    "label": "Collect payment for \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish how many buyers for \"League-fee and tournament-bracket workbook for LAN gaming centers\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+  "openings": [
+   {
+    "opportunityId": "cop_261b61ad66e744a38609",
+    "title": "League-fee and tournament-bracket workbook for LAN gaming centers",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 129,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Managers of LAN and esports gaming centers",
+     "reachableChannel": "Email to managers listed on centers' own websites",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:12:12.974Z",
+     "offerScope": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+     "priceCents": 12900,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "LAN and esports gaming centers",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to managers listed on centers' own websites"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 129 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "14 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 2, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Brain estimates roughly 800 LAN and esports gaming centers operate nationally, from a web search; no directory or count of reachable managers has been compiled.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain produces the workbook on payment; card payouts land 3 days after payment. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "6 paid orders from 50 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$2",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Managers of LAN and esports gaming centers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six gaming-center managers paid $129 each for the workbook after a first outreach (payment-processor report, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:35.603Z"
+ }
+}

@@ -1,0 +1,1751 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_3cba574c7d524425b423",
+   "words": "Collect $3,000 of settled cash within 14 days with at most $200 of capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 20000,
+    "proofCondition": "At least $3,000 of settled cash received within 14 days, with no more than $200 of capital committed.",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "967bacbae368b79b52a25cea"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_3cba574c7d524425b423",
+    "contractDigest": "967bacbae368b79b52a25cea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed FAA Part 137 audit packs and collect $3,600 by day 10",
+     "opportunityIds": [
+      "cop_69205c1a8a524c18906b"
+     ],
+     "why": "Three operators signed engagement letters at $1,200 each (EVIDENCE: signed Nov 24-26). Brain produces the pack (PRODUCE_SPREADSHEET proved) and delivers all three by Dec 1; each pays net 7 from delivery, so $3,600 settles by Dec 8 (day 10) of a 14-day window, $600 above the $3,000 target. The only outlay is the $25 records-retrieval fee per operator paid up front: $75 in total (the card's exposure fact is $75, and offerScope says $25 per operator), well inside the $200 capital limit. I disagree with Brain's NOT_VIABLE reading: it treats the opening's $75 peak funding as a per-deal figure (3 x $75 = $225 > $200), but the card's own record states the fee is $25 per operator and the total exposure is $75, so all three packs fit inside $200 at once and no deadline relaxation is needed."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver only two packs within the capital limit (Brain's reading)",
+      "why": "Rejected: rests on the $75 being per operator; the card says $25 per operator, $75 total exposure, so all three fit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Pay the $25 records-retrieval fee for each of the 3 signed operators ($75 total, paid up front)",
+      "performer": "BRAIN",
+      "costCents": 7500,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope",
+       "s_cost",
+       "s_exp"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain compiles each operator's dispatch and chemical-application records into the FAA Part 137 audit pack and emails all three by Dec 1 (day 3)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "order",
+      "evidence": [
+       "s_scope",
+       "s_deliv"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each operator $1,200 on delivery; collect net 7 (by Dec 8, day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_price",
+       "s_cash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 1",
+      "stepId": "order"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 2",
+      "stepId": "order"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 3",
+      "stepId": "order"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 1 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 2 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 3 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1200,
+      "unit": "USD per audit pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed buyers",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "signed engagement letters",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "up-front fee",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD per operator",
+      "sources": [
+       "s_scope",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "USD total",
+      "sources": [
+       "s_exp"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "day all three are paid (delivery by day 3 + net 7)",
+      "sources": [
+       "s_scope",
+       "s_cash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#price",
+      "dated": "2026-11-26",
+      "claim": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24-26, 2026), payable net 7 from delivery.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#captureMechanism",
+      "dated": "2026-11-26",
+      "claim": "Brain compiles each operator's records into the audit pack and delivers within 3 days of the signed letter (all three by Dec 1); net 7 from delivery; a $25 records-retrieval fee per operator is paid up front.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#directCosts",
+      "dated": "2026-11-26",
+      "claim": "Direct cost $25 per operator (records-retrieval fee).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#exposure",
+      "dated": "2026-11-26",
+      "claim": "Exposure $75 (3 operators x $25 paid up front).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cash",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#timeToFirstCash",
+      "dated": "2026-11-26",
+      "claim": "10 days to first cash.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_deliv",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#delivery",
+      "dated": "2026-11-26",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "deals": 3,
+      "price": 1200,
+      "directCost": 25,
+      "capital": 25,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_43fd42f43efe_bedbe0",
+    "digest": "43fd42f43efe56cd56190d4f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:18:16.504Z"
+   },
+   {
+    "goalId": "wst_3cba574c7d524425b423",
+    "contractDigest": "967bacbae368b79b52a25cea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed FAA Part 137 audit packs and collect $3,600 by day 10",
+     "opportunityIds": [
+      "cop_69205c1a8a524c18906b"
+     ],
+     "why": "Three operators signed engagement letters at $1,200 each (EVIDENCE: signed Nov 24-26). Brain produces the pack (PRODUCE_SPREADSHEET proved) and delivers all three by Dec 1; each pays net 7 from delivery, so $3,600 settles by Dec 8 (day 10) of a 14-day window, $600 above the $3,000 target. The only outlay is the $25 records-retrieval fee per operator paid up front: $75 in total (the card's exposure fact is $75, and offerScope says $25 per operator), well inside the $200 capital limit. I disagree with Brain's NOT_VIABLE reading: it treats the opening's $75 peak funding as a per-deal figure (3 x $75 = $225 > $200), but the card's own record states the fee is $25 per operator and the total exposure is $75, so all three packs fit inside $200 at once and no deadline relaxation is needed."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver only two packs within the capital limit (Brain's reading)",
+      "why": "Rejected: rests on the $75 being per operator; the card says $25 per operator, $75 total exposure, so all three fit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the three signed engagement letters at $1,200 per audit pack (net 7 from delivery) and request each operator's records",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Owner pays the $25 records-retrieval fee for each of the 3 signed operators ($75 total, paid up front)",
+      "performer": "OWNER",
+      "ownerHours": 0.25,
+      "costCents": 7500,
+      "day": 0,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_scope",
+       "s_cost",
+       "s_exp"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain compiles each operator's dispatch and chemical-application records into the FAA Part 137 audit pack and emails all three by Dec 1 (day 3)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "order",
+      "evidence": [
+       "s_scope",
+       "s_deliv"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each operator $1,200 on delivery; collect net 7 (by Dec 8, day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_price",
+       "s_cash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 1",
+      "stepId": "order"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 2",
+      "stepId": "order"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 3",
+      "stepId": "order"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 1 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 2 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 3 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1200,
+      "unit": "USD per audit pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed buyers",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "signed engagement letters",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "up-front fee",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD per operator",
+      "sources": [
+       "s_scope",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "USD total",
+      "sources": [
+       "s_exp"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "day all three are paid (delivery by day 3 + net 7)",
+      "sources": [
+       "s_scope",
+       "s_cash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#price",
+      "dated": "2026-11-26",
+      "claim": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24-26, 2026), payable net 7 from delivery.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#captureMechanism",
+      "dated": "2026-11-26",
+      "claim": "Brain compiles each operator's records into the audit pack and delivers within 3 days of the signed letter (all three by Dec 1); net 7 from delivery; a $25 records-retrieval fee per operator is paid up front.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#directCosts",
+      "dated": "2026-11-26",
+      "claim": "Direct cost $25 per operator (records-retrieval fee).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#exposure",
+      "dated": "2026-11-26",
+      "claim": "Exposure $75 (3 operators x $25 paid up front).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cash",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#timeToFirstCash",
+      "dated": "2026-11-26",
+      "claim": "10 days to first cash.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_deliv",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#delivery",
+      "dated": "2026-11-26",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "deals": 3,
+      "price": 1200,
+      "directCost": 25,
+      "capital": 25,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c94751d8a62d_caba4c",
+    "digest": "c94751d8a62d983b3b8ba953",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:18:25.885Z"
+   },
+   {
+    "goalId": "wst_3cba574c7d524425b423",
+    "contractDigest": "967bacbae368b79b52a25cea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed FAA Part 137 audit packs and collect $3,600 by day 10",
+     "opportunityIds": [
+      "cop_69205c1a8a524c18906b"
+     ],
+     "why": "Three operators signed engagement letters at $1,200 each (EVIDENCE: signed Nov 24-26). Brain produces the pack (PRODUCE_SPREADSHEET proved) and delivers all three by Dec 1; each pays net 7 from delivery, so $3,600 settles by Dec 8 (day 10) of a 14-day window, $600 above the $3,000 target. The only outlay is the $25 records-retrieval fee per operator paid up front: $75 in total (the card's exposure fact is $75, and offerScope says $25 per operator), well inside the $200 capital limit. I disagree with Brain's NOT_VIABLE reading: it treats the opening's $75 peak funding as a per-deal figure (3 x $75 = $225 > $200), but the card's own record states the fee is $25 per operator and the total exposure is $75, so all three packs fit inside $200 at once and no deadline relaxation is needed."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver only two packs within the capital limit (Brain's reading)",
+      "why": "Rejected: rests on the $75 being per operator; the card says $25 per operator, $75 total exposure, so all three fit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the three signed engagement letters at $1,200 per audit pack (net 7 from delivery) and request each operator's records",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Pay the $25 records-retrieval fee per operator up front ($75 total); Brain compiles each operator's dispatch and chemical-application records into the FAA Part 137 audit pack and emails all three by Dec 1 (day 3)",
+      "performer": "BRAIN",
+      "costCents": 7500,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_scope",
+       "s_deliv",
+       "s_cost",
+       "s_exp"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each operator $1,200 on delivery; collect net 7 (by Dec 8, day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_price",
+       "s_cash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 1 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 2 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 3 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1200,
+      "unit": "USD per audit pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed buyers",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "signed engagement letters",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "up-front fee",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD per operator",
+      "sources": [
+       "s_scope",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "USD total",
+      "sources": [
+       "s_exp"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "day all three are paid (delivery by day 3 + net 7)",
+      "sources": [
+       "s_scope",
+       "s_cash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#price",
+      "dated": "2026-11-26",
+      "claim": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24-26, 2026), payable net 7 from delivery.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#captureMechanism",
+      "dated": "2026-11-26",
+      "claim": "Brain compiles each operator's records into the audit pack and delivers within 3 days of the signed letter (all three by Dec 1); net 7 from delivery; a $25 records-retrieval fee per operator is paid up front.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#directCosts",
+      "dated": "2026-11-26",
+      "claim": "Direct cost $25 per operator (records-retrieval fee).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#exposure",
+      "dated": "2026-11-26",
+      "claim": "Exposure $75 (3 operators x $25 paid up front).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cash",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#timeToFirstCash",
+      "dated": "2026-11-26",
+      "claim": "10 days to first cash.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_deliv",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#delivery",
+      "dated": "2026-11-26",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "deals": 3,
+      "price": 1200,
+      "directCost": 25,
+      "capital": 25,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c08aaa47fa09_66dd02",
+    "digest": "c08aaa47fa09df67bd13e6e3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:18:33.323Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_3cba574c7d524425b423",
+   "contractDigest": "967bacbae368b79b52a25cea",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the three signed FAA Part 137 audit packs and collect $3,600 by day 10",
+    "opportunityIds": [
+     "cop_69205c1a8a524c18906b"
+    ],
+    "why": "Three operators signed engagement letters at $1,200 each (EVIDENCE: signed Nov 24-26). Brain produces the pack (PRODUCE_SPREADSHEET proved) and delivers all three by Dec 1; each pays net 7 from delivery, so $3,600 settles by Dec 8 (day 10) of a 14-day window, $600 above the $3,000 target. The only outlay is the $25 records-retrieval fee per operator paid up front: $75 in total (the card's exposure fact is $75, and offerScope says $25 per operator), well inside the $200 capital limit. I disagree with Brain's NOT_VIABLE reading: it treats the opening's $75 peak funding as a per-deal figure (3 x $75 = $225 > $200), but the card's own record states the fee is $25 per operator and the total exposure is $75, so all three packs fit inside $200 at once and no deadline relaxation is needed."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver only two packs within the capital limit (Brain's reading)",
+     "why": "Rejected: rests on the $75 being per operator; the card says $25 per operator, $75 total exposure, so all three fit."
+    }
+   ],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm the three signed engagement letters at $1,200 per audit pack (net 7 from delivery) and request each operator's records",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s_price"
+     ],
+     "priceCents": 120000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Pay the $25 records-retrieval fee per operator up front ($75 total); Brain compiles each operator's dispatch and chemical-application records into the FAA Part 137 audit pack and emails all three by Dec 1 (day 3)",
+     "performer": "BRAIN",
+     "costCents": 7500,
+     "day": 3,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_scope",
+      "s_deliv",
+      "s_cost",
+      "s_exp"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Invoice each operator $1,200 on delivery; collect net 7 (by Dec 8, day 10)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_price",
+      "s_cash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Records-retrieval fee, operator 1",
+     "stepId": "deliver"
+    },
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Records-retrieval fee, operator 2",
+     "stepId": "deliver"
+    },
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 2500,
+     "label": "Records-retrieval fee, operator 3",
+     "stepId": "deliver"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 120000,
+     "label": "Audit pack, operator 1 ($1,200 net 7 from delivery)",
+     "settlesDay": 10,
+     "stepId": "collect"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 120000,
+     "label": "Audit pack, operator 2 ($1,200 net 7 from delivery)",
+     "settlesDay": 10,
+     "stepId": "collect"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 120000,
+     "label": "Audit pack, operator 3 ($1,200 net 7 from delivery)",
+     "settlesDay": 10,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 10,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 1200,
+     "unit": "USD per audit pack",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed buyers",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "signed engagement letters",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "up-front fee",
+     "status": "EVIDENCED",
+     "value": 25,
+     "unit": "USD per operator",
+     "sources": [
+      "s_scope",
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "peak capital",
+     "status": "EVIDENCED",
+     "value": 75,
+     "unit": "USD total",
+     "sources": [
+      "s_exp"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settlement",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "day all three are paid (delivery by day 3 + net 7)",
+     "sources": [
+      "s_scope",
+      "s_cash"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#price",
+     "dated": "2026-11-26",
+     "claim": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24-26, 2026), payable net 7 from delivery.",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    },
+    {
+     "id": "s_scope",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#captureMechanism",
+     "dated": "2026-11-26",
+     "claim": "Brain compiles each operator's records into the audit pack and delivers within 3 days of the signed letter (all three by Dec 1); net 7 from delivery; a $25 records-retrieval fee per operator is paid up front.",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#directCosts",
+     "dated": "2026-11-26",
+     "claim": "Direct cost $25 per operator (records-retrieval fee).",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    },
+    {
+     "id": "s_exp",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#exposure",
+     "dated": "2026-11-26",
+     "claim": "Exposure $75 (3 operators x $25 paid up front).",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    },
+    {
+     "id": "s_cash",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#timeToFirstCash",
+     "dated": "2026-11-26",
+     "claim": "10 days to first cash.",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    },
+    {
+     "id": "s_deliv",
+     "url": "https://brain.local/card/cop_69205c1a8a524c18906b#delivery",
+     "dated": "2026-11-26",
+     "claim": "A spreadsheet Brain produces.",
+     "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_69205c1a8a524c18906b"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_69205c1a8a524c18906b",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_69205c1a8a524c18906b",
+     "deals": 3,
+     "price": 1200,
+     "directCost": 25,
+     "capital": 25,
+     "settlesDay": 10
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c08aaa47fa09_66dd02",
+   "digest": "c08aaa47fa09df67bd13e6e3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1472a62cd23b4db78b86/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:18:33.323Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_c08aaa47fa09_66dd02",
+   "digest": "c08aaa47fa09df67bd13e6e3",
+   "contractDigest": "967bacbae368b79b52a25cea",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 7500,
+    "committedOpenCents": 0,
+    "preProofCents": 7500,
+    "maxExposureCents": 7500,
+    "minCashCents": 12500,
+    "minCashDay": 0,
+    "collectedCents": 360000,
+    "collectedInWindowCents": 360000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 352500
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $2,400 of the $3,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $225, what the lots that reach the target need at once; or deadline: move the deadline to at least 20 days from now, when enough lots have settled; or target: lower the target to about $2,400, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_69205c1a8a524c18906b"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "title": "FAA Part 137 application-record audit packs for agricultural aviation operators",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+       "reachableChannel": "Signed engagement letters; delivery by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:31.855Z",
+       "offerScope": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+       "priceCents": 120000,
+       "currency": "USD",
+       "peakFundingCents": 7500,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "agricultural aviation",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Signed engagement letters; delivery by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3600 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3600 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 25, tied up 75"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$25",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$75",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24–26, 2026), payable net 7 from delivery.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:15:52.340Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_c08aaa47fa09_66dd02",
+    "revisionDigest": "c08aaa47fa09df67bd13e6e3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_edc4110914094318a290/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported and the author's disagreement with Brain's NOT_VIABLE reading is correct. Three operators signed engagement letters at $1,200 per audit pack (price fact EVIDENCE, three WRITTEN_ACCEPTANCE agreements), so no new deals, conversion or market volume is needed. Fulfilment is Brain's (PRODUCE_SPREADSHEET proved, delivery a spreadsheet Brain produces). Capital: the card's offerScope says a $25 records-retrieval fee per operator is paid up front and the exposure fact is $75 total, i.e. 3 x $25; Brain's planner treated peakFundingCents 7500 as per-lot (3 x $75 = $225 > $200), which double-counts the same $75. Recomputed: peak capital $75 <= $200 cap; 3 x $1,200 = $3,600 >= $3,000; delivery of all three by Dec 1 (day 3) plus net 7 = Dec 8 (day 10) of 14; net $3,525. Ledger (three $25 spends day 0, three $1,200 receipts settling day 10) matches the steps and the trace (max exposure $75, $3,600 collected in window).",
+    "findings": [
+     "Recomputed: 3 x $1,200 = $3,600 gross, $75 up-front fees, $3,525 net; settles day 10 of 14; peak capital $75 of the $200 cap.",
+     "Brain's NOT_VIABLE verdict rests on reading peakFundingCents $75 as per deal; the card's own facts (offerScope '$25 per operator', exposure '$75', directCosts '$25') show $75 is the total for all three.",
+     "Residual risk: settlement depends on each operator paying on net-7 terms as signed; only 4 days of slack (day 10 vs 14) if a payment is late. No deposit is taken.",
+     "The plan needs each operator's records to compile the pack; the sell step requests them on day 0, so delivery by Dec 1 assumes the records arrive promptly.",
+     "Operational note: ISSUE_AN_INVOICE and SEND_A_MESSAGE are NOT_CONNECTED; invoicing must be connected before day 3."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:13.382Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_c08aaa47fa09_66dd02",
+   "digest": "c08aaa47fa09df67bd13e6e3",
+   "contractDigest": "967bacbae368b79b52a25cea",
+   "plan": {
+    "goalId": "wst_3cba574c7d524425b423",
+    "contractDigest": "967bacbae368b79b52a25cea",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the three signed FAA Part 137 audit packs and collect $3,600 by day 10",
+     "opportunityIds": [
+      "cop_69205c1a8a524c18906b"
+     ],
+     "why": "Three operators signed engagement letters at $1,200 each (EVIDENCE: signed Nov 24-26). Brain produces the pack (PRODUCE_SPREADSHEET proved) and delivers all three by Dec 1; each pays net 7 from delivery, so $3,600 settles by Dec 8 (day 10) of a 14-day window, $600 above the $3,000 target. The only outlay is the $25 records-retrieval fee per operator paid up front: $75 in total (the card's exposure fact is $75, and offerScope says $25 per operator), well inside the $200 capital limit. I disagree with Brain's NOT_VIABLE reading: it treats the opening's $75 peak funding as a per-deal figure (3 x $75 = $225 > $200), but the card's own record states the fee is $25 per operator and the total exposure is $75, so all three packs fit inside $200 at once and no deadline relaxation is needed."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver only two packs within the capital limit (Brain's reading)",
+      "why": "Rejected: rests on the $75 being per operator; the card says $25 per operator, $75 total exposure, so all three fit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the three signed engagement letters at $1,200 per audit pack (net 7 from delivery) and request each operator's records",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Pay the $25 records-retrieval fee per operator up front ($75 total); Brain compiles each operator's dispatch and chemical-application records into the FAA Part 137 audit pack and emails all three by Dec 1 (day 3)",
+      "performer": "BRAIN",
+      "costCents": 7500,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_scope",
+       "s_deliv",
+       "s_cost",
+       "s_exp"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice each operator $1,200 on delivery; collect net 7 (by Dec 8, day 10)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_price",
+       "s_cash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2500,
+      "label": "Records-retrieval fee, operator 3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 1 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 2 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Audit pack, operator 3 ($1,200 net 7 from delivery)",
+      "settlesDay": 10,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1200,
+      "unit": "USD per audit pack",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed buyers",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "signed engagement letters",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "up-front fee",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD per operator",
+      "sources": [
+       "s_scope",
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "USD total",
+      "sources": [
+       "s_exp"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "day all three are paid (delivery by day 3 + net 7)",
+      "sources": [
+       "s_scope",
+       "s_cash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#price",
+      "dated": "2026-11-26",
+      "claim": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24-26, 2026), payable net 7 from delivery.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#captureMechanism",
+      "dated": "2026-11-26",
+      "claim": "Brain compiles each operator's records into the audit pack and delivers within 3 days of the signed letter (all three by Dec 1); net 7 from delivery; a $25 records-retrieval fee per operator is paid up front.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#directCosts",
+      "dated": "2026-11-26",
+      "claim": "Direct cost $25 per operator (records-retrieval fee).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_exp",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#exposure",
+      "dated": "2026-11-26",
+      "claim": "Exposure $75 (3 operators x $25 paid up front).",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_cash",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#timeToFirstCash",
+      "dated": "2026-11-26",
+      "claim": "10 days to first cash.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     },
+     {
+      "id": "s_deliv",
+      "url": "https://brain.local/card/cop_69205c1a8a524c18906b#delivery",
+      "dated": "2026-11-26",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_69205c1a8a524c18906b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_69205c1a8a524c18906b",
+      "deals": 3,
+      "price": 1200,
+      "directCost": 25,
+      "capital": 25,
+      "settlesDay": 10
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c08aaa47fa09_66dd02",
+    "digest": "c08aaa47fa09df67bd13e6e3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:18:33.323Z"
+   },
+   "review": {
+    "revisionId": "rev_c08aaa47fa09_66dd02",
+    "revisionDigest": "c08aaa47fa09df67bd13e6e3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1472a62cd23b4db78b86/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_edc4110914094318a290/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported and the author's disagreement with Brain's NOT_VIABLE reading is correct. Three operators signed engagement letters at $1,200 per audit pack (price fact EVIDENCE, three WRITTEN_ACCEPTANCE agreements), so no new deals, conversion or market volume is needed. Fulfilment is Brain's (PRODUCE_SPREADSHEET proved, delivery a spreadsheet Brain produces). Capital: the card's offerScope says a $25 records-retrieval fee per operator is paid up front and the exposure fact is $75 total, i.e. 3 x $25; Brain's planner treated peakFundingCents 7500 as per-lot (3 x $75 = $225 > $200), which double-counts the same $75. Recomputed: peak capital $75 <= $200 cap; 3 x $1,200 = $3,600 >= $3,000; delivery of all three by Dec 1 (day 3) plus net 7 = Dec 8 (day 10) of 14; net $3,525. Ledger (three $25 spends day 0, three $1,200 receipts settling day 10) matches the steps and the trace (max exposure $75, $3,600 collected in window).",
+    "findings": [
+     "Recomputed: 3 x $1,200 = $3,600 gross, $75 up-front fees, $3,525 net; settles day 10 of 14; peak capital $75 of the $200 cap.",
+     "Brain's NOT_VIABLE verdict rests on reading peakFundingCents $75 as per deal; the card's own facts (offerScope '$25 per operator', exposure '$75', directCosts '$25') show $75 is the total for all three.",
+     "Residual risk: settlement depends on each operator paying on net-7 terms as signed; only 4 days of slack (day 10 vs 14) if a payment is late. No deposit is taken.",
+     "The plan needs each operator's records to compile the pack; the sell step requests them on day 0, so delivery by Dec 1 assumes the records arrive promptly.",
+     "Operational note: ISSUE_AN_INVOICE and SEND_A_MESSAGE are NOT_CONNECTED; invoicing must be connected before day 3."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:13.382Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 14 days with at most $200 of capital.",
+    "terms": "ae54278b15e25f63",
+    "openings": {
+     "cop_69205c1a8a524c18906b": "5d720d07c9f99cee"
+    }
+   },
+   "at": "2026-11-28T03:19:39.853Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}
