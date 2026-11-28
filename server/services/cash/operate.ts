@@ -477,6 +477,17 @@ export async function withdrawResearchNotWorthIt(projectId: string): Promise<str
  */
 const NAMES_A_PAYER =
   /\b(is the payer|pays? (?:out|for|a|an|the|up to|researchers|contributors|creators|freelancers)|bount(?:y|ies)|reward(?:s|ed)?|commission(?:s|ed)?|hiring|hires|seeking|request for proposals?|rfp|contract award|grant)\b/i;
+/**
+ * A buyer spending on work: "merchants spend $2,000 per month on photography",
+ * "practices pay $400/month for review replies", "firms retain paralegals".
+ * The recurring-price and resale-quote markers below are not a supplier's or a
+ * market's alone — a buyer's own spend is written with the same "per month",
+ * "/mo" or "resale" — so a sentence in which somebody pays, spends, budgets,
+ * outsources or retains keeps its payer question. Erring toward asking costs
+ * one research slot; erring toward withholding hides a real buyer.
+ */
+const BUYER_SPEND =
+  /\b(spends?|spent|spending|pay|pays|paid|paying|budgets?|budgeted|outsourc(?:e|es|ed|ing)|retains?|retained|retainers?)\b/i;
 const RESALE_MARKET =
   /\b(tcgplayer|stubhub|vivid ?seats|seatgeek|ebay|stockx|goat|grailed|poshmark|mercari|ticketmaster resale)\b/i;
 const RESALE_QUOTE = /\b(traded at|resale|market price|current market|listed (?:resale|at)|last sold|sold for|tracked sale)\b/i;
@@ -487,6 +498,7 @@ export function payerQuestionUnanswerable(opportunity: Pick<CashOpportunity, 'ti
   if (opportunity.payer !== null) return null;
   const text = opportunity.title;
   if (NAMES_A_PAYER.test(text)) return null;
+  if (BUYER_SPEND.test(text)) return null;
   if (RESALE_MARKET.test(text) && RESALE_QUOTE.test(text)) {
     return "it is a resale market's price quote, which names no party that would pay Brain";
   }

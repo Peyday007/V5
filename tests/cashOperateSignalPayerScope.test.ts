@@ -75,6 +75,38 @@ describe('payerQuestionUnanswerable', () => {
   });
 });
 
+describe('payerQuestionUnanswerable at its boundary, beyond the recorded titles', () => {
+  it('rules out supplier prices and resale quotes it was not fitted to', () => {
+    for (const title of [
+      'Canva Pro publishes a subscription price of $15/month for one seat',
+      'Costco charges members a $65 annual membership fee',
+      'A StubHub resale listing for the Eras Tour floor seats was $1,200',
+      'On eBay, a PSA 10 Charizard last sold for $420',
+    ]) {
+      expect(payerQuestionUnanswerable({ title, payer: null }), title).not.toBeNull();
+    }
+  });
+
+  it('keeps the payer question when the same markers describe a buyer spending on work', () => {
+    // Each sentence carries a supplier-price or resale-quote marker the
+    // classifier keys on ("per month", "/month", "/mo", "membership fee",
+    // "resale", "current market", a resale market's name) — and each names
+    // somebody paying for work, which is exactly the party Brain asks after.
+    for (const title of [
+      'Shopify merchants spend $2,000 per month on product photography',
+      'Dental practices pay $400/month for review-response management',
+      'Agencies paid $750/mo for white-label SEO reports',
+      'Small law firms retain outside paralegals at $1,200 per month',
+      'Gyms budget for a membership fee audit each quarter',
+      'Ticket brokers who resell on StubHub spend $300/month on resale price data',
+      'eBay sellers outsource listing photography to keep items at current market price',
+      'Card shops spending on TCGPlayer market price tracking tools',
+    ]) {
+      expect(payerQuestionUnanswerable({ title, payer: null }), title).toBeNull();
+    }
+  });
+});
+
 describe('the signal gap pass', () => {
   it('asks the GitHub bounty its payer and does not ask the supplier and resale facts', async () => {
     const ids = {
