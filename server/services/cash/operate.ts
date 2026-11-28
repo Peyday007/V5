@@ -92,6 +92,7 @@ import { cashEngineCard, NEED_RESEARCHABLE_ENGINE_FIELDS } from './engineCard.ts
 import { CAPTURE_INPUTS, cashTier } from './tier.ts';
 import { questionKey } from './conditions.ts';
 import { closeNeed, raiseNeed } from './needs.ts';
+import { readOperatePermission } from '../sources/acquisition.ts';
 import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
@@ -558,11 +559,171 @@ async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpport
   return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
 }
 
+/**
+ * The channel an opening's own source sentence names outright, or null.
+ *
+ * ORIGINATED:UNMET_NEED:access-for-v: the GitHub bounty's accepted claim says
+ * its bounty "is run through HackerOne (hackerone.com/github)", yet the
+ * opening's "Access for …" question waited on a research slot to rediscover a
+ * channel Brain already held. Only explicit forms that name both a party and
+ * the address it is reached at are read ("run through X (domain)",
+ * "submit(ted) via/through X (domain)", "reported through X at domain");
+ * anything looser is left to research, because a channel guessed from grammar
+ * is a wrong load-bearing field. Pure.
+ *
+ * Review round 1 (F1): the pattern is case-sensitive, like `STATED_PAYER`, so
+ * NAME's capital letter is a real requirement — compiled with 'i' it read
+ * "the web form" or "some random forum" as the party. Only the verbs are
+ * spelled for a sentence-initial capital. A capitalised word that is a date,
+ * not a party ("run through December (…)"), is refused by NOT_A_CHANNEL.
+ */
+const DOMAIN = String.raw`(?:https?:\/\/)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?:\/[\w./-]*[\w/])?`;
+const STATED_CHANNEL = new RegExp(
+  String.raw`\b(?:[Ii]s\s+run|[Rr]un|[Ss]ubmit(?:ted)?|[Rr]eported|[Aa]re\s+reported|[Ii]s\s+reported)\s+(?:via|through)\s+${NAME}\s*(?:\((${DOMAIN})\)|\s+at\s+(${DOMAIN}))`,
+);
+const NOT_A_CHANNEL =
+  /^(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Q[1-4]|The|This|That|These|Those|Our|Their|Its|His|Her|Your|My)\b/;
+export function statedChannel(text: string | null | undefined): string | null {
+  const found = STATED_CHANNEL.exec(text ?? '');
+  if (!found) return null;
+  const name = found[1]?.trim().replace(/[.'’-]+$/, '');
+  const where = (found[2] ?? found[3])?.replace(/[.,;:]+$/, '');
+  if (!name || !where || NOT_A_NAME.test(name) || NOT_A_CHANNEL.test(name)) return null;
+  return `${name} (${where})`;
+}
+
+/**
+ * Write the channel an opening's accepted source claim states outright, through
+ * the same evidence write `fillStatedPayer` uses. Unchanged when nothing was
+ * written — an unaccepted or unsourced claim never becomes a load-bearing field.
+ */
+async function fillStatedChannel(opportunity: CashOpportunity): Promise<CashOpportunity> {
+  if (opportunity.reachableChannel !== null || !opportunity.sourceClaimId) return opportunity;
+  const claim = await getClaim(opportunity.sourceClaimId);
+  if (!claim || !claim.accepted || !claim.sourceUrl) return opportunity;
+  const channel = statedChannel(claim.claim);
+  if (!channel) return opportunity;
+  const written = await writeEvidenceAnswer({ opportunity, field: 'access', claim: { ...claim, claim: channel }, needId: null });
+  if (!written) return opportunity;
+  await askOperatePermission(opportunity, channel);
+  return (await getOpportunity(opportunity.id)) ?? opportunity;
+}
+
+/**
+ * The host a stated channel ("HackerOne (hackerone.com/github)") is reached
+ * at, lowercased and without scheme or path, or null. Pure.
+ */
+export function channelHost(channel: string | null | undefined): string | null {
+  const inside = /\(([^()\s]+)\)\s*$/.exec(channel ?? '')?.[1];
+  const host = inside?.replace(/^https?:\/\//i, '').split('/')[0]?.toLowerCase() ?? '';
+  return /^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(host) ? host : null;
+}
+
+/** The request key of the person-held need to operate a host for one opening. */
+export function operateKey(opportunityId: string, host: string): string {
+  return `operate:${opportunityId}:${host}`;
+}
+
+/**
+ * A stated channel is a platform's own interface, so reaching anyone through
+ * it means submitting there under an account — and permission to operate a
+ * site under a named account is produced only by a person at a terminal
+ * (`sources/operatePermissionCli.ts`). Review round 1 (F2, access-for-v):
+ * filling Access from the source answered where the channel is, and left the
+ * opening reading as reachable with nobody able to use it. Unless a standing
+ * permission for the host is already recorded, one person-held need says so
+ * (blocker `PERSON`, so it is a person's review and never a research slot).
+ * It is settled by `settleOperatePermissionNeeds` once the grant row exists.
+ */
+async function askOperatePermission(opportunity: CashOpportunity, channel: string): Promise<void> {
+  const host = channelHost(channel);
+  if (!host) return;
+  if ((await readOperatePermission(host)).permitted) return;
+  const grant = `npx tsx server/services/sources/operatePermissionCli.ts grant --host ${host} --account "<account reference>" --by <name>`;
+  await raiseNeed({
+    projectId: opportunity.projectId,
+    opportunityId: opportunity.id,
+    actorRef: BRAIN,
+    blockedAction: `Operate ${host} for "${opportunity.title}"`,
+    whyItMatters:
+      `The channel its source states, ${channel}, is a platform's own interface: reaching anyone through it means ` +
+      'submitting there under an account, and only a person can grant Brain permission to operate a site under a named account.',
+    recommendedPath: `The person who holds an account on ${host} grants it at a terminal: ${grant}`,
+    setupEffort: 'One terminal command by the person who holds the account.',
+    nextStep: grant,
+    completionCondition: `A standing OPERATE_PERMISSION for ${host} is recorded.`,
+    blocksState: 'EXECUTING',
+    requestKey: operateKey(opportunity.id, host),
+    blockerKey: parseBlockerKey('PERSON'),
+  });
+}
+
+/** Settle each open operate need whose host now reads a standing permission, by reading the row. */
+async function settleOperatePermissionNeeds(open: readonly CashNeed[]): Promise<void> {
+  for (const need of open) {
+    if (!need.requestKey?.startsWith('operate:')) continue;
+    const host = need.requestKey.slice(need.requestKey.lastIndexOf(':') + 1);
+    const permission = await readOperatePermission(host);
+    if (!permission.permitted) continue;
+    await closeNeed({
+      needId: need.id,
+      to: 'RESOLVED',
+      resolution: `${host} now reads a standing permission to operate it under "${permission.accountRef}", granted by ${permission.grantedBy ?? 'a person'}.`,
+      actorUserId: BRAIN,
+      verifiedBy: 'BRAIN_READ_THE_ROW',
+    });
+  }
+}
+
+/**
+ * The card questions a signal's own fact rules out, keyed by field, with why.
+ *
+ * ORIGINATED:UNMET_NEED:access-for-v: withholding only the payer left the
+ * access question asked of the same openings — "establish a channel that
+ * actually reaches them" when the fact names nobody to reach. A resale quote
+ * or a supplier's own price names no party that would pay Brain, so there is
+ * no "them" and neither question has an answer research can find. The rule is
+ * the one `payerQuestionUnanswerable` already states; this only says which
+ * fields it covers.
+ */
+export const NO_PAYER_FIELDS = Object.freeze(['payer', 'access'] as const);
+export function signalQuestionsUnanswerable(
+  opportunity: Pick<CashOpportunity, 'title' | 'payer'>,
+): { fields: readonly string[]; why: string } | null {
+  const noPayer = payerQuestionUnanswerable(opportunity);
+  return noPayer ? { fields: NO_PAYER_FIELDS, why: noPayer } : null;
+}
+
+/**
+ * Whether an open question need asks something its opening's own fact rules
+ * out, read the way the raising pass reads it (a SIGNAL opening only). Used at
+ * the launch, so a need raised before the rule existed is not turned into work.
+ */
+async function needQuestionUnanswerable(
+  projectId: string,
+  opportunity: CashOpportunity,
+  need: Pick<CashNeed, 'requestKey'>,
+): Promise<string | null> {
+  const ruled = signalQuestionsUnanswerable(opportunity);
+  if (!ruled || !need.requestKey) return null;
+  const field = ruled.fields.find((one) => questionKey(opportunity.id, one) === need.requestKey);
+  if (!field) return null;
+  const engine = cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) });
+  const reading = cashTier({
+    opportunity,
+    card: engine,
+    readiness: evidenceCard(opportunity).readiness,
+    policy: await executionPolicyForProject(projectId),
+  });
+  return reading.tier === 'SIGNAL' ? ruled.why : null;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
   const openByKey = new Map(open.filter((one) => !!one.requestKey).map((one) => [one.requestKey!, one]));
+  await settleOperatePermissionNeeds(open);
 
   for (const listed of await listOpportunities({
     projectId,
@@ -579,7 +740,7 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * and no "Payer for …" need is raised to rediscover it — and one already
      * open is settled by the filled-gap pass below, as any filled field is.
      */
-    const opportunity = await fillStatedPayer(listed);
+    const opportunity = await fillStatedChannel(await fillStatedPayer(listed));
     /*
      * Only for something Brain has a reason to spend on.
      *
@@ -666,21 +827,25 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * already open on it is withdrawn — nothing was established, so never
      * resolved — which frees the research slot it held.
      */
-    const noPayer = reading.tier === 'SIGNAL' ? payerQuestionUnanswerable(opportunity) : null;
+    const noPayer = reading.tier === 'SIGNAL' ? signalQuestionsUnanswerable(opportunity) : null;
     if (noPayer) {
-      asking = asking.filter((one) => one.key !== 'payer');
+      asking = asking.filter((one) => !noPayer.fields.includes(one.key));
+      const skipped = card.fields
+        .filter((one) => noPayer.fields.includes(one.key) && one.value === null)
+        .map((one) => one.key);
       await recordQuestionsSkipped({
         projectId,
         opportunityId: opportunity.id,
-        fields: ['payer'],
-        why: `No payer to look up: ${noPayer}.`,
+        fields: skipped,
+        why: `No payer to look up, and nobody to reach: ${noPayer.why}.`,
       });
-      const stale = openByKey.get(questionKey(opportunity.id, 'payer'));
-      if (stale) {
+      for (const field of noPayer.fields) {
+        const stale = openByKey.get(questionKey(opportunity.id, field));
+        if (!stale) continue;
         const closed = await closeNeed({
           needId: stale.id,
           to: 'WITHDRAWN',
-          resolution: `Not researched: ${noPayer}. Nothing was established, so this is withdrawn rather than resolved.`,
+          resolution: `Not researched: ${noPayer.why}. Nothing was established, so this is withdrawn rather than resolved.`,
           actorUserId: BRAIN,
         });
         if (closed.ok) openByKey.delete(stale.requestKey!);
@@ -1230,6 +1395,8 @@ export async function startDependentWork(projectId: string): Promise<DependentWo
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       continue;
     }
+    // A question the opening's own fact rules out is never launched (access-for-v).
+    if (await needQuestionUnanswerable(projectId, opportunity, need)) continue;
     const candidate = await createCandidate({
       projectId,
       visibility: 'SHARED',
@@ -1325,6 +1492,8 @@ export async function startNeedWork(need: CashNeed, route: AcquiringRoute): Prom
     if (cashEngineCard({ opportunity, facts: await cardFactsFor(opportunity.id) }).disqualifiedBy) {
       return { kind: 'REFUSED', needId: need.id, reason: 'its opening is ruled out by its own card' };
     }
+    const unanswerable = await needQuestionUnanswerable(need.projectId, opportunity, need);
+    if (unanswerable) return { kind: 'REFUSED', needId: need.id, reason: `its question has no answer to find: ${unanswerable}` };
   }
   const ask = acquisitionAsk(need, route);
   const candidate = await createCandidate({
