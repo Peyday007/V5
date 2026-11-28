@@ -56,17 +56,35 @@ export const REASK_AFTER_MS = 24 * 60 * 60 * 1000;
 /** …and at most this many times in all, so a question nobody can answer stops. */
 export const MAX_ASKINGS = 3;
 
+/** The payer question: the published paying party and how it pays, never an unpublished internal approver. */
+export const PAYER_ASK =
+  'Name who pays for exactly this: the organisation published as paying for it — the buyer itself, or for a sponsored award ' +
+  'the sponsoring body, a challenge partner or a contracted prize or payout administrator — and the published mechanism by ' +
+  'which it pays (an award, an invoice, a platform payout, a contract, and the funding source when stated), with a source and ' +
+  'date for each. A named internal official or office who approves the payment is not required: it is rarely published, and ' +
+  'its absence is no reason to leave the payer unanswered. A buyer only described as "businesses" or "companies" is not a payer.';
+
 const FIELDS_FOR: Partial<Record<ChainLink, { field: string; ask: string }[]>> = {
   /*
    * The answers land on the columns the link is judged on (answers.ts COLUMN:
    * `payer` -> payer, `access` -> reachable_channel), through the evidence gate.
    */
   REACHABLE_BUYER: [
+    /*
+     * ORIGINATED:UNMET_NEED:field-payer (220 openings, 2026-11): this asked for
+     * "the role inside it that decides and pays", and the person or role who
+     * approves a payment is an internal fact nobody publishes — a federal
+     * prize's payer is the sponsoring agency (15 U.S.C. 3719(b)), its notice
+     * need name no approving official (3719(f)), and the disbursing staff are
+     * internal (GSA Prize and Challenge Toolkit 2026, §4.2). So the question
+     * had no answer research could find, and every asking ended unanswered.
+     * What is published, and what the payer column is judged on, is the
+     * paying party and how it pays. The bar is unchanged: a payer is still a
+     * named organisation, never "businesses".
+     */
     {
       field: 'payer',
-      ask:
-        'Name who pays for exactly this: the kind of organisation or person that is published as buying it, the role inside it that ' +
-        'decides and pays, with a source and date for each. A buyer only described as "businesses" or "companies" is not a payer.',
+      ask: PAYER_ASK,
     },
     {
       field: 'access',
@@ -375,7 +393,7 @@ export async function researchGoalPaths(input: {
         });
         if (!closed.ok) continue;
         keys.delete(key);
-        nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason);
+        nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason, field);
       }
       if (input.remedyInstruction?.trim()) nextStep = `${nextStep} ${input.remedyInstruction.trim()}`;
       if (input.dryRun) {
@@ -419,10 +437,21 @@ export async function researchGoalPaths(input: {
  * wrong and turns to other kinds of source; the third answers from comparable
  * published cases. Never the identical search twice.
  */
-export function differentMethod(ask: string, asking: number, previous: string): string {
+export function differentMethod(ask: string, asking: number, previous: string, field?: string): string {
   const why = previous.replace(/\s+/g, ' ').trim().slice(0, 240);
+  /*
+   * Who pays is assigned by rules, so a payer asked again goes to the rules
+   * rather than to comparables: comparable cases name somebody else's payer,
+   * never this opening's.
+   */
   const method =
-    asking <= 2
+    field === 'payer'
+      ? 'Do not repeat that approach, and do not look for a named approving official. Read the documents that assign who pays: ' +
+        'the listing’s own sponsor, host or "posted by" field, the program or competition rules and terms, the platform’s payout ' +
+        'terms, and the statute or regulation that authorises it; when the original listing platform is retired or the page is ' +
+        'gone, read its archived copy or its successor listing (for example Challenge.gov content moved to USA.gov). Name the ' +
+        'paying organisation and how it pays, and say which documents you used.'
+      : asking <= 2
       ? 'Do not repeat that approach. Use other kinds of source — the buyer’s or platform’s own published terms and payout pages, official filings, trade or industry publications, archived copies of pages that are now unavailable — and say which you used.'
       : 'Two attempts found no direct answer. Answer from the closest comparable published cases instead: name each comparable business or transaction, its published figure or terms with source and date, and how it compares to this opening. Say plainly if nothing comparable is published.';
   return `${ask} An earlier attempt ended without an answer: ${why}. ${method}`;
