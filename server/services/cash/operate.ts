@@ -480,13 +480,30 @@ const NAMES_A_PAYER =
 const RESALE_MARKET =
   /\b(tcgplayer|stubhub|vivid ?seats|seatgeek|ebay|stockx|goat|grailed|poshmark|mercari|ticketmaster resale)\b/i;
 const RESALE_QUOTE = /\b(traded at|resale|market price|current market|listed (?:resale|at)|last sold|sold for|tracked sale)\b/i;
+/*
+ * Somebody in the sentence spends money, so a payer exists and is worth naming.
+ *
+ * Review round 1 (F1): the first SUPPLIER_PRICE matched a bare billing cadence
+ * ("per month", "/month"), so "Acme Dental pays $4,000 per month to an outside
+ * agency" or "the City of Austin budgets $12,000 per month for translation"
+ * read as a supplier's price list and lost the one question that could move
+ * them. A cadence says how often money moves, not which way, so it is no
+ * evidence on its own; a buyer-side spend verb wins over everything below.
+ */
+const BUYER_SPEND =
+  /\b(pays?|paid|paying|spends?|spent|spending|budgets?|budgeted|allocates?|allocated|outsources?|outsourced|retains?|retained|contracts? with|procures?|procured|purchases?|purchased|buys|bought)\b/i;
+/*
+ * A supplier's own price to its own customers: the sentence has to say it is
+ * the seller's subscription, registration or membership terms, or that the
+ * seller charges its customers. A cadence alone never qualifies.
+ */
 const SUPPLIER_PRICE =
-  /\b(subscription price|subscription (?:plan|tier)|per month|\/month|\/mo\b|registration (?:fee|terms)|annual (?:registration|membership)|membership fee|charges (?:buyers|customers|members|users|subscribers)(?: who)?)\b/i;
+  /\b(subscription price|subscription (?:plan|tier)|registration (?:fee|terms)|annual (?:registration|membership)|membership fee|charges (?:buyers|customers|members|users|subscribers))\b/i;
 
 export function payerQuestionUnanswerable(opportunity: Pick<CashOpportunity, 'title' | 'payer'>): string | null {
   if (opportunity.payer !== null) return null;
   const text = opportunity.title;
-  if (NAMES_A_PAYER.test(text)) return null;
+  if (NAMES_A_PAYER.test(text) || BUYER_SPEND.test(text)) return null;
   if (RESALE_MARKET.test(text) && RESALE_QUOTE.test(text)) {
     return "it is a resale market's price quote, which names no party that would pay Brain";
   }

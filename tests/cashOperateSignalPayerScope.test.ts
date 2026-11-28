@@ -31,6 +31,13 @@ const COPART =
   "Preferred Auto Brokers (PAB), whose registration terms are published on Copart's own site, charges buyers who register through it a $195.00 annual registration fee";
 const STUBHUB =
   'As of April 9, 2026 at 4pm PT, StubHub listed Coachella 2026 Weekend 1 resale tickets at $2,905 for general admission and $5,061 for VIP — a specific listing';
+// Review round 1 (F1): buyer-side spend facts that merely carry a billing cadence.
+const BUYER_SPEND_FACTS = [
+  'Acme Dental pays $4,000 per month to an outside agency for appointment-reminder calls',
+  'Shopify merchants spend $500/month on product photography retouching',
+  'The City of Austin budgets $12,000 per month for translation services',
+  'Regional law firms outsource document review at $3,000/mo per matter',
+];
 const GITHUB =
   "GitHub is the payer; its bug bounty is run through HackerOne (hackerone.com/github). The program's own site says 'If you have found a vulnerability, submit it'";
 
@@ -72,6 +79,12 @@ describe('payerQuestionUnanswerable', () => {
     expect(payerQuestionUnanswerable({ title: GITHUB, payer: null })).toBeNull();
     expect(payerQuestionUnanswerable({ title: 'A bare opening', payer: null })).toBeNull();
     expect(payerQuestionUnanswerable({ title: ADOBE, payer: 'Somebody' })).toBeNull();
+  });
+
+  it('keeps the payer question on a buyer-side spend fact, however it is billed', () => {
+    for (const title of BUYER_SPEND_FACTS) {
+      expect(payerQuestionUnanswerable({ title, payer: null }), title).toBeNull();
+    }
   });
 });
 
@@ -135,5 +148,18 @@ describe('the signal gap pass', () => {
     expect(withdrawn[0]!.resolution).toContain('Nothing was established');
     expect(await listNeeds({ projectId, states: ['RESOLVED'] })).toEqual([]);
     expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === key)).toBe(false);
+  });
+
+  it('asks a buyer-spend signal its payer and leaves its open payer question open', async () => {
+    const spend = await signal(BUYER_SPEND_FACTS[0]!);
+    const key = questionKey(spend.id, 'payer');
+    const fresh = await reconcileDiscoverableGaps(projectId);
+    expect(fresh.filter((one) => one.field === 'payer').map((one) => one.opportunityId)).toEqual([spend.id]);
+
+    await reconcileDiscoverableGaps(projectId);
+    expect((await listNeeds({ projectId, states: ['OPEN'] })).some((one) => one.requestKey === key)).toBe(true);
+    expect(await listNeeds({ projectId, states: ['WITHDRAWN'] })).toEqual([]);
+    const skipped = await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT);
+    expect(skipped.filter((event) => event.opportunityId === spend.id)).toEqual([]);
   });
 });
