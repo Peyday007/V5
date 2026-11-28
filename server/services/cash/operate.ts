@@ -95,7 +95,8 @@ import { closeNeed, raiseNeed } from './needs.ts';
 import { positionNeedKey, seekCompliantPositions, type PositionPass } from './regulatedPositions.ts';
 import { assessOpportunityRole, type RegulatedActivity } from './exclusions.ts';
 import type { BlockerKey } from '../../domain/types.ts';
-import { applyProposal, applyResearchAnswers, proposeTerms } from './answers.ts';
+import { applyProposal, applyResearchAnswers, proposeTerms, writeEvidenceAnswer } from './answers.ts';
+import { getClaim } from '../../repos/research.ts';
 import {
   CAPACITY_DEFERRALS_PER_PASS,
   capacityDeferralCandidates,
@@ -458,12 +459,112 @@ export async function withdrawResearchNotWorthIt(projectId: string): Promise<str
   return out;
 }
 
+/**
+ * Why a signal's payer question has no answer that could pay Brain, or null.
+ *
+ * Production, 2026-11 (ORIGINATED:UNMET_NEED:payer-for-v): five SIGNAL openings
+ * each held an open "Payer for …" need, and the self-model grouped them as one
+ * missing resource. They were five unanswerable questions: a stock-image
+ * subscription price and a broker's registration fee are what a supplier
+ * charges *its* customers, and a TCGPlayer or StubHub quote is a resale
+ * market's price — none names anybody who would approve paying Brain, so
+ * "Name the person or role who can approve payment" has no answer research can
+ * find. Only the payer question is withheld; the opening's other capture
+ * questions are still asked, and a fact that itself names a payer — a bounty,
+ * a reward, "X is the payer" — keeps its question.
+ *
+ * Read from the opening's own sentence and never written anywhere: this decides
+ * which question is worth a research slot, and it establishes nothing (§8).
+ */
+const NAMES_A_PAYER =
+  /\b(is the payer|pays? (?:out|for|a|an|the|up to|researchers|contributors|creators|freelancers)|bount(?:y|ies)|reward(?:s|ed)?|commission(?:s|ed)?|hiring|hires|seeking|request for proposals?|rfp|contract award|grant)\b/i;
+const RESALE_MARKET =
+  /\b(tcgplayer|stubhub|vivid ?seats|seatgeek|ebay|stockx|goat|grailed|poshmark|mercari|ticketmaster resale)\b/i;
+const RESALE_QUOTE = /\b(traded at|resale|market price|current market|listed (?:resale|at)|last sold|sold for|tracked sale)\b/i;
+/*
+ * Somebody in the sentence spends money, so a payer exists and is worth naming.
+ *
+ * Review round 1 (F1): the first SUPPLIER_PRICE matched a bare billing cadence
+ * ("per month", "/month"), so "Acme Dental pays $4,000 per month to an outside
+ * agency" or "the City of Austin budgets $12,000 per month for translation"
+ * read as a supplier's price list and lost the one question that could move
+ * them. A cadence says how often money moves, not which way, so it is no
+ * evidence on its own; a buyer-side spend verb wins over everything below.
+ */
+const BUYER_SPEND =
+  /\b(pays?|paid|paying|spends?|spent|spending|budgets?|budgeted|allocates?|allocated|outsources?|outsourced|retains?|retained|contracts? with|procures?|procured|purchases?|purchased|buys|bought)\b/i;
+/*
+ * A supplier's own price to its own customers: the sentence has to say it is
+ * the seller's subscription, registration or membership terms, or that the
+ * seller charges its customers. A cadence alone never qualifies.
+ */
+const SUPPLIER_PRICE =
+  /\b(subscription price|subscription (?:plan|tier)|registration (?:fee|terms)|annual (?:registration|membership)|membership fee|charges (?:buyers|customers|members|users|subscribers))\b/i;
+
+export function payerQuestionUnanswerable(opportunity: Pick<CashOpportunity, 'title' | 'payer'>): string | null {
+  if (opportunity.payer !== null) return null;
+  const text = opportunity.title;
+  if (NAMES_A_PAYER.test(text) || BUYER_SPEND.test(text)) return null;
+  if (RESALE_MARKET.test(text) && RESALE_QUOTE.test(text)) {
+    return "it is a resale market's price quote, which names no party that would pay Brain";
+  }
+  if (SUPPLIER_PRICE.test(text)) {
+    return 'it is a price a supplier charges its own customers, which names no party that would pay Brain';
+  }
+  return null;
+}
+
+/**
+ * The payer an opening's own source sentence names outright, or null.
+ *
+ * Review round 1 (F2): the GitHub bounty's accepted claim says "GitHub is the
+ * payer", yet the opening was created with payer null — discovery writes a
+ * payer only from a buyer *population* (`joinRouteEvidence`, which refuses one
+ * organisation), so the one answerable "Payer for …" question waited on a
+ * research slot to rediscover a sentence Brain already held. Only the explicit
+ * forms are read ("X is the payer", "the payer is X"); anything looser is left
+ * to research, because a payer guessed from grammar is a wrong load-bearing
+ * field. Pure.
+ */
+const NAME = String.raw`([A-Z][\w&.'-]*(?:\s+(?:of\s+|the\s+|&\s+)?[A-Z][\w&.'-]*){0,5})`;
+const STATED_PAYER = [
+  new RegExp(String.raw`(?:^|[.;:]\s+)(?:The\s+)?${NAME}\s+is\s+the\s+payer\b`),
+  new RegExp(String.raw`\b[Tt]he\s+payer\s+is\s+${NAME}`),
+];
+const NOT_A_NAME = /^(?:who|what|which|whoever|it|this|that|there|nobody|no one|someone|somebody|unknown)$/i;
+export function statedPayer(text: string | null | undefined): string | null {
+  for (const pattern of STATED_PAYER) {
+    const name = pattern.exec(text ?? '')?.[1]?.trim().replace(/[.'’-]+$/, '');
+    if (name && !NOT_A_NAME.test(name)) return name;
+  }
+  return null;
+}
+
+/**
+ * Write the payer an opening's accepted source claim states outright, through
+ * the same evidence write every research answer uses (`writeEvidenceAnswer`:
+ * card fact with the claim it rests on, event, `mayReplace`). Returns the
+ * opening as it now reads, unchanged when nothing was written.
+ */
+async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpportunity> {
+  if (opportunity.payer !== null || !opportunity.sourceClaimId) return opportunity;
+  const claim = await getClaim(opportunity.sourceClaimId);
+  // Only a claim the gate accepted, with the source it rests on, is evidence:
+  // a rejected or unsourced sentence never becomes a load-bearing field.
+  if (!claim || !claim.accepted || !claim.sourceUrl) return opportunity;
+  const payer = statedPayer(claim.claim);
+  if (!payer) return opportunity;
+  const written = await writeEvidenceAnswer({ opportunity, field: 'payer', claim: { ...claim, claim: payer }, needId: null });
+  return written ? ((await getOpportunity(opportunity.id)) ?? opportunity) : opportunity;
+}
+
 export async function reconcileDiscoverableGaps(projectId: string): Promise<DiscoverableGap[]> {
   const out: DiscoverableGap[] = [];
   const open = await listNeeds({ projectId, states: ['OPEN'] });
   const keys = new Set(open.map((one) => one.requestKey).filter((one): one is string => !!one));
+  const openByKey = new Map(open.filter((one) => !!one.requestKey).map((one) => [one.requestKey!, one]));
 
-  for (const opportunity of await listOpportunities({
+  for (const listed of await listOpportunities({
     projectId,
     states: ['DISCOVERED', 'EVIDENCE_CARD'],
   })) {
@@ -471,7 +572,14 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
     await new Promise<void>((resolve) => setImmediate(resolve));
     // A second record of an opening is researched through its survivor, never
     // again on its own (`duplicates.ts`).
-    if (opportunity.duplicateOfId) continue;
+    if (listed.duplicateOfId) continue;
+    /*
+     * A payer the opening's own accepted source states outright is written
+     * before any question is weighed (`fillStatedPayer`), so the card reads it
+     * and no "Payer for …" need is raised to rediscover it — and one already
+     * open is settled by the filled-gap pass below, as any filled field is.
+     */
+    const opportunity = await fillStatedPayer(listed);
     /*
      * Only for something Brain has a reason to spend on.
      *
@@ -548,10 +656,36 @@ export async function reconcileDiscoverableGaps(projectId: string): Promise<Disc
      * many: it left the payer unasked, which is the single question that could
      * have moved the piece.
      */
-    const asking =
+    let asking =
       reading.tier === 'SIGNAL'
         ? card.fields.filter((one) => (CAPTURE_INPUTS as readonly string[]).includes(one.key))
         : card.fields;
+    /*
+     * And a signal is not asked for a payer its own fact rules out
+     * (`payerQuestionUnanswerable`). The skip is recorded, and a payer question
+     * already open on it is withdrawn — nothing was established, so never
+     * resolved — which frees the research slot it held.
+     */
+    const noPayer = reading.tier === 'SIGNAL' ? payerQuestionUnanswerable(opportunity) : null;
+    if (noPayer) {
+      asking = asking.filter((one) => one.key !== 'payer');
+      await recordQuestionsSkipped({
+        projectId,
+        opportunityId: opportunity.id,
+        fields: ['payer'],
+        why: `No payer to look up: ${noPayer}.`,
+      });
+      const stale = openByKey.get(questionKey(opportunity.id, 'payer'));
+      if (stale) {
+        const closed = await closeNeed({
+          needId: stale.id,
+          to: 'WITHDRAWN',
+          resolution: `Not researched: ${noPayer}. Nothing was established, so this is withdrawn rather than resolved.`,
+          actorUserId: BRAIN,
+        });
+        if (closed.ok) openByKey.delete(stale.requestKey!);
+      }
+    }
 
     for (const field of orderFieldsByCost(asking)) {
       if (!field.loadBearing || field.owner !== 'BRAIN_RESEARCH' || field.value !== null) continue;
