@@ -69,7 +69,7 @@ const EMPLOYMENT = /\b(?:salar(?:y|ies)|wages?|annual pay|base pay|per year in p
  * Before, only a bare "per hour" counted, so both read as no exchange shown and
  * the plan modelled them at no price at all.
  */
-const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:[a-z-]+ ){0,2}?(?:hour|project|order|month|unit|item|page|word|seat|user|license|licence|lead|call|job|move|delivery|load|booking|task|visit|appointment|transaction|shift)s?|buys?|bought|purchases?|purchased|sells?|sold|hires?|hired|rates?|a (?:year|month)|annually|monthly|platform)\b/i;
+const PURCHASE = /\b(?:charges?|charged|priced|pricing|price|fees?|costs?|invoices?|invoiced|retainers?|subscriptions?|commissions?|quotes?|quoted|per (?:[a-z-]+ ){0,2}?(?:hour|project|order|month|unit|item|page|word|seat|user|license|licence|lead|call|job|move|delivery|load|booking|task|visit|appointment|transaction|shift)s?|buys?|bought|purchases?|purchased|sells?|sold|lists?|listed|hires?|hired|rates?|a (?:year|month)|annually|monthly|platform)\b/i;
 
 /**
  * What a figure's claim says the money is paid for. Non-purchase cues are

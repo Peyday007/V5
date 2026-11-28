@@ -1,0 +1,363 @@
+{
+ "caseId": "av-04-livestock-auction-one-sound",
+ "keys": {
+  "cop_586a380e15534af19bdf": "consignmentRecon",
+  "cop_90bee0c45cb44d318b77": "triCounty",
+  "cop_6b370abc76db4606a92c": "heiferResale"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: \"Buying and reselling loads of bred heifers\" ties up 21000 USD, more than the 500 the owner said this goal may commit, held at once. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 67× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Custodial-account audit preparation for Tri-County Livestock Exchange\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_90bee0c45cb44d318b77",
+   "cop_6b370abc76db4606a92c",
+   "cop_586a380e15534af19bdf"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Custodial-account audit preparation for Tri-County Livestock Exchange\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Custodial-account audit preparation for Tri-County Livestock Exchange\"",
+    "owner": "PERSON",
+    "cost": 20
+   },
+   {
+    "label": "Collect payment for \"Custodial-account audit preparation for Tri-County Livestock Exchange\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 38000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_6b370abc76db4606a92c",
+    "title": "Buying and reselling loads of bred heifers",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Cow-calf ranchers rebuilding herds",
+     "reachableChannel": "Consignment at the regional sale barn",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:12.057Z",
+     "offerScope": "Buying and reselling loads of bred heifers",
+     "priceCents": 2600000,
+     "currency": "USD",
+     "fulfillmentOwner": "Prairie Livestock Hauling (licensed hauler, quoted)",
+     "peakFundingCents": 2100000,
+     "humanHours": 8,
+     "requiredCapabilities": [],
+     "industry": "livestock auction markets",
+     "mechanism": "RESALE_OR_ASSET",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 2600000,
+      "currency": "USD",
+      "deliverable": "Buying and reselling loads of bred heifers",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The general manager's emailed purchase order | reach: Consignment at the regional sale barn"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 2400 USD | a buyer agreed to 26000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 2400 USD | buyers have agreed to 26000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed | a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | fulfilled by Prairie Livestock Hauling (licensed hauler, quoted) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 20, tied up 0 | cost 21000, tied up 21000"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "25 days to usable cash against 35 left | 21 days to usable cash against 35 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Buying and reselling loads of bred heifers to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$21000",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$21000",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Prairie Livestock Hauling (licensed hauler, quoted) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Cow-calf ranchers rebuilding herds",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "A load of ten bred heifers sold for $26,000 at the regional sale barn (market report, 2026-11-14).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "21 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_90bee0c45cb44d318b77",
+    "title": "Custodial-account audit preparation for Tri-County Livestock Exchange",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Tri-County Livestock Exchange (general manager)",
+     "reachableChannel": "The general manager's emailed purchase order",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:12.057Z",
+     "offerScope": "One audit-preparation package, delivered by day 5; the exchange pays net 20 days from delivery.",
+     "priceCents": 240000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "livestock auction markets",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "One audit-preparation package, delivered by day 5; the exchange pays net 20 days from delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One audit-preparation package, delivered by day 5; the exchange pays net 20 days from delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$20",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Tri-County Livestock Exchange (general manager)",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Tri-County Livestock Exchange's general manager issued a $2,400 purchase order for one custodial-account audit-preparation package (PO dated 2026-11-20).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "25 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_586a380e15534af19bdf",
+    "title": "Consignment-settlement reconciliation workbook for livestock auction markets",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Office managers at livestock auction markets",
+     "reachableChannel": "Email to the office addresses on the federal registered-market list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T05:52:12.057Z",
+     "offerScope": "A workbook that reconciles a market's weekly consignor settlements against its custodial account; Brain builds it from the market's sale-day export within one day. Paid by card at order; the processor pays out 6 days later.",
+     "priceCents": 65000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "livestock auction markets",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The general manager's emailed purchase order | reach: Consignment at the regional sale barn | reach: Email to the office addresses on the federal registered-market list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "a buyer agreed to 2400 USD | a buyer agreed to 26000 USD | no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "4 new buyer(s) would be offered and nobody knows how many would agree (one agreement of 2400 is recorded) (close rate is not established) | buyers have agreed to 26000 USD | measured on this offer's own sales: 14 accepted of 120 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "1 deal(s) needed and nobody has established how many buyers exist or how often they buy | a one-off needs its one buyer | 8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | fulfilled by Prairie Livestock Hauling (licensed hauler, quoted) (a source says so) | Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 20, tied up 0 | cost 21000, tied up 21000 | cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "25 days to usable cash against 35 left | 21 days to usable cash against 35 left | 6 days to usable cash against 35 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "240 livestock auction markets in the region are on the federal registered-market list with office emails; each settles consignor accounts weekly and is audited for custodial-account shortages.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook that reconciles a market's weekly consignor settlements against its custodial account; Brain builds it from the market's sale-day export within one day. Paid by card at order; the processor pays out 6 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "14 paid orders from 120 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Office managers at livestock auction markets",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Agricultural bookkeeping template sellers list a custodial-account reconciliation workbook for auction markets at $650 (listing pages, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "6 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_03022a7dae2047588c47",
+   "cnd_701328ed472e4399be8a",
+   "cnd_935ee3a1704242c784fe"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 35,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:55:59.685Z"
+ }
+}

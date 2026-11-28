@@ -258,7 +258,7 @@ export interface PlanRevisionInput {
    * link it rests on is unestablished (price: OFFER_AND_PRICE, capital: ECONOMICS, settlesDay: SETTLES_IN_TIME): an
    * unknown stays unknown, and a known figure is never left out.
    */
-  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null; settlesDay?: number | null; /** Owner hours the deals take in all, when the goal limits them. */ ownerHours?: number | null }[];
+  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null; settlesDay?: number | null; /** Owner hours the deals take in all, when the goal limits them. */ ownerHours?: number | null; /** The most deals the evidence supports from this payer population (1 for one organisation's single order); deals never exceed it. */ dealsMax?: number | null }[];
   /** The chain links the plan's validation test or research measures (what would resolve the unknowns). */
   resolves?: string[];
   /** Where the session's chain judgement differs from Brain's planner (BrainFacts.links): the link and the evidence-based reason. */
@@ -299,7 +299,7 @@ export const REVISION_SCHEMA = {
     excluded: { type: 'array', items: { type: 'object', required: ['opportunityId', 'why'], properties: { opportunityId: { type: 'string' }, why: { type: 'string' } } } },
     members: {
       type: 'array',
-      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num, ownerHours: { type: ['number', 'null'], description: 'Owner hours the deals take in all; required when the goal limits owner hours.' } } },
+      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num, ownerHours: { type: ['number', 'null'], description: 'Owner hours the deals take in all; required when the goal limits owner hours.' }, dealsMax: { type: ['number', 'null'], description: 'The most deals the evidence supports from this payer population (1 for one organisation\'s single order).' } } },
     },
     steps: {
       type: 'array',
@@ -365,9 +365,13 @@ export interface ReviewCondition {
    * is not a payment for this deliverable. Without one the condition contradicts Brain's evidence on no stated ground.
    */
   defect?: 'PERSON_WORD' | 'CONTRADICTED' | 'NOT_A_PURCHASE';
+  /** With NOT_A_PURCHASE: which payment the figure is instead (COMPLETION-SPEC §3 NON_PURCHASE_PRICE). */
+  nonPurchase?: (typeof NON_PURCHASE_KINDS)[number];
 }
 
 export const PRICE_DEFECTS = ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'] as const;
+/** What a figure that is not a payment for the deliverable is instead (COMPLETION-SPEC §3), plus a wage for the owner's own hours. A comparable offer's current price is none of them. */
+export const NON_PURCHASE_KINDS = ['REWARD', 'BOUNTY', 'GRANT', 'PRIZE', 'REBATE', 'SETTLEMENT', 'WAGE', 'ANOTHER_BUYERS_CLAIM'] as const;
 
 export type CardFacts = Record<string, { field: string; kind: string }[]>;
 
@@ -391,6 +395,13 @@ export function conditionProblems(conditions: ReviewCondition[], revision: Pick<
      */
     if (c.link === 'OFFER_AND_PRICE' && c.basis === 'EVIDENCE' && (established[c.opportunityId] ?? []).includes('OFFER_AND_PRICE') && !(c.defect && (PRICE_DEFECTS as readonly string[]).includes(c.defect))) {
       out.push(`${at}: Brain's planner establishes this opening's price from the card's evidence; a condition against it names the defect the record shows (defect: ${PRICE_DEFECTS.join(' | ')} — only a person's word, contradicted by another record, or not a payment for this deliverable), or the price stands`);
+    } else if (c.link === 'OFFER_AND_PRICE' && c.defect === 'NOT_A_PURCHASE' && (established[c.opportunityId] ?? []).includes('OFFER_AND_PRICE') && !(c.nonPurchase && (NON_PURCHASE_KINDS as readonly string[]).includes(c.nonPurchase))) {
+      /*
+       * Run 15 (fleet-1, a01/a04/a06): with a defect required, a reviewer labelled current listing prices of directly
+       * comparable offers NOT_A_PURCHASE ("what someone else asks") and the plans went conditional. The spec's
+       * non-purchases are payments of another kind; a comparable offer's price is an evidenced price (§2).
+       */
+      out.push(`${at}: NOT_A_PURCHASE names what the figure is instead (nonPurchase: ${NON_PURCHASE_KINDS.join(' | ')}); a directly comparable offer's current price is an evidenced price, not a non-purchase, so without one the price stands`);
     }
   });
   return out;
@@ -709,7 +720,14 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       const gaps: string[] = [];
       if (m.price === null && !missing('OFFER_AND_PRICE')) gaps.push('price is null but OFFER_AND_PRICE is established');
       if (m.price !== null && m.deals === null) gaps.push(`deals is null at a price of ${m.price}: the deals needed are target / price`);
-      if (m.price !== null && m.deals !== null && m.deals * m.price * 100 < t.targetCents - 0.5) gaps.push(`${m.deals} deals at ${m.price} do not carry the ${t.targetCents / 100} target`);
+      /*
+       * An opening's deals are what it would take to carry the target alone, or what its payer population can give
+       * (run 15, av-04: the rule asked one organisation's single $2,400 order for 2 deals). A capped opening states
+       * dealsMax, never more deals than it; the strategy's members together carry the target.
+       */
+      const capped = typeof m.dealsMax === 'number' && m.deals !== null && m.deals >= m.dealsMax;
+      if (typeof m.dealsMax === 'number' && m.deals !== null && m.deals > m.dealsMax) gaps.push(`${m.deals} deals exceed the ${m.dealsMax} its payer population supports (dealsMax)`);
+      if (m.price !== null && m.deals !== null && !capped && !r.strategy.opportunityIds.includes(c.opportunityId) && m.deals * m.price * 100 < t.targetCents - 0.5) gaps.push(`${m.deals} deals at ${m.price} do not carry the ${t.targetCents / 100} target (or state dealsMax when its payers can give no more)`);
       if (m.capital === null && !missing('ECONOMICS')) gaps.push('capital is null but ECONOMICS is established');
       if (m.settlesDay === undefined) gaps.push('settlesDay is not stated (null if SETTLES_IN_TIME is unestablished)');
       else if (m.settlesDay === null && !missing('SETTLES_IN_TIME')) gaps.push('settlesDay is null but SETTLES_IN_TIME is established');
@@ -719,6 +737,12 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
         else if (m.ownerHours === null && !missing('FULFILMENT')) gaps.push('ownerHours is null but FULFILMENT is established');
       }
       if (gaps.length) add('ARITHMETIC_UNSTATED', `${c.opportunityId}'s arithmetic: ${gaps.join('; ')}`, c.opportunityId);
+    }
+    const strat = (r.members ?? []).filter((m) => r.strategy.opportunityIds.includes(m.opportunityId) && !set.has(m.opportunityId));
+    const priced = strat.filter((m) => m.price !== null && m.deals !== null);
+    if (strat.length && priced.length === strat.length) {
+      const sum = priced.reduce((x, m) => x + (m.deals ?? 0) * (m.price ?? 0) * 100, 0);
+      if (sum < t.targetCents - 0.5) add('ARITHMETIC_UNSTATED', `the strategy's members bring ${Math.round(sum) / 100} at their deals and prices, under the ${t.targetCents / 100} target`, null);
     }
   }
 

@@ -1,0 +1,3371 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_edbb3c6189014b31a4c6",
+   "words": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 28,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "Settled cash of $2,500 received within 28 days, using at most 2 owner hours a week",
+    "ownerHoursPerWeek": 2,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "ce4a872158391c3a82dd1783"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Every link is on the card: 530 reachable buyers (EVIDENCE), a $290 price this offer has already sold at (15 paid orders of 125 contacts, 12%+), Brain-proved spreadsheet fulfilment at $4 direct cost and zero capital, and card payout 4 days after order. 10 orders x $290 = $2900 gross, $2860 net, against the $2500 target, needing about 84 contacts of 125 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 125 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 4,
+      "kind": "SPEND",
+      "amountCents": 4000,
+      "label": "Direct delivery cost $4 x 10",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $290 (listing/price pages, 2026-11); card offer price 29000 cents",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card carries one price, priceCents 29000 ($290), and the price fact (EVIDENCE) is $290 from listing pages; the conversion fact (EVIDENCE) records 15 paid orders of this offer from 125 contacts, so buyers have paid this offer's single price. Brain's basis 'no single price on the card' does not match the card."
+     },
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_d2279a4d1762_666692",
+    "digest": "d2279a4d1762721db1ce936e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:05.513Z"
+   },
+   {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Every link is on the card: 530 reachable buyers (EVIDENCE), a $290 price this offer has already sold at (15 paid orders of 125 contacts, 12%+), Brain-proved spreadsheet fulfilment at $4 direct cost and zero capital, and card payout 4 days after order. 10 orders x $290 = $2900 gross, $2860 net, against the $2500 target, needing about 84 contacts of 125 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 125 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct delivery cost $4 x 5, paid out of the first payout (card exposure $0)",
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct delivery cost $4 x 5, paid out of the second payout",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $290 (listing/price pages, 2026-11); card offer price 29000 cents",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card carries one price, priceCents 29000 ($290), and the price fact (EVIDENCE) is $290 from listing pages; the conversion fact (EVIDENCE) records 15 paid orders of this offer from 125 contacts, so buyers have paid this offer's single price. Brain's basis 'no single price on the card' does not match the card."
+     },
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_2a92d79f1bd3_55b7aa",
+    "digest": "2a92d79f1bd3388d890e58a5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:58:17.512Z"
+   },
+   {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": "rev_2a92d79f1bd3_55b7aa",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Every link is on the card: 530 reachable buyers (EVIDENCE), a $290 price this offer has already sold at (15 paid orders of 125 contacts, 12%+), Brain-proved spreadsheet fulfilment at $4 direct cost and zero capital, and card payout 4 days after order. 10 orders x $290 = $2900 gross, $2860 net, against the $2500 target, needing about 84 contacts of 125 sent; all cash settles by day 12."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails 125 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct delivery cost $4 x 5, paid out of the first payout (card exposure $0)",
+      "stepId": "s4"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Direct delivery cost $4 x 5, paid out of the second payout",
+      "stepId": "s4"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 8,
+      "stepId": "s5"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 145000,
+      "label": "5 card orders",
+      "settlesDay": 12,
+      "stepId": "s5"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_price",
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Listed price of this product at $290 (listing/price pages, 2026-11); card offer price 29000 cents",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic recomputed; rests on the $290",
+      "resolution": "Agreed with the arithmetic (10 x $290 = $2,900; net $2,860; ~84 contacts). The $290 is established — see condition 0."
+     },
+     {
+      "finding": "1: competitor listing at $290 is NOT_A_PURCHASE",
+      "resolution": "Rebutted. The $290 is not only a listing: the card's own offer is priced priceCents 29000 and sold 'Paid by card at order' (offerScope), and the conversionRates EVIDENCE fact records 15 PAID orders from 125 contacts, which Brain's CONVERSION link states was 'measured on this offer's own sales'. A paid order of this offer is a purchase at this offer's single card price; the listing fact corroborates the same figure. No other price appears on the card, so nothing contradicts it."
+     },
+     {
+      "finding": "2: market volume agrees with the disagreement",
+      "resolution": "Agreed; disagreement kept, citing buyerVolume (530 permitted plants)."
+     },
+     {
+      "finding": "3: owner hours, humanHours 0.25 per deal",
+      "resolution": "Rebutted. Under the fulfilment rule humanHours is per-deal work by the fulfiller; the card names no fulfillmentOwner, requiredCapabilities is PRODUCE_SPREADSHEET, the delivery EVIDENCE fact is 'A spreadsheet Brain produces' and brain:FULFILMENT says Brain has proved it, so the DELIVER performer is BRAIN and those hours are not owner hours. Owner time is the 1-hour approval on day 1, within 2 h/week. Even if counted, 10 x 0.25 + 1 = 3.5 h against 8 h total."
+     },
+     {
+      "finding": "4: SEND_A_MESSAGE / ISSUE_AN_INVOICE NOT_CONNECTED",
+      "resolution": "Accepted as an execution note, not a chain-link gap: Brain's own check attached these executors and did not refuse any step; outreach and card checkout are performed by Brain under its operations, and the card's offerScope ('Paid by card at order; payout 4 days later') and timeToFirstCash fact fix the collection path. No opening fact is contradicted."
+     },
+     {
+      "finding": "5: excluded consultation correctly rejected",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "6: suggested CONDITIONAL on OFFER_AND_PRICE",
+      "resolution": "Rebutted with condition 0: the price is established by paid orders of this offer at its card price, so no live test is needed for it and the stance stays EXECUTABLE."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Rebutted: paid orders of this offer at its single card price establish the price.",
+      "condition": 0,
+      "decision": "REBUTTED",
+      "records": [
+       "priceCents",
+       "offerScope",
+       "conversionRates",
+       "price",
+       "brain:CONVERSION"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card carries one price, priceCents 29000 ($290), and the price fact (EVIDENCE) is $290 from listing pages; the conversion fact (EVIDENCE) records 15 paid orders of this offer from 125 contacts, so buyers have paid this offer's single price. Brain's basis 'no single price on the card' does not match the card."
+     },
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_dde05189d038_7a00c4",
+    "digest": "dde05189d0380fedf38fbc9b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:39.678Z"
+   },
+   {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": "rev_dde05189d038_7a00c4",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test, then sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Reach (530 listed buyers), conversion on this offer (15 paid of 125), Brain-proved fulfilment at $4, zero capital and 4-day card payout are on the card. The $290 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $290 is unknown and a live $290 card offer to the first 50 decides it before the rest of the list is contacted. 10 orders x $290 = $2900 gross carries the $2500 target with all cash settled by day 17."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails the first 50 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Live test: offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order, to those 50; count paid orders at $290 by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_listing",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "REACH",
+      "label": "On proof, Brain emails 150 more of the remaining list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290 by card to the second tranche",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Delivery cost x 3, paid out of the test-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2800,
+      "label": "Delivery cost x 7, paid out of the second-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 87000,
+      "label": "3 test-tranche card orders at $290",
+      "settlesDay": 10,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 203000,
+      "label": "7 second-tranche card orders at $290",
+      "settlesDay": 17,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price these buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "paid card orders at $290 in the live test (s3)"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "confirmed by the live test"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_listing",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Other sellers' listing/price pages show a comparable product at $290 — an asking price, not a purchase by these buyers",
+      "population": "Other sellers of comparable products (not these buyers)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $290 from the first 50 contacts by day 7",
+     "stop": [
+      "Fewer than 3 paid orders at $290 from the first 50 by day 7: stop outreach at $290 and re-plan the price",
+      "Any refund or chargeback pattern showing buyers reject the price"
+     ],
+     "continue": [
+      "3+ paid at $290 by day 7: email 150 more of the list at $290 and fulfil each order within a day"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic correct",
+      "resolution": "Agreed; unchanged (10 x $290 = $2,900)."
+     },
+     {
+      "finding": "1: price is only other sellers' listing pages (NOT_A_PURCHASE)",
+      "resolution": "Accepted. Re-read the card: the conversionRates fact states no price and priceCents carries the listing figure, so no record shows a dry cleaner paying $290. Stance is now CONDITIONAL with a live $290 card test to the first 50 plants deciding OFFER_AND_PRICE; the disagreement on that link is withdrawn."
+     },
+     {
+      "finding": "2: owner-hours rebuttal accepted",
+      "resolution": "Unchanged: 1 owner hour on day 1."
+     },
+     {
+      "finding": "3: what would make this PASS",
+      "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $290 to the first 50, proof >=3 paid by day 7, stop below 3, continue with 150 more; settles by day 17."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Accepted; price marked UNKNOWN and tested.",
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "priceCents",
+       "offerScope",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 17,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_feabc751046d_a45562",
+    "digest": "feabc751046d93ae50430fee",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:45.353Z"
+   },
+   {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": "rev_dde05189d038_7a00c4",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test, then sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Reach (530 listed buyers), conversion on this offer (15 paid of 125), Brain-proved fulfilment at $4, zero capital and 4-day card payout are on the card. The $290 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $290 is unknown and a live $290 card offer to the first 50 decides it before the rest of the list is contacted. 10 orders x $290 = $2900 gross carries the $2500 target with all cash settled by day 17."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails the first 50 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Live test: offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order, to those 50; count paid orders at $290 by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_listing",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "REACH",
+      "label": "On proof, Brain emails 150 more of the remaining list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290 by card to the second tranche",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Delivery cost x 3, paid out of the test-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2800,
+      "label": "Delivery cost x 7, paid out of the second-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 87000,
+      "label": "3 test-tranche card orders at $290",
+      "settlesDay": 10,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 203000,
+      "label": "7 second-tranche card orders at $290",
+      "settlesDay": 17,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price these buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid card orders at $290 in the live test (s3)"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "confirmed by the live test"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_listing",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Other sellers' listing/price pages show a comparable product at $290 — an asking price, not a purchase by these buyers",
+      "population": "Other sellers of comparable products (not these buyers)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $290 from the first 50 contacts by day 7",
+     "stop": [
+      "Fewer than 3 paid orders at $290 from the first 50 by day 7: stop outreach at $290 and re-plan the price",
+      "Any refund or chargeback pattern showing buyers reject the price"
+     ],
+     "continue": [
+      "3+ paid at $290 by day 7: email 150 more of the list at $290 and fulfil each order within a day"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic correct",
+      "resolution": "Agreed; unchanged (10 x $290 = $2,900)."
+     },
+     {
+      "finding": "1: price is only other sellers' listing pages (NOT_A_PURCHASE)",
+      "resolution": "Accepted. Re-read the card: the conversionRates fact states no price and priceCents carries the listing figure, so no record shows a dry cleaner paying $290. Stance is now CONDITIONAL with a live $290 card test to the first 50 plants deciding OFFER_AND_PRICE; the disagreement on that link is withdrawn."
+     },
+     {
+      "finding": "2: owner-hours rebuttal accepted",
+      "resolution": "Unchanged: 1 owner hour on day 1."
+     },
+     {
+      "finding": "3: what would make this PASS",
+      "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $290 to the first 50, proof >=3 paid by day 7, stop below 3, continue with 150 more; settles by day 17."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Accepted; price marked UNKNOWN and tested.",
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "priceCents",
+       "offerScope",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 17,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_7c14b02b7ff3_83bfae",
+    "digest": "7c14b02b7ff37002f1fff4cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:51.711Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_edbb3c6189014b31a4c6",
+   "contractDigest": "ce4a872158391c3a82dd1783",
+   "parentRevisionId": "rev_dde05189d038_7a00c4",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test, then sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+    "opportunityIds": [
+     "cop_b0991136ea5846969c0c"
+    ],
+    "why": "Reach (530 listed buyers), conversion on this offer (15 paid of 125), Brain-proved fulfilment at $4, zero capital and 4-day card payout are on the card. The $290 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $290 is unknown and a live $290 card offer to the first 50 decides it before the rest of the list is contacted. 10 orders x $290 = $2900 gross carries the $2500 target with all cash settled by day 17."
+   },
+   "alternatives": [
+    {
+     "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+     "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "OTHER",
+     "label": "Owner approves the offer email and price before Brain sends it",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_price"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Brain emails the first 50 of the 530 the plants on the state air-permit list (email)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_volume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "TEST",
+     "label": "Live test: offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order, to those 50; count paid orders at $290 by day 7",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_listing",
+      "src_conv"
+     ],
+     "priceCents": 29000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "REACH",
+     "label": "On proof, Brain emails 150 more of the remaining list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s3",
+     "evidence": [
+      "src_volume",
+      "src_conv"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290 by card to the second tranche",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s4",
+     "evidence": [
+      "src_conv"
+     ],
+     "priceCents": 29000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+     "performer": "BRAIN",
+     "costCents": 4000,
+     "day": 3,
+     "dependsOn": "s3",
+     "evidence": [
+      "src_cost",
+      "src_delivery"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Card payouts settle 4 days after each order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s6",
+     "evidence": [
+      "src_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 1200,
+     "label": "Delivery cost x 3, paid out of the test-tranche payout",
+     "stepId": "s6"
+    },
+    {
+     "day": 17,
+     "kind": "SPEND",
+     "amountCents": 2800,
+     "label": "Delivery cost x 7, paid out of the second-tranche payout",
+     "stepId": "s6"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 87000,
+     "label": "3 test-tranche card orders at $290",
+     "settlesDay": 10,
+     "stepId": "s7"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 203000,
+     "label": "7 second-tranche card orders at $290",
+     "settlesDay": 17,
+     "stepId": "s7"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price these buyers pay for this offer",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents",
+     "sources": [],
+     "needs": "paid card orders at $290 in the live test (s3)"
+    },
+    {
+     "name": "offered price",
+     "status": "ASSUMED",
+     "value": 29000,
+     "unit": "cents",
+     "sources": [
+      "src_listing"
+     ],
+     "needs": "confirmed by the live test"
+    },
+    {
+     "name": "conversion (paid orders / contacts)",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "ratio",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 530,
+     "unit": "buyers",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per order",
+     "status": "EVIDENCED",
+     "value": 400,
+     "unit": "cents",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days from order to settled cash",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "days",
+     "sources": [
+      "src_ttc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+     "dated": "2026-11",
+     "claim": "15 paid orders from 125 contacts on this offer's own sales",
+     "population": "Owners of independent dry cleaners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+     "dated": "2026-11",
+     "claim": "530 reachable buyers listed with contact details",
+     "population": "Owners of independent dry cleaners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $4 per deal",
+     "population": "Owners of independent dry cleaners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces",
+     "population": "Owners of independent dry cleaners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    },
+    {
+     "id": "src_ttc",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "Paid by card at order; payout 4 days later",
+     "population": "Owners of independent dry cleaners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    },
+    {
+     "id": "src_listing",
+     "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+     "dated": "2026-11",
+     "claim": "Other sellers' listing/price pages show a comparable product at $290 — an asking price, not a purchase by these buyers",
+     "population": "Other sellers of comparable products (not these buyers)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_b0991136ea5846969c0c"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 paid card orders at $290 from the first 50 contacts by day 7",
+    "stop": [
+     "Fewer than 3 paid orders at $290 from the first 50 by day 7: stop outreach at $290 and re-plan the price",
+     "Any refund or chargeback pattern showing buyers reject the price"
+    ],
+    "continue": [
+     "3+ paid at $290 by day 7: email 150 more of the list at $290 and fulfil each order within a day"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "0: arithmetic correct",
+     "resolution": "Agreed; unchanged (10 x $290 = $2,900)."
+    },
+    {
+     "finding": "1: price is only other sellers' listing pages (NOT_A_PURCHASE)",
+     "resolution": "Accepted. Re-read the card: the conversionRates fact states no price and priceCents carries the listing figure, so no record shows a dry cleaner paying $290. Stance is now CONDITIONAL with a live $290 card test to the first 50 plants deciding OFFER_AND_PRICE; the disagreement on that link is withdrawn."
+    },
+    {
+     "finding": "2: owner-hours rebuttal accepted",
+     "resolution": "Unchanged: 1 owner hour on day 1."
+    },
+    {
+     "finding": "3: what would make this PASS",
+     "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $290 to the first 50, proof >=3 paid by day 7, stop below 3, continue with 150 more; settles by day 17."
+    },
+    {
+     "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+     "resolution": "Accepted; price marked UNKNOWN and tested.",
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "conversionRates",
+      "priceCents",
+      "offerScope",
+      "brain:OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_b0991136ea5846969c0c",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+     "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_b0991136ea5846969c0c",
+     "deals": 10,
+     "price": 290,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": 17,
+     "ownerHours": 1
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_b0991136ea5846969c0c",
+     "link": "MARKET_VOLUME",
+     "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+    }
+   ],
+   "revisionId": "rev_7c14b02b7ff3_83bfae",
+   "digest": "7c14b02b7ff37002f1fff4cf",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:06:51.711Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_7c14b02b7ff3_83bfae",
+   "digest": "7c14b02b7ff37002f1fff4cf",
+   "contractDigest": "ce4a872158391c3a82dd1783",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4000,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 6,
+    "collectedCents": 290000,
+    "collectedInWindowCents": 290000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 286000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14204× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Perchloroethylene usage and leak-inspection recordkeeping wo\" needs [figure withheld] and keeps [figure withheld], 286× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_b0991136ea5846969c0c"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+      "owner": "PERSON",
+      "cost": 4
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the supply",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 70.29657043481598
+     },
+     {
+      "label": "Collect payment for \"Perchloroethylene usage and leak-inspection recordkeeping workbook for dry clean\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "title": "Perchloroethylene usage and leak-inspection recordkeeping workbook for dry cleaners",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Owners of independent dry cleaners",
+       "reachableChannel": "Email and phone to the plants on the state air-permit list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:23.485Z",
+       "offerScope": "A workbook for monthly perc purchase records and weekly leak inspections, built by Brain within one day of the order. Paid by card at order; payout 4 days later.",
+       "priceCents": 29000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.25,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "dry cleaning",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email and phone to the plants on the state air-permit list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 15 accepted of 125 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "10 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "4 days to usable cash against 28 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "530 dry-cleaning plants hold a state air permit for perchloroethylene machines; the public permit list gives each plant's phone and email, and each must keep monthly perc purchase and weekly leak-inspection records.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook for monthly perc purchase records and weekly leak inspections, built by Brain within one day of the order. Paid by card at order; payout 4 days later. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "15 paid orders from 125 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent dry cleaners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Environmental-compliance template sellers list a perc dry-cleaner recordkeeping workbook at $290 (listing pages, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "4 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "title": "On-site pressing-floor efficiency consultation by the owner",
+      "reason": "needs the owner's physical work: the service (\"On-site\") would be performed by The owner, personally; the owner does no physical work",
+      "card": {
+       "payer": "Owners of independent dry cleaners",
+       "reachableChannel": "The three owners who signed consultation agreements",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:52:23.485Z",
+       "offerScope": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+       "priceCents": 90000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 9,
+       "requiredCapabilities": [],
+       "industry": "dry cleaning",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The owner spends a working day at the plant and writes up the changes: 9 owner hours a consultation, paid 7 days after the visit. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent dry cleaners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three dry-cleaner owners signed consultation agreements at $900 each (signed agreements, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 28,
+     "hoursCeiling": 8,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 2
+    },
+    "at": "2026-11-28T05:56:16.222Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_2a92d79f1bd3_55b7aa",
+    "revisionDigest": "2a92d79f1bd3388d890e58a5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39a5e80342db4dc7a4bb/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "EXECUTABLE is not earned on the price link. The only price evidence is that environmental-compliance template sellers list a similar perc workbook at $290 — another seller's asking price, not a purchase these dry cleaners are recorded making of this offer. The conversion fact (15 paid of 125) states no price, so the revision's inference that 'buyers have paid this offer's single price' is not on the card. The whole $2,900 multiplies that unestablished $290, and Brain flags the reconstruction implausible. Owner hours also do not reconcile with the card. The stance should be CONDITIONAL: a live $290 card offer to a first tranche of permit-list plants that measures paid orders at that price, with proof/stop/continue, before claiming the target.",
+    "findings": [
+     "Recomputed: 10 x $290 = $2,900 gross, 10 x $4 = $40 cost, net $2,860 >= $2,500 (9 deals = $2,610 is the minimum). At 15/125 = 12%, 10 deals need ~84 contacts; 125 sent gives ~15. Payouts day 8 and day 12, inside 28 days. Internally consistent, but every dollar rests on the $290.",
+     "Price: a competitor listing at $290 is NOT_A_PURCHASE for this buyer; Brain's OFFER_AND_PRICE is unestablished and the disagreement does not supply a recorded purchase at $290.",
+     "Market volume: I agree with the revision's disagreement here — the buyerVolume EVIDENCE fact counts 530 permitted plants with contact details; even at one purchase each, 10 deals fit. I do not propose a volume condition.",
+     "Owner hours: the card says humanHours 0.25 per deal; Brain's own step list makes delivery a PERSON step. 10 deals x 0.25 h = 2.5 h plus the 1 h approval = 3.5 h, not the 1 h the member records. With 5 orders landing day 3 plus the approval on day 1, week 1 needs ~2.25 h against a 2 h/week ceiling. The ledger should carry the per-deal hours and schedule within 2 h/week.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; card collection needs a connected provider before orders can be taken.",
+     "Excluded consultation correctly rejected: 9 owner hours each vs 2 h/week, and on-site physical owner work.",
+     "Suggested revision: CONDITIONAL, validation decides OFFER_AND_PRICE on cop_b0991136ea5846969c0c — offer at $290 by card to the first ~50 permit-list plants; proof = >=4 paid orders at $290 within 7 days (carries 9+ deals from the remaining 480 at the measured rate); stop at <2; continue to the full list on proof."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:00:11.433Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "defect": "NOT_A_PURCHASE",
+      "why": "The price fact is other template sellers' listing pages at $290 — a competitor's asking price, not a purchase price these dry cleaners are recorded paying for this offer; the conversion fact states no price."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_dde05189d038_7a00c4",
+    "revisionDigest": "dde05189d0380fedf38fbc9b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39a5e80342db4dc7a4bb/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The rebuttal on price does not hold. It argues the 15 paid orders were purchases 'at this offer's single card price', but the conversionRates fact records only '15 paid orders from 125 contacts' — no price — and the card's priceCents 29000 is the figure taken from the price fact, which is environmental-compliance template sellers' listing pages. Reading the past orders as made at $290 because today's card shows $290 is circular: the only source for $290 is a competitor's asking price. Brain's planner still holds OFFER_AND_PRICE unestablished ('no single price on the card'), and an EXECUTABLE stance needs every link established by evidence. The plan should be CONDITIONAL on a live $290 offer whose paid orders decide the price. The owner-hours rebuttal I accept (3.5 h worst case against 8 h, approval 1 h on day 1).",
+    "findings": [
+     "Arithmetic unchanged and correct: 10 x $290 = $2,900, $40 cost, $2,860 net; 9 deals minimum; payouts day 8 and 12 inside 28.",
+     "Price: the only record of $290 is the price fact — other sellers' listing pages (NOT_A_PURCHASE). The conversion fact states no price; offerScope states the payment method, not a price paid. No record shows a dry cleaner paying $290 for this offer.",
+     "Owner hours: rebuttal accepted — worst case 10 x 0.25 + 1 = 3.5 h within 2 h/week x 4 weeks if scheduled; no further finding.",
+     "What would make this PASS: CONDITIONAL with validation.decides [OFFER_AND_PRICE] — e.g. $290 card offer to the first ~50 permit-list plants, proof >=3 paid by day 7 (at 6%, the remaining 480 yield ~29, carrying 9+ deals by ~day 16, settled by ~day 20), stop below 3."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:04:48.611Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "defect": "NOT_A_PURCHASE",
+      "why": "The only source of $290 is the price fact — other template sellers' listing pages, an asking price. The conversionRates fact records paid orders without any price, so it cannot show these buyers paid $290; priceCents was itself set from the listing."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_7c14b02b7ff3_83bfae",
+    "revisionDigest": "7c14b02b7ff37002f1fff4cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39a5e80342db4dc7a4bb/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now right: the $290 is held ASSUMED, the price these buyers pay is UNKNOWN, the listing source is marked as other sellers (matchesBuyer false), and OFFER_AND_PRICE is the one link the live test decides. Reach (530 permit-list plants), conversion on this offer, Brain-proven spreadsheet fulfilment, $4 cost, zero capital and 4-day payout are evidenced. The test sells only a deliverable Brain has proven, owner time is 1 h on day 1 within 2 h/week, and passing at the threshold carries the target inside 28 days.",
+    "findings": [
+     "Recomputed: ceil(2500/290) = 9 deals; plan 10 = $2,900 gross, $40 cost, $2,860 net. Cash: 3 x $290 = $870 settling day 10, 7 x $290 = $2,030 settling day 17 <= 28. Matches the check trace.",
+     "Threshold carries the target: proof = 3 paid of 50 (6%); at exactly 6% the next 150 contacts yield 9, total 12 >= 9 needed; 380 more on the list remain as slack.",
+     "Stop rules are clean (fewer than 3 by day 7, or a refund/chargeback pattern); nothing is spent before proof.",
+     "Carry forward: SEND_A_MESSAGE / ISSUE_AN_INVOICE must be connected before day 2's send."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:07:50.771Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_7c14b02b7ff3_83bfae",
+   "digest": "7c14b02b7ff37002f1fff4cf",
+   "contractDigest": "ce4a872158391c3a82dd1783",
+   "plan": {
+    "goalId": "wst_edbb3c6189014b31a4c6",
+    "contractDigest": "ce4a872158391c3a82dd1783",
+    "parentRevisionId": "rev_dde05189d038_7a00c4",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test, then sell Brain-built perc recordkeeping workbooks to permitted dry cleaners at $290",
+     "opportunityIds": [
+      "cop_b0991136ea5846969c0c"
+     ],
+     "why": "Reach (530 listed buyers), conversion on this offer (15 paid of 125), Brain-proved fulfilment at $4, zero capital and 4-day card payout are on the card. The $290 price is only other sellers' listing pages and the paid-order record states no price, so whether these buyers pay $290 is unknown and a live $290 card offer to the first 50 decides it before the rest of the list is contacted. 10 orders x $290 = $2900 gross carries the $2500 target with all cash settled by day 17."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site pressing-floor consultations (three signed at $900)",
+      "why": "Rejected: 9 owner hours each against 8 owner hours in the whole window, and it is the owner's physical on-site work."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OTHER",
+      "label": "Owner approves the offer email and price before Brain sends it",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Brain emails the first 50 of the 530 the plants on the state air-permit list (email)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Live test: offer the perc usage and leak-inspection recordkeeping workbook at $290, paid by card at order, to those 50; count paid orders at $290 by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_listing",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "REACH",
+      "label": "On proof, Brain emails 150 more of the remaining list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_volume",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Offer the perc usage and leak-inspection recordkeeping workbook at $290 by card to the second tranche",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Brain builds and delivers each perc usage and leak-inspection recordkeeping workbook within one day of the order (10 orders)",
+      "performer": "BRAIN",
+      "costCents": 4000,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_cost",
+       "src_delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Card payouts settle 4 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s6",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 1200,
+      "label": "Delivery cost x 3, paid out of the test-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2800,
+      "label": "Delivery cost x 7, paid out of the second-tranche payout",
+      "stepId": "s6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 87000,
+      "label": "3 test-tranche card orders at $290",
+      "settlesDay": 10,
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 203000,
+      "label": "7 second-tranche card orders at $290",
+      "settlesDay": 17,
+      "stepId": "s7"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price these buyers pay for this offer",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents",
+      "sources": [],
+      "needs": "paid card orders at $290 in the live test (s3)"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 29000,
+      "unit": "cents",
+      "sources": [
+       "src_listing"
+      ],
+      "needs": "confirmed by the live test"
+     },
+     {
+      "name": "conversion (paid orders / contacts)",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "ratio",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 530,
+      "unit": "buyers",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per order",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "cents",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from order to settled cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#conversionRates",
+      "dated": "2026-11",
+      "claim": "15 paid orders from 125 contacts on this offer's own sales",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#buyerVolume",
+      "dated": "2026-11",
+      "claim": "530 reachable buyers listed with contact details",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $4 per deal",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "Paid by card at order; payout 4 days later",
+      "population": "Owners of independent dry cleaners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     },
+     {
+      "id": "src_listing",
+      "url": "https://brain.local/card/cop_b0991136ea5846969c0c#price",
+      "dated": "2026-11",
+      "claim": "Other sellers' listing/price pages show a comparable product at $290 — an asking price, not a purchase by these buyers",
+      "population": "Other sellers of comparable products (not these buyers)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b0991136ea5846969c0c"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 paid card orders at $290 from the first 50 contacts by day 7",
+     "stop": [
+      "Fewer than 3 paid orders at $290 from the first 50 by day 7: stop outreach at $290 and re-plan the price",
+      "Any refund or chargeback pattern showing buyers reject the price"
+     ],
+     "continue": [
+      "3+ paid at $290 by day 7: email 150 more of the list at $290 and fulfil each order within a day"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "0: arithmetic correct",
+      "resolution": "Agreed; unchanged (10 x $290 = $2,900)."
+     },
+     {
+      "finding": "1: price is only other sellers' listing pages (NOT_A_PURCHASE)",
+      "resolution": "Accepted. Re-read the card: the conversionRates fact states no price and priceCents carries the listing figure, so no record shows a dry cleaner paying $290. Stance is now CONDITIONAL with a live $290 card test to the first 50 plants deciding OFFER_AND_PRICE; the disagreement on that link is withdrawn."
+     },
+     {
+      "finding": "2: owner-hours rebuttal accepted",
+      "resolution": "Unchanged: 1 owner hour on day 1."
+     },
+     {
+      "finding": "3: what would make this PASS",
+      "resolution": "Done: CONDITIONAL, validation.decides [OFFER_AND_PRICE], $290 to the first 50, proof >=3 paid by day 7, stop below 3, continue with 150 more; settles by day 17."
+     },
+     {
+      "finding": "condition 0: OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "Accepted; price marked UNKNOWN and tested.",
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "priceCents",
+       "offerScope",
+       "brain:OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3d4b341b9ee54ceba3d8",
+      "why": "Owner-performed on-site consultation: 9 owner hours per consultation against an 8-hour total owner allowance (2 h/week x 4 weeks), and it is physical on-site work by the owner; even one consultation ($900) does not fit, and three ($2,700) would need 27 owner hours."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "deals": 10,
+      "price": 290,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 17,
+      "ownerHours": 1
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_b0991136ea5846969c0c",
+      "link": "MARKET_VOLUME",
+      "reason": "The buyerVolume fact (EVIDENCE) counts 530 permitted perc plants on the public permit list, each with phone and email and each required to keep these records; 10 deals at the measured 12% need about 84 contacts, well inside 530. Brain's basis 'nobody has established how many buyers exist' does not match the card."
+     }
+    ],
+    "revisionId": "rev_7c14b02b7ff3_83bfae",
+    "digest": "7c14b02b7ff37002f1fff4cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:06:51.711Z"
+   },
+   "review": {
+    "revisionId": "rev_7c14b02b7ff3_83bfae",
+    "revisionDigest": "7c14b02b7ff37002f1fff4cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ea278fd66e1240e5a0c5/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_39a5e80342db4dc7a4bb/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now right: the $290 is held ASSUMED, the price these buyers pay is UNKNOWN, the listing source is marked as other sellers (matchesBuyer false), and OFFER_AND_PRICE is the one link the live test decides. Reach (530 permit-list plants), conversion on this offer, Brain-proven spreadsheet fulfilment, $4 cost, zero capital and 4-day payout are evidenced. The test sells only a deliverable Brain has proven, owner time is 1 h on day 1 within 2 h/week, and passing at the threshold carries the target inside 28 days.",
+    "findings": [
+     "Recomputed: ceil(2500/290) = 9 deals; plan 10 = $2,900 gross, $40 cost, $2,860 net. Cash: 3 x $290 = $870 settling day 10, 7 x $290 = $2,030 settling day 17 <= 28. Matches the check trace.",
+     "Threshold carries the target: proof = 3 paid of 50 (6%); at exactly 6% the next 150 contacts yield 9, total 12 >= 9 needed; 380 more on the list remain as slack.",
+     "Stop rules are clean (fewer than 3 by day 7, or a refund/chargeback pattern); nothing is spent before proof.",
+     "Carry forward: SEND_A_MESSAGE / ISSUE_AN_INVOICE must be connected before day 2's send."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:07:50.771Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,500 of settled cash within 28 days with no more than 2 hours a week of owner time.",
+    "terms": "fd26181c16eea9b2",
+    "openings": {
+     "cop_3d4b341b9ee54ceba3d8": "5f97afcdc56e3bd3",
+     "cop_b0991136ea5846969c0c": "3168764a0a683650"
+    }
+   },
+   "at": "2026-11-28T06:08:51.850Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

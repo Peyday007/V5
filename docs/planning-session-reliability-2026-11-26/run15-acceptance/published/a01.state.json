@@ -1,0 +1,2698 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_7df1007614634c538c49",
+   "words": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$2,500 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "7c009fdcb153c812994a7994"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_7df1007614634c538c49",
+    "contractDigest": "7c009fdcb153c812994a7994",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the DTC shipping-report workbook to small wineries in the winegrowers directory",
+     "opportunityIds": [
+      "cop_52cc540b8d5040aaaa5b"
+     ],
+     "why": "Published listings price this workbook at $240; this offer's own sales converted 18 of 150 contacts; 410 permit-holding wineries are reachable by email; Brain builds the spreadsheet; $4 cost per deal; card payout 5 days after order. 12 deals = $2,880 settled by day 22, above the $2,500 target with no capital."
+    },
+    "alternatives": [
+     {
+      "title": "Harvest-crew labour placement for vineyards",
+      "why": "Rejected: the $22 on the card is the hourly wage paid to workers, not a placement fee any vineyard pays; 61 deals would be needed against 60 vineyards that hire once a season."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 150 permit-holding wineries from the state winegrowers association directory with the workbook offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_volume",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Take card orders for the $240 per-state shipping-report workbook",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each winery's shipping-report workbook from its order export within one day of the order",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 3,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Receive card-processor payouts 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 144000,
+      "label": "Payout for first 6 orders (days 2-3)",
+      "settlesDay": 8,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 2400,
+      "label": "Direct cost $4 x 6 deliveries, paid from payout",
+      "stepId": "deliver"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 144000,
+      "label": "Payout for next 6 orders (days 4-10)",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "FEE",
+      "amountCents": 2400,
+      "label": "Direct cost $4 x 6 deliveries, paid from payout",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price per workbook",
+      "status": "EVIDENCED",
+      "value": 240,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "paid conversion of contacts",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact (18/150)",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "wineries",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "deals (ceil 2500/240); plan sells 12",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#price",
+      "dated": "2026-11",
+      "claim": "Two DTC-compliance template sellers list a per-winery state shipping-report workbook at $240 (listing pages, 2026-11).",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#conversionRates",
+      "dated": "2026-11",
+      "claim": "18 paid orders from 150 contacts on this offer's own sales.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#buyerVolume",
+      "dated": "2026-11",
+      "claim": "410 direct-shipper wineries listed with contact emails; each files shipping reports monthly.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Sell the workbook to each buyer by email to the directory contacts.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "5 days to first cash (processor payout).",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_hc_price",
+      "url": "https://brain.local/card/cop_b47e08b8b926487fb9d7#price",
+      "dated": "2026-11",
+      "claim": "$22 is the hourly wage paid to harvest workers (state wage survey) — not a placement fee.",
+      "population": "Vineyard harvest workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b47e08b8b926487fb9d7"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "why": "Price is a worker's hourly wage, not what a vineyard pays for placement; 60 vineyards hiring once cannot supply the deals needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "deals": 12,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card holds one price, $240 (priceCents 24000), backed by an EVIDENCE fact: two template sellers' published listing pages (2026-11) sell this exact workbook at $240, and this offer's own sales recorded 18 paid orders of 150 contacts. That is a published price buyers pay, not a guess."
+     }
+    ],
+    "revisionId": "rev_d8888eb264fb_ae55ed",
+    "digest": "d8888eb264fb9496d3a44dec",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:57:52.096Z"
+   },
+   {
+    "goalId": "wst_7df1007614634c538c49",
+    "contractDigest": "7c009fdcb153c812994a7994",
+    "parentRevisionId": "rev_d8888eb264fb_ae55ed",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the $240 DTC shipping-report workbook to 50 directory wineries, then scale to 12 orders",
+     "opportunityIds": [
+      "cop_52cc540b8d5040aaaa5b"
+     ],
+     "why": "Buyers (410 permit-holding wineries by email), demand, conversion (18 paid of 150 on this offer's own sales), Brain fulfilment, $4 cost and 5-day payout are evidenced. The $240 price rests only on other sellers' listing pages, an asking price rather than a recorded purchase, so what these wineries pay is unknown. A first send to 50 contacts at $240 measures it within a week at zero capital; 12 orders at $240 = $2,880 would clear the $2,500 target by about day 22."
+    },
+    "alternatives": [
+     {
+      "title": "Harvest-crew labour placement for vineyards",
+      "why": "Rejected: the $22 on the card is the hourly wage paid to workers, not a placement fee any vineyard pays; 61 deals would be needed against 60 vineyards that hire once a season."
+     }
+    ],
+    "steps": [
+     {
+      "id": "setup",
+      "kind": "OTHER",
+      "label": "Connect the outbound email sender and a card-payment link before the first send (SEND_A_MESSAGE and ISSUE_AN_INVOICE are not yet connected)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the first 50 permit-holding wineries in the state winegrowers association directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "setup",
+      "evidence": [
+       "s_volume",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $240 to those 50 and count card-paid orders by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If the test passes, offer at $240 to the remaining 360 directory wineries until 12 paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_volume"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each winery's shipping-report workbook from its order export within one day of the order",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 3,
+      "dependsOn": "test",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Receive card-processor payouts 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 72000,
+      "label": "Payout for 3 test orders at $240 (by day 7)",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1200,
+      "label": "Direct cost $4 x 3, paid from payout",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 216000,
+      "label": "Payout for 9 further orders at $240 (by day 17)",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 3600,
+      "label": "Direct cost $4 x 9, paid from payout",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price wineries pay for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "card-paid orders at $240 from the first 50 contacts"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 240,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "the live test"
+     },
+     {
+      "name": "paid conversion of contacts",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact (18/150), price paid not recorded",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "wineries",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 11,
+      "unit": "deals (ceil 2500/240); plan sells 12",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#price",
+      "dated": "2026-11",
+      "claim": "Two other template sellers list a similar workbook at $240 (listing pages, 2026-11) — an asking price, not a recorded purchase by these wineries.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#conversionRates",
+      "dated": "2026-11",
+      "claim": "18 paid orders from 150 contacts on this offer's own sales.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#buyerVolume",
+      "dated": "2026-11",
+      "claim": "410 direct-shipper wineries listed with contact emails; each files shipping reports monthly.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Sell the workbook to each buyer by email to the directory contacts.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "5 days to first cash (processor payout).",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_hc_price",
+      "url": "https://brain.local/card/cop_b47e08b8b926487fb9d7#price",
+      "dated": "2026-11",
+      "claim": "$22 is the hourly wage paid to harvest workers (state wage survey) — not a placement fee.",
+      "population": "Vineyard harvest workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b47e08b8b926487fb9d7"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 50 directory wineries pay $240 by card for the workbook by day 7.",
+     "stop": [
+      "Fewer than 3 card-paid orders at $240 from 50 contacts by day 7: stop; the price is not established - re-plan at a researched price."
+     ],
+     "continue": [
+      "3 or more paid at $240 by day 7: offer to the remaining 360 wineries until 12 paid orders ($2,880) by day 17, settled by day 22."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic as written: 12 x $240 = $2,880 gross ... every dollar of it multiplies the unestablished $240.",
+      "resolution": "Accepted. The arithmetic is kept but now hangs on a live price test: the $240 is ASSUMED, the price buyers pay is UNKNOWN, and the plan scales only after the test proves it."
+     },
+     {
+      "finding": "Price: listing pages are what other sellers charge, not what this buyer pays (NOT_A_PURCHASE).",
+      "resolution": "Accepted. Re-read the card's price fact: it is two other sellers' listing pages, an asking price, and Brain's OFFER_AND_PRICE basis also leaves it unestablished. OFFER_AND_PRICE is now missing in the chain, the stance is CONDITIONAL and the disagreement is withdrawn."
+     },
+     {
+      "finding": "Conversion 18/150 is recorded without the price it was measured at; it does not establish $240.",
+      "resolution": "Accepted. The conversion stays as evidence of buyer response (unit notes the price paid is not recorded), and the test measures paid orders at $240 directly."
+     },
+     {
+      "finding": "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; name this as a setup prerequisite.",
+      "resolution": "Accepted. Added a day-1 setup step (connect the sender and a card-payment link) that the reach step depends on."
+     },
+     {
+      "finding": "Brain's step list assigns Deliver to PERSON with 0.5 human hours per deal; the ledger should match.",
+      "resolution": "Rebutted. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET in requiredCapabilities, and its delivery fact says 'A spreadsheet Brain produces'; Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. By the fulfilment rule the DELIVER performer is BRAIN and humanHours (0.5) is the fulfiller's work per deal, not owner hours; the goal sets no hours ceiling either. Member ownerHours stays null."
+     },
+     {
+      "finding": "Harvest-crew alternative correctly excluded.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Suggested revision: stance CONDITIONAL; validation decides OFFER_AND_PRICE; offer at $240 to the first ~50 contacts; proof/stop/continue.",
+      "resolution": "Accepted in substance: first 50 contacts at $240; proof = at least 3 card-paid orders by day 7 (expected 6 at the measured 12%); stop below 3; continue to the remaining 360 until 12 orders."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "The price fact is other sellers' listing pages, not a purchase by these buyers; OFFER_AND_PRICE is marked missing and decided by the live test."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "why": "Price is a worker's hourly wage, not what a vineyard pays for placement; 60 vineyards hiring once cannot supply the deals needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "deals": 12,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 22,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_a99936527367_9da623",
+    "digest": "a9993652736797f326842720",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:40.779Z"
+   },
+   {
+    "goalId": "wst_7df1007614634c538c49",
+    "contractDigest": "7c009fdcb153c812994a7994",
+    "parentRevisionId": "rev_d8888eb264fb_ae55ed",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the $240 DTC shipping-report workbook to 50 directory wineries, then scale to 12 orders",
+     "opportunityIds": [
+      "cop_52cc540b8d5040aaaa5b"
+     ],
+     "why": "Buyers (410 permit-holding wineries by email), demand, conversion (18 paid of 150 on this offer's own sales), Brain fulfilment, $4 cost and 5-day payout are evidenced. The $240 price rests only on other sellers' listing pages, an asking price rather than a recorded purchase, so what these wineries pay is unknown. A first send to 50 contacts at $240 measures it within a week at zero capital; 12 orders at $240 = $2,880 would clear the $2,500 target by about day 22."
+    },
+    "alternatives": [
+     {
+      "title": "Harvest-crew labour placement for vineyards",
+      "why": "Rejected: the $22 on the card is the hourly wage paid to workers, not a placement fee any vineyard pays; 61 deals would be needed against 60 vineyards that hire once a season."
+     }
+    ],
+    "steps": [
+     {
+      "id": "setup",
+      "kind": "OTHER",
+      "label": "Connect the outbound email sender and a card-payment link before the first send (SEND_A_MESSAGE and ISSUE_AN_INVOICE are not yet connected)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_channel",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the first 50 permit-holding wineries in the state winegrowers association directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "setup",
+      "evidence": [
+       "s_volume",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $240 to those 50 and count card-paid orders by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If the test passes, offer at $240 to the remaining 360 directory wineries until 12 paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_volume"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each winery's shipping-report workbook from its order export within one day of the order",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 3,
+      "dependsOn": "test",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Receive card-processor payouts 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 72000,
+      "label": "Payout for 3 test orders at $240 (by day 7)",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1200,
+      "label": "Direct cost $4 x 3, paid from payout",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 216000,
+      "label": "Payout for 9 further orders at $240 (by day 17)",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 3600,
+      "label": "Direct cost $4 x 9, paid from payout",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price wineries pay for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "card-paid orders at $240 from the first 50 contacts"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 240,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "the live test"
+     },
+     {
+      "name": "paid conversion of contacts",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact (18/150), price paid not recorded",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "wineries",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 11,
+      "unit": "deals (ceil 2500/240); plan sells 12",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#price",
+      "dated": "2026-11",
+      "claim": "Two other template sellers list a similar workbook at $240 (listing pages, 2026-11) — an asking price, not a recorded purchase by these wineries.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#conversionRates",
+      "dated": "2026-11",
+      "claim": "18 paid orders from 150 contacts on this offer's own sales.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#buyerVolume",
+      "dated": "2026-11",
+      "claim": "410 direct-shipper wineries listed with contact emails; each files shipping reports monthly.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Sell the workbook to each buyer by email to the directory contacts.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "5 days to first cash (processor payout).",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_hc_price",
+      "url": "https://brain.local/card/cop_b47e08b8b926487fb9d7#price",
+      "dated": "2026-11",
+      "claim": "$22 is the hourly wage paid to harvest workers (state wage survey) — not a placement fee.",
+      "population": "Vineyard harvest workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b47e08b8b926487fb9d7"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 50 directory wineries pay $240 by card for the workbook by day 7.",
+     "stop": [
+      "Fewer than 3 card-paid orders at $240 from 50 contacts by day 7: stop; the price is not established - re-plan at a researched price."
+     ],
+     "continue": [
+      "3 or more paid at $240 by day 7: offer to the remaining 360 wineries until 12 paid orders ($2,880) by day 17, settled by day 22."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic as written: 12 x $240 = $2,880 gross ... every dollar of it multiplies the unestablished $240.",
+      "resolution": "Accepted. The arithmetic is kept but now hangs on a live price test: the $240 is ASSUMED, the price buyers pay is UNKNOWN, and the plan scales only after the test proves it."
+     },
+     {
+      "finding": "Price: listing pages are what other sellers charge, not what this buyer pays (NOT_A_PURCHASE).",
+      "resolution": "Accepted. Re-read the card's price fact: it is two other sellers' listing pages, an asking price, and Brain's OFFER_AND_PRICE basis also leaves it unestablished. OFFER_AND_PRICE is now missing in the chain, the stance is CONDITIONAL and the disagreement is withdrawn."
+     },
+     {
+      "finding": "Conversion 18/150 is recorded without the price it was measured at; it does not establish $240.",
+      "resolution": "Accepted. The conversion stays as evidence of buyer response (unit notes the price paid is not recorded), and the test measures paid orders at $240 directly."
+     },
+     {
+      "finding": "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; name this as a setup prerequisite.",
+      "resolution": "Accepted. Added a day-1 setup step (connect the sender and a card-payment link) that the reach step depends on."
+     },
+     {
+      "finding": "Brain's step list assigns Deliver to PERSON with 0.5 human hours per deal; the ledger should match.",
+      "resolution": "Rebutted. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET in requiredCapabilities, and its delivery fact says 'A spreadsheet Brain produces'; Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. By the fulfilment rule the DELIVER performer is BRAIN and humanHours (0.5) is the fulfiller's work per deal, not owner hours; the goal sets no hours ceiling either. Member ownerHours stays null."
+     },
+     {
+      "finding": "Harvest-crew alternative correctly excluded.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Suggested revision: stance CONDITIONAL; validation decides OFFER_AND_PRICE; offer at $240 to the first ~50 contacts; proof/stop/continue.",
+      "resolution": "Accepted in substance: first 50 contacts at $240; proof = at least 3 card-paid orders by day 7 (expected 6 at the measured 12%); stop below 3; continue to the remaining 360 until 12 orders."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "The price fact is other sellers' listing pages, not a purchase by these buyers; OFFER_AND_PRICE is marked missing and decided by the live test."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "why": "Price is a worker's hourly wage, not what a vineyard pays for placement; 60 vineyards hiring once cannot supply the deals needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "deals": 12,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 22,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b2b3f6a25436_9b79cf",
+    "digest": "b2b3f6a25436b85d85c3b346",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:46.342Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_7df1007614634c538c49",
+   "contractDigest": "7c009fdcb153c812994a7994",
+   "parentRevisionId": "rev_d8888eb264fb_ae55ed",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test-sell the $240 DTC shipping-report workbook to 50 directory wineries, then scale to 12 orders",
+    "opportunityIds": [
+     "cop_52cc540b8d5040aaaa5b"
+    ],
+    "why": "Buyers (410 permit-holding wineries by email), demand, conversion (18 paid of 150 on this offer's own sales), Brain fulfilment, $4 cost and 5-day payout are evidenced. The $240 price rests only on other sellers' listing pages, an asking price rather than a recorded purchase, so what these wineries pay is unknown. A first send to 50 contacts at $240 measures it within a week at zero capital; 12 orders at $240 = $2,880 would clear the $2,500 target by about day 22."
+   },
+   "alternatives": [
+    {
+     "title": "Harvest-crew labour placement for vineyards",
+     "why": "Rejected: the $22 on the card is the hourly wage paid to workers, not a placement fee any vineyard pays; 61 deals would be needed against 60 vineyards that hire once a season."
+    }
+   ],
+   "steps": [
+    {
+     "id": "setup",
+     "kind": "OTHER",
+     "label": "Connect the outbound email sender and a card-payment link before the first send (SEND_A_MESSAGE and ISSUE_AN_INVOICE are not yet connected)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_channel",
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "PLAN_DECISION",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [],
+      "routine": false
+     }
+    },
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email the first 50 permit-holding wineries in the state winegrowers association directory",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "setup",
+     "evidence": [
+      "s_volume",
+      "s_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Offer the workbook at $240 to those 50 and count card-paid orders by day 7",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price",
+      "s_conv"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "If the test passes, offer at $240 to the remaining 360 directory wineries until 12 paid orders",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "test",
+     "evidence": [
+      "s_conv",
+      "s_volume"
+     ],
+     "priceCents": 24000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Build each winery's shipping-report workbook from its order export within one day of the order",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 3,
+     "dependsOn": "test",
+     "evidence": [
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Receive card-processor payouts 5 days after each order",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 72000,
+     "label": "Payout for 3 test orders at $240 (by day 7)",
+     "settlesDay": 12,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "FEE",
+     "amountCents": 1200,
+     "label": "Direct cost $4 x 3, paid from payout",
+     "stepId": "deliver"
+    },
+    {
+     "day": 22,
+     "kind": "RECEIPT",
+     "amountCents": 216000,
+     "label": "Payout for 9 further orders at $240 (by day 17)",
+     "settlesDay": 22,
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 3600,
+     "label": "Direct cost $4 x 9, paid from payout",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price wineries pay for the workbook",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "card-paid orders at $240 from the first 50 contacts"
+    },
+    {
+     "name": "offered price",
+     "status": "ASSUMED",
+     "value": 240,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "the live test"
+    },
+    {
+     "name": "paid conversion of contacts",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "paid orders per contact (18/150), price paid not recorded",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 410,
+     "unit": "wineries",
+     "sources": [
+      "s_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "ESTIMATE",
+     "value": 11,
+     "unit": "deals (ceil 2500/240); plan sells 12",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s_ttc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#price",
+     "dated": "2026-11",
+     "claim": "Two other template sellers list a similar workbook at $240 (listing pages, 2026-11) — an asking price, not a recorded purchase by these wineries.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#conversionRates",
+     "dated": "2026-11",
+     "claim": "18 paid orders from 150 contacts on this offer's own sales.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_volume",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#buyerVolume",
+     "dated": "2026-11",
+     "claim": "410 direct-shipper wineries listed with contact emails; each files shipping reports monthly.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_channel",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#captureMechanism",
+     "dated": "2026-11",
+     "claim": "Sell the workbook to each buyer by email to the directory contacts.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#directCosts",
+     "dated": "2026-11",
+     "claim": "$4 direct cost per deal.",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_ttc",
+     "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "5 days to first cash (processor payout).",
+     "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_52cc540b8d5040aaaa5b"
+    },
+    {
+     "id": "s_hc_price",
+     "url": "https://brain.local/card/cop_b47e08b8b926487fb9d7#price",
+     "dated": "2026-11",
+     "claim": "$22 is the hourly wage paid to harvest workers (state wage survey) — not a placement fee.",
+     "population": "Vineyard harvest workers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_b47e08b8b926487fb9d7"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 of the first 50 directory wineries pay $240 by card for the workbook by day 7.",
+    "stop": [
+     "Fewer than 3 card-paid orders at $240 from 50 contacts by day 7: stop; the price is not established - re-plan at a researched price."
+    ],
+    "continue": [
+     "3 or more paid at $240 by day 7: offer to the remaining 360 wineries until 12 paid orders ($2,880) by day 17, settled by day 22."
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic as written: 12 x $240 = $2,880 gross ... every dollar of it multiplies the unestablished $240.",
+     "resolution": "Accepted. The arithmetic is kept but now hangs on a live price test: the $240 is ASSUMED, the price buyers pay is UNKNOWN, and the plan scales only after the test proves it."
+    },
+    {
+     "finding": "Price: listing pages are what other sellers charge, not what this buyer pays (NOT_A_PURCHASE).",
+     "resolution": "Accepted. Re-read the card's price fact: it is two other sellers' listing pages, an asking price, and Brain's OFFER_AND_PRICE basis also leaves it unestablished. OFFER_AND_PRICE is now missing in the chain, the stance is CONDITIONAL and the disagreement is withdrawn."
+    },
+    {
+     "finding": "Conversion 18/150 is recorded without the price it was measured at; it does not establish $240.",
+     "resolution": "Accepted. The conversion stays as evidence of buyer response (unit notes the price paid is not recorded), and the test measures paid orders at $240 directly."
+    },
+    {
+     "finding": "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; name this as a setup prerequisite.",
+     "resolution": "Accepted. Added a day-1 setup step (connect the sender and a card-payment link) that the reach step depends on."
+    },
+    {
+     "finding": "Brain's step list assigns Deliver to PERSON with 0.5 human hours per deal; the ledger should match.",
+     "resolution": "Rebutted. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET in requiredCapabilities, and its delivery fact says 'A spreadsheet Brain produces'; Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. By the fulfilment rule the DELIVER performer is BRAIN and humanHours (0.5) is the fulfiller's work per deal, not owner hours; the goal sets no hours ceiling either. Member ownerHours stays null."
+    },
+    {
+     "finding": "Harvest-crew alternative correctly excluded.",
+     "resolution": "Agreed; unchanged."
+    },
+    {
+     "finding": "Suggested revision: stance CONDITIONAL; validation decides OFFER_AND_PRICE; offer at $240 to the first ~50 contacts; proof/stop/continue.",
+     "resolution": "Accepted in substance: first 50 contacts at $240; proof = at least 3 card-paid orders by day 7 (expected 6 at the measured 12%); stop below 3; continue to the remaining 360 until 12 orders."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "price",
+      "conversionRates",
+      "brain:OFFER_AND_PRICE"
+     ],
+     "finding": "OFFER_AND_PRICE NOT_A_PURCHASE",
+     "resolution": "The price fact is other sellers' listing pages, not a purchase by these buyers; OFFER_AND_PRICE is marked missing and decided by the live test."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_52cc540b8d5040aaaa5b",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "opportunityId": "cop_b47e08b8b926487fb9d7",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_b47e08b8b926487fb9d7",
+     "why": "Price is a worker's hourly wage, not what a vineyard pays for placement; 60 vineyards hiring once cannot supply the deals needed."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_52cc540b8d5040aaaa5b",
+     "deals": 12,
+     "price": 240,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": 22,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_b2b3f6a25436_9b79cf",
+   "digest": "b2b3f6a25436b85d85c3b346",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_e467b3c30aa14776b714/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T06:02:46.342Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_b2b3f6a25436_9b79cf",
+   "digest": "b2b3f6a25436b85d85c3b346",
+   "contractDigest": "7c009fdcb153c812994a7994",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4800,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 70800,
+    "minCashDay": 12,
+    "collectedCents": 288000,
+    "collectedInWindowCents": 288000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 283200
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 25488× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Direct-to-consumer shipping-report workbook for small wineri\" needs [figure withheld] and keeps [figure withheld], 236× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Tasting-room and DTC managers at small wineries\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_52cc540b8d5040aaaa5b",
+     "cop_b47e08b8b926487fb9d7"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Direct-to-consumer shipping-report workbook for small wineries\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Direct-to-consumer shipping-report workbook for small wineries\"",
+      "owner": "PERSON",
+      "cost": 4
+     },
+     {
+      "label": "Sell \"Harvest-crew labour placement for vineyards\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Harvest-crew labour placement for vineyards\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Tasting-room and DTC managers at small wineries",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Tasting-room and DTC managers at small wineries",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 7.980920246443498
+     },
+     {
+      "label": "Collect payment for \"Direct-to-consumer shipping-report workbook for small wineries\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment for \"Harvest-crew labour placement for vineyards\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "title": "Direct-to-consumer shipping-report workbook for small wineries",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Tasting-room and DTC managers at small wineries",
+       "reachableChannel": "Email to the contacts in the state winegrowers association's public member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-22T05:51:54.250Z",
+       "offerScope": "A workbook that turns a winery's order export into its monthly per-state direct-shipping reports; Brain builds each from the winery's export within one day of the order. Paid by card at order; the processor pays out 5 days later.",
+       "priceCents": 24000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "wineries",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the contacts in the state winegrowers association's public member direc"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-22"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "12 deal(s) needed, 410 available in the window (410 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "410 wineries holding a direct-shipper permit are listed with contact emails in the state winegrowers association's public member directory; each files shipping reports monthly.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook that turns a winery's order export into its monthly per-state direct-shipping reports; Brain builds each from the winery's export within one day of the order. Paid by card at order; the processor pays out 5 days later. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "18 paid orders from 150 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Tasting-room and DTC managers at small wineries",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Two DTC-compliance template sellers list a per-winery state shipping-report workbook at $240 (listing pages, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "title": "Harvest-crew labour placement for vineyards",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Vineyard managers",
+       "reachableChannel": "Phone calls to vineyard managers in the county",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T05:51:54.250Z",
+       "offerScope": "Harvest-crew labour placement for vineyards",
+       "priceCents": 2200,
+       "currency": "USD",
+       "fulfillmentOwner": "Valley Farm Labor Contractors (licensed crew leader)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "wineries",
+       "mechanism": "SUPPLY_DEMAND_MISMATCH",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Phone calls to vineyard managers in the county"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 10 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "61 deal(s) needed but only 60 in the window (60 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Valley Farm Labor Contractors (licensed crew leader) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "14 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "60 vineyards in the county hire harvest crews each autumn.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Harvest-crew labour placement for vineyards to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "10 paid orders from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Valley Farm Labor Contractors (licensed crew leader) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Vineyard managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Vineyard harvest workers in the county are paid a $22 hourly wage (state agricultural wage survey, 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:57:10.590Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_d8888eb264fb_ae55ed",
+    "revisionDigest": "d8888eb264fb9496d3a44dec",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e1f902b5e40c4eda9dcf/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "EXECUTABLE is not earned. The whole target rests on a $240 price whose only evidence is that two other DTC-compliance template sellers list a similar workbook at $240. That is a competitor's list price, a benchmark of what someone else asks, not a recorded purchase by these wineries of this offer; Brain's own planner holds OFFER_AND_PRICE unestablished ('no single price on the card') and flags the reconstruction implausible. The conversion fact (18 paid of 150) states no price it was measured at, so it cannot stand in for the price either. With price unestablished, the stance should be CONDITIONAL: a live offer at $240 to a first tranche of directory contacts, with proof/stop/continue thresholds that measure paid orders at that price, before claiming the $2,500.",
+    "findings": [
+     "Arithmetic as written: 12 x $240 = $2,880 gross, 12 x $4 = $48 cost, net $2,832; ceil(2500/240)=11 deals; at 18/150 = 12% conversion, 12 deals need 100 contacts, plan emails 150 (expected 18). Payouts day 8 and day 15 inside 30 days. The arithmetic is internally consistent, but every dollar of it multiplies the unestablished $240.",
+     "Price: 'Two DTC-compliance template sellers list ... at $240 (listing pages)' is what other sellers charge, not what this buyer pays for this offer (NOT_A_PURCHASE). The revision's disagreement treats a listing as 'a published price buyers pay' — a listing shows an asking price, not a purchase.",
+     "Conversion 18/150 is recorded without the price it was measured at; it does not establish $240.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and the card-payment collection step has no connected provider; the plan should name this as a setup prerequisite rather than present the steps as routine.",
+     "Brain's step list assigns Deliver to PERSON with 0.5 human hours per deal (card humanHours 0.5); the revision's member ownerHours is null and the deliver step says BRAIN. With 12 deals that is ~6 owner hours unaccounted for; no hours ceiling is set, but the ledger should match.",
+     "Harvest-crew alternative correctly excluded: $22 is a worker's hourly wage (not a placement fee a vineyard pays) and 61 deals against 60 once-a-season buyers fails volume.",
+     "Suggested revision: stance CONDITIONAL; validation decides OFFER_AND_PRICE on cop_52cc540b8d5040aaaa5b — offer the workbook at $240 to the first ~50 directory contacts; proof = >=4 card-paid orders at $240 within 7 days (carries 11 deals from the remaining 360 contacts at the measured rate); stop if <2 paid; continue to the full list on proof."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:59:16.404Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "link": "OFFER_AND_PRICE",
+      "basis": "EVIDENCE",
+      "field": "price",
+      "defect": "NOT_A_PURCHASE",
+      "why": "The price fact is two other sellers' listing pages at $240 — an asking price by competitors, not a purchase price these wineries are recorded paying for this offer."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_b2b3f6a25436_9b79cf",
+    "revisionDigest": "b2b3f6a25436b85d85c3b346",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e1f902b5e40c4eda9dcf/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now the right stance and the plan is startable. The $240 is correctly held as ASSUMED with the price buyers pay UNKNOWN, OFFER_AND_PRICE is marked missing and is the one link the live test decides. Every other link is evidenced (410 directory wineries, 18/150 paid conversion on this offer, Brain-proven spreadsheet fulfilment, $4 cost, 5-day payout, zero capital). The test takes orders only for a deliverable Brain has proven, setup of sender and payment link is named first, and passing at the threshold carries the target inside 30 days.",
+    "findings": [
+     "Recomputed: ceil(2500/240) = 11 deals; plan sells 12 = $2,880 gross, $48 cost, $2,832 net. Ledger: 3 x $240 = $720 settling day 12, 9 x $240 = $2,160 settling day 22; deliver cost 12 x $4 = $48. Matches the check trace.",
+     "Threshold carries the target: proof = 3 paid of 50 (6%). At exactly 6%, the remaining 360 wineries yield ~21, so 3 + 21 = 24 >= 11 needed; orders by day 17 settle by day 22 <= 30.",
+     "Stop rule: <3 paid at $240 by day 7 stops and re-plans at a researched price; nothing is committed before proof ($12 of direct cost, paid from receipts).",
+     "The rebuttal on owner hours is acceptable here: the card names Brain as producer, and the goal sets no hours ceiling.",
+     "Carry forward: re-measure the second-wave rate from the $240 test rather than the unpriced 18/150."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:04:30.752Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_b2b3f6a25436_9b79cf",
+   "digest": "b2b3f6a25436b85d85c3b346",
+   "contractDigest": "7c009fdcb153c812994a7994",
+   "plan": {
+    "goalId": "wst_7df1007614634c538c49",
+    "contractDigest": "7c009fdcb153c812994a7994",
+    "parentRevisionId": "rev_d8888eb264fb_ae55ed",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the $240 DTC shipping-report workbook to 50 directory wineries, then scale to 12 orders",
+     "opportunityIds": [
+      "cop_52cc540b8d5040aaaa5b"
+     ],
+     "why": "Buyers (410 permit-holding wineries by email), demand, conversion (18 paid of 150 on this offer's own sales), Brain fulfilment, $4 cost and 5-day payout are evidenced. The $240 price rests only on other sellers' listing pages, an asking price rather than a recorded purchase, so what these wineries pay is unknown. A first send to 50 contacts at $240 measures it within a week at zero capital; 12 orders at $240 = $2,880 would clear the $2,500 target by about day 22."
+    },
+    "alternatives": [
+     {
+      "title": "Harvest-crew labour placement for vineyards",
+      "why": "Rejected: the $22 on the card is the hourly wage paid to workers, not a placement fee any vineyard pays; 61 deals would be needed against 60 vineyards that hire once a season."
+     }
+    ],
+    "steps": [
+     {
+      "id": "setup",
+      "kind": "OTHER",
+      "label": "Connect the outbound email sender and a card-payment link before the first send (SEND_A_MESSAGE and ISSUE_AN_INVOICE are not yet connected)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_channel",
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the first 50 permit-holding wineries in the state winegrowers association directory",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "setup",
+      "evidence": [
+       "s_volume",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Offer the workbook at $240 to those 50 and count card-paid orders by day 7",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If the test passes, offer at $240 to the remaining 360 directory wineries until 12 paid orders",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "test",
+      "evidence": [
+       "s_conv",
+       "s_volume"
+      ],
+      "priceCents": 24000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Build each winery's shipping-report workbook from its order export within one day of the order",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 3,
+      "dependsOn": "test",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Receive card-processor payouts 5 days after each order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 72000,
+      "label": "Payout for 3 test orders at $240 (by day 7)",
+      "settlesDay": 12,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1200,
+      "label": "Direct cost $4 x 3, paid from payout",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 216000,
+      "label": "Payout for 9 further orders at $240 (by day 17)",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 3600,
+      "label": "Direct cost $4 x 9, paid from payout",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price wineries pay for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "card-paid orders at $240 from the first 50 contacts"
+     },
+     {
+      "name": "offered price",
+      "status": "ASSUMED",
+      "value": 240,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "the live test"
+     },
+     {
+      "name": "paid conversion of contacts",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact (18/150), price paid not recorded",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "wineries",
+      "sources": [
+       "s_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "ESTIMATE",
+      "value": 11,
+      "unit": "deals (ceil 2500/240); plan sells 12",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#price",
+      "dated": "2026-11",
+      "claim": "Two other template sellers list a similar workbook at $240 (listing pages, 2026-11) — an asking price, not a recorded purchase by these wineries.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#conversionRates",
+      "dated": "2026-11",
+      "claim": "18 paid orders from 150 contacts on this offer's own sales.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_volume",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#buyerVolume",
+      "dated": "2026-11",
+      "claim": "410 direct-shipper wineries listed with contact emails; each files shipping reports monthly.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Sell the workbook to each buyer by email to the directory contacts.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#directCosts",
+      "dated": "2026-11",
+      "claim": "$4 direct cost per deal.",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_ttc",
+      "url": "https://brain.local/card/cop_52cc540b8d5040aaaa5b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "5 days to first cash (processor payout).",
+      "population": "Tasting-room and DTC managers at small wineries (state winegrowers association directory)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_52cc540b8d5040aaaa5b"
+     },
+     {
+      "id": "s_hc_price",
+      "url": "https://brain.local/card/cop_b47e08b8b926487fb9d7#price",
+      "dated": "2026-11",
+      "claim": "$22 is the hourly wage paid to harvest workers (state wage survey) — not a placement fee.",
+      "population": "Vineyard harvest workers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_b47e08b8b926487fb9d7"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 50 directory wineries pay $240 by card for the workbook by day 7.",
+     "stop": [
+      "Fewer than 3 card-paid orders at $240 from 50 contacts by day 7: stop; the price is not established - re-plan at a researched price."
+     ],
+     "continue": [
+      "3 or more paid at $240 by day 7: offer to the remaining 360 wineries until 12 paid orders ($2,880) by day 17, settled by day 22."
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic as written: 12 x $240 = $2,880 gross ... every dollar of it multiplies the unestablished $240.",
+      "resolution": "Accepted. The arithmetic is kept but now hangs on a live price test: the $240 is ASSUMED, the price buyers pay is UNKNOWN, and the plan scales only after the test proves it."
+     },
+     {
+      "finding": "Price: listing pages are what other sellers charge, not what this buyer pays (NOT_A_PURCHASE).",
+      "resolution": "Accepted. Re-read the card's price fact: it is two other sellers' listing pages, an asking price, and Brain's OFFER_AND_PRICE basis also leaves it unestablished. OFFER_AND_PRICE is now missing in the chain, the stance is CONDITIONAL and the disagreement is withdrawn."
+     },
+     {
+      "finding": "Conversion 18/150 is recorded without the price it was measured at; it does not establish $240.",
+      "resolution": "Accepted. The conversion stays as evidence of buyer response (unit notes the price paid is not recorded), and the test measures paid orders at $240 directly."
+     },
+     {
+      "finding": "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; name this as a setup prerequisite.",
+      "resolution": "Accepted. Added a day-1 setup step (connect the sender and a card-payment link) that the reach step depends on."
+     },
+     {
+      "finding": "Brain's step list assigns Deliver to PERSON with 0.5 human hours per deal; the ledger should match.",
+      "resolution": "Rebutted. The card names no fulfillmentOwner and lists PRODUCE_SPREADSHEET in requiredCapabilities, and its delivery fact says 'A spreadsheet Brain produces'; Brain's FULFILMENT link basis is 'Brain has proved: PRODUCE_SPREADSHEET'. By the fulfilment rule the DELIVER performer is BRAIN and humanHours (0.5) is the fulfiller's work per deal, not owner hours; the goal sets no hours ceiling either. Member ownerHours stays null."
+     },
+     {
+      "finding": "Harvest-crew alternative correctly excluded.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Suggested revision: stance CONDITIONAL; validation decides OFFER_AND_PRICE; offer at $240 to the first ~50 contacts; proof/stop/continue.",
+      "resolution": "Accepted in substance: first 50 contacts at $240; proof = at least 3 card-paid orders by day 7 (expected 6 at the measured 12%); stop below 3; continue to the remaining 360 until 12 orders."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "price",
+       "conversionRates",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "OFFER_AND_PRICE NOT_A_PURCHASE",
+      "resolution": "The price fact is other sellers' listing pages, not a purchase by these buyers; OFFER_AND_PRICE is marked missing and decided by the live test."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_b47e08b8b926487fb9d7",
+      "why": "Price is a worker's hourly wage, not what a vineyard pays for placement; 60 vineyards hiring once cannot supply the deals needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_52cc540b8d5040aaaa5b",
+      "deals": 12,
+      "price": 240,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 22,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b2b3f6a25436_9b79cf",
+    "digest": "b2b3f6a25436b85d85c3b346",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T06:02:46.342Z"
+   },
+   "review": {
+    "revisionId": "rev_b2b3f6a25436_9b79cf",
+    "revisionDigest": "b2b3f6a25436b85d85c3b346",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_e467b3c30aa14776b714/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e1f902b5e40c4eda9dcf/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is now the right stance and the plan is startable. The $240 is correctly held as ASSUMED with the price buyers pay UNKNOWN, OFFER_AND_PRICE is marked missing and is the one link the live test decides. Every other link is evidenced (410 directory wineries, 18/150 paid conversion on this offer, Brain-proven spreadsheet fulfilment, $4 cost, 5-day payout, zero capital). The test takes orders only for a deliverable Brain has proven, setup of sender and payment link is named first, and passing at the threshold carries the target inside 30 days.",
+    "findings": [
+     "Recomputed: ceil(2500/240) = 11 deals; plan sells 12 = $2,880 gross, $48 cost, $2,832 net. Ledger: 3 x $240 = $720 settling day 12, 9 x $240 = $2,160 settling day 22; deliver cost 12 x $4 = $48. Matches the check trace.",
+     "Threshold carries the target: proof = 3 paid of 50 (6%). At exactly 6%, the remaining 360 wineries yield ~21, so 3 + 21 = 24 >= 11 needed; orders by day 17 settle by day 22 <= 30.",
+     "Stop rule: <3 paid at $240 by day 7 stops and re-plans at a researched price; nothing is committed before proof ($12 of direct cost, paid from receipts).",
+     "The rebuttal on owner hours is acceptable here: the card names Brain as producer, and the goal sets no hours ceiling.",
+     "Carry forward: re-measure the second-wave rate from the $240 test rather than the unpriced 18/150."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T06:04:30.752Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "terms": "5f67e7635aeeb057",
+    "openings": {
+     "cop_52cc540b8d5040aaaa5b": "0c3d218885c15950",
+     "cop_b47e08b8b926487fb9d7": "64deaf5ddc9c31b8"
+    }
+   },
+   "at": "2026-11-28T06:06:03.953Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

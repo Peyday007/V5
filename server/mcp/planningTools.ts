@@ -268,7 +268,7 @@ const reviewTool: McpTool = {
           '(field) that shows it; MISSING_PREREQUISITE names a field no EVIDENCE fact on the card carries. A condition without either is refused.',
         items: {
           type: 'object',
-          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' }, defect: { type: 'string', enum: ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'], description: 'Against a price Brain\u2019s planner establishes: the defect the record shows. Required there.' } },
+          properties: { opportunityId: { type: 'string' }, link: { type: 'string' }, basis: { type: 'string', enum: ['EVIDENCE', 'MISSING_PREREQUISITE'] }, field: { type: 'string' }, why: { type: 'string' }, defect: { type: 'string', enum: ['PERSON_WORD', 'CONTRADICTED', 'NOT_A_PURCHASE'], description: 'Against a price Brain\u2019s planner establishes: the defect the record shows. Required there.' }, nonPurchase: { type: 'string', enum: ['REWARD', 'BOUNTY', 'GRANT', 'PRIZE', 'REBATE', 'SETTLEMENT', 'WAGE', 'ANOTHER_BUYERS_CLAIM'], description: 'With NOT_A_PURCHASE: what payment the figure is instead. A directly comparable offer\u2019s current price is an evidenced price, not one of these.' } },
           required: ['opportunityId', 'link', 'basis', 'field', 'why'],
           additionalProperties: false,
         },
