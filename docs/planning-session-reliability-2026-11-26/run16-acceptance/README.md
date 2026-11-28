@@ -16,11 +16,13 @@ An independent agent wrote the hidden cases in `cases/`: 12 established-opportun
 
 ## Result (COMPLETION-SPEC §4)
 
-| set | passed / run | accuracy | Wilson 95% | critical |
-|---|---|---|---|---|
-| bench (hidden, held-out) | 12 / 12 | 1.00 | 0.76–1.00 | 0 |
-| raw-objective discovery | 3 / 4 | 0.75 | 0.30–0.95 | 0 |
-| **all** | **15 / 16** | **0.9375** | **0.72–0.99** | **0** |
+| set | passed / run | accuracy | Wilson 95% | critical | owner-usable | end-to-end |
+|---|---|---|---|---|---|---|
+| bench (hidden, held-out) | 12 / 12 | 1.00 | 0.76–1.00 | 0 | 12 / 12 | 12 / 12 |
+| raw-objective discovery | 3 / 4 | 0.75 | 0.30–0.95 | 0 | (graded by rubric) | 3 / 4 published |
+| **all** | **15 / 16** | **0.9375** | **0.72–0.99** | **0** | | |
+
+Every bench case was published after an independent fleet review (`reviewer` in `grades/summary.txt`). ax-06 was revised once after a REVISE. The changed cases a07, a10 and a12 were re-reviewed after their change.
 
 Stated in the spec's form: 15/16 = 0.9375 (Wilson 95% 0.72–0.99), on f458f03.
 
