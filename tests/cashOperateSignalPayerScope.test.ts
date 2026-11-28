@@ -137,24 +137,27 @@ describe('the signal gap pass', () => {
     const payerAsked = gaps.filter((one) => one.field === 'payer').map((one) => one.opportunityId);
     expect(payerAsked).toEqual([ids.github]);
 
-    // The other capture questions are still asked of every one of them.
+    // The buying-evidence question is still asked of every one of them; the
+    // access question goes with the payer (access-for-v): nobody to reach.
     for (const id of Object.values(ids)) {
       expect(gaps.filter((one) => one.opportunityId === id).map((one) => one.field)).toEqual(
-        expect.arrayContaining(['access', 'buyingEvidence']),
+        expect.arrayContaining(['buyingEvidence']),
       );
     }
+    expect(gaps.filter((one) => one.field === 'access').map((one) => one.opportunityId)).toEqual([ids.github]);
 
     // Each payer question not asked is recorded once, with why.
     const skipped = await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT);
     for (const id of [ids.adobe, ids.tcg, ids.copart, ids.stubhub]) {
       const mine = skipped.filter((event) => event.opportunityId === id);
-      expect(mine).toHaveLength(1);
+      // One per question not asked: the payer, and the access it would reach (access-for-v).
+      expect(mine.map((event) => (event.detail as { field: string }).field).sort()).toEqual(['access', 'payer']);
       expect(mine[0]!.summary).toContain('No payer to look up');
     }
     expect(skipped.filter((event) => event.opportunityId === ids.github)).toEqual([]);
 
     await reconcileDiscoverableGaps(projectId);
-    expect(await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT)).toHaveLength(4);
+    expect(await cashEventsOfKindInProject(projectId, QUESTION_SKIPPED_EVENT)).toHaveLength(8);
   });
 
   it('withdraws a payer question already open on a supplier-price signal, and resolves nothing', async () => {
