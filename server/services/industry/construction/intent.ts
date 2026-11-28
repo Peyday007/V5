@@ -96,6 +96,8 @@ const MONEY = String.raw`\$?\s?(\d[\d,]*(?:\.\d+)?)\s?(k|m|mm|thousand|million)?
  */
 export function cashMetricOf(text: string): 'SETTLED_CASH' | 'COLLECTED_CASH' | 'CONTRIBUTION' {
   if (/\b(?:profit|net|netting|contribution)\b/i.test(text)) return 'CONTRIBUTION';
+  // "Keep $3,500 after all direct costs" (run 16, au/aw-04: a money-kept target read as nothing): what is left after costs.
+  if (/\b(?:keep|keeps|keeping|kept|clear|clears|clearing|pocket|pockets|left over|walk away with)\b[^.;]{0,60}\bafter\b[^.;]{0,30}\b(?:costs?|expenses|spend(?:ing)?)\b/i.test(text)) return 'CONTRIBUTION';
   if (/\bsettled\b/i.test(text)) return 'SETTLED_CASH';
   if (/\b(?:collect(?:ed|ing|s)?\b[^.;]{0,40}\b(?:revenue|payments?|cash|sales)|customer\s+(?:payments?|revenue))\b/i.test(text)) return 'COLLECTED_CASH';
   return 'SETTLED_CASH';
@@ -807,7 +809,7 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
 
   // 5. The amount: a figure the words say is to be brought in.
   // Every person of the verb: "a business that collects $50,000" names the amount as surely as "collect $50,000".
-  const verbBefore = /\b(?:want|wants|need|needs|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?|pays?(?:\s+(?:me|us))?|paying(?:\s+(?:me|us))?|take home|taking home|replac(?:e|es|ing)(?:\s+(?:my|our))?|(?:like|want|need|love|hope)\s+to\s+have|(?:I'd|I would|we'd|we would)\s+like|(?:go|get|grow|move)\s+from\b[^$.;]{0,60}?\s+to|aim(?:s|ing)?\s+for|shoot(?:s|ing)?\s+for|hop(?:e|es|ing)\s+for|looking\s+for|(?:goal|target|aim)\s+(?:is|of)|(?:income|revenue|earnings|profit)\s+of)\s+(?:(?:me|us|it|them|this|that|my business|the business)\s+)?(?:(?:to|up to)\s+)?(?:(?:me|us|at least|over|more than|about|around|roughly|approximately|maybe|some|close to|nearly|almost|just over|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
+  const verbBefore = /\b(?:want|wants|need|needs|keep|keeps|keeping|pocket|pockets|walk away with|builds?|building|get|gets|getting|grow(?:s|ing)? to|generates?|generating|makes?|making|earns?|earning|collects?|collecting|nets?|netting|brings? in|bringing in|clears?|clearing|gross(?:es)?|grossing|produces?|producing|reach(?:es)?|reaching|hits?|gets? to|books?|banks?|pulls? in|realizes?|realises?|profits?|creates?|pays?(?:\s+(?:me|us))?|paying(?:\s+(?:me|us))?|take home|taking home|replac(?:e|es|ing)(?:\s+(?:my|our))?|(?:like|want|need|love|hope)\s+to\s+have|(?:I'd|I would|we'd|we would)\s+like|(?:go|get|grow|move)\s+from\b[^$.;]{0,60}?\s+to|aim(?:s|ing)?\s+for|shoot(?:s|ing)?\s+for|hop(?:e|es|ing)\s+for|looking\s+for|(?:goal|target|aim)\s+(?:is|of)|(?:income|revenue|earnings|profit)\s+of)\s+(?:(?:me|us|it|them|this|that|my business|the business)\s+)?(?:(?:to|up to)\s+)?(?:(?:me|us|at least|over|more than|about|around|roughly|approximately|maybe|some|close to|nearly|almost|just over|an? (?:extra|additional)|another|a minimum of|minimum of|a total of)\s+)*$/i;
   const nounAfter = /^\s*(?:(?:(?:in|of)\s+)?(?:(?:settled|collected|net|gross|new|recurring|monthly|total|customer|client)\s+)*(?:revenue|sales|profit|income|cash flow|cash|payments|invoices|billings?|bookings|fees|commissions|deposits)\b|collected\b|(?:a|per)\s+month\s+recurring\b|\/\s?mo(?:nth)?\s+recurring\b|MRR\b)/i;
   let amountToken: MoneyToken | null = null;
   let recurring: ObjectiveReading['recurring'] = null;
@@ -850,6 +852,12 @@ function readObjectiveDetail(input: string, now: Date): ObjectiveDetail {
       t.role = 'AMOUNT';
       amountToken = { ...t, value: Math.round(t.value / 12) };
       recurring = 'MONTHLY';
+      continue;
+    }
+    // "Keep $500 aside / in reserve": money the owner holds back, never the target.
+    if (/\b(?:keep|keeps|keeping)\s+(?:\S+\s+){0,2}$/i.test(before) && /^\s*(?:aside|in reserve|back|as (?:a |my |our )?(?:buffer|reserve|cushion)|in the bank|untouched|on hand)\b/i.test(after)) {
+      t.role = 'MADE';
+      unread.push(`"${t.raw}": money kept in reserve, not a target`);
       continue;
     }
     const monthlyRecurring = statedRecurring || ranRate;
