@@ -19,6 +19,9 @@ import { activate } from '../server/services/cash/lifecycle.ts';
 import { getCashMode } from '../server/repos/cashMode.ts';
 import { createOpportunity, listNeeds } from '../server/repos/cashPortfolio.ts';
 import { differentMethod, PAYER_ASK, researchGoalPaths } from '../server/services/goals/pathResearch.ts';
+import { reconcileDiscoverableGaps } from '../server/services/cash/operate.ts';
+import { evidenceCard } from '../server/services/cash/card.ts';
+import { getOpportunity } from '../server/repos/cashPortfolio.ts';
 import type { PathResearchReading } from '../server/services/goals/pathResearch.ts';
 import type { ConsideredOpening } from '../server/services/goals/plan.ts';
 
@@ -82,6 +85,38 @@ describe('field-payer: the payer question asks for the published paying party', 
     // … and keeps the bar: a generic "businesses" payer is still refused.
     expect(step).toMatch(/only described as "businesses" or "companies" is not a payer/);
     expect(step).toMatch(/source and date/);
+  });
+
+  it('reproduces the recorded need: the card pass raises "Payer for …" asking for an approver, and the path pass replaces it with the published payer', async () => {
+    const id = await opening('Paid task: federal government-sponsored prize/challenge competitions listed on Challenge.gov that request a specific deliverable');
+    const approver = evidenceCard((await getOpportunity(id))!).fields.find((one) => one.key === 'payer')!.task;
+    expect(approver).toBe('Name the person or role who can approve payment.');
+    // The real card pass, the producer of the 220 recorded needs.
+    await reconcileDiscoverableGaps(projectId);
+    const recorded = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) => one.requestKey === `question:${id}:payer`);
+    expect(recorded).toBeDefined();
+    expect(recorded!.blockedAction).toMatch(/^Payer for "/);
+    expect(recorded!.nextStep).toBe(approver);
+    // No research has run on it, so it is superseded now — not after it fails a day later.
+    await researchGoalPaths({ reading: reading(id), projectId, now, dryRun: false });
+    const open = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.requestKey === `question:${id}:payer`);
+    expect(open).toHaveLength(1);
+    expect(open[0]!.id).not.toBe(recorded!.id);
+    expect(open[0]!.nextStep ?? '').not.toContain('approve payment');
+    expect(open[0]!.nextStep ?? '').toContain(PAYER_ASK);
+    const withdrawn = (await listNeeds({ projectId, states: ['WITHDRAWN'] })).find((one) => one.id === recorded!.id);
+    expect(withdrawn?.resolution ?? '').toMatch(/not published/);
+    // The bar is unchanged: a payer is still a named organisation, never "businesses".
+    expect(open[0]!.nextStep ?? '').toMatch(/only described as "businesses" or "companies" is not a payer/);
+  });
+
+  it('a payer question already asked for the published payer is left alone, not replaced again', async () => {
+    const id = await opening('Paid task: federal prize competition requesting a deliverable');
+    await researchGoalPaths({ reading: reading(id), projectId, now, dryRun: false });
+    const first = (await listNeeds({ projectId, states: ['OPEN'] })).find((one) => one.requestKey === `question:${id}:payer`);
+    await researchGoalPaths({ reading: reading(id), projectId, now, dryRun: false });
+    const again = (await listNeeds({ projectId, states: ['OPEN'] })).filter((one) => one.requestKey === `question:${id}:payer`);
+    expect(again.map((one) => one.id)).toEqual([first!.id]);
   });
 
   it('a payer asked again goes to the documents that assign who pays, not the identical search or comparables', () => {

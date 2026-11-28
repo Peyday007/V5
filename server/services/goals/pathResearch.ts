@@ -35,6 +35,7 @@ import { getCandidate } from '../../repos/russellCandidates.ts';
 import { latestMissionForCandidate } from '../../repos/russellMissions.ts';
 import { questionKey } from '../cash/conditions.ts';
 import { diveOwnsItsQuestions } from '../cash/operate.ts';
+import { evidenceCard } from '../cash/card.ts';
 import { parseBlockerKey } from '../../domain/types.ts';
 import type { ChainLink, PlanReading } from './plan.ts';
 
@@ -370,30 +371,61 @@ export async function researchGoalPaths(input: {
         // a goal rests on were never researched again.
         const stale = open.find((one) => one.requestKey === key);
         if (!stale) continue;
-        if (stale.occurrence >= MAX_ASKINGS) {
-          note(`${one.title.slice(0, 60)} ${field}: asked ${stale.occurrence} times already`);
-          continue;
+        /*
+         * ORIGINATED:UNMET_NEED:field-payer (220 openings, 2026-11): the same
+         * key is raised by the card pass (operate.ts, `Payer for "…"`) with the
+         * card's payer task — "Name the person or role who can approve
+         * payment" — an internal fact nobody publishes, so its research could
+         * only end unanswered. That asking was never this question, so it is
+         * superseded by the published-payer question as soon as no research is
+         * running on it, without waiting for it to fail and without spending
+         * this question's askings.
+         */
+        if (field === 'payer' && asksUnpublishedApprover(stale.nextStep, opportunity)) {
+          if (await missionRunning(stale.candidateId)) {
+            actedHere = true;
+            note(`${one.title.slice(0, 60)} ${field}: approver question being researched; superseded when it ends`);
+            continue;
+          }
+          if (input.dryRun) {
+            note(`${one.title.slice(0, 60)} ${field}: would ask for the published payer instead of an approver`);
+            actedHere = true;
+            continue;
+          }
+          const closed = await closeNeed({
+            needId: stale.id,
+            to: 'WITHDRAWN',
+            resolution: 'It asked for the person or role who approves payment, which is not published; asked instead for the published paying party and how it pays.',
+            actorUserId: 'BRAIN',
+          });
+          if (!closed.ok) continue;
+          keys.delete(key);
+        } else {
+          if (stale.occurrence >= MAX_ASKINGS) {
+            note(`${one.title.slice(0, 60)} ${field}: asked ${stale.occurrence} times already`);
+            continue;
+          }
+          const ended = await endedWithoutAnswer(stale.candidateId, now);
+          if (!ended) {
+            if (await researchAlive(stale.candidateId)) actedHere = true;
+            note(`${one.title.slice(0, 60)} ${field}: ${(await researchAlive(stale.candidateId)) ? 'being researched' : 'ended less than a day ago'}`);
+            continue;
+          }
+          if (input.dryRun) {
+            note(`${one.title.slice(0, 60)} ${field}: would ask again (${ended.reason.slice(0, 80)})`);
+            actedHere = true;
+            continue;
+          }
+          const closed = await closeNeed({
+            needId: stale.id,
+            to: 'WITHDRAWN',
+            resolution: `Its research ended without an answer (${ended.reason}); asked again a different way.`,
+            actorUserId: 'BRAIN',
+          });
+          if (!closed.ok) continue;
+          keys.delete(key);
+          nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason, field);
         }
-        const ended = await endedWithoutAnswer(stale.candidateId, now);
-        if (!ended) {
-          if (await researchAlive(stale.candidateId)) actedHere = true;
-          note(`${one.title.slice(0, 60)} ${field}: ${(await researchAlive(stale.candidateId)) ? 'being researched' : 'ended less than a day ago'}`);
-          continue;
-        }
-        if (input.dryRun) {
-          note(`${one.title.slice(0, 60)} ${field}: would ask again (${ended.reason.slice(0, 80)})`);
-          actedHere = true;
-          continue;
-        }
-        const closed = await closeNeed({
-          needId: stale.id,
-          to: 'WITHDRAWN',
-          resolution: `Its research ended without an answer (${ended.reason}); asked again a different way.`,
-          actorUserId: 'BRAIN',
-        });
-        if (!closed.ok) continue;
-        keys.delete(key);
-        nextStep = differentMethod(ask, stale.occurrence + 1, ended.reason, field);
       }
       if (input.remedyInstruction?.trim()) nextStep = `${nextStep} ${input.remedyInstruction.trim()}`;
       if (input.dryRun) {
@@ -455,6 +487,25 @@ export function differentMethod(ask: string, asking: number, previous: string, f
       ? 'Do not repeat that approach. Use other kinds of source — the buyer’s or platform’s own published terms and payout pages, official filings, trade or industry publications, archived copies of pages that are now unavailable — and say which you used.'
       : 'Two attempts found no direct answer. Answer from the closest comparable published cases instead: name each comparable business or transaction, its published figure or terms with source and date, and how it compares to this opening. Say plainly if nothing comparable is published.';
   return `${ask} An earlier attempt ended without an answer: ${why}. ${method}`;
+}
+
+/**
+ * Does an open payer question ask for the person or role who approves the
+ * payment — the card pass's payer task (card.ts), which nobody publishes?
+ * Brain wrote that step, so it is recognised by constructing the card's task
+ * again and comparing, never by reading the prose for meaning.
+ */
+function asksUnpublishedApprover(nextStep: string | null, opportunity: Parameters<typeof evidenceCard>[0]): boolean {
+  const task = evidenceCard(opportunity).fields.find((one) => one.key === 'payer')?.task;
+  return !!task && !!nextStep && nextStep.trim().startsWith(task);
+}
+
+/** True while a research mission is actually running on the question. */
+async function missionRunning(candidateId: string | null): Promise<boolean> {
+  if (!candidateId) return false;
+  const mission = await latestMissionForCandidate(candidateId);
+  if (!mission) return false;
+  return mission.state !== 'FAILED' && mission.state !== 'CANCELLED' && mission.state !== 'DONE' && mission.state !== 'NEEDS_HUMAN';
 }
 
 /** True while a question is waiting to be asked or its research is still under way. */
