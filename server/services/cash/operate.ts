@@ -569,18 +569,25 @@ async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpport
  * "submit(ted) via/through X (domain)", "reported through X at domain");
  * anything looser is left to research, because a channel guessed from grammar
  * is a wrong load-bearing field. Pure.
+ *
+ * Review round 1 (F1): the pattern is case-sensitive, like `STATED_PAYER`, so
+ * NAME's capital letter is a real requirement — compiled with 'i' it read
+ * "the web form" or "some random forum" as the party. Only the verbs are
+ * spelled for a sentence-initial capital. A capitalised word that is a date,
+ * not a party ("run through December (…)"), is refused by NOT_A_CHANNEL.
  */
-const DOMAIN = String.raw`(?:https?:\/\/)?[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:\/[\w./-]*[\w/])?`;
+const DOMAIN = String.raw`(?:https?:\/\/)?[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+(?:\/[\w./-]*[\w/])?`;
 const STATED_CHANNEL = new RegExp(
-  String.raw`\b(?:is\s+run|run|submit(?:ted)?|reported|are\s+reported|is\s+reported)\s+(?:via|through)\s+${NAME}\s*(?:\((${DOMAIN})\)|\s+at\s+(${DOMAIN}))`,
-  'i',
+  String.raw`\b(?:[Ii]s\s+run|[Rr]un|[Ss]ubmit(?:ted)?|[Rr]eported|[Aa]re\s+reported|[Ii]s\s+reported)\s+(?:via|through)\s+${NAME}\s*(?:\((${DOMAIN})\)|\s+at\s+(${DOMAIN}))`,
 );
+const NOT_A_CHANNEL =
+  /^(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Q[1-4]|The|This|That|These|Those|Our|Their|Its|His|Her|Your|My)\b/;
 export function statedChannel(text: string | null | undefined): string | null {
   const found = STATED_CHANNEL.exec(text ?? '');
   if (!found) return null;
   const name = found[1]?.trim().replace(/[.'’-]+$/, '');
   const where = (found[2] ?? found[3])?.replace(/[.,;:]+$/, '');
-  if (!name || !where || NOT_A_NAME.test(name)) return null;
+  if (!name || !where || NOT_A_NAME.test(name) || NOT_A_CHANNEL.test(name)) return null;
   return `${name} (${where})`;
 }
 

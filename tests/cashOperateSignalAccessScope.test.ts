@@ -174,6 +174,12 @@ describe('statedChannel', () => {
       'Intigriti (app.intigriti.com/programs/acme)',
     );
     expect(statedChannel('The bounty is run through HackerOne.')).toBeNull();
+    // Review round 1 (F1): a lowercase phrase or a date is not a party to reach.
+    expect(statedChannel('The spring promotion is run through December (example.com/promo).')).toBeNull();
+    expect(statedChannel('orders are submitted via the web form at example.com/form.')).toBeNull();
+    expect(statedChannel('Tickets are reported through some random forum at reddit.com/r/x.')).toBeNull();
+    expect(statedChannel('Entries are submitted via The Form (example.com/form).')).toBeNull();
+    expect(statedChannel('Submitted through HackerOne (HackerOne.com/acme).')).toBe('HackerOne (HackerOne.com/acme)');
     for (const title of [TCG, COPART, STUBHUB, SAFE_MUSIC]) expect(statedChannel(title)).toBeNull();
   });
 });
