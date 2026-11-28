@@ -243,7 +243,7 @@ const revisionTool: McpTool = {
     'Submit a plan revision (stance, strategy, alternatives, steps, cash sequence, proof day, quantities with UNKNOWN as null, ' +
     'sources with population and buyer match (and `opportunityId` for a public source about an opening the session discovered), ' +
     'validation (for a conditional plan, `decides`: the chain link(s) whose measurement decides whether it goes on) or no-plan ' +
-    'reasoning, reach with its calibration, answers to the last review). Every opening on the goal goes in `chain` (weighed) or ' +
+    'reasoning, reach with its calibration, answers to the last review). Every opening in the context\'s `mustAccount` goes in `chain` (weighed) or ' +
     '`excluded` (with why, e.g. outside a changed objective). A no-plan or conditional result states `members` for every opening ' +
     'it weighs: deals needed at its price, direct cost, capital per cycle and `settlesDay`, null exactly where that link is ' +
     'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished, and states ' +
@@ -354,10 +354,10 @@ const stateTool: McpTool = {
  * What one call returns must fit what the Claude app reads in one tool result (about 25k tokens), not only Brain's own
  * 256 KB transport cap (production, 2026-11-28, Cash Mode 1: brain_planning_context returned 158,464 characters, which
  * the app saved to a file instead of reading, and brain_planning_state and brain_planning_submit_revision hit the
- * 256 KB cap). Every planning tool's value is fitted to that budget, each cut named in `compacted`; the records stay
+ * 256 KB cap). Every planning tool's value is fitted to that budget (40 KB: JSON runs about 3 characters a token, and 72K characters were still refused), each cut named in `compacted`; the records stay
  * whole in Brain, which the checks read.
  */
-export const APP_RESULT_BUDGET_BYTES = 80 * 1024;
+export const APP_RESULT_BUDGET_BYTES = 40 * 1024;
 export const fitted = (tool: McpTool): McpTool => ({
   ...tool,
   run: async (args, ctx) => {
