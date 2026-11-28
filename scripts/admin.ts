@@ -2441,7 +2441,13 @@ async function main(): Promise<void> {
       const goalId = rest[0] ?? fail('Name a goal.');
       const goal = await getGoalRow(goalId);
       if (!goal) fail(`No goal ${goalId}.`);
-      if (goal!.projectId && !(await getMembership(goal!.projectId, 'HUMAN', actor.id))) fail('The administrator is not a member of this goal’s project, so cannot own it.');
+      /*
+       * The terms route requires an owner to be a member of the goal's project, so nobody's name goes on work they
+       * cannot see. An administrator sees every project (`identity/policy.ts`: a Brain admin is allowed on any
+       * project), so for them the rule protects nothing; anyone else must be a member. 2026-11-28: the owner's
+       * administrator account held no membership on Cash Mode 1, and the app session's goal could not be owned.
+       */
+      if (goal!.projectId && !actor.isBrainAdmin && !(await getMembership(goal!.projectId, 'HUMAN', actor.id))) fail('The administrator is not a member of this goal’s project, so cannot own it.');
       const made = await setGoalTermsDecision(goal!.id, { ownerUserId: actor.id }, `person:${actor.id}`);
       if (!made.ok) fail(`${made.reason} ${made.consequence}`);
       console.log(`  ${goal!.id} is owned by ${actor.email}.`);
