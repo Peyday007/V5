@@ -1,0 +1,218 @@
+{
+ "caseId": "at-07-community-radio-price-contradicted",
+ "keys": {
+  "cop_8b657f6bf2e849558519": "publicFile"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 42250× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Quarterly issues/programs list and online public-file upkeep\" needs [figure withheld] and keeps [figure withheld], 650× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"General managers and volunteer station coordinators at noncommercial community radio stati\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_8b657f6bf2e849558519"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+    "owner": "PERSON",
+    "cost": 10
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach General managers and volunteer station coordinators at noncommercial community radio stati",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with General managers and volunteer station coordinators at noncommercial community radio stati",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 20.6954129783515
+   },
+   {
+    "label": "Collect payment for \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_8b657f6bf2e849558519",
+    "title": "Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "General managers and volunteer station coordinators at noncommercial community radio stations",
+     "reachableChannel": "Station contact addresses in the regulator's online public-file listings",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:14.969Z",
+     "offerScope": "Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations",
+     "priceCents": 120000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "community radio stations",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Station contact addresses in the regulator's online public-file listings"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 20 accepted of 200 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "43 deal(s) needed at the measured rate means asking 596 prospects, but the market holds only 410 (410 reachable buyers, each buying about every 91 days, so 1 purchase(s) each in 30 days): at that rate it yields about 29.6"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 10, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The regulator's licence database lists 410 noncommercial FM stations in the region; each must post a quarterly issues/programs list to its online public file.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "20 paid orders from 200 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "General managers and volunteer station coordinators at noncommercial community radio stations",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$120",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_a6d150f9b1364749bd5d"
+  ],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:37:47.882Z"
+ }
+}

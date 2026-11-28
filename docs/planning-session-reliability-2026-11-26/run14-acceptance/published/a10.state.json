@@ -1,0 +1,1259 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_4116635e6ad941e69521",
+   "words": "Collect $3,000 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "Settled cash received in the owner's account totals the target inside the window",
+    "ownerHoursPerWeek": 3,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a953634d2fbb19842b01b592"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_4116635e6ad941e69521",
+    "contractDigest": "a953634d2fbb19842b01b592",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+     "opportunityIds": [],
+     "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver one revision inside the 13 hours",
+      "why": "Brings $750, a quarter of the target."
+     },
+     {
+      "title": "Find a subcontracted instructor to do the revisions",
+      "why": "No fulfiller other than the owner is on the record; would need research."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find a qualified subcontractor with a written rate below $750 to perform the course-outline revisions instead of the owner",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Owner hours per revision",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "hours",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per revision",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+      "dated": "2026-11",
+      "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+      "dated": "2026-11-25",
+      "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Fulfilment inside the owner-hour limit: the owner is the only fulfiller, at 8 hours per revision; four revisions ($3,000) need 32 hours against the 13 the goal allows.",
+     "resolution": "Find a subcontracted fulfiller with a written rate below $750 per revision so the owner's time is not consumed, or raise the owner-hour allowance to about 32 hours (7.5 h/week).",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner-time allowance to at least 32 hours in the window (about 7.5 hours a week), or lower the target to $750.",
+      "basis": [
+       {
+        "opportunityId": "cop_83344643029244b8b05d",
+        "field": "humanHours"
+       }
+      ]
+     }
+    ],
+    "disagreements": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "link": "FULFILMENT",
+      "reason": "Brain marks fulfilment ok, but the only fulfiller is the owner (the fulfillment fact is PERSON), at 8 humanHours per revision; inside the goal's 13 owner hours only one of the four needed revisions can be delivered, so fulfilment of the required volume is not established within the limits."
+     }
+    ],
+    "revisionId": "rev_8f4939542c56_abb3b6",
+    "digest": "8f4939542c5659d2fc0fffba",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:44:40.750Z"
+   },
+   {
+    "goalId": "wst_4116635e6ad941e69521",
+    "contractDigest": "a953634d2fbb19842b01b592",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+     "opportunityIds": [],
+     "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver one revision inside the 13 hours",
+      "why": "Brings $750, a quarter of the target."
+     },
+     {
+      "title": "Find a subcontracted instructor to do the revisions",
+      "why": "No fulfiller other than the owner is on the record; would need research."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find a qualified subcontractor with a written rate below $750 to perform the course-outline revisions instead of the owner",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Owner hours per revision",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [
+       "s2"
+      ],
+      "needs": "An evidenced measure of the work time per revision (the record's 8 h is not evidence)"
+     },
+     {
+      "name": "Price per revision",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+      "dated": "2026-11",
+      "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+      "dated": "2026-11-25",
+      "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Fulfilment inside the owner-hour limit is not established: the only fulfiller on record is the owner, and that rests on a PERSON statement, not evidence; the record's 8 hours per revision would put four revisions ($3,000) at 32 owner hours against the 13 the goal allows, and no evidenced figure shows the work fits.",
+     "resolution": "Establish a fulfiller that fits the limit: find a subcontracted reviewer with a written rate below $750 per revision (so owner time is not consumed), or measure the owner's actual hours on the first signed revision; continue only if four revisions fit in 13 owner hours or a subcontractor carries them.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "link": "FULFILMENT",
+      "reason": "Brain marks fulfilment ok, but the only fulfiller is the owner (the fulfillment fact is PERSON), at 8 humanHours per revision; inside the goal's 13 owner hours only one of the four needed revisions can be delivered, so fulfilment of the required volume is not established within the limits."
+     }
+    ],
+    "revisionId": "rev_7da863648d0e_3b28c9",
+    "digest": "7da863648d0e80dd7fc8a16c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:44:53.395Z"
+   },
+   {
+    "goalId": "wst_4116635e6ad941e69521",
+    "contractDigest": "a953634d2fbb19842b01b592",
+    "parentRevisionId": "rev_7da863648d0e_3b28c9",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+     "opportunityIds": [],
+     "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver one revision inside the 13 hours",
+      "why": "Brings $750, a quarter of the target."
+     },
+     {
+      "title": "Find a subcontracted instructor to do the revisions",
+      "why": "No fulfiller other than the owner is on the record; would need research."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find a qualified subcontractor with a written rate below $750 to perform the course-outline revisions instead of the owner",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Owner hours per revision",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "hours",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per revision",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+      "dated": "2026-11",
+      "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+      "dated": "2026-11-25",
+      "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the owner does each revision personally at 8 hours; $3,000 needs four revisions = 32 hours against the 12.9 hours (3 h/week x 30/7 weeks) the goal allows, which cover one revision ($750).",
+     "resolution": "Raise the owner-hour allowance to at least 32 hours (about 7.5 h/week), or lower the target to $750; alternatively measure the first revision and continue only if a revision takes at most 3.25 hours.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner-time allowance to at least 32 hours in 30 days (about 7.5 hours a week), or lower the target to $750 under the current 3 hours a week.",
+      "basis": [
+       {
+        "opportunityId": "cop_83344643029244b8b05d",
+        "field": "fulfillment"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_f557bcab383c_d0e765",
+    "digest": "f557bcab383c0bffddc3acbd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:47:58.059Z"
+   },
+   {
+    "goalId": "wst_4116635e6ad941e69521",
+    "contractDigest": "a953634d2fbb19842b01b592",
+    "parentRevisionId": "rev_7da863648d0e_3b28c9",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+     "opportunityIds": [],
+     "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver one revision inside the 13 hours",
+      "why": "Brings $750, a quarter of the target."
+     },
+     {
+      "title": "Have a subcontractor do the revisions",
+      "why": "Each signed deliverable reads 'done by the owner'; a substitute needs each school's written consent and a fulfiller with a written rate, none on record."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "TEST",
+      "label": "Owner times the first signed revision; continue only if it takes at most 3.25 hours (four in 13 hours)",
+      "performer": "OWNER",
+      "ownerHours": 8,
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Owner hours per revision",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "hours",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per revision",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+      "dated": "2026-11",
+      "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+      "dated": "2026-11-25",
+      "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the owner does each revision personally at 8 hours; $3,000 needs four revisions = 32 hours against the 12.9 hours (3 h/week x 30/7 weeks) the goal allows, which cover one revision ($750).",
+     "resolution": "Raise the owner-hour allowance to at least 32 hours (about 7.5 h/week), or lower the target to $750; alternatively measure the first revision and continue only if a revision takes at most 3.25 hours.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 4 revisions x 8 h = 32 h vs 12.9 h allowed; 13 h deliver $750.",
+      "resolution": "Agreed; the plan now states exactly this."
+     },
+     {
+      "finding": "Decisive gap misclassified: it is an OWNER_HOURS constraint, not missing FULFILMENT evidence.",
+      "resolution": "Accepted. FULFILMENT is no longer marked missing; the revision carries an OWNER_HOURS constraint (raise to at least 32 h, about 7.5 h/week, or lower the target to $750), based on the card's fulfillment record (the owner personally) and its 8 humanHours per revision."
+     },
+     {
+      "finding": "A subcontractor conflicts with the signed 'done by the owner' agreements.",
+      "resolution": "Accepted. The subcontractor route is dropped from the resolution and kept only as an alternative that needs each school's written consent."
+     },
+     {
+      "finding": "The measuring test must state its threshold: at most 3.25 h per revision.",
+      "resolution": "Accepted. Step r1 and the resolution state the 3.25-hour threshold."
+     },
+     {
+      "finding": "The disagreement with Brain's FULFILMENT link was framed as an evidence defect.",
+      "resolution": "Accepted. The disagreement is removed; the chain now agrees with Brain that every link is established, and the limit is the owner-hour constraint."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner-time allowance to at least 32 hours in 30 days (about 7.5 hours a week), or lower the target to $750 under the current 3 hours a week.",
+      "basis": [
+       {
+        "opportunityId": "cop_83344643029244b8b05d",
+        "field": "fulfillment"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_40b33f7f22f7_71a0c1",
+    "digest": "40b33f7f22f7d652e618ef33",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:48:09.927Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_4116635e6ad941e69521",
+   "contractDigest": "a953634d2fbb19842b01b592",
+   "parentRevisionId": "rev_7da863648d0e_3b28c9",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+    "opportunityIds": [],
+    "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver one revision inside the 13 hours",
+     "why": "Brings $750, a quarter of the target."
+    },
+    {
+     "title": "Have a subcontractor do the revisions",
+     "why": "Each signed deliverable reads 'done by the owner'; a substitute needs each school's written consent and a fulfiller with a written rate, none on record."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "TEST",
+     "label": "Owner times the first signed revision; continue only if it takes at most 3.25 hours (four in 13 hours)",
+     "performer": "OWNER",
+     "ownerHours": 8,
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Owner hours per revision",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "hours",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Price per revision",
+     "status": "EVIDENCED",
+     "value": 750,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+     "dated": "2026-11",
+     "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+     "population": "five signed schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83344643029244b8b05d"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+     "dated": "2026-11-25",
+     "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+     "population": "five signed schools",
+     "matchesBuyer": true,
+     "opportunityId": "cop_83344643029244b8b05d"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: the owner does each revision personally at 8 hours; $3,000 needs four revisions = 32 hours against the 12.9 hours (3 h/week x 30/7 weeks) the goal allows, which cover one revision ($750).",
+    "resolution": "Raise the owner-hour allowance to at least 32 hours (about 7.5 h/week), or lower the target to $750; alternatively measure the first revision and continue only if a revision takes at most 3.25 hours.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed: 4 revisions x 8 h = 32 h vs 12.9 h allowed; 13 h deliver $750.",
+     "resolution": "Agreed; the plan now states exactly this."
+    },
+    {
+     "finding": "Decisive gap misclassified: it is an OWNER_HOURS constraint, not missing FULFILMENT evidence.",
+     "resolution": "Accepted. FULFILMENT is no longer marked missing; the revision carries an OWNER_HOURS constraint (raise to at least 32 h, about 7.5 h/week, or lower the target to $750), based on the card's fulfillment record (the owner personally) and its 8 humanHours per revision."
+    },
+    {
+     "finding": "A subcontractor conflicts with the signed 'done by the owner' agreements.",
+     "resolution": "Accepted. The subcontractor route is dropped from the resolution and kept only as an alternative that needs each school's written consent."
+    },
+    {
+     "finding": "The measuring test must state its threshold: at most 3.25 h per revision.",
+     "resolution": "Accepted. Step r1 and the resolution state the 3.25-hour threshold."
+    },
+    {
+     "finding": "The disagreement with Brain's FULFILMENT link was framed as an evidence defect.",
+     "resolution": "Accepted. The disagreement is removed; the chain now agrees with Brain that every link is established, and the limit is the owner-hour constraint."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_83344643029244b8b05d",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_83344643029244b8b05d",
+     "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Raise the owner-time allowance to at least 32 hours in 30 days (about 7.5 hours a week), or lower the target to $750 under the current 3 hours a week.",
+     "basis": [
+      {
+       "opportunityId": "cop_83344643029244b8b05d",
+       "field": "fulfillment"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_40b33f7f22f7_71a0c1",
+   "digest": "40b33f7f22f7d652e618ef33",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_3f547d6718e2445594ef/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:48:09.927Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_40b33f7f22f7_71a0c1",
+   "digest": "40b33f7f22f7d652e618ef33",
+   "contractDigest": "a953634d2fbb19842b01b592",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: the agreed deals need 40 owner hours, more than the 13 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5229× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Chief flight instructors and owners of certific\" needs [figure withheld] and keeps [figure withheld], 749× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_83344643029244b8b05d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the supply",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 4.831019445537701
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 3750 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "title": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Chief flight instructors and owners of certificated flight schools",
+       "reachableChannel": "The five schools that signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:29.149Z",
+       "offerScope": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+       "priceCents": 75000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 8,
+       "requiredCapabilities": [],
+       "industry": "flight schools",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 75000,
+        "currency": "USD",
+        "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 75000,
+        "currency": "USD",
+        "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 75000,
+        "currency": "USD",
+        "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 75000,
+        "currency": "USD",
+        "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 75000,
+        "currency": "USD",
+        "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The five schools that signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3750 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3750 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by The owner, personally (a person says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Training-course outline and stage-check records revision for flight schools, done by the owner to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Chief flight instructors and owners of certificated flight schools",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Five flight schools signed engagements at $750 per course-outline revision (signed engagements, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": 13,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 3
+    },
+    "at": "2026-11-28T04:36:56.979Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_7da863648d0e_3b28c9",
+    "revisionDigest": "7da863648d0e80dd7fc8a16c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_87ce6a15ae674be68d6a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "NO_PLAN is the right stance but it names the wrong kind of gap. The record holds five written acceptances at $750 and a card humanHours of 8 per revision done by the owner personally (the owner is the authority on whether he does his own work; Brain marks FULFILMENT ok from this offer's own record, and no record contradicts it). The binding fact is the owner-hour limit: 3 h/week x 30/7 weeks = 12.9 h, so 13 h cover one revision ($750), while $3,000 needs four (32 h). That is a constraint - even with every link evidenced the work cannot fit the limit - so it belongs in `constraints` (OWNER_HOURS) with a suggestion, not as missing FULFILMENT evidence; the revision's constraints list is empty and it calls the 8 h figure 'not evidence' while still relying on it.",
+    "findings": [
+     "Recomputed: 5 x $750 = $3,750 agreed; target $3,000 = 4 revisions; 4 x 8 h = 32 owner hours (all five = 40 h, as Brain says) vs 12.9 h allowed; 13 h deliver 1 revision = $750. Settlement (7 days) and costs ($0) fit; only owner hours fail.",
+     "Decisive gap misclassified: decisiveLinks [FULFILMENT] and 'no evidenced figure shows the work fits' treats a limit breach as missing evidence. It should be a constraint: raise the owner's allowance to at least 32 h in 30 days (about 7.5 h/week), or lower the target to $750 under the current 3 h/week.",
+     "Resolution 'find a subcontracted reviewer' conflicts with the signed agreements: each deliverable reads 'done by the owner'; substituting a subcontractor requires each school's written consent, which the resolution should require before it counts.",
+     "Resolution 'measure the owner's actual hours on the first revision; continue only if four fit in 13 hours' is a valid test but must state the threshold: at most 3.25 h per revision.",
+     "Disagreement with Brain's FULFILMENT link is framed as an evidence defect; the owner's statement that he does the work is not contradicted by any record, so the disagreement should be about the hours limit, not who fulfils."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:46:34.028Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_f557bcab383c_d0e765",
+    "revisionDigest": "f557bcab383c0bffddc3acbd",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_87ce6a15ae674be68d6a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN now rests on the right gap: an OWNER_HOURS constraint. Five written acceptances at $750 ($3,750), owner fulfils personally at 8 h per revision (card humanHours, now treated as evidenced), $3,000 needs four revisions = 32 h against 3 h/week x 30/7 = 12.9 h, which covers one ($750). The constraint suggestion (at least 32 h, about 7.5 h/week, or target $750) and the measurement alternative (continue only if a revision takes at most 3.25 h) are arithmetically right. Brain's check agrees (NOT_VIABLE on owner hours).",
+    "findings": [
+     "Recomputed: 4 x 8 = 32 h; 32 / (30/7) = 7.47 h/week; 12.9 h / 4 revisions = 3.2 h each. Matches.",
+     "Not decisive: step r1 and the 'subcontracted instructor' alternative still ignore that every signed deliverable reads 'done by the owner'; a substitute performer needs each school's written consent before it counts. The revision has no answers recorded to the previous review's findings."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:48:37.717Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_40b33f7f22f7_71a0c1",
+    "revisionDigest": "40b33f7f22f7d652e618ef33",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_87ce6a15ae674be68d6a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN on an OWNER_HOURS constraint is correct and every earlier finding is answered: 4 revisions x 8 h = 32 h vs 3 h/week x 30/7 = 12.9 h, covering one $750 revision; the suggestion (at least 32 h, about 7.5 h/week, or target $750) is right; the subcontractor route now requires each school's written consent because the signed deliverables read 'done by the owner'; the measurement test states its threshold (at most 3.25 h per revision) and is an owner task whose 8 h fit inside the 12.9 h and deliver a signed $750 revision either way. The chain agrees with Brain's links; Brain's check agrees (NOT_VIABLE on owner hours).",
+    "findings": [
+     "Recomputed: 12.9 / 4 = 3.2 h per revision needed; the 3.25 h threshold rounds up slightly (4 x 3.25 = 13.0 h vs 12.86 h allowed) - immaterial."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:48:52.949Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_40b33f7f22f7_71a0c1",
+   "digest": "40b33f7f22f7d652e618ef33",
+   "contractDigest": "a953634d2fbb19842b01b592",
+   "plan": {
+    "goalId": "wst_4116635e6ad941e69521",
+    "contractDigest": "a953634d2fbb19842b01b592",
+    "parentRevisionId": "rev_7da863648d0e_3b28c9",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the signed flight-school revisions need 32 owner hours against 13 allowed",
+     "opportunityIds": [],
+     "why": "Five schools signed at $750 ($3,750); the owner is the only fulfiller and each revision takes 8 hours. Reaching $3,000 needs four revisions = 32 owner hours; the goal allows 3 hours a week, 13 hours in 30 days, which covers one revision ($750)."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver one revision inside the 13 hours",
+      "why": "Brings $750, a quarter of the target."
+     },
+     {
+      "title": "Have a subcontractor do the revisions",
+      "why": "Each signed deliverable reads 'done by the owner'; a substitute needs each school's written consent and a fulfiller with a written rate, none on record."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "TEST",
+      "label": "Owner times the first signed revision; continue only if it takes at most 3.25 hours (four in 13 hours)",
+      "performer": "OWNER",
+      "ownerHours": 8,
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Owner hours per revision",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "hours",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per revision",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#price",
+      "dated": "2026-11",
+      "claim": "Five flight schools signed engagements at $750 per course-outline revision",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_83344643029244b8b05d#humanHours",
+      "dated": "2026-11-25",
+      "claim": "8 hours of work per revision by the fulfiller, the owner personally",
+      "population": "five signed schools",
+      "matchesBuyer": true,
+      "opportunityId": "cop_83344643029244b8b05d"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: the owner does each revision personally at 8 hours; $3,000 needs four revisions = 32 hours against the 12.9 hours (3 h/week x 30/7 weeks) the goal allows, which cover one revision ($750).",
+     "resolution": "Raise the owner-hour allowance to at least 32 hours (about 7.5 h/week), or lower the target to $750; alternatively measure the first revision and continue only if a revision takes at most 3.25 hours.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 4 revisions x 8 h = 32 h vs 12.9 h allowed; 13 h deliver $750.",
+      "resolution": "Agreed; the plan now states exactly this."
+     },
+     {
+      "finding": "Decisive gap misclassified: it is an OWNER_HOURS constraint, not missing FULFILMENT evidence.",
+      "resolution": "Accepted. FULFILMENT is no longer marked missing; the revision carries an OWNER_HOURS constraint (raise to at least 32 h, about 7.5 h/week, or lower the target to $750), based on the card's fulfillment record (the owner personally) and its 8 humanHours per revision."
+     },
+     {
+      "finding": "A subcontractor conflicts with the signed 'done by the owner' agreements.",
+      "resolution": "Accepted. The subcontractor route is dropped from the resolution and kept only as an alternative that needs each school's written consent."
+     },
+     {
+      "finding": "The measuring test must state its threshold: at most 3.25 h per revision.",
+      "resolution": "Accepted. Step r1 and the resolution state the 3.25-hour threshold."
+     },
+     {
+      "finding": "The disagreement with Brain's FULFILMENT link was framed as an evidence defect.",
+      "resolution": "Accepted. The disagreement is removed; the chain now agrees with Brain that every link is established, and the limit is the owner-hour constraint."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_83344643029244b8b05d",
+      "why": "Only the owner fulfils, at 8 hours each: 13 owner hours deliver one $750 revision, not $3,000."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Raise the owner-time allowance to at least 32 hours in 30 days (about 7.5 hours a week), or lower the target to $750 under the current 3 hours a week.",
+      "basis": [
+       {
+        "opportunityId": "cop_83344643029244b8b05d",
+        "field": "fulfillment"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_40b33f7f22f7_71a0c1",
+    "digest": "40b33f7f22f7d652e618ef33",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:48:09.927Z"
+   },
+   "review": {
+    "revisionId": "rev_40b33f7f22f7_71a0c1",
+    "revisionDigest": "40b33f7f22f7d652e618ef33",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3f547d6718e2445594ef/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_87ce6a15ae674be68d6a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN on an OWNER_HOURS constraint is correct and every earlier finding is answered: 4 revisions x 8 h = 32 h vs 3 h/week x 30/7 = 12.9 h, covering one $750 revision; the suggestion (at least 32 h, about 7.5 h/week, or target $750) is right; the subcontractor route now requires each school's written consent because the signed deliverables read 'done by the owner'; the measurement test states its threshold (at most 3.25 h per revision) and is an owner task whose 8 h fit inside the 12.9 h and deliver a signed $750 revision either way. The chain agrees with Brain's links; Brain's check agrees (NOT_VIABLE on owner hours).",
+    "findings": [
+     "Recomputed: 12.9 / 4 = 3.2 h per revision needed; the 3.25 h threshold rounds up slightly (4 x 3.25 = 13.0 h vs 12.86 h allowed) - immaterial."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:48:52.949Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+    "terms": "6c6a692204fc182d",
+    "openings": {
+     "cop_83344643029244b8b05d": "ba14c795755cff34"
+    }
+   },
+   "at": "2026-11-28T04:51:50.814Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

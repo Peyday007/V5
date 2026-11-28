@@ -1,0 +1,797 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_98caa8f7d8c746648cbd",
+   "words": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 800000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of at least 8000 USD received within 45 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "e7d2ab309ebbfa4102276371"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_98caa8f7d8c746648cbd",
+    "contractDigest": "e7d2ab309ebbfa4102276371",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a purchase price for the eligibility workbook is established",
+     "opportunityIds": [],
+     "why": "The card's $2,000 'price' is the state grant programme's payment to providers per unserved location they connect (programme guidelines, Oct 2026). That is a grant award to the buyer, not what a provider pays for an eligibility workbook. No price a buyer pays for the workbook is recorded, so OFFER_AND_PRICE is not established, and the deal count against the $8,000 target cannot be computed. Everything else (75 reachable providers, 8/60 paid conversion, Brain-produced spreadsheet, $20 cost, $0 exposure, 10-day settlement in a 45-day window) is on the card."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at $2,000 per workbook",
+      "why": "Reads a grant payout per connected location as a purchase price; rejected. At the measured 8/60 conversion the 75-provider list yields about 10 sales, so the plan works only if the real price is at least about $800 - which nothing yet shows."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish what small WISPs actually pay for an unserved-location eligibility workbook: the amounts paid on the 8 recorded paid orders, or published, dated prices for broadband-grant eligibility/location-analysis services",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price a provider pays per workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "An order amount or a published, dated purchase price for this deliverable (the $2,000 is a grant per connected location)"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.133,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable providers",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "providers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 20,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#price",
+      "dated": "2026-10-31",
+      "claim": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect - a grant to the buyer, not a workbook price.",
+      "population": "state broadband grant programme (payer is the state, not the workbook buyer)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "8 paid orders from 60 contacts.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Eligible-applicant list names 75 fixed-wireless providers for the current round.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $20.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only $2,000 figure is a grant the state pays providers per connected location, not a price any provider pays for the workbook; no purchase price is established, so revenue per deal and the number of the 75 providers needed for $8,000 are unknown.",
+     "resolution": "Record the amount actually paid on the 8 existing paid orders, or research published, dated prices for unserved-location eligibility analyses sold to WISPs. With ~10 sales reachable (75 x 8/60), a confirmed price of at least ~$800 makes the plan EXECUTABLE within 45 days; a lower price means the target must be relaxed.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 10,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain judged 'price 2000 USD (EVIDENCE)', but the card's price fact is the state grant programme paying providers up to $2,000 per unserved location connected (guidelines, Oct 2026): a grant/reward to the buyer, not a purchase price for the workbook. No buyer is shown paying any price for it."
+     }
+    ],
+    "revisionId": "rev_2cda1c1ade06_eeb8b6",
+    "digest": "2cda1c1ade067d5290cd43d3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7b71f937ed44185b4be/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:23.777Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_98caa8f7d8c746648cbd",
+   "contractDigest": "e7d2ab309ebbfa4102276371",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until a purchase price for the eligibility workbook is established",
+    "opportunityIds": [],
+    "why": "The card's $2,000 'price' is the state grant programme's payment to providers per unserved location they connect (programme guidelines, Oct 2026). That is a grant award to the buyer, not what a provider pays for an eligibility workbook. No price a buyer pays for the workbook is recorded, so OFFER_AND_PRICE is not established, and the deal count against the $8,000 target cannot be computed. Everything else (75 reachable providers, 8/60 paid conversion, Brain-produced spreadsheet, $20 cost, $0 exposure, 10-day settlement in a 45-day window) is on the card."
+   },
+   "alternatives": [
+    {
+     "title": "Sell at $2,000 per workbook",
+     "why": "Reads a grant payout per connected location as a purchase price; rejected. At the measured 8/60 conversion the 75-provider list yields about 10 sales, so the plan works only if the real price is at least about $800 - which nothing yet shows."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Establish what small WISPs actually pay for an unserved-location eligibility workbook: the amounts paid on the 8 recorded paid orders, or published, dated prices for broadband-grant eligibility/location-analysis services",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price a provider pays per workbook",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "An order amount or a published, dated purchase price for this deliverable (the $2,000 is a grant per connected location)"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.133,
+     "unit": "paid/contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable providers",
+     "status": "EVIDENCED",
+     "value": 75,
+     "unit": "providers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 20,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#price",
+     "dated": "2026-10-31",
+     "claim": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect - a grant to the buyer, not a workbook price.",
+     "population": "state broadband grant programme (payer is the state, not the workbook buyer)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_4e8bfce1deee49daa4fc"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "8 paid orders from 60 contacts.",
+     "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_4e8bfce1deee49daa4fc"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Eligible-applicant list names 75 fixed-wireless providers for the current round.",
+     "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_4e8bfce1deee49daa4fc"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $20.",
+     "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_4e8bfce1deee49daa4fc"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the only $2,000 figure is a grant the state pays providers per connected location, not a price any provider pays for the workbook; no purchase price is established, so revenue per deal and the number of the 75 providers needed for $8,000 are unknown.",
+    "resolution": "Record the amount actually paid on the 8 existing paid orders, or research published, dated prices for unserved-location eligibility analyses sold to WISPs. With ~10 sales reachable (75 x 8/60), a confirmed price of at least ~$800 makes the plan EXECUTABLE within 45 days; a lower price means the target must be relaxed.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_4e8bfce1deee49daa4fc",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_4e8bfce1deee49daa4fc",
+     "deals": null,
+     "price": null,
+     "directCost": 20,
+     "capital": 0,
+     "settlesDay": 10,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_4e8bfce1deee49daa4fc",
+     "link": "OFFER_AND_PRICE",
+     "reason": "Brain judged 'price 2000 USD (EVIDENCE)', but the card's price fact is the state grant programme paying providers up to $2,000 per unserved location connected (guidelines, Oct 2026): a grant/reward to the buyer, not a purchase price for the workbook. No buyer is shown paying any price for it."
+    }
+   ],
+   "revisionId": "rev_2cda1c1ade06_eeb8b6",
+   "digest": "2cda1c1ade067d5290cd43d3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_d7b71f937ed44185b4be/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:40:23.777Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_2cda1c1ade06_eeb8b6",
+   "digest": "2cda1c1ade067d5290cd43d3",
+   "contractDigest": "e7d2ab309ebbfa4102276371",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Unserved-location eligibility workbook for broadband grant a\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Unserved-location eligibility workbook for broadband grant a\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 148500× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Unserved-location eligibility workbook for broadband grant application\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_4e8bfce1deee49daa4fc"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+      "owner": "PERSON",
+      "cost": 20
+     },
+     {
+      "label": "Collect payment for \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "title": "Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 8000,
+      "potentialReach": 8000,
+      "card": {
+       "payer": "Owners and network engineers at small fixed-wireless internet providers",
+       "reachableChannel": "Provider contacts on the state broadband office's eligible-applicant list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:19.612Z",
+       "offerScope": "Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs",
+       "priceCents": 200000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "rural fixed-wireless internet providers",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Provider contacts on the state broadband office's eligible-applicant list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 2000 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 8 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "5 deal(s) needed, 75 available in the window (75 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 20, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state broadband office's eligible-applicant list names 75 fixed-wireless providers for the current round, each with a published contact.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "8 paid orders from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners and network engineers at small fixed-wireless internet providers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect (programme guidelines, Oct 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 800000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:38:00.977Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_2cda1c1ade06_eeb8b6",
+    "revisionDigest": "2cda1c1ade067d5290cd43d3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7b71f937ed44185b4be/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b80ce6e1013847c29be7/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and the disagreement with Brain's price link is correct. The card's price fact is the state broadband grant programme paying providers up to $2,000 per unserved location they connect (programme guidelines, Oct 2026): a grant the state pays the buyer, not an amount any provider pays for an eligibility workbook. Brain's OFFER_AND_PRICE link ('price 2000 USD (EVIDENCE)') rests on that fact, so its price carries the NOT_A_PURCHASE defect. Every other link is on evidence: 75 providers on the eligible-applicant list, 8/60 = 13.3% paid conversion on this offer's own sales, Brain-produced spreadsheet, $20 cost, $0 exposure, 10 days to cash inside 45. Recomputed: 75 x 8/60 = 10 expected sales, so the target needs a real price of at least $8,000 / 10 = $800 per workbook (more for margin against variance) — nothing on the card shows it. The revision names OFFER_AND_PRICE as decisive, does not treat the $2,000 as known, keeps the ledger empty and gives a concrete resolution (amounts paid on the 8 recorded orders, or published dated prices for eligibility analyses sold to WISPs).",
+    "findings": [
+     "Price defect on Brain's established price: NOT_A_PURCHASE — the $2,000 is a grant per connected location paid by the state to providers (a reward to the buyer), not a purchase price for the workbook.",
+     "Arithmetic verified: 75 x 0.1333 = 10 expected paid orders; breakeven price for $8,000 is $800 per workbook; at $2,000 Brain would need 4-5 deals, which is why reading the grant as a price inflates the plan.",
+     "The 8 earlier paid orders necessarily carried an actual amount; retrieving it is the cheapest resolution and research step r1 targets it first.",
+     "Stance check: missing evidence, not a constraint — correctly no constraint is claimed; not CONDITIONAL, since the price behind existing orders is a retrievable record, not something only a live test measures."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:45:06.958Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_2cda1c1ade06_eeb8b6",
+   "digest": "2cda1c1ade067d5290cd43d3",
+   "contractDigest": "e7d2ab309ebbfa4102276371",
+   "plan": {
+    "goalId": "wst_98caa8f7d8c746648cbd",
+    "contractDigest": "e7d2ab309ebbfa4102276371",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a purchase price for the eligibility workbook is established",
+     "opportunityIds": [],
+     "why": "The card's $2,000 'price' is the state grant programme's payment to providers per unserved location they connect (programme guidelines, Oct 2026). That is a grant award to the buyer, not what a provider pays for an eligibility workbook. No price a buyer pays for the workbook is recorded, so OFFER_AND_PRICE is not established, and the deal count against the $8,000 target cannot be computed. Everything else (75 reachable providers, 8/60 paid conversion, Brain-produced spreadsheet, $20 cost, $0 exposure, 10-day settlement in a 45-day window) is on the card."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at $2,000 per workbook",
+      "why": "Reads a grant payout per connected location as a purchase price; rejected. At the measured 8/60 conversion the 75-provider list yields about 10 sales, so the plan works only if the real price is at least about $800 - which nothing yet shows."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish what small WISPs actually pay for an unserved-location eligibility workbook: the amounts paid on the 8 recorded paid orders, or published, dated prices for broadband-grant eligibility/location-analysis services",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price a provider pays per workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "An order amount or a published, dated purchase price for this deliverable (the $2,000 is a grant per connected location)"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.133,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable providers",
+      "status": "EVIDENCED",
+      "value": 75,
+      "unit": "providers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 20,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#price",
+      "dated": "2026-10-31",
+      "claim": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect - a grant to the buyer, not a workbook price.",
+      "population": "state broadband grant programme (payer is the state, not the workbook buyer)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "8 paid orders from 60 contacts.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Eligible-applicant list names 75 fixed-wireless providers for the current round.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_4e8bfce1deee49daa4fc#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $20.",
+      "population": "small fixed-wireless internet providers on the state eligible-applicant list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_4e8bfce1deee49daa4fc"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only $2,000 figure is a grant the state pays providers per connected location, not a price any provider pays for the workbook; no purchase price is established, so revenue per deal and the number of the 75 providers needed for $8,000 are unknown.",
+     "resolution": "Record the amount actually paid on the 8 existing paid orders, or research published, dated prices for unserved-location eligibility analyses sold to WISPs. With ~10 sales reachable (75 x 8/60), a confirmed price of at least ~$800 makes the plan EXECUTABLE within 45 days; a lower price means the target must be relaxed.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 10,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_4e8bfce1deee49daa4fc",
+      "link": "OFFER_AND_PRICE",
+      "reason": "Brain judged 'price 2000 USD (EVIDENCE)', but the card's price fact is the state grant programme paying providers up to $2,000 per unserved location connected (guidelines, Oct 2026): a grant/reward to the buyer, not a purchase price for the workbook. No buyer is shown paying any price for it."
+     }
+    ],
+    "revisionId": "rev_2cda1c1ade06_eeb8b6",
+    "digest": "2cda1c1ade067d5290cd43d3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7b71f937ed44185b4be/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:23.777Z"
+   },
+   "review": {
+    "revisionId": "rev_2cda1c1ade06_eeb8b6",
+    "revisionDigest": "2cda1c1ade067d5290cd43d3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d7b71f937ed44185b4be/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b80ce6e1013847c29be7/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and the disagreement with Brain's price link is correct. The card's price fact is the state broadband grant programme paying providers up to $2,000 per unserved location they connect (programme guidelines, Oct 2026): a grant the state pays the buyer, not an amount any provider pays for an eligibility workbook. Brain's OFFER_AND_PRICE link ('price 2000 USD (EVIDENCE)') rests on that fact, so its price carries the NOT_A_PURCHASE defect. Every other link is on evidence: 75 providers on the eligible-applicant list, 8/60 = 13.3% paid conversion on this offer's own sales, Brain-produced spreadsheet, $20 cost, $0 exposure, 10 days to cash inside 45. Recomputed: 75 x 8/60 = 10 expected sales, so the target needs a real price of at least $8,000 / 10 = $800 per workbook (more for margin against variance) — nothing on the card shows it. The revision names OFFER_AND_PRICE as decisive, does not treat the $2,000 as known, keeps the ledger empty and gives a concrete resolution (amounts paid on the 8 recorded orders, or published dated prices for eligibility analyses sold to WISPs).",
+    "findings": [
+     "Price defect on Brain's established price: NOT_A_PURCHASE — the $2,000 is a grant per connected location paid by the state to providers (a reward to the buyer), not a purchase price for the workbook.",
+     "Arithmetic verified: 75 x 0.1333 = 10 expected paid orders; breakeven price for $8,000 is $800 per workbook; at $2,000 Brain would need 4-5 deals, which is why reading the grant as a price inflates the plan.",
+     "The 8 earlier paid orders necessarily carried an actual amount; retrieving it is the cheapest resolution and research step r1 targets it first.",
+     "Stance check: missing evidence, not a constraint — correctly no constraint is claimed; not CONDITIONAL, since the price behind existing orders is a retrievable record, not something only a live test measures."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:45:06.958Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "fa35d661d9728fb7",
+    "openings": {
+     "cop_4e8bfce1deee49daa4fc": "190aaed33ca2ba3a"
+    }
+   },
+   "at": "2026-11-28T04:47:07.491Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

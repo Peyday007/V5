@@ -1,0 +1,110 @@
+[
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "au-01-quick-cash-no-capital",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "au-02-auto-glass-named-industry",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "I want $5,000 collected within 30 days, only from work in the auto glass repair and replacement industry. I can put in up to $1,000 of my own money.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "au-03-owner-two-hours-a-week",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Get me $3,000 within 21 days. I can give it 2 hours a week, no more, and I can spend up to $300.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "au-04-net-profit-larger",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Over the next 45 days I want to clear $12,000 of profit - money kept after every direct cost - and I can put in at most $2,500.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  }
+]

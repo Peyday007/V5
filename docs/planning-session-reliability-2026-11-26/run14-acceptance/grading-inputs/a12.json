@@ -1,0 +1,174 @@
+{
+ "caseId": "at-12-alpaca-fleece-capital-raised",
+ "keys": {
+  "cop_0138795a20d540629a68": "fleece"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Graded alpaca fleece lots bought from a fibre co-op and reso\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Graded alpaca fleece lots bought from a fibre co-op and reso\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Fulfil \"Constructed: Reverse: own the buyer, pay a supplier to deliver, and keep the mar\" through a supplier at the c…) it would reach 48.2% (p50 $12,785): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Graded alpaca fleece lots bought from a fibre co-op and resold to a re\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0138795a20d540629a68"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Graded alpaca fleece lots bought from a fibre co-op and resold to a regional min\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Graded alpaca fleece lots bought from a fibre co-op and resold to a regional min\"",
+    "owner": "PERSON",
+    "cost": 3200
+   },
+   {
+    "label": "Collect payment for \"Graded alpaca fleece lots bought from a fibre co-op and resold to a regional min\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_0138795a20d540629a68",
+    "title": "Graded alpaca fleece lots bought from a fibre co-op and resold to a regional mini-mill",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "The fibre buyer at Ridgeline Mini-Mill, a regional mill spinning alpaca yarn",
+     "reachableChannel": "The mill's fibre buyer, who signed both agreements",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:38.935Z",
+     "offerScope": "One graded, skirted 200-lb lot of alpaca fleece delivered to the mill; the mill pays 14 days after delivery",
+     "priceCents": 480000,
+     "currency": "USD",
+     "fulfillmentOwner": "High Plains Alpaca Fibre Co-op (written quote: $3,200 per graded 200-lb lot, paid on pickup; ships within 5 days)",
+     "peakFundingCents": 320000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "alpaca fibre farming",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 480000,
+      "currency": "USD",
+      "deliverable": "One graded, skirted 200-lb lot of alpaca fleece delivered to the mill; the mill pays 14 days after delivery",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 480000,
+      "currency": "USD",
+      "deliverable": "One graded, skirted 200-lb lot of alpaca fleece delivered to the mill; the mill pays 14 days after delivery",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The mill's fibre buyer, who signed both agreements"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 9600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 9600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by High Plains Alpaca Fibre Co-op (written quote: $3,200 per graded 200-lb lot, pai (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 3200, tied up 3200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 40 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Ridgeline Mini-Mill signed for two lots; nothing says it buys more inside the window.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One graded, skirted 200-lb lot of alpaca fleece delivered to the mill; the mill pays 14 days after delivery to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3200",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$3200",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "High Plains Alpaca Fibre Co-op (written quote: $3,200 per graded 200-lb lot, paid on pickup; ships within 5 days) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "The fibre buyer at Ridgeline Mini-Mill, a regional mill spinning alpaca yarn",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Ridgeline Mini-Mill signed two purchase agreements at $4,800 per graded 200-lb lot (signed 2026-11-24).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 40,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:53:58.815Z"
+ }
+}

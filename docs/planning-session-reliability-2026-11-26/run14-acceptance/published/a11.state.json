@@ -1,0 +1,748 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_ca2441fcf06b48cd89f3",
+   "words": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 6000000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash received in the owner's account totals the target inside the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "c2c8def4bde1e8499ba311a0"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_ca2441fcf06b48cd89f3",
+    "contractDigest": "c2c8def4bde1e8499ba311a0",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the whole counted shooting-range market is worth $34,000, below $60,000",
+     "opportunityIds": [],
+     "why": "The state registry lists 85 indoor ranges, each buying one workbook a year at $400: every range buying brings $34,000. $60,000 needs 150 sales. At the measured 18% conversion (9 of 50) the realistic take is about 15 sales, about $6,100."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the workbook to the 85 registry ranges anyway",
+      "why": "Sound economics ($400 price, $6 cost, 3-day settlement) but caps at $34,000 and realistically about $6,100."
+     },
+     {
+      "title": "Find ranges in other states or other buyers",
+      "why": "Not counted on the record; would need research."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Count indoor-range registries in other states reachable by email to widen the buyer population",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Reachable buyers",
+      "status": "EVIDENCED",
+      "value": 85,
+      "unit": "ranges",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "USD",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Conversion",
+      "status": "EVIDENCED",
+      "value": 0.18,
+      "unit": "paid per contact",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state registry lists 85 indoor ranges; each buys one workbook a year",
+      "population": "85 registry ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#price",
+      "dated": "2026-11",
+      "claim": "Nine ranges each paid $400 for the workbook",
+      "population": "indoor ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 50 contacts",
+      "population": "indoor ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: 85 counted buyers x $400 = $34,000 is the ceiling, below the $60,000 target (150 sales needed).",
+     "resolution": "Lower the target to what the market supports (at most $34,000; about $6,100 at the measured 18% conversion), or research further reachable populations (other states' range registries) that could add 65+ buyers.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+      "why": "Its whole counted market (85 x $400 = $34,000) is below the $60,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $34,000 (85 ranges x $400); about $6,100 is what the measured 18% conversion supports.",
+      "basis": [
+       {
+        "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_54ccb0b9a3da_6943d3",
+    "digest": "54ccb0b9a3da4538623efef7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48ba0c2350f44608a26b/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:44:40.724Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_ca2441fcf06b48cd89f3",
+   "contractDigest": "c2c8def4bde1e8499ba311a0",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the whole counted shooting-range market is worth $34,000, below $60,000",
+    "opportunityIds": [],
+    "why": "The state registry lists 85 indoor ranges, each buying one workbook a year at $400: every range buying brings $34,000. $60,000 needs 150 sales. At the measured 18% conversion (9 of 50) the realistic take is about 15 sales, about $6,100."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the workbook to the 85 registry ranges anyway",
+     "why": "Sound economics ($400 price, $6 cost, 3-day settlement) but caps at $34,000 and realistically about $6,100."
+    },
+    {
+     "title": "Find ranges in other states or other buyers",
+     "why": "Not counted on the record; would need research."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Count indoor-range registries in other states reachable by email to widen the buyer population",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Reachable buyers",
+     "status": "EVIDENCED",
+     "value": 85,
+     "unit": "ranges",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Price",
+     "status": "EVIDENCED",
+     "value": 400,
+     "unit": "USD",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Conversion",
+     "status": "EVIDENCED",
+     "value": 0.18,
+     "unit": "paid per contact",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The state registry lists 85 indoor ranges; each buys one workbook a year",
+     "population": "85 registry ranges",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#price",
+     "dated": "2026-11",
+     "claim": "Nine ranges each paid $400 for the workbook",
+     "population": "indoor ranges",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#conversionRates",
+     "dated": "2026-11",
+     "claim": "9 paid orders from 50 contacts",
+     "population": "indoor ranges",
+     "matchesBuyer": true,
+     "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Market volume: 85 counted buyers x $400 = $34,000 is the ceiling, below the $60,000 target (150 sales needed).",
+    "resolution": "Lower the target to what the market supports (at most $34,000; about $6,100 at the measured 18% conversion), or research further reachable populations (other states' range registries) that could add 65+ buyers.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+     "why": "Its whole counted market (85 x $400 = $34,000) is below the $60,000 target."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [
+    {
+     "constraint": "TARGET",
+     "suggestion": "Lower the target to at most $34,000 (85 ranges x $400); about $6,100 is what the measured 18% conversion supports.",
+     "basis": [
+      {
+       "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+       "field": "buyerVolume"
+      },
+      {
+       "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_54ccb0b9a3da_6943d3",
+   "digest": "54ccb0b9a3da4538623efef7",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_48ba0c2350f44608a26b/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:44:40.724Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_54ccb0b9a3da_6943d3",
+   "digest": "54ccb0b9a3da4538623efef7",
+   "contractDigest": "c2c8def4bde1e8499ba311a0",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $34,000, so they cannot reach the $60,000 still needed. To make it supportable, target: lower the target to about $34,000, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_1c8ab9b6b3c4486c8fec"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+      "title": "Airborne-lead and surface-sampling log workbook for indoor shooting ranges",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 34000,
+      "potentialReach": 60000,
+      "card": {
+       "payer": "Range owners and range safety officers at indoor shooting ranges",
+       "reachableChannel": "Contact emails in the state's shooting-range registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:34.034Z",
+       "offerScope": "Airborne-lead and surface-sampling log workbook for indoor shooting ranges",
+       "priceCents": 40000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "indoor shooting ranges",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Contact emails in the state's shooting-range registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 400 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 9 accepted of 50 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "86 deal(s) needed but only 85 in the window (85 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 6, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state's shooting-range registry lists 85 indoor ranges; each buys one sampling-log workbook a year, for its annual exposure review.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Airborne-lead and surface-sampling log workbook for indoor shooting ranges to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "9 paid orders from 50 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Range owners and range safety officers at indoor shooting ranges",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Nine ranges each paid $400 for the workbook on this seller's checkout (Oct-Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 6000000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:36:56.813Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_54ccb0b9a3da_6943d3",
+    "revisionDigest": "54ccb0b9a3da4538623efef7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48ba0c2350f44608a26b/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1e6a287a48d040899062/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive link MARKET_VOLUME and a TARGET constraint is correct and is a genuine constraint, not missing evidence: every link of the only opening is evidenced (price $400 from nine real purchases on this seller's checkout, conversion 9/50 measured on this offer, cost $6, 3-day settlement, Brain-proved spreadsheet fulfilment, $0 exposure), and the whole evidenced population - 85 registry ranges each buying once a year - brings at most 85 x $400 = $34,000 in 30 days, below $60,000 (150 sales needed). Brain's own check agrees (NOT_VIABLE, supported reach $34,000).",
+    "findings": [
+     "Recomputed: 85 x $400 = $34,000 ceiling; $60,000 / $400 = 150 sales; 0.18 x 85 = 15.3 sales = about $6,120 realistic. Matches.",
+     "Ceiling may be lower than stated: the nine ranges that paid in Oct-Nov 2026 each buy once a year; if they are among the 85 registry ranges, only 76 can buy in the window (76 x $400 = $30,400). The target suggestion 'at most $34,000' should note this overlap; it does not change the stance.",
+     "Resolution (lower the target, or count other states' range registries for 65+ more buyers) names the decisive evidence correctly; 65 more buyers at 100% purchase would be needed for $60,000, and at the measured 18% about 833 reachable ranges would be needed in total - worth stating so the research step's bar is clear."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:46:55.274Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_54ccb0b9a3da_6943d3",
+   "digest": "54ccb0b9a3da4538623efef7",
+   "contractDigest": "c2c8def4bde1e8499ba311a0",
+   "plan": {
+    "goalId": "wst_ca2441fcf06b48cd89f3",
+    "contractDigest": "c2c8def4bde1e8499ba311a0",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the whole counted shooting-range market is worth $34,000, below $60,000",
+     "opportunityIds": [],
+     "why": "The state registry lists 85 indoor ranges, each buying one workbook a year at $400: every range buying brings $34,000. $60,000 needs 150 sales. At the measured 18% conversion (9 of 50) the realistic take is about 15 sales, about $6,100."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the workbook to the 85 registry ranges anyway",
+      "why": "Sound economics ($400 price, $6 cost, 3-day settlement) but caps at $34,000 and realistically about $6,100."
+     },
+     {
+      "title": "Find ranges in other states or other buyers",
+      "why": "Not counted on the record; would need research."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Count indoor-range registries in other states reachable by email to widen the buyer population",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Reachable buyers",
+      "status": "EVIDENCED",
+      "value": 85,
+      "unit": "ranges",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "USD",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Conversion",
+      "status": "EVIDENCED",
+      "value": 0.18,
+      "unit": "paid per contact",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state registry lists 85 indoor ranges; each buys one workbook a year",
+      "population": "85 registry ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#price",
+      "dated": "2026-11",
+      "claim": "Nine ranges each paid $400 for the workbook",
+      "population": "indoor ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_1c8ab9b6b3c4486c8fec#conversionRates",
+      "dated": "2026-11",
+      "claim": "9 paid orders from 50 contacts",
+      "population": "indoor ranges",
+      "matchesBuyer": true,
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Market volume: 85 counted buyers x $400 = $34,000 is the ceiling, below the $60,000 target (150 sales needed).",
+     "resolution": "Lower the target to what the market supports (at most $34,000; about $6,100 at the measured 18% conversion), or research further reachable populations (other states' range registries) that could add 65+ buyers.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+      "why": "Its whole counted market (85 x $400 = $34,000) is below the $60,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $34,000 (85 ranges x $400); about $6,100 is what the measured 18% conversion supports.",
+      "basis": [
+       {
+        "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_1c8ab9b6b3c4486c8fec",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_54ccb0b9a3da_6943d3",
+    "digest": "54ccb0b9a3da4538623efef7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48ba0c2350f44608a26b/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:44:40.724Z"
+   },
+   "review": {
+    "revisionId": "rev_54ccb0b9a3da_6943d3",
+    "revisionDigest": "54ccb0b9a3da4538623efef7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_48ba0c2350f44608a26b/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1e6a287a48d040899062/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive link MARKET_VOLUME and a TARGET constraint is correct and is a genuine constraint, not missing evidence: every link of the only opening is evidenced (price $400 from nine real purchases on this seller's checkout, conversion 9/50 measured on this offer, cost $6, 3-day settlement, Brain-proved spreadsheet fulfilment, $0 exposure), and the whole evidenced population - 85 registry ranges each buying once a year - brings at most 85 x $400 = $34,000 in 30 days, below $60,000 (150 sales needed). Brain's own check agrees (NOT_VIABLE, supported reach $34,000).",
+    "findings": [
+     "Recomputed: 85 x $400 = $34,000 ceiling; $60,000 / $400 = 150 sales; 0.18 x 85 = 15.3 sales = about $6,120 realistic. Matches.",
+     "Ceiling may be lower than stated: the nine ranges that paid in Oct-Nov 2026 each buy once a year; if they are among the 85 registry ranges, only 76 can buy in the window (76 x $400 = $30,400). The target suggestion 'at most $34,000' should note this overlap; it does not change the stance.",
+     "Resolution (lower the target, or count other states' range registries for 65+ more buyers) names the decisive evidence correctly; 65 more buyers at 100% purchase would be needed for $60,000, and at the measured 18% about 833 reachable ranges would be needed in total - worth stating so the research step's bar is clear."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:46:55.274Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "791268f826e394ca",
+    "openings": {
+     "cop_1c8ab9b6b3c4486c8fec": "db05fca73344aa81"
+    }
+   },
+   "at": "2026-11-28T04:47:27.121Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

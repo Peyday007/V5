@@ -34,6 +34,7 @@ import {
   cashTrace,
   revisionDigest,
   REVISION_SCHEMA,
+  wageWording,
   type BrainFacts,
   type CardFacts,
   type ReviewCondition,
@@ -831,6 +832,17 @@ export function incompleteSections(r: Partial<PlanRevisionInput>): string[] {
  * rather than crashing a check downstream (production, 2026-11-28, the owner's app journey: a NO_PLAN revision sent a
  * strategy with no `opportunityIds`, and every submit failed with "ids is not iterable").
  */
+/** The weighed openings whose card states their revenue as hourly pay for labour (`wageWording`). */
+async function wagePricedOf(ids: string[]): Promise<string[]> {
+  const out: string[] = [];
+  for (const id of ids) {
+    const facts = await cardFactsFor(id).catch(() => []);
+    const revenue = facts.filter((f) => ['price', 'revenueRange', 'offer', 'captureMechanism'].includes(f.field)).map((f) => f.value).join(' ');
+    if (wageWording(revenue)) out.push(id);
+  }
+  return out;
+}
+
 /**
  * The source URLs whose claims Brain's evidence gate rejected on this goal's research and accepted on none, with the
  * gate's reason, so a revision cannot mark a quantity EVIDENCED on them (`REJECTED_EVIDENCE_USED`).
@@ -948,7 +960,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed), rejectedSources: await rejectedSourcesOf(goalId) };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed), rejectedSources: await rejectedSourcesOf(goalId), wagePriced: await wagePricedOf(weighed) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

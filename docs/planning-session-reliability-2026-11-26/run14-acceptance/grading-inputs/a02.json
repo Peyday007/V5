@@ -1,0 +1,452 @@
+{
+ "caseId": "at-02-kayak-outfitter-owner-hours",
+ "keys": {
+  "cop_d136f685482247d2b942": "checkin",
+  "cop_453cc994fec846a7a72e": "rescueClass",
+  "cop_6ac9bf8d1d3848c6bbd8": "shuttle"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Digital waiver and river-trip roster check-in setup for kaya\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 49056× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Digital waiver and river-trip roster check-in setup for kayak and cano\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_d136f685482247d2b942",
+   "cop_453cc994fec846a7a72e"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+    "owner": "PERSON",
+    "cost": 12
+   },
+   {
+    "label": "Collect payment for \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_453cc994fec846a7a72e",
+    "title": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Outfitter owners training their guide staff",
+     "reachableChannel": "Direct email to the outfitters who signed",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:50.722Z",
+     "offerScope": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+     "priceCents": 90000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 10,
+     "requiredCapabilities": [],
+     "industry": "river kayak and canoe outfitters",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Direct email to the outfitters who signed"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Swiftwater-rescue refresher class for outfitter guides, taught by the owner to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Outfitter owners training their guide staff",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four outfitters signed class bookings at $900 per class (signed bookings, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_d136f685482247d2b942",
+    "title": "Digital waiver and river-trip roster check-in setup for kayak and canoe outfitters",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Owners and operations managers of licensed river outfitters",
+     "reachableChannel": "Contact emails listed in the state river-outfitter licence registry",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:50.722Z",
+     "offerScope": "Waiver form, trip roster and arrival check-in configured on the outfitter's booking system; paid on completion",
+     "priceCents": 45000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.25,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "river kayak and canoe outfitters",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Contact emails listed in the state river-outfitter licence registry"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 450 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 11 accepted of 80 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "8 deal(s) needed, 160 available in the window (160 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 12, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state's river-outfitter licence registry lists 160 licensed outfitters with contact emails; each must hold signed participant waivers for every trip and re-sets its waiver process before the spring season.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Waiver form, trip roster and arrival check-in configured on the outfitter's booking system; paid on completion to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "11 paid orders from 80 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$12",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners and operations managers of licensed river outfitters",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "This seller's last nine outfitter setups were each invoiced and paid at $450 (invoices, Aug-Oct 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+    "title": "Brokered vehicle-shuttle runs for self-guided river trips",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 1200,
+    "potentialReach": 1200,
+    "card": {
+     "payer": "Outfitters running self-guided trips",
+     "reachableChannel": "Direct email to the outfitters who signed",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:50.722Z",
+     "offerScope": "Brokered vehicle-shuttle runs for self-guided river trips",
+     "priceCents": 12000,
+     "currency": "USD",
+     "fulfillmentOwner": "Valley Van Shuttle LLC (written rate: $135 per run)",
+     "peakFundingCents": 0,
+     "humanHours": 0.2,
+     "requiredCapabilities": [],
+     "industry": "river kayak and canoe outfitters",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 12000,
+      "currency": "USD",
+      "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brokered vehicle-shuttle runs for self-guided river trips to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$135",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Valley Van Shuttle LLC (written rate: $135 per run) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Outfitters running self-guided trips",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Ten outfitters signed shuttle orders at $120 per run (signed orders, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_6c0c0705ad33424896d6",
+   "cnd_ea9c937bc1104642a721"
+  ],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 28,
+   "hoursCeiling": 16,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-28T04:37:35.917Z"
+ }
+}

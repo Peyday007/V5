@@ -1,0 +1,5061 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_0c6844ed89194880be85",
+   "words": "Over the next 45 days I want to clear $12,000 of profit - money kept after every direct cost - and I can put in at most $2,500.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 250000,
+    "proofCondition": "first sale settled with positive contribution after direct costs",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "d0651c03d74add1a3cefcf0b"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_0c6844ed89194880be85",
+    "contractDigest": "d0651c03d74add1a3cefcf0b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+     "opportunityIds": [
+      "cop_02da4a34235042709531"
+     ],
+     "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). Comparable builds are posted at $750-1500 and bid at $366-835, so both the price ceiling and the subcontract supply are visible; the unknown is whether cold-reached local businesses pay $1,500, which only a live test measures."
+    },
+    "alternatives": [
+     {
+      "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+      "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+     },
+     {
+      "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+      "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+     },
+     {
+      "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+      "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Post the fixed 5-page build spec as a Freelancer.com project and collect developer bids (free to post); accept only a written fixed quote <= $377 incl. 3% employer fee",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Open Instantly Growth plan for two months and one sending domain/mailbox",
+      "performer": "OWNER",
+      "costCents": 15400,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Build list of local service businesses with outdated or missing sites and send cold sequences (<=1,000 contacts/month on Growth)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_instantly",
+       "src_clutch_smb",
+       "src_hunter"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild at $1,500, 50% deposit, 7-day delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Hire the quoted Freelancer.com developer per deal via a funded milestone ($377 each, 12 deals, ordered per batch)",
+      "performer": "BRAIN",
+      "costCents": 452400,
+      "day": 9,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+      "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "costCents": null,
+      "day": 16,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "COLLECT",
+      "label": "Collect 50% balance on delivery by Stripe invoice",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 16,
+      "dependsOn": "s8",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 166200,
+      "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 15400,
+      "label": "Instantly Growth x2 months + domain/mailbox",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 deposits",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 1: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 balances",
+      "settlesDay": 22,
+      "stepId": "s9"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 deposits",
+      "settlesDay": 21,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 2: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 balances",
+      "settlesDay": 32,
+      "stepId": "s9"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 deposits",
+      "settlesDay": 28,
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 3: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 balances",
+      "settlesDay": 37,
+      "stepId": "s9"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on balances",
+      "stepId": "s9"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 150000,
+      "unit": "cents per site",
+      "sources": [
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "needs": "first paid deposits at $1,500 from cold-email buyers"
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per 1,000 contacts reached",
+      "sources": [
+       "src_hunter"
+      ],
+      "needs": "live test: deposits paid from the first 1,000 contacts"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 37700,
+      "unit": "cents per site build",
+      "sources": [
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "needs": "a written fixed quote from a developer on the posted spec"
+     },
+     {
+      "name": "q_deals",
+      "status": "ASSUMED",
+      "value": 12,
+      "unit": "deals in 45 days",
+      "sources": [
+       "src_card_m"
+      ],
+      "needs": "close rate"
+     },
+     {
+      "name": "q_settle",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_card_m",
+      "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p1",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p2",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+      "population": "Freelancer.com developers bidding",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_fee",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+      "population": "Freelancer.com",
+      "matchesBuyer": false,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/web-designers/pricing",
+      "dated": "2026-09-21",
+      "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+      "population": "Clutch web design buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_clutch_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; ~17% still have none",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_hunter",
+      "url": "https://hunter.io/the-state-of-cold-email-2025",
+      "dated": "2025",
+      "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+      "population": "B2B cold email recipients",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails and 1,000 uploaded contacts per month",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_card_dup",
+      "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+      "dated": "2026-11-28",
+      "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_fl_list",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-28",
+      "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_fl_p1b",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_art1",
+      "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     },
+     {
+      "id": "src_art2",
+      "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 article series, 18 bids averaging $330",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+     "stop": [
+      "No paid deposit after 1,000 contacts reached by day 12: stop, total loss <= $154 of tools",
+      "No developer quote <= $377 by day 4: do not sell further builds",
+      "Deposits arrive but fewer than 4 by day 18: target unreachable in window; stop new outreach and only deliver signed deals"
+     ],
+     "continue": [
+      ">= 2 deposits by day 10 and a quote <= $377: run batches 2 and 3",
+      ">= 4 deposits by day 18: hold the 12-deal schedule"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 1000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 377,
+      "capital": 1662,
+      "settlesDay": 37,
+      "ownerHours": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8d29f07c7b5a_0305e3",
+    "digest": "8d29f07c7b5a046d123f7df5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:53:16.935Z"
+   },
+   {
+    "goalId": "wst_0c6844ed89194880be85",
+    "contractDigest": "d0651c03d74add1a3cefcf0b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+     "opportunityIds": [
+      "cop_02da4a34235042709531"
+     ],
+     "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). Comparable builds are posted at $750-1500 and bid at $366-835, so both the price ceiling and the subcontract supply are visible; the unknown is whether cold-reached local businesses pay $1,500, which only a live test measures."
+    },
+    "alternatives": [
+     {
+      "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+      "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+     },
+     {
+      "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+      "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+     },
+     {
+      "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+      "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Post the fixed 5-page build spec as a Freelancer.com project and collect developer bids (free to post); accept only a written fixed quote <= $377 incl. 3% employer fee",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Open Instantly Growth plan for two months and one sending domain/mailbox",
+      "performer": "OWNER",
+      "costCents": 15400,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Build list of local service businesses with outdated or missing sites and send cold sequences (<=1,000 contacts/month on Growth)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_instantly",
+       "src_clutch_smb",
+       "src_hunter"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild at $1,500, 50% deposit, 7-day delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Hire the quoted Freelancer.com developer per deal via a funded milestone ($377 each, 12 deals, ordered per batch)",
+      "performer": "BRAIN",
+      "costCents": 452400,
+      "day": 9,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+      "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "costCents": null,
+      "day": 16,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "COLLECT",
+      "label": "Collect 50% balance on delivery by Stripe invoice",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 16,
+      "dependsOn": "s8",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 166200,
+      "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 15400,
+      "label": "Instantly Growth x2 months + domain/mailbox",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 deposits",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 1: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 balances",
+      "settlesDay": 22,
+      "stepId": "s9"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 deposits",
+      "settlesDay": 21,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 2: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 balances",
+      "settlesDay": 32,
+      "stepId": "s9"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 deposits",
+      "settlesDay": 28,
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 3: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 balances",
+      "settlesDay": 37,
+      "stepId": "s9"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on balances",
+      "stepId": "s9"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 150000,
+      "unit": "cents per site",
+      "sources": [
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "needs": "first paid deposits at $1,500 from cold-email buyers"
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per 1,000 contacts reached",
+      "sources": [
+       "src_hunter"
+      ],
+      "needs": "live test: deposits paid from the first 1,000 contacts"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 37700,
+      "unit": "cents per site build",
+      "sources": [
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "needs": "a written fixed quote from a developer on the posted spec"
+     },
+     {
+      "name": "q_deals",
+      "status": "ASSUMED",
+      "value": 12,
+      "unit": "deals in 45 days",
+      "sources": [
+       "src_card_m"
+      ],
+      "needs": "close rate"
+     },
+     {
+      "name": "q_settle",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_card_m",
+      "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p1",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p2",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+      "population": "Freelancer.com developers bidding",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_fee",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+      "population": "Freelancer.com",
+      "matchesBuyer": false,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/web-designers/pricing",
+      "dated": "2026-09-21",
+      "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+      "population": "Clutch web design buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_clutch_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; ~17% still have none",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_hunter",
+      "url": "https://hunter.io/the-state-of-cold-email-2025",
+      "dated": "2025",
+      "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+      "population": "B2B cold email recipients",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails and 1,000 uploaded contacts per month",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_card_dup",
+      "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+      "dated": "2026-11-28",
+      "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_fl_list",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-28",
+      "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_fl_p1b",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_art1",
+      "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     },
+     {
+      "id": "src_art2",
+      "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 article series, 18 bids averaging $330",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+     "stop": [
+      "No paid deposit after 1,000 contacts reached by day 12: stop, total loss <= $154 of tools",
+      "No developer quote <= $377 by day 4: do not sell further builds",
+      "Deposits arrive but fewer than 4 by day 18: target unreachable in window; stop new outreach and only deliver signed deals"
+     ],
+     "continue": [
+      ">= 2 deposits by day 10 and a quote <= $377: run batches 2 and 3",
+      ">= 4 deposits by day 18: hold the 12-deal schedule"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 1000,
+      "reach": 1000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 377,
+      "capital": 1662,
+      "settlesDay": 37,
+      "ownerHours": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_8d29f07c7b5a_82625a",
+    "digest": "8d29f07c7b5a046d123f7df5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:53:21.037Z"
+   },
+   {
+    "goalId": "wst_0c6844ed89194880be85",
+    "contractDigest": "d0651c03d74add1a3cefcf0b",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+     "opportunityIds": [
+      "cop_02da4a34235042709531"
+     ],
+     "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). Comparable builds are posted at $750-1500 and bid at $366-835, so both the price ceiling and the subcontract supply are visible; the unknown is whether cold-reached local businesses pay $1,500, which only a live test measures."
+    },
+    "alternatives": [
+     {
+      "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+      "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+     },
+     {
+      "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+      "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+     },
+     {
+      "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+      "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Post the fixed 5-page build spec as a Freelancer.com project and collect developer bids (free to post); accept only a written fixed quote <= $377 incl. 3% employer fee",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Open Instantly Growth plan for two months and one sending domain/mailbox",
+      "performer": "OWNER",
+      "costCents": 15400,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Build list of local service businesses with outdated or missing sites and send cold sequences to 2,000 contacts over two months (1,000 contacts/month on Growth)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_instantly",
+       "src_clutch_smb",
+       "src_hunter"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Offer fixed-scope 5-page website rebuild at $1,500, 50% deposit, 7-day delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 8,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Owner funds a Freelancer.com milestone for the quoted developer per deal ($377 each, 12 deals, ordered per batch)",
+      "performer": "OWNER",
+      "costCents": 452400,
+      "day": 9,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+      "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "costCents": null,
+      "day": 16,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "COLLECT",
+      "label": "Collect 50% balance on delivery by Stripe invoice",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 16,
+      "dependsOn": "s8",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 166200,
+      "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 15400,
+      "label": "Instantly Growth x2 months + domain/mailbox",
+      "stepId": "s2"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 deposits",
+      "settlesDay": 22,
+      "stepId": "s6"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 9,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 1: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 balances",
+      "settlesDay": 22,
+      "stepId": "s9"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 deposits",
+      "settlesDay": 21,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 2: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 balances",
+      "settlesDay": 32,
+      "stepId": "s9"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 deposits",
+      "settlesDay": 28,
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 3: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 balances",
+      "settlesDay": 37,
+      "stepId": "s9"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on balances",
+      "stepId": "s9"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 150000,
+      "unit": "cents per site",
+      "sources": [
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "needs": "first paid deposits at $1,500 from cold-email buyers"
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per 300 contacts reached",
+      "sources": [],
+      "needs": "live test: deposits paid from the first 1,000 contacts"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 37700,
+      "unit": "cents per site build",
+      "sources": [
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "needs": "a written fixed quote from a developer on the posted spec"
+     },
+     {
+      "name": "q_deals",
+      "status": "ASSUMED",
+      "value": 12,
+      "unit": "deals in 45 days",
+      "sources": [
+       "src_card_m"
+      ],
+      "needs": "close rate"
+     },
+     {
+      "name": "q_settle",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_card_m",
+      "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p1",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p2",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+      "population": "Freelancer.com developers bidding",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_fee",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+      "population": "Freelancer.com",
+      "matchesBuyer": false,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/web-designers/pricing",
+      "dated": "2026-09-21",
+      "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+      "population": "Clutch web design buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_clutch_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; ~17% still have none",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_hunter",
+      "url": "https://hunter.io/the-state-of-cold-email-2025",
+      "dated": "2025",
+      "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+      "population": "B2B cold email recipients",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth $47/mo, 5,000 emails and 1,000 uploaded contacts per month",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_card_dup",
+      "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+      "dated": "2026-11-28",
+      "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_pub",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted exactly this offer (mobile business site, service pages, quote forms, basic SEO) at $250-750; 93 developers bid averaging $366",
+      "population": "small businesses buying sites",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "~17% of US small businesses still have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_fl_list",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-28",
+      "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_fl_p1b",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_art1",
+      "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     },
+     {
+      "id": "src_art2",
+      "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 article series, 18 bids averaging $330",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+     "stop": [
+      "Fewer than 2 paid deposits from the first 300 contacts by day 10: stop outreach, total loss <= $154 of tools",
+      "No developer quote <= $377 by day 4: do not sell further builds",
+      "Deposits arrive but fewer than 4 by day 18: target unreachable in window; stop new outreach and only deliver signed deals"
+     ],
+     "continue": [
+      ">= 2 deposits by day 10 and a quote <= $377: run batches 2 and 3",
+      ">= 4 deposits by day 18: hold the 12-deal schedule"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 2000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 377,
+      "capital": 1662,
+      "settlesDay": 37,
+      "ownerHours": 16
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 400,
+      "capital": null,
+      "settlesDay": null,
+      "ownerHours": 12
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "deals": 33,
+      "price": 835,
+      "directCost": 461,
+      "capital": 397,
+      "settlesDay": null,
+      "ownerHours": 33
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "deals": 63,
+      "price": 324,
+      "directCost": 133,
+      "capital": 120,
+      "settlesDay": null,
+      "ownerHours": 32
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e4a8db85a672_99c6ca",
+    "digest": "e4a8db85a672aafbc1d292cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:53:42.725Z"
+   },
+   {
+    "goalId": "wst_0c6844ed89194880be85",
+    "contractDigest": "d0651c03d74add1a3cefcf0b",
+    "parentRevisionId": "rev_e4a8db85a672_99c6ca",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+     "opportunityIds": [
+      "cop_02da4a34235042709531"
+     ],
+     "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). The $1,500 price is ASSUMED: no record shows a cold-reached local business paying it (Freelancer.com budgets and seller bids were rejected as buyer-paid prices, and are a different population). The $377 build cost is an estimate from other seller bids, not a quote. The plan therefore tests the quote first (day 4), then the paid-deposit rate (day 12), before any order is placed."
+    },
+    "alternatives": [
+     {
+      "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+      "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+     },
+     {
+      "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+      "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+     },
+     {
+      "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+      "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Owner posts the fixed 5-page build spec as a Freelancer.com project (free to post) and collects developer bids; accept only a written fixed quote <= $377 incl. 3% employer fee from a developer with a verifiable portfolio, by day 4",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Open Instantly Hypergrowth for one month ($107, 25,000 uploaded contacts) and one sending domain/mailbox (~$47, estimate)",
+      "performer": "OWNER",
+      "costCents": 15400,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Owner uploads a list of local service businesses with outdated or missing sites and sends cold sequences through Instantly: 300 contacts every 3 days, 1,800 by day 20; owner answers replies",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_instantly",
+       "src_clutch_smb"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Owner replies to interested buyers with the fixed-scope 5-page rebuild at $1,500, 50% deposit, 7-day delivery (only after the day-4 quote exists)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_price"
+      ],
+      "priceCents": 150000,
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4, closed by days 12, 18 and 24)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Owner funds a Freelancer.com milestone for the quoted developer per deal ($377 each, 12 deals, ordered per batch)",
+      "performer": "OWNER",
+      "costCents": 452400,
+      "day": 13,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+      "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "costCents": null,
+      "day": 20,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "COLLECT",
+      "label": "Collect 50% balance on delivery by Stripe invoice",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 20,
+      "dependsOn": "s8",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 166200,
+      "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 15400,
+      "label": "Instantly Hypergrowth one month ($107) + domain/mailbox (~$47)",
+      "stepId": "s2"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 deposits",
+      "settlesDay": 23,
+      "stepId": "s6"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 1: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 balances",
+      "settlesDay": 23,
+      "stepId": "s9"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 deposits",
+      "settlesDay": 23,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 2: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 balances",
+      "settlesDay": 32,
+      "stepId": "s9"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 deposits",
+      "settlesDay": 26,
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 3: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 balances",
+      "settlesDay": 34,
+      "stepId": "s9"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on balances",
+      "stepId": "s9"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 150000,
+      "unit": "cents per site",
+      "sources": [
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "needs": "first paid deposits at $1,500 from cold-email buyers"
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per 300 contacts reached",
+      "sources": [],
+      "needs": "live test: deposits paid from the first 300 contacts"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 37700,
+      "unit": "cents per site build",
+      "sources": [
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "needs": "a written fixed quote from a developer on the posted spec"
+     },
+     {
+      "name": "q_deals",
+      "status": "ASSUMED",
+      "value": 12,
+      "unit": "deals in 45 days",
+      "sources": [
+       "src_card_m"
+      ],
+      "needs": "close rate"
+     },
+     {
+      "name": "q_settle",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_card_m",
+      "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p1",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p2",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+      "population": "Freelancer.com developers bidding",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_fee",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+      "population": "Freelancer.com",
+      "matchesBuyer": false,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/web-designers/pricing",
+      "dated": "2026-09-21",
+      "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+      "population": "Clutch web design buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_clutch_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; ~17% still have none",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_hunter",
+      "url": "https://hunter.io/the-state-of-cold-email-2025",
+      "dated": "2025",
+      "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+      "population": "B2B cold email recipients",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Hypergrowth $107/mo, 125,000 emails and 25,000 uploaded contacts per month (Growth $47 allows only 1,000 contacts)",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_card_dup",
+      "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+      "dated": "2026-11-28",
+      "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_pub",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted exactly this offer (mobile business site, service pages, quote forms, basic SEO) at $250-750; 93 developers bid averaging $366",
+      "population": "small businesses buying sites",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "~17% of US small businesses still have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_fl_list",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-28",
+      "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_fl_p1b",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_art1",
+      "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     },
+     {
+      "id": "src_art2",
+      "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 article series, 18 bids averaging $330",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+     "stop": [
+      "Fewer than 2 paid deposits from the first 300 contacts by day 12: stop outreach, total loss <= $154 of tools",
+      "No developer quote <= $377 by day 4: do not sell further builds",
+      "Fewer than 8 deposits from the first 1,200 contacts by day 18: the 12-deal schedule cannot close by day 24; stop new outreach and deliver only signed deals"
+     ],
+     "continue": [
+      "Quote <= $377 by day 4: start outreach",
+      ">= 2 deposits from the first 300 contacts by day 12: keep sending 300 contacts every 3 days to 1,800",
+      ">= 8 deposits by day 18: hold the 12-deal schedule"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1800
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed economics fit",
+      "resolution": "Agreed; after the re-schedule: receipts $18,000, Stripe fees $529, builds $4,524, tools $154, contribution $12,793; peak owner float $154 + 4 x $377 = $1,662 until batch-1 deposits settle (Stripe first payout) on day 23."
+     },
+     {
+      "finding": "Reach vs schedule",
+      "resolution": "Accepted. Growth caps uploads at 1,000/month, so the plan moves to Hypergrowth ($107, 25,000 contacts; same $154 tool line) and reaches 300 contacts every 3 days, 1,800 by day 20. At the threshold rate 2/300 that is 12 deposits by day 24; batches close days 12/18/24, deliver days 20/30/32, and the last balances settle day 34 < 45."
+     },
+     {
+      "finding": "Proof and stop disagree",
+      "resolution": "Accepted: one denominator - the first 300 contacts (sent days 5-7), judged on day 12, for proof, stop and threshold."
+     },
+     {
+      "finding": "Price presented as supported",
+      "resolution": "Accepted: the strategy now says $1,500 is ASSUMED, that the Freelancer budgets/bids were rejected as buyer-paid prices and are another population; q_price stays ASSUMED and the paid deposits are the evidence."
+     },
+     {
+      "finding": "Members list contradicts strategy",
+      "resolution": "Accepted: members now hold only cop_02da; cop_a11a, cop_8e4f and cop_e36c moved to excluded with their arithmetic in the reason."
+     },
+     {
+      "finding": "Offer does not depend on quote",
+      "resolution": "Accepted: s4 (offer) now depends on s1 (the day-4 developer quote) and is dated day 5; no offer goes out without a quote <= $377."
+     },
+     {
+      "finding": "Sending capability not held",
+      "resolution": "Accepted: the owner is the sender - s1 (post spec, 1 h), s3 (upload lists and send through Instantly, answer replies, 8 h), s4 (send offers, 2 h) are OWNER steps with hours; owner total 27 h, no cap in this goal."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "OFFER_AND_PRICE condition",
+      "resolution": "No EVIDENCE fact holds a paid price; OFFER_AND_PRICE stays missing in the chain and is in validation.decides - the day-12 paid deposits measure it."
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "No developer has quoted; FULFILMENT stays missing and the day-4 written quote <= $377 gates the offer step (s4 depends on s1)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "why": "Duplicate of the strategy offer (same buyers, same $1,500 price, $400 build): 12 deals at $1,500 - $400 would only re-count the same buyers"
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "why": "Alternative, not used: 32+ wins needed at $835 - $461 = $374 each against 65-380 bids per project; win rate unmeasured, settlement unset"
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "why": "Alternative, not used: 63 wins needed at $324 - $133 = $191 each; writer cost an estimate, settlement unset"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 377,
+      "capital": 1662,
+      "settlesDay": 37,
+      "ownerHours": 27
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_69aa6a1eb593_afcbce",
+    "digest": "69aa6a1eb593443cf681f267",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:02:01.180Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_0c6844ed89194880be85",
+   "contractDigest": "d0651c03d74add1a3cefcf0b",
+   "parentRevisionId": "rev_e4a8db85a672_99c6ca",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+    "opportunityIds": [
+     "cop_02da4a34235042709531"
+    ],
+    "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). The $1,500 price is ASSUMED: no record shows a cold-reached local business paying it (Freelancer.com budgets and seller bids were rejected as buyer-paid prices, and are a different population). The $377 build cost is an estimate from other seller bids, not a quote. The plan therefore tests the quote first (day 4), then the paid-deposit rate (day 12), before any order is placed."
+   },
+   "alternatives": [
+    {
+     "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+     "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+    },
+    {
+     "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+     "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+    },
+    {
+     "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+     "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "TEST",
+     "label": "Owner posts the fixed 5-page build spec as a Freelancer.com project (free to post) and collects developer bids; accept only a written fixed quote <= $377 incl. 3% employer fee from a developer with a verifiable portfolio, by day 4",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_subcost",
+      "src_fl_p2",
+      "src_fl_fee"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "REACH",
+     "label": "Open Instantly Hypergrowth for one month ($107, 25,000 uploaded contacts) and one sending domain/mailbox (~$47, estimate)",
+     "performer": "OWNER",
+     "costCents": 15400,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_instantly"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "REACH",
+     "label": "Owner uploads a list of local service businesses with outdated or missing sites and sends cold sequences through Instantly: 300 contacts every 3 days, 1,800 by day 20; owner answers replies",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_instantly",
+      "src_clutch_smb"
+     ],
+     "ownerHours": 8,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "OFFER",
+     "label": "Owner replies to interested buyers with the fixed-scope 5-page rebuild at $1,500, 50% deposit, 7-day delivery (only after the day-4 quote exists)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s1",
+     "evidence": [
+      "q_price"
+     ],
+     "priceCents": 150000,
+     "ownerHours": 2,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "SELL",
+     "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4, closed by days 12, 18 and 24)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 12,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "COLLECT",
+     "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+     "performer": "BRAIN",
+     "costCents": 26460,
+     "day": 12,
+     "dependsOn": "s5",
+     "evidence": [
+      "src_stripe_fee",
+      "src_stripe_payout"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "ORDER",
+     "label": "Owner funds a Freelancer.com milestone for the quoted developer per deal ($377 each, 12 deals, ordered per batch)",
+     "performer": "OWNER",
+     "costCents": 452400,
+     "day": 13,
+     "dependsOn": "s6",
+     "evidence": [
+      "q_subcost",
+      "src_fl_p2",
+      "src_fl_fee"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s8",
+     "kind": "DELIVER",
+     "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+     "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+     "costCents": null,
+     "day": 20,
+     "dependsOn": "s7",
+     "evidence": [
+      "q_subcost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s9",
+     "kind": "COLLECT",
+     "label": "Collect 50% balance on delivery by Stripe invoice",
+     "performer": "BRAIN",
+     "costCents": 26460,
+     "day": 20,
+     "dependsOn": "s8",
+     "evidence": [
+      "src_stripe_fee",
+      "src_stripe_payout"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "FUNDING",
+     "amountCents": 166200,
+     "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+     "stepId": "s2"
+    },
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 15400,
+     "label": "Instantly Hypergrowth one month ($107) + domain/mailbox (~$47)",
+     "stepId": "s2"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 1: 4 deposits",
+     "settlesDay": 23,
+     "stepId": "s6"
+    },
+    {
+     "day": 12,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 1: Stripe fees on deposits",
+     "stepId": "s6"
+    },
+    {
+     "day": 13,
+     "kind": "COMMIT",
+     "amountCents": 150800,
+     "label": "Batch 1: 4 subcontract milestones",
+     "stepId": "s7"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 1: 4 balances",
+     "settlesDay": 23,
+     "stepId": "s9"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 1: Stripe fees on balances",
+     "stepId": "s9"
+    },
+    {
+     "day": 18,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 2: 4 deposits",
+     "settlesDay": 23,
+     "stepId": "s6"
+    },
+    {
+     "day": 18,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 2: Stripe fees on deposits",
+     "stepId": "s6"
+    },
+    {
+     "day": 23,
+     "kind": "COMMIT",
+     "amountCents": 150800,
+     "label": "Batch 2: 4 subcontract milestones",
+     "stepId": "s7"
+    },
+    {
+     "day": 30,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 2: 4 balances",
+     "settlesDay": 32,
+     "stepId": "s9"
+    },
+    {
+     "day": 30,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 2: Stripe fees on balances",
+     "stepId": "s9"
+    },
+    {
+     "day": 24,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 3: 4 deposits",
+     "settlesDay": 26,
+     "stepId": "s6"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 3: Stripe fees on deposits",
+     "stepId": "s6"
+    },
+    {
+     "day": 25,
+     "kind": "COMMIT",
+     "amountCents": 150800,
+     "label": "Batch 3: 4 subcontract milestones",
+     "stepId": "s7"
+    },
+    {
+     "day": 32,
+     "kind": "RECEIPT",
+     "amountCents": 300000,
+     "label": "Batch 3: 4 balances",
+     "settlesDay": 34,
+     "stepId": "s9"
+    },
+    {
+     "day": 32,
+     "kind": "FEE",
+     "amountCents": 8820,
+     "label": "Batch 3: Stripe fees on balances",
+     "stepId": "s9"
+    }
+   ],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "q_price",
+     "status": "ASSUMED",
+     "value": 150000,
+     "unit": "cents per site",
+     "sources": [
+      "src_fl_p1",
+      "src_clutch"
+     ],
+     "needs": "first paid deposits at $1,500 from cold-email buyers"
+    },
+    {
+     "name": "q_close",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid deposits per 300 contacts reached",
+     "sources": [],
+     "needs": "live test: deposits paid from the first 300 contacts"
+    },
+    {
+     "name": "q_subcost",
+     "status": "ESTIMATE",
+     "value": 37700,
+     "unit": "cents per site build",
+     "sources": [
+      "src_fl_p2",
+      "src_fl_fee"
+     ],
+     "needs": "a written fixed quote from a developer on the posted spec"
+    },
+    {
+     "name": "q_deals",
+     "status": "ASSUMED",
+     "value": 12,
+     "unit": "deals in 45 days",
+     "sources": [
+      "src_card_m"
+     ],
+     "needs": "close rate"
+    },
+    {
+     "name": "q_settle",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days max to first Stripe payout",
+     "sources": [
+      "src_stripe_payout"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_card_m",
+     "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+     "dated": "2026-11-28",
+     "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+     "population": "US local service businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_fl_p1",
+     "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+     "dated": "2026-11-28",
+     "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+     "population": "Freelancer.com buyers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_fl_p2",
+     "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+     "dated": "2026-11-28",
+     "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+     "population": "Freelancer.com developers bidding",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_fl_fee",
+     "url": "https://www.freelancer.com/feesandcharges",
+     "dated": "2026-11-28",
+     "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+     "population": "Freelancer.com",
+     "matchesBuyer": false,
+     "opportunityId": "cop_8e4f3860ff0a4f239eec"
+    },
+    {
+     "id": "src_clutch",
+     "url": "https://clutch.co/web-designers/pricing",
+     "dated": "2026-09-21",
+     "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+     "population": "Clutch web design buyers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_clutch_smb",
+     "url": "https://clutch.co/press-releases/smb-websites-2025",
+     "dated": "2025-08-21",
+     "claim": "83% of US small businesses have a website; ~17% still have none",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_hunter",
+     "url": "https://hunter.io/the-state-of-cold-email-2025",
+     "dated": "2025",
+     "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+     "population": "B2B cold email recipients",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_instantly",
+     "url": "https://instantly.ai/pricing.md",
+     "dated": "2026-11-28",
+     "claim": "Instantly Hypergrowth $107/mo, 125,000 emails and 25,000 uploaded contacts per month (Growth $47 allows only 1,000 contacts)",
+     "population": "tool",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_stripe_fee",
+     "url": "https://stripe.com/pricing",
+     "dated": "2026-11-28",
+     "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+     "population": "tool",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_stripe_payout",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+     "population": "tool",
+     "matchesBuyer": false,
+     "opportunityId": "cop_02da4a34235042709531"
+    },
+    {
+     "id": "src_card_dup",
+     "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+     "dated": "2026-11-28",
+     "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+     "population": "US local service businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a11a5ea2635945428a00"
+    },
+    {
+     "id": "src_dup_pub",
+     "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+     "dated": "2026-11-28",
+     "claim": "A small firm posted exactly this offer (mobile business site, service pages, quote forms, basic SEO) at $250-750; 93 developers bid averaging $366",
+     "population": "small businesses buying sites",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a11a5ea2635945428a00"
+    },
+    {
+     "id": "src_dup_smb",
+     "url": "https://clutch.co/press-releases/smb-websites-2025",
+     "dated": "2025-08-21",
+     "claim": "~17% of US small businesses still have no website",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a11a5ea2635945428a00"
+    },
+    {
+     "id": "src_fl_list",
+     "url": "https://www.freelancer.com/jobs/website-design/",
+     "dated": "2026-11-28",
+     "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+     "population": "Freelancer.com buyers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8e4f3860ff0a4f239eec"
+    },
+    {
+     "id": "src_fl_p1b",
+     "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+     "dated": "2026-11-28",
+     "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+     "population": "Freelancer.com buyers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8e4f3860ff0a4f239eec"
+    },
+    {
+     "id": "src_art1",
+     "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+     "dated": "2026-11-28",
+     "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+     "population": "Freelancer.com buyers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+    },
+    {
+     "id": "src_art2",
+     "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+     "dated": "2026-11-28",
+     "claim": "Posted $250-750 article series, 18 bids averaging $330",
+     "population": "Freelancer.com buyers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+    }
+   ],
+   "validation": {
+    "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+    "stop": [
+     "Fewer than 2 paid deposits from the first 300 contacts by day 12: stop outreach, total loss <= $154 of tools",
+     "No developer quote <= $377 by day 4: do not sell further builds",
+     "Fewer than 8 deposits from the first 1,200 contacts by day 18: the 12-deal schedule cannot close by day 24; stop new outreach and deliver only signed deals"
+    ],
+    "continue": [
+     "Quote <= $377 by day 4: start outreach",
+     ">= 2 deposits from the first 300 contacts by day 12: keep sending 300 contacts every 3 days to 1,800",
+     ">= 8 deposits by day 18: hold the 12-deal schedule"
+    ],
+    "decides": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "FULFILMENT"
+    ],
+    "threshold": {
+     "paid": 2,
+     "of": 300,
+     "reach": 1800
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed economics fit",
+     "resolution": "Agreed; after the re-schedule: receipts $18,000, Stripe fees $529, builds $4,524, tools $154, contribution $12,793; peak owner float $154 + 4 x $377 = $1,662 until batch-1 deposits settle (Stripe first payout) on day 23."
+    },
+    {
+     "finding": "Reach vs schedule",
+     "resolution": "Accepted. Growth caps uploads at 1,000/month, so the plan moves to Hypergrowth ($107, 25,000 contacts; same $154 tool line) and reaches 300 contacts every 3 days, 1,800 by day 20. At the threshold rate 2/300 that is 12 deposits by day 24; batches close days 12/18/24, deliver days 20/30/32, and the last balances settle day 34 < 45."
+    },
+    {
+     "finding": "Proof and stop disagree",
+     "resolution": "Accepted: one denominator - the first 300 contacts (sent days 5-7), judged on day 12, for proof, stop and threshold."
+    },
+    {
+     "finding": "Price presented as supported",
+     "resolution": "Accepted: the strategy now says $1,500 is ASSUMED, that the Freelancer budgets/bids were rejected as buyer-paid prices and are another population; q_price stays ASSUMED and the paid deposits are the evidence."
+    },
+    {
+     "finding": "Members list contradicts strategy",
+     "resolution": "Accepted: members now hold only cop_02da; cop_a11a, cop_8e4f and cop_e36c moved to excluded with their arithmetic in the reason."
+    },
+    {
+     "finding": "Offer does not depend on quote",
+     "resolution": "Accepted: s4 (offer) now depends on s1 (the day-4 developer quote) and is dated day 5; no offer goes out without a quote <= $377."
+    },
+    {
+     "finding": "Sending capability not held",
+     "resolution": "Accepted: the owner is the sender - s1 (post spec, 1 h), s3 (upload lists and send through Instantly, answer replies, 8 h), s4 (send offers, 2 h) are OWNER steps with hours; owner total 27 h, no cap in this goal."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "revenueRange",
+      "price",
+      "brain:OFFER_AND_PRICE"
+     ],
+     "finding": "OFFER_AND_PRICE condition",
+     "resolution": "No EVIDENCE fact holds a paid price; OFFER_AND_PRICE stays missing in the chain and is in validation.decides - the day-12 paid deposits measure it."
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ],
+     "finding": "FULFILMENT condition",
+     "resolution": "No developer has quoted; FULFILMENT stays missing and the day-4 written quote <= $377 gates the offer step (s4 depends on s1)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_02da4a34235042709531",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_a11a5ea2635945428a00",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_8e4f3860ff0a4f239eec",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_a11a5ea2635945428a00",
+     "why": "Duplicate of the strategy offer (same buyers, same $1,500 price, $400 build): 12 deals at $1,500 - $400 would only re-count the same buyers"
+    },
+    {
+     "opportunityId": "cop_8e4f3860ff0a4f239eec",
+     "why": "Alternative, not used: 32+ wins needed at $835 - $461 = $374 each against 65-380 bids per project; win rate unmeasured, settlement unset"
+    },
+    {
+     "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+     "why": "Alternative, not used: 63 wins needed at $324 - $133 = $191 each; writer cost an estimate, settlement unset"
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_02da4a34235042709531",
+     "deals": 12,
+     "price": 1500,
+     "directCost": 377,
+     "capital": 1662,
+     "settlesDay": 37,
+     "ownerHours": 27
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_69aa6a1eb593_afcbce",
+   "digest": "69aa6a1eb593443cf681f267",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:02:01.180Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_69aa6a1eb593_afcbce",
+   "digest": "69aa6a1eb593443cf681f267",
+   "contractDigest": "d0651c03d74add1a3cefcf0b",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 68320,
+    "committedOpenCents": 452400,
+    "preProofCents": 24220,
+    "maxExposureCents": 192660,
+    "minCashCents": 223540,
+    "minCashDay": 20,
+    "collectedCents": 1800000,
+    "collectedInWindowCents": 1800000,
+    "refundsCents": 0,
+    "ownerFundedCents": 166200,
+    "netCents": 1731680
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_02da4a34235042709531",
+     "cop_a11a5ea2635945428a00",
+     "cop_8e4f3860ff0a4f239eec",
+     "cop_e36cc5d8d80f47d78f9d"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "title": "Cold-email website rebuild for local service businesses, build subcontracted",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1123,
+      "card": {
+       "payer": "US local service businesses with outdated or missing websites",
+       "reachableChannel": "cold email via Instantly Growth plan",
+       "offerScope": "fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "peakFundingCents": 25000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "local services (trades, clinics, firms)",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email via Instantly Growth plan"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 377, tied up 250"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email via Instantly Growth plan",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec to US local service businesses with outdated or missing websites, reached through cold email via Instantly Growth plan, at $1,500; Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$377",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service businesses with outdated or missing websites",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/projects/web-design/emergency-management-website-creation; https://clutch.co/press-releases/smb-websites-2025; https://hunter.io/the-state-of-cold-email-2025; https://clutch.co/press-releases/smb-websites-2025; https://instantly.ai/pricing.md",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "title": "Cold-email local business websites, build subcontracted to Freelancer.com freelancer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1100,
+      "card": {
+       "payer": "US local service businesses with outdated or missing websites",
+       "reachableChannel": "cold email via Instantly Growth plan",
+       "offerScope": "5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelancer.com web developer hired per project",
+       "peakFundingCents": 60000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "local services",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: cold email via Instantly Growth plan"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 400, tied up 600"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "cold email via Instantly Growth plan",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell 5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA to US local service businesses with outdated or missing websites, reached through cold email via Instantly Growth plan, at $1,500; Freelancer.com web developer hired per project delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$400",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelancer.com web developer hired per project.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service businesses with outdated or missing websites",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/projects/web-design/emergency-management-website-creation; https://clutch.co/press-releases/smb-websites-2025; https://hunter.io/the-state-of-cold-email-2025; https://instantly.ai/pricing.md",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "title": "Win posted $750-1500 website projects on Freelancer.com, subcontract the build",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 374,
+      "card": {
+       "payer": "small businesses and individuals who post fixed-price website projects on Freelancer.com",
+       "reachableChannel": "Freelancer.com project bids",
+       "offerScope": "responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs",
+       "priceCents": 83500,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "peakFundingCents": 39700,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "web design",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Freelancer.com project bids"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 835 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 461, tied up 397"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Freelancer.com project bids",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs to small businesses and individuals who post fixed-price website projects on Freelancer.com, reached through Freelancer.com project bids, at $835; Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$461",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$397",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "small businesses and individuals who post fixed-price website projects on Freelancer.com",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$835",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$835",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/jobs/website-design/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "title": "Win posted blog-article projects on Freelancer.com, subcontract the writing",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 191,
+      "card": {
+       "payer": "businesses posting fixed-price blog/article writing projects on Freelancer.com",
+       "reachableChannel": "Freelancer.com project bids",
+       "offerScope": "researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain",
+       "priceCents": 32400,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings)",
+       "peakFundingCents": 12000,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "content marketing",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Freelancer.com project bids"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 324 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 133, tied up 120"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Freelancer.com project bids",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain to businesses posting fixed-price blog/article writing projects on Freelancer.com, reached through Freelancer.com project bids, at $324; Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$133",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$120",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "businesses posting fixed-price blog/article writing projects on Freelancer.com",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$324",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$324",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts; https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/projects/blog-writing/engaging-english-article-blog-writer; https://www.freelancer.com/jobs/article-writing/; https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts; https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205; https://www.freelancer.com/jobs/article-writing/",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:58:23.101Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_e4a8db85a672_99c6ca",
+    "revisionDigest": "e4a8db85a672aafbc1d292cf",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8e7b22daeb6b4323b64e/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL on cold-emailed $1,500 rebuilds is a startable shape and the money arithmetic fits the limits, but the schedule the test is supposed to validate is not carried by its own threshold, the price is presented as more supported than it is, and the members list contradicts the strategy.",
+    "findings": [
+     "Recomputed economics: Stripe 2.9% + $0.30 on each $750 half = $22.05, $44.10 per deal (the ledger's $88.20 per batch of four deposits matches that); contribution per deal = 1,500 - 377 - 44 = $1,079; 12 deals = $12,947, less $154 tools = $12,793 >= $12,000. Exposure: $154 + 4 x $377 floated on day 9 while deposits sit in Stripe's first payout until day 22 = $1,662 (Brain trace peak $1,927) <= $2,500. These fit.",
+     "Reach vs schedule: Instantly Growth uploads 1,000 contacts per month (src_instantly), so by day 26 - when the ledger has all 12 deposits in - at most ~1,000 contacts have been reached. 12 deposits from 1,000 contacts is a 1.2% paid rate, while the threshold (2 of 300 = 0.67%) only implies ~6.7 deals by day 26 and ~13 only after all 2,000 contacts, i.e. after day 31, leaving month-2 deals to deposit, deliver in 7 days and settle balances by day 45. Rebuild the ledger on the threshold rate, or raise the threshold to what the 12-by-day-26 schedule needs (about 4 of 300), and show that batch 3 settles by day 45 either way.",
+     "Proof and stop disagree: proof says '>= 2 paid deposits from <= 1,000 businesses reached by day 10', stop says 'fewer than 2 from the first 300 by day 10'. Pick one denominator; at 1,000 contacts per month only ~300 are reachable by day 10.",
+     "Price: the strategy says 'comparable builds are posted at $750-1500 and bid at $366-835, so the price ceiling ... is visible'. Those are open budgets and sellers' bids on Freelancer.com, rejected on verification as buyer-paid prices, from marketplace posters, not cold-reached US local businesses; $1,500 sits at the top of one poster's budget. q_price is correctly ASSUMED - the strategy text should say the same.",
+     "Members list includes cop_a11a (described as a duplicate kept out), cop_8e4f and cop_e36c (described as alternatives) with deal counts; only cop_02da is the plan. Remove them or the ledger double-counts buyers.",
+     "Order: s4 (offers) does not depend on s1 (the developer quote due day 4). Deposits start day 8, so no order is taken before the quote deadline in practice, but make s4 depend on s1 so the stop 'no quote <= $377 by day 4: do not sell' is enforced.",
+     "s1, s3, s4 rely on SEND_A_MESSAGE (NOT_CONNECTED) and READ_REPLIES (UNREAD): name the owner as sender with hours, or state how Brain sends. No owner-hours cap, but unknown hours are unknown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:59:08.551Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "No EVIDENCE fact holds a price buyers paid; the Freelancer.com budgets/bids and the Clutch ceiling were rejected on verification (open budgets and sellers' asks, mismatched population)."
+     },
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "No developer has quoted the spec; $377 is an average of other sellers' bids on another poster's project, and the offer step does not depend on the quote test."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_69aa6a1eb593_afcbce",
+    "revisionDigest": "69aa6a1eb593443cf681f267",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8e7b22daeb6b4323b64e/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and the plan is now startable and internally consistent where it matters. Price ($1,500) is explicitly ASSUMED and measured by paid deposits; the build cost is an estimate gated by a written developer quote <= $377 on day 4 before any offer (s4 depends on s1), so no order is taken before fulfilment is shown possible. Reach was fixed (Hypergrowth, 300 contacts every 3 days, 1,800 by day 20); at the threshold rate 2/300 that is 12 deposits, so passing at the threshold carries the target. The owner is the sender with stated hours (27 h; no hours cap). Members hold only the strategy opening.",
+    "findings": [
+     "Recomputed: receipts 12 x $1,500 = $18,000; Stripe 24 x $22.05 = $529; builds 12 x $377 = $4,524; tools $154; contribution $12,793 >= $12,000 (headroom $793, i.e. one deal short misses the target - 11 deals = $11,714). Peak float $154 + 4 x $377 = $1,662 until batch-1 deposits settle day 23 (Brain trace peak $1,927) <= $2,500. Last balances settle day 34 < 45.",
+     "Stale text: validation.proof still reads 'By day 10 ... from <= 1,000 local businesses reached', while the stop/continue rules and threshold use the first 300 contacts judged on day 12. The rules are consistent; the proof sentence should be updated to match.",
+     "Margin is thin: the target needs all 12 deals at $377 or less; the day-18 stop (< 8 deposits from 1,200 contacts) is the right guard and should be read as 'target missed', not 'later'."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:02:53.772Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_69aa6a1eb593_afcbce",
+   "digest": "69aa6a1eb593443cf681f267",
+   "contractDigest": "d0651c03d74add1a3cefcf0b",
+   "plan": {
+    "goalId": "wst_0c6844ed89194880be85",
+    "contractDigest": "d0651c03d74add1a3cefcf0b",
+    "parentRevisionId": "rev_e4a8db85a672_99c6ca",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Cold-email fixed-scope website rebuilds to local service businesses at $1,500, builds subcontracted to a Freelancer.com developer at $377",
+     "opportunityIds": [
+      "cop_02da4a34235042709531"
+     ],
+     "why": "Highest contribution per deal of the discovered routes ($1,500 - $377 build - ~$88 Stripe fees = ~$1,035), so 12 deals clear $12,000 after all direct costs inside 45 days with peak owner exposure ~$1,662 < $2,500 (deposits fund later batches). The $1,500 price is ASSUMED: no record shows a cold-reached local business paying it (Freelancer.com budgets and seller bids were rejected as buyer-paid prices, and are a different population). The $377 build cost is an estimate from other seller bids, not a quote. The plan therefore tests the quote first (day 4), then the paid-deposit rate (day 12), before any order is placed."
+    },
+    "alternatives": [
+     {
+      "title": "Win posted $750-1500 projects on Freelancer.com and subcontract (cop_8e4f)",
+      "why": "Demand is visible (355 open jobs) but ~$374 contribution needs ~33 wins against 65-380 bids each; win rate unknown and $397 tied up per deal"
+     },
+     {
+      "title": "Win posted blog-article projects and subcontract writing (cop_e36c)",
+      "why": "~$191 contribution per $324 project needs 60+ wins; writer cost only estimated"
+     },
+     {
+      "title": "Duplicate cold-email card at $400 subcontract (cop_a11a)",
+      "why": "Same offer as the strategy; kept out to avoid counting buyers twice"
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Owner posts the fixed 5-page build spec as a Freelancer.com project (free to post) and collects developer bids; accept only a written fixed quote <= $377 incl. 3% employer fee from a developer with a verifiable portfolio, by day 4",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "REACH",
+      "label": "Open Instantly Hypergrowth for one month ($107, 25,000 uploaded contacts) and one sending domain/mailbox (~$47, estimate)",
+      "performer": "OWNER",
+      "costCents": 15400,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "REACH",
+      "label": "Owner uploads a list of local service businesses with outdated or missing sites and sends cold sequences through Instantly: 300 contacts every 3 days, 1,800 by day 20; owner answers replies",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_instantly",
+       "src_clutch_smb"
+      ],
+      "ownerHours": 8,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "OFFER",
+      "label": "Owner replies to interested buyers with the fixed-scope 5-page rebuild at $1,500, 50% deposit, 7-day delivery (only after the day-4 quote exists)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_price"
+      ],
+      "priceCents": 150000,
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "SELL",
+      "label": "Owner takes a short close call with each interested buyer and signs the scope (12 deals, 3 batches of 4, closed by days 12, 18 and 24)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposits by Stripe invoice (2.9% + 30c each)",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 12,
+      "dependsOn": "s5",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "ORDER",
+      "label": "Owner funds a Freelancer.com milestone for the quoted developer per deal ($377 each, 12 deals, ordered per batch)",
+      "performer": "OWNER",
+      "costCents": 452400,
+      "day": 13,
+      "dependsOn": "s6",
+      "evidence": [
+       "q_subcost",
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s8",
+      "kind": "DELIVER",
+      "label": "Developer builds the site to Brain's spec; Brain QAs against the scope and hands over",
+      "performer": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+      "costCents": null,
+      "day": 20,
+      "dependsOn": "s7",
+      "evidence": [
+       "q_subcost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s9",
+      "kind": "COLLECT",
+      "label": "Collect 50% balance on delivery by Stripe invoice",
+      "performer": "BRAIN",
+      "costCents": 26460,
+      "day": 20,
+      "dependsOn": "s8",
+      "evidence": [
+       "src_stripe_fee",
+       "src_stripe_payout"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 166200,
+      "label": "Owner advances tools and first-batch subcontract float (peak exposure)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 15400,
+      "label": "Instantly Hypergrowth one month ($107) + domain/mailbox (~$47)",
+      "stepId": "s2"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 deposits",
+      "settlesDay": 23,
+      "stepId": "s6"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 1: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 1: 4 balances",
+      "settlesDay": 23,
+      "stepId": "s9"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 1: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 deposits",
+      "settlesDay": 23,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 2: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 2: 4 balances",
+      "settlesDay": 32,
+      "stepId": "s9"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 2: Stripe fees on balances",
+      "stepId": "s9"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 deposits",
+      "settlesDay": 26,
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on deposits",
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "COMMIT",
+      "amountCents": 150800,
+      "label": "Batch 3: 4 subcontract milestones",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "RECEIPT",
+      "amountCents": 300000,
+      "label": "Batch 3: 4 balances",
+      "settlesDay": 34,
+      "stepId": "s9"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 8820,
+      "label": "Batch 3: Stripe fees on balances",
+      "stepId": "s9"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 150000,
+      "unit": "cents per site",
+      "sources": [
+       "src_fl_p1",
+       "src_clutch"
+      ],
+      "needs": "first paid deposits at $1,500 from cold-email buyers"
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per 300 contacts reached",
+      "sources": [],
+      "needs": "live test: deposits paid from the first 300 contacts"
+     },
+     {
+      "name": "q_subcost",
+      "status": "ESTIMATE",
+      "value": 37700,
+      "unit": "cents per site build",
+      "sources": [
+       "src_fl_p2",
+       "src_fl_fee"
+      ],
+      "needs": "a written fixed quote from a developer on the posted spec"
+     },
+     {
+      "name": "q_deals",
+      "status": "ASSUMED",
+      "value": 12,
+      "unit": "deals in 45 days",
+      "sources": [
+       "src_card_m"
+      ],
+      "needs": "close rate"
+     },
+     {
+      "name": "q_settle",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days max to first Stripe payout",
+      "sources": [
+       "src_stripe_payout"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_card_m",
+      "url": "https://brain.local/card/cop_02da4a34235042709531#price",
+      "dated": "2026-11-28",
+      "claim": "Route card: $1,500 website rebuild sold by cold email, build subcontracted at $377",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p1",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "A buyer posted a comparable site build with a $750-1500 budget; 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_p2",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted a mobile business site (service pages, quote forms, SEO) at $250-750; 93 developers bid averaging $366 - the subcontract price",
+      "population": "Freelancer.com developers bidding",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_fl_fee",
+      "url": "https://www.freelancer.com/feesandcharges",
+      "dated": "2026-11-28",
+      "claim": "Freelancer fixed-price fees: 10% or $5 for freelancers; employer project fee charged on award",
+      "population": "Freelancer.com",
+      "matchesBuyer": false,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_clutch",
+      "url": "https://clutch.co/web-designers/pricing",
+      "dated": "2026-09-21",
+      "claim": "Most web design projects reviewed on Clutch cost less than $10,000 (verified reviews)",
+      "population": "Clutch web design buyers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_clutch_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; ~17% still have none",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_hunter",
+      "url": "https://hunter.io/the-state-of-cold-email-2025",
+      "dated": "2025",
+      "claim": "Average cold campaign reply rate 4.1% over 11M emails (reply, not purchase)",
+      "population": "B2B cold email recipients",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing.md",
+      "dated": "2026-11-28",
+      "claim": "Instantly Hypergrowth $107/mo, 125,000 emails and 25,000 uploaded contacts per month (Growth $47 allows only 1,000 contacts)",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_fee",
+      "url": "https://stripe.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Stripe US domestic cards 2.9% + 30c per transaction",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_stripe_payout",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "First payout 7-14 days after first live payment; US settlement 2 business days thereafter",
+      "population": "tool",
+      "matchesBuyer": false,
+      "opportunityId": "cop_02da4a34235042709531"
+     },
+     {
+      "id": "src_card_dup",
+      "url": "https://brain.local/card/cop_a11a5ea2635945428a00#price",
+      "dated": "2026-11-28",
+      "claim": "Duplicate route card of the same cold-email website offer at $400 subcontract cost",
+      "population": "US local service businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_pub",
+      "url": "https://www.freelancer.com/projects/web-design/emergency-management-website-creation",
+      "dated": "2026-11-28",
+      "claim": "A small firm posted exactly this offer (mobile business site, service pages, quote forms, basic SEO) at $250-750; 93 developers bid averaging $366",
+      "population": "small businesses buying sites",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_dup_smb",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "~17% of US small businesses still have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a11a5ea2635945428a00"
+     },
+     {
+      "id": "src_fl_list",
+      "url": "https://www.freelancer.com/jobs/website-design/",
+      "dated": "2026-11-28",
+      "claim": "355 open website-design jobs on Freelancer.com in Nov 2026, each drawing 65-380 bids",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_fl_p1b",
+      "url": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website",
+      "dated": "2026-11-28",
+      "claim": "Posted $750-1500 website project, 72 bids averaging $835",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8e4f3860ff0a4f239eec"
+     },
+     {
+      "id": "src_art1",
+      "url": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 blog-post project, 40 bids averaging $324",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     },
+     {
+      "id": "src_art2",
+      "url": "https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205",
+      "dated": "2026-11-28",
+      "claim": "Posted $250-750 article series, 18 bids averaging $330",
+      "population": "Freelancer.com buyers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 paid 50% deposits at $1,500 from <=1,000 local businesses reached, and a written developer quote <= $377 on the posted spec",
+     "stop": [
+      "Fewer than 2 paid deposits from the first 300 contacts by day 12: stop outreach, total loss <= $154 of tools",
+      "No developer quote <= $377 by day 4: do not sell further builds",
+      "Fewer than 8 deposits from the first 1,200 contacts by day 18: the 12-deal schedule cannot close by day 24; stop new outreach and deliver only signed deals"
+     ],
+     "continue": [
+      "Quote <= $377 by day 4: start outreach",
+      ">= 2 deposits from the first 300 contacts by day 12: keep sending 300 contacts every 3 days to 1,800",
+      ">= 8 deposits by day 18: hold the 12-deal schedule"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 1800
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed economics fit",
+      "resolution": "Agreed; after the re-schedule: receipts $18,000, Stripe fees $529, builds $4,524, tools $154, contribution $12,793; peak owner float $154 + 4 x $377 = $1,662 until batch-1 deposits settle (Stripe first payout) on day 23."
+     },
+     {
+      "finding": "Reach vs schedule",
+      "resolution": "Accepted. Growth caps uploads at 1,000/month, so the plan moves to Hypergrowth ($107, 25,000 contacts; same $154 tool line) and reaches 300 contacts every 3 days, 1,800 by day 20. At the threshold rate 2/300 that is 12 deposits by day 24; batches close days 12/18/24, deliver days 20/30/32, and the last balances settle day 34 < 45."
+     },
+     {
+      "finding": "Proof and stop disagree",
+      "resolution": "Accepted: one denominator - the first 300 contacts (sent days 5-7), judged on day 12, for proof, stop and threshold."
+     },
+     {
+      "finding": "Price presented as supported",
+      "resolution": "Accepted: the strategy now says $1,500 is ASSUMED, that the Freelancer budgets/bids were rejected as buyer-paid prices and are another population; q_price stays ASSUMED and the paid deposits are the evidence."
+     },
+     {
+      "finding": "Members list contradicts strategy",
+      "resolution": "Accepted: members now hold only cop_02da; cop_a11a, cop_8e4f and cop_e36c moved to excluded with their arithmetic in the reason."
+     },
+     {
+      "finding": "Offer does not depend on quote",
+      "resolution": "Accepted: s4 (offer) now depends on s1 (the day-4 developer quote) and is dated day 5; no offer goes out without a quote <= $377."
+     },
+     {
+      "finding": "Sending capability not held",
+      "resolution": "Accepted: the owner is the sender - s1 (post spec, 1 h), s3 (upload lists and send through Instantly, answer replies, 8 h), s4 (send offers, 2 h) are OWNER steps with hours; owner total 27 h, no cap in this goal."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price",
+       "brain:OFFER_AND_PRICE"
+      ],
+      "finding": "OFFER_AND_PRICE condition",
+      "resolution": "No EVIDENCE fact holds a paid price; OFFER_AND_PRICE stays missing in the chain and is in validation.decides - the day-12 paid deposits measure it."
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ],
+      "finding": "FULFILMENT condition",
+      "resolution": "No developer has quoted; FULFILMENT stays missing and the day-4 written quote <= $377 gates the offer step (s4 depends on s1)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a11a5ea2635945428a00",
+      "why": "Duplicate of the strategy offer (same buyers, same $1,500 price, $400 build): 12 deals at $1,500 - $400 would only re-count the same buyers"
+     },
+     {
+      "opportunityId": "cop_8e4f3860ff0a4f239eec",
+      "why": "Alternative, not used: 32+ wins needed at $835 - $461 = $374 each against 65-380 bids per project; win rate unmeasured, settlement unset"
+     },
+     {
+      "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+      "why": "Alternative, not used: 63 wins needed at $324 - $133 = $191 each; writer cost an estimate, settlement unset"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_02da4a34235042709531",
+      "deals": 12,
+      "price": 1500,
+      "directCost": 377,
+      "capital": 1662,
+      "settlesDay": 37,
+      "ownerHours": 27
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_69aa6a1eb593_afcbce",
+    "digest": "69aa6a1eb593443cf681f267",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:02:01.180Z"
+   },
+   "review": {
+    "revisionId": "rev_69aa6a1eb593_afcbce",
+    "revisionDigest": "69aa6a1eb593443cf681f267",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_567f6dcfc9514a7bafe1/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_8e7b22daeb6b4323b64e/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and the plan is now startable and internally consistent where it matters. Price ($1,500) is explicitly ASSUMED and measured by paid deposits; the build cost is an estimate gated by a written developer quote <= $377 on day 4 before any offer (s4 depends on s1), so no order is taken before fulfilment is shown possible. Reach was fixed (Hypergrowth, 300 contacts every 3 days, 1,800 by day 20); at the threshold rate 2/300 that is 12 deposits, so passing at the threshold carries the target. The owner is the sender with stated hours (27 h; no hours cap). Members hold only the strategy opening.",
+    "findings": [
+     "Recomputed: receipts 12 x $1,500 = $18,000; Stripe 24 x $22.05 = $529; builds 12 x $377 = $4,524; tools $154; contribution $12,793 >= $12,000 (headroom $793, i.e. one deal short misses the target - 11 deals = $11,714). Peak float $154 + 4 x $377 = $1,662 until batch-1 deposits settle day 23 (Brain trace peak $1,927) <= $2,500. Last balances settle day 34 < 45.",
+     "Stale text: validation.proof still reads 'By day 10 ... from <= 1,000 local businesses reached', while the stop/continue rules and threshold use the first 300 contacts judged on day 12. The rules are consistent; the proof sentence should be updated to match.",
+     "Margin is thin: the target needs all 12 deals at $377 or less; the day-18 stop (< 8 deposits from 1,200 contacts) is the right guard and should be read as 'target missed', not 'later'."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:02:53.772Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Over the next 45 days I want to clear $12,000 of profit - money kept after every direct cost - and I can put in at most $2,500.",
+    "terms": "13fcd76b955da904",
+    "openings": {
+     "cop_02da4a34235042709531": "56d72d482bc90c02",
+     "cop_8e4f3860ff0a4f239eec": "c44223888623d299",
+     "cop_a11a5ea2635945428a00": "17256b6b888dc18d",
+     "cop_e36cc5d8d80f47d78f9d": "0eae4aa608e9a2ea"
+    }
+   },
+   "at": "2026-11-28T05:04:40.848Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

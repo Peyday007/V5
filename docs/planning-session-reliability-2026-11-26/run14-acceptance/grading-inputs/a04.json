@@ -1,0 +1,235 @@
+{
+ "caseId": "at-04-adoption-agency-scope-change",
+ "keys": {
+  "cop_ad4e46f6105a4165842e": "hague",
+  "cop_1d7e0714d0334f24a579": "cosmoExam"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Accreditation annual-report evidence workbook for private ad\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Accreditation annual-report evidence workbook for private ad\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 56240× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Accreditation annual-report evidence workbook for private adoption age\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_ad4e46f6105a4165842e"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+    "owner": "PERSON",
+    "cost": 8
+   },
+   {
+    "label": "Collect payment for \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_ad4e46f6105a4165842e",
+    "title": "Accreditation annual-report evidence workbook for private adoption agencies",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 3500,
+    "potentialReach": 3500,
+    "card": {
+     "payer": "Executive directors and compliance coordinators of licensed private adoption agencies",
+     "reachableChannel": "Contact emails published in the state's licensed child-placing agency list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:00.542Z",
+     "offerScope": "A workbook that maps each annual-report standard to the agency's own case-file evidence, delivered within 3 days of order",
+     "priceCents": 60000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "private adoption agencies",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Contact emails published in the state's licensed child-placing agency list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 600 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 12 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "7 deal(s) needed, 95 available in the window (95 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state's licensed child-placing agency list names 95 private adoption agencies with contact emails; each files an annual report to its accrediting entity and its state licensor.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook that maps each annual-report standard to the agency's own case-file evidence, delivered within 3 days of order to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "12 paid orders from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Executive directors and compliance coordinators of licensed private adoption agencies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_1d7e0714d0334f24a579",
+    "title": "State-board practical-exam prep question bank licence for cosmetology schools",
+    "reason": "left out by the goal's own terms: outside the one industry this goal names (private adoption agencies): it is cosmetology schools",
+    "card": {
+     "payer": "Directors of state-licensed cosmetology schools",
+     "reachableChannel": "Contact emails on the state cosmetology board's licensed-school list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:00.542Z",
+     "offerScope": "State-board practical-exam prep question bank licence for cosmetology schools",
+     "priceCents": 35000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.25,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "cosmetology schools",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state cosmetology board's licensed-school list names 140 cosmetology schools; each enrols a new class every quarter.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell State-board practical-exam prep question bank licence for cosmetology schools to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "15 paid orders from 100 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Directors of state-licensed cosmetology schools",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Cosmetology schools paid $350 per annual licence on this seller's checkout (Oct 2026 order records).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 350000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": "private adoption agencies",
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T05:03:35.501Z"
+ }
+}

@@ -1,0 +1,194 @@
+{
+ "caseId": "at-09-limo-net45-after-deadline",
+ "keys": {
+  "cop_af7d1f0140bf485fb4f6": "partyCars"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $4,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_af7d1f0140bf485fb4f6"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_af7d1f0140bf485fb4f6",
+    "title": "Brokered chauffeured transport for corporate December holiday parties",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Corporate event planners and executive assistants booking December parties",
+     "reachableChannel": "The six planners who signed bookings, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:24.434Z",
+     "offerScope": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+     "priceCents": 90000,
+     "currency": "USD",
+     "fulfillmentOwner": "Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars each night on days 7-22)",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "chauffeured limousine services",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 90000,
+      "currency": "USD",
+      "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The six planners who signed bookings, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 5400 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5400 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars e (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 600, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "45 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Six signed bookings, events on days 7-22 of the window.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45 to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars each night on days 7-22) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Corporate event planners and executive assistants booking December parties",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Six corporate planners signed bookings at $900 per 5-hour party run (signed bookings, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "45 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_fc89e1f03421408181da"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:36:56.554Z"
+ }
+}

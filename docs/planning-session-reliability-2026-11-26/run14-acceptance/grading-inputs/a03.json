@@ -1,0 +1,414 @@
+{
+ "caseId": "at-03-loan-signing-net",
+ "keys": {
+  "cop_ee4f1e0d6ac44b2c8d03": "signings"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Brokered mortgage loan-signing appointments completed by com\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Brokered mortgage loan-signing appointments completed by com\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2560× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Brokered mortgage loan-signing appointments completed by commissioned \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_ee4f1e0d6ac44b2c8d03"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+    "owner": "PERSON",
+    "cost": 95
+   },
+   {
+    "label": "Collect payment for \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+    "title": "Brokered mortgage loan-signing appointments completed by commissioned signing agents",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 2000,
+    "potentialReach": 2000,
+    "card": {
+     "payer": "Escrow officers and closing coordinators at independent title agencies",
+     "reachableChannel": "The standing-order email of the four agencies already ordering from this seller",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:55.545Z",
+     "offerScope": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+     "priceCents": 17500,
+     "currency": "USD",
+     "fulfillmentOwner": "Tri-County Signing Agents Network (written rate: $95 per completed signing, paid by the seller within 3 days of the agency paying for that signing; can cover up to 6 signings a day)",
+     "peakFundingCents": 0,
+     "humanHours": 0.2,
+     "requiredCapabilities": [],
+     "industry": "mobile notary loan signing",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 17500,
+      "currency": "USD",
+      "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The standing-order email of the four agencies already ordering from this seller"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 5600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Tri-County Signing Agents Network (written rate: $95 per completed signing, paid (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 95, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Four title agencies signed standing orders with this seller for 32 loan signings, all scheduled on days 2-16 of the window.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$95",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Tri-County Signing Agents Network (written rate: $95 per completed signing, paid by the seller within 3 days of the agency paying for that signing; can cover up to 6 signings a day) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Escrow officers and closing coordinators at independent title agencies",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The fee schedules of the four agencies ordering from this seller pay $175 per completed loan signing (fee schedules, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 200000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:37:51.329Z"
+ }
+}

@@ -1,0 +1,2115 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_161d58c6fcea4de2a34b",
+   "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": null,
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "ee3126b6011e71e1bcc78f9e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_161d58c6fcea4de2a34b",
+    "contractDigest": "ee3126b6011e71e1bcc78f9e",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Listeria environmental-monitoring program and log workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_7d58fdae1fa9409da0d9"
+     ],
+     "why": "Price $380 is paid on this seller's own checkout records; conversion 14 paid of 120 contacts was measured on this offer's own sales; 210 licensed plants on the state list each must keep this program; Brain produces the workbook; $4 direct cost, $0 exposure, 2 days to cash. 11 deals x $380 = $4,180 >= $4,000; the full list at 11.7% yields ~24.5 expected paid orders, more than twice the 11 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Add the Green Hollow RFQ audit",
+      "why": "Single buyer, unmeasured close rate on an RFQ, 21 days to cash; adds risk not needed for the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 210 buyers from the published list (state dairy-plant licence list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "9da0d9-buyerVolume",
+       "9da0d9-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: Listeria environmental-monitoring program and log workbook at $380",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 11 paid orders at $380 (measured 14 paid of 120 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "9da0d9-conversionRates",
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (11 deals, $4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "9da0d9-delivery",
+       "9da0d9-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $4180 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 20,
+      "dependsOn": "deliver",
+      "evidence": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 418000,
+      "label": "11 x $380 settled",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 4400,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1167,
+      "unit": "paid orders/contact",
+      "sources": [
+       "9da0d9-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 24.5,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-conversionRates",
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "days",
+      "sources": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "9da0d9-price",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-conversionRates",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-buyerVolume",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-directCosts",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-exposure",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-timeToFirstCash",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-delivery",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-payer",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "missing": [
+       "MARKET_VOLUME",
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "why": "One cooperative issued one RFQ for one $2,500 audit: a single buyer and a single deal (it cannot reach $4,000 alone), the close rate on a competitive RFQ is unmeasured, and cash takes 21 days. Not needed for the plan."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "why": "Buyer count is only an estimate (RECOMMENDATION), and the $150 fee is paid by two cave owners, not by the cheesemakers named as payer; supply is capped by two caves. Not needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "deals": 11,
+      "price": 380,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 20,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain counts the cooperative's 22 member farms as 22 buyers, but the card's buyerVolume says the cooperative issued one RFQ for one audit: one organisation is one buyer, so only one deal exists, not 22."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The price fact says two cave owners pay a $150 placement fee, while the card names small cheesemakers as payer; the price is not established for the named payer, and only two signed fee letters exist."
+     }
+    ],
+    "revisionId": "rev_64af4e8c0df2_f48dd7",
+    "digest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:02.608Z"
+   },
+   {
+    "goalId": "wst_161d58c6fcea4de2a34b",
+    "contractDigest": "ee3126b6011e71e1bcc78f9e",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Listeria environmental-monitoring program and log workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_7d58fdae1fa9409da0d9"
+     ],
+     "why": "Price $380 is paid on this seller's own checkout records; conversion 14 paid of 120 contacts was measured on this offer's own sales; 210 licensed plants on the state list each must keep this program; Brain produces the workbook; $4 direct cost, $0 exposure, 2 days to cash. 11 deals x $380 = $4,180 >= $4,000; the full list at 11.7% yields ~24.5 expected paid orders, more than twice the 11 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Add the Green Hollow RFQ audit",
+      "why": "Single buyer, unmeasured close rate on an RFQ, 21 days to cash; adds risk not needed for the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 210 buyers from the published list (state dairy-plant licence list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "9da0d9-buyerVolume",
+       "9da0d9-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: Listeria environmental-monitoring program and log workbook at $380",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 11 paid orders at $380 (measured 14 paid of 120 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "9da0d9-conversionRates",
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (11 deals, $4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "9da0d9-delivery",
+       "9da0d9-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $4180 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 20,
+      "dependsOn": "deliver",
+      "evidence": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 418000,
+      "label": "11 x $380 settled",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 4400,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1167,
+      "unit": "paid orders/contact",
+      "sources": [
+       "9da0d9-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 24.5,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-conversionRates",
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "days",
+      "sources": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "9da0d9-price",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-conversionRates",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-buyerVolume",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-directCosts",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-exposure",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-timeToFirstCash",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-delivery",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-payer",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "missing": [
+       "MARKET_VOLUME",
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "why": "One cooperative issued one RFQ for one $2,500 audit: a single buyer and a single deal (it cannot reach $4,000 alone), the close rate on a competitive RFQ is unmeasured, and cash takes 21 days. Not needed for the plan."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "why": "Buyer count is only an estimate (RECOMMENDATION), and the $150 fee is paid by two cave owners, not by the cheesemakers named as payer; supply is capped by two caves. Not needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "deals": 11,
+      "price": 380,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 20,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain counts the cooperative's 22 member farms as 22 buyers, but the card's buyerVolume says the cooperative issued one RFQ for one audit: one organisation is one buyer, so only one deal exists, not 22."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The price fact says two cave owners pay a $150 placement fee, while the card names small cheesemakers as payer; the price is not established for the named payer, and only two signed fee letters exist."
+     }
+    ],
+    "revisionId": "rev_64af4e8c0df2_f04078",
+    "digest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:17.237Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_161d58c6fcea4de2a34b",
+   "contractDigest": "ee3126b6011e71e1bcc78f9e",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell Listeria environmental-monitoring program and log workbook to the listed buyers",
+    "opportunityIds": [
+     "cop_7d58fdae1fa9409da0d9"
+    ],
+    "why": "Price $380 is paid on this seller's own checkout records; conversion 14 paid of 120 contacts was measured on this offer's own sales; 210 licensed plants on the state list each must keep this program; Brain produces the workbook; $4 direct cost, $0 exposure, 2 days to cash. 11 deals x $380 = $4,180 >= $4,000; the full list at 11.7% yields ~24.5 expected paid orders, more than twice the 11 needed."
+   },
+   "alternatives": [
+    {
+     "title": "Add the Green Hollow RFQ audit",
+     "why": "Single buyer, unmeasured close rate on an RFQ, 21 days to cash; adds risk not needed for the target."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email 210 buyers from the published list (state dairy-plant licence list)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "9da0d9-buyerVolume",
+      "9da0d9-payer"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer: Listeria environmental-monitoring program and log workbook at $380",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "9da0d9-price"
+     ],
+     "priceCents": 38000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 11 paid orders at $380 (measured 14 paid of 120 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 18,
+     "dependsOn": "offer",
+     "evidence": [
+      "9da0d9-conversionRates",
+      "9da0d9-price"
+     ],
+     "priceCents": 38000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers each workbook/spreadsheet (11 deals, $4 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 4400,
+     "day": 18,
+     "dependsOn": "sell",
+     "evidence": [
+      "9da0d9-delivery",
+      "9da0d9-directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $4180 settled",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 20,
+     "dependsOn": "deliver",
+     "evidence": [
+      "9da0d9-timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 418000,
+     "label": "11 x $380 settled",
+     "settlesDay": 20,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 4400,
+     "label": "direct delivery cost, paid out of receipts",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 380,
+     "unit": "USD/deal",
+     "sources": [
+      "9da0d9-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1167,
+     "unit": "paid orders/contact",
+     "sources": [
+      "9da0d9-conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 210,
+     "unit": "buyers",
+     "sources": [
+      "9da0d9-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "EVIDENCED",
+     "value": 11,
+     "unit": "deals",
+     "sources": [
+      "9da0d9-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "expected paid orders from full list",
+     "status": "EVIDENCED",
+     "value": 24.5,
+     "unit": "deals",
+     "sources": [
+      "9da0d9-conversionRates",
+      "9da0d9-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "USD/deal",
+     "sources": [
+      "9da0d9-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 2,
+     "unit": "days",
+     "sources": [
+      "9da0d9-timeToFirstCash"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "9da0d9-price",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#price",
+     "dated": "2026-11",
+     "claim": "price",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-conversionRates",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#conversionRates",
+     "dated": "2026-11",
+     "claim": "conversionRates",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-buyerVolume",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#buyerVolume",
+     "dated": "2026-11",
+     "claim": "buyerVolume",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-directCosts",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#directCosts",
+     "dated": "2026-11",
+     "claim": "directCosts",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-exposure",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#exposure",
+     "dated": "2026-11",
+     "claim": "exposure",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-timeToFirstCash",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "timeToFirstCash",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-delivery",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#delivery",
+     "dated": "2026-11",
+     "claim": "delivery",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    },
+    {
+     "id": "9da0d9-payer",
+     "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#payer",
+     "dated": "2026-11",
+     "claim": "payer",
+     "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7d58fdae1fa9409da0d9"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_7d58fdae1fa9409da0d9",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_8dcb708a6f694259b17d",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    },
+    {
+     "opportunityId": "cop_29ad623dd8334268aba2",
+     "missing": [
+      "MARKET_VOLUME",
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8dcb708a6f694259b17d",
+     "why": "One cooperative issued one RFQ for one $2,500 audit: a single buyer and a single deal (it cannot reach $4,000 alone), the close rate on a competitive RFQ is unmeasured, and cash takes 21 days. Not needed for the plan."
+    },
+    {
+     "opportunityId": "cop_29ad623dd8334268aba2",
+     "why": "Buyer count is only an estimate (RECOMMENDATION), and the $150 fee is paid by two cave owners, not by the cheesemakers named as payer; supply is capped by two caves. Not needed."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_7d58fdae1fa9409da0d9",
+     "deals": 11,
+     "price": 380,
+     "directCost": 4,
+     "capital": 0,
+     "settlesDay": 20,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_8dcb708a6f694259b17d",
+     "link": "MARKET_VOLUME",
+     "reason": "Brain counts the cooperative's 22 member farms as 22 buyers, but the card's buyerVolume says the cooperative issued one RFQ for one audit: one organisation is one buyer, so only one deal exists, not 22."
+    },
+    {
+     "opportunityId": "cop_29ad623dd8334268aba2",
+     "link": "OFFER_AND_PRICE",
+     "reason": "The price fact says two cave owners pay a $150 placement fee, while the card names small cheesemakers as payer; the price is not established for the named payer, and only two signed fee letters exist."
+    }
+   ],
+   "revisionId": "rev_64af4e8c0df2_f04078",
+   "digest": "64af4e8c0df2286fbb518ab3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f0945d69801b46c0a9c9/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:40:17.237Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_64af4e8c0df2_f04078",
+   "digest": "64af4e8c0df2286fbb518ab3",
+   "contractDigest": "ee3126b6011e71e1bcc78f9e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4400,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 413600,
+    "minCashDay": 20,
+    "collectedCents": 418000,
+    "collectedInWindowCents": 418000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 413600
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Environmental-monitoring (Listeria swab) program and log wor\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Environmental-monitoring (Listeria swab) program and log wor\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 43616× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Environmental-monitoring (Listeria swab) program and log workbook for \".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_7d58fdae1fa9409da0d9",
+     "cop_8dcb708a6f694259b17d",
+     "cop_29ad623dd8334268aba2"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+      "owner": "PERSON",
+      "cost": 4
+     },
+     {
+      "label": "Collect payment for \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "title": "Environmental-monitoring (Listeria swab) program and log workbook for farmstead cheesemakers",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 4000,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Owners and head cheesemakers at licensed farmstead creameries",
+       "reachableChannel": "Contact emails published on the state dairy-plant licence list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:45.995Z",
+       "offerScope": "A swab-site map, sampling schedule and corrective-action log set up for the plant, delivered as a workbook within 2 days of order",
+       "priceCents": 38000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "artisan cheesemaking",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Contact emails published on the state dairy-plant licence list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 380 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 14 accepted of 120 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "12 deal(s) needed, 210 available in the window (210 reachable buyers (210 licensed or registered plants), each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 4, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "2 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state agriculture department's dairy-plant licence list names 210 licensed farmstead and artisan cheese plants, each with a published contact email; every licensed plant must keep an environmental-monitoring program, reviewed at its annual inspection.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A swab-site map, sampling schedule and corrective-action log set up for the plant, delivered as a workbook within 2 days of order to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "14 paid orders from 120 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$4",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners and head cheesemakers at licensed farmstead creameries",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "This seller's own checkout records show three cheesemakers each paid $380 for the workbook in October 2026.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "2 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "title": "Aging-room humidity audit for Green Hollow Cheese Cooperative",
+      "missing": [
+       "CONVERSION"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 4000,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Green Hollow Cheese Cooperative's buying committee",
+       "reachableChannel": "The cooperative's RFQ reply address",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:45.995Z",
+       "offerScope": "Aging-room humidity audit for Green Hollow Cheese Cooperative",
+       "priceCents": 250000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "artisan cheesemaking",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The cooperative's RFQ reply address"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 2500 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "2 deal(s) needed, 22 available in the window (22 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "21 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Green Hollow Cheese Cooperative issued one RFQ for one audit; the cooperative has 22 member farms.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Aging-room humidity audit for Green Hollow Cheese Cooperative to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Green Hollow Cheese Cooperative's buying committee",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Green Hollow Cheese Cooperative's RFQ of 2026-11-20 offers $2,500 for one aging-room humidity audit.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "21 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "title": "Matching cheesemakers with spare commercial aging-cave space",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 150,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Small cheesemakers short of aging space",
+       "reachableChannel": "The state cheese guild newsletter",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:45.995Z",
+       "offerScope": "Matching cheesemakers with spare commercial aging-cave space",
+       "priceCents": 15000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "artisan cheesemaking",
+       "mechanism": "INFORMATION_ASYMMETRY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The state cheese guild newsletter"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 150 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 3 accepted of 40 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Cheesemakers in the state probably need extra aging space every season.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Matching cheesemakers with spare commercial aging-cave space to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "3 paid orders from 40 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Small cheesemakers short of aging space",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Two cave owners pay a $150 placement fee per matched cheesemaker (signed fee letters).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:39:06.248Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_64af4e8c0df2_f48dd7",
+    "revisionDigest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_84cfd1196e2c4fdf9cd8/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. The single member (cop_7d58fdae1fa9409da0d9) has every chain link established on this offer's own records: price $380 is a real purchase price paid by this buyer type (seller's own checkout records, three cheesemakers, Oct 2026); conversion 14/120 = 11.67% measured on this offer's own sales; volume is a published list of 210 licensed plants, each a separate buyer with a regulatory need (not one organisation, not a shared category total); delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $4 < price; exposure $0; 2 days to cash. Recomputed: 11 x $380 = $4,180 >= $4,000; 210 x 0.1167 = 24.5 expected orders vs 11 needed (binomial sd ~4.65, so 11 is ~2.9 sd below the mean; even at the ~6.5% lower 95% bound of 14/120, ~13.7 expected orders still exceed 11). Cash settles day 20 inside the 30-day window; net $4,136 after $44 direct cost; no up-front capital. Exclusions are correct: Green Hollow is one organisation issuing one RFQ for one $2,500 audit (22 member farms are not 22 buyers), and the cave-matching $150 fee is paid by two cave owners, not the named cheesemaker payer, with buyer volume only a RECOMMENDATION.",
+    "findings": [
+     "Arithmetic verified: 11 deals x $380 = $4,180 gross, $44 direct cost, $4,136 net; target $4,000 reached with 1 deal of slack; Brain's link basis counts 12 deals needed — the plan's 11 still clears the gross target, and the 24.5 expected orders cover either count.",
+     "Ledger: the deliver step is day 18 with $44 cost while the ledger records that spend on day 20 'paid out of receipts'. Since buyers pay at checkout (price fact) and exposure is $0, this is consistent with no up-front capital, but the ledger day should match the step.",
+     "Owner hours: the card records humanHours 0.5 while the member's ownerHours is null (unknown, not zero). The contract sets no hours ceiling, so this does not bind; Brain's check lists delivery as PERSON-owned while the revision says BRAIN produces — the card's delivery fact ('A spreadsheet Brain produces') supports the revision.",
+     "Execution capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connecting them is a routine setup step before day 1, not a gap in the evidence chain.",
+     "The 14 prior payers (and the three October buyers) may already sit on the 210-plant list; excluding them leaves ~196 contacts and ~22.9 expected orders, still double the 11 needed.",
+     "Two revisions (f48dd7 and f04078) share digest 64af4e8c0df2286fbb518ab3; this review is of f48dd7 as named."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:41:22.842Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_64af4e8c0df2_f04078",
+    "revisionDigest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_84cfd1196e2c4fdf9cd8/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. The single member (cop_7d58fdae1fa9409da0d9) has every chain link established on this offer's own records: price $380 is a real purchase price paid by this buyer type (seller's own checkout records, three cheesemakers, Oct 2026); conversion 14/120 = 11.67% measured on this offer's own sales; volume is a published list of 210 licensed plants, each a separate buyer with a regulatory need (not one organisation, not a shared category total); delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $4 < price; exposure $0; 2 days to cash. Recomputed: 11 x $380 = $4,180 >= $4,000; 210 x 0.1167 = 24.5 expected orders vs 11 needed (binomial sd ~4.65, so 11 is ~2.9 sd below the mean; even at the ~6.5% lower 95% bound of 14/120, ~13.7 expected orders still exceed 11). Cash settles day 20 inside the 30-day window; net $4,136 after $44 direct cost; no up-front capital. Exclusions are correct: Green Hollow is one organisation issuing one RFQ for one $2,500 audit (22 member farms are not 22 buyers), and the cave-matching $150 fee is paid by two cave owners, not the named cheesemaker payer, with buyer volume only a RECOMMENDATION.",
+    "findings": [
+     "Arithmetic verified: 11 deals x $380 = $4,180 gross (10 deals would fall short at $3,800), $44 direct cost, $4,136 net; Brain's link basis counts 12 deals needed — the 24.5 expected orders cover either count.",
+     "Ledger: the deliver step is day 18 with $44 cost while the ledger records that spend on day 20 'paid out of receipts'. Since buyers pay at checkout (price fact) and exposure is $0, this is consistent with no up-front capital, but the ledger day should match the step.",
+     "Owner hours: the card records humanHours 0.5 while the member's ownerHours is null (unknown, not zero). The contract sets no hours ceiling, so this does not bind; Brain's check lists delivery as PERSON-owned while the revision says BRAIN produces — the card's delivery fact ('A spreadsheet Brain produces') supports the revision.",
+     "Execution capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connecting them is a routine setup step before day 1, not a gap in the evidence chain.",
+     "The 14 prior payers (and the three October buyers) may already sit on the 210-plant list; excluding them leaves ~196 contacts and ~22.9 expected orders, still double the 11 needed.",
+     "This revision is content-identical to rev_64af4e8c0df2_f48dd7 (same digest 64af4e8c0df2286fbb518ab3); judged afresh with the same result."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:41:46.298Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_64af4e8c0df2_f04078",
+   "digest": "64af4e8c0df2286fbb518ab3",
+   "contractDigest": "ee3126b6011e71e1bcc78f9e",
+   "plan": {
+    "goalId": "wst_161d58c6fcea4de2a34b",
+    "contractDigest": "ee3126b6011e71e1bcc78f9e",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell Listeria environmental-monitoring program and log workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_7d58fdae1fa9409da0d9"
+     ],
+     "why": "Price $380 is paid on this seller's own checkout records; conversion 14 paid of 120 contacts was measured on this offer's own sales; 210 licensed plants on the state list each must keep this program; Brain produces the workbook; $4 direct cost, $0 exposure, 2 days to cash. 11 deals x $380 = $4,180 >= $4,000; the full list at 11.7% yields ~24.5 expected paid orders, more than twice the 11 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Add the Green Hollow RFQ audit",
+      "why": "Single buyer, unmeasured close rate on an RFQ, 21 days to cash; adds risk not needed for the target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 210 buyers from the published list (state dairy-plant licence list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "9da0d9-buyerVolume",
+       "9da0d9-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: Listeria environmental-monitoring program and log workbook at $380",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 11 paid orders at $380 (measured 14 paid of 120 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "9da0d9-conversionRates",
+       "9da0d9-price"
+      ],
+      "priceCents": 38000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (11 deals, $4 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4400,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "9da0d9-delivery",
+       "9da0d9-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $4180 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 20,
+      "dependsOn": "deliver",
+      "evidence": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 418000,
+      "label": "11 x $380 settled",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 4400,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 380,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1167,
+      "unit": "paid orders/contact",
+      "sources": [
+       "9da0d9-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 210,
+      "unit": "buyers",
+      "sources": [
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 11,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 24.5,
+      "unit": "deals",
+      "sources": [
+       "9da0d9-conversionRates",
+       "9da0d9-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "USD/deal",
+      "sources": [
+       "9da0d9-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "days",
+      "sources": [
+       "9da0d9-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "9da0d9-price",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-conversionRates",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-buyerVolume",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-directCosts",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-exposure",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-timeToFirstCash",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-delivery",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     },
+     {
+      "id": "9da0d9-payer",
+      "url": "https://brain.local/card/cop_7d58fdae1fa9409da0d9#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed farmstead/artisan cheese plants on the state dairy-plant licence list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7d58fdae1fa9409da0d9"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "missing": [
+       "MARKET_VOLUME",
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "why": "One cooperative issued one RFQ for one $2,500 audit: a single buyer and a single deal (it cannot reach $4,000 alone), the close rate on a competitive RFQ is unmeasured, and cash takes 21 days. Not needed for the plan."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "why": "Buyer count is only an estimate (RECOMMENDATION), and the $150 fee is paid by two cave owners, not by the cheesemakers named as payer; supply is capped by two caves. Not needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_7d58fdae1fa9409da0d9",
+      "deals": 11,
+      "price": 380,
+      "directCost": 4,
+      "capital": 0,
+      "settlesDay": 20,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_8dcb708a6f694259b17d",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain counts the cooperative's 22 member farms as 22 buyers, but the card's buyerVolume says the cooperative issued one RFQ for one audit: one organisation is one buyer, so only one deal exists, not 22."
+     },
+     {
+      "opportunityId": "cop_29ad623dd8334268aba2",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The price fact says two cave owners pay a $150 placement fee, while the card names small cheesemakers as payer; the price is not established for the named payer, and only two signed fee letters exist."
+     }
+    ],
+    "revisionId": "rev_64af4e8c0df2_f04078",
+    "digest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:17.237Z"
+   },
+   "review": {
+    "revisionId": "rev_64af4e8c0df2_f04078",
+    "revisionDigest": "64af4e8c0df2286fbb518ab3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f0945d69801b46c0a9c9/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_84cfd1196e2c4fdf9cd8/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. The single member (cop_7d58fdae1fa9409da0d9) has every chain link established on this offer's own records: price $380 is a real purchase price paid by this buyer type (seller's own checkout records, three cheesemakers, Oct 2026); conversion 14/120 = 11.67% measured on this offer's own sales; volume is a published list of 210 licensed plants, each a separate buyer with a regulatory need (not one organisation, not a shared category total); delivery is a spreadsheet Brain produces (PRODUCE_SPREADSHEET proved); direct cost $4 < price; exposure $0; 2 days to cash. Recomputed: 11 x $380 = $4,180 >= $4,000; 210 x 0.1167 = 24.5 expected orders vs 11 needed (binomial sd ~4.65, so 11 is ~2.9 sd below the mean; even at the ~6.5% lower 95% bound of 14/120, ~13.7 expected orders still exceed 11). Cash settles day 20 inside the 30-day window; net $4,136 after $44 direct cost; no up-front capital. Exclusions are correct: Green Hollow is one organisation issuing one RFQ for one $2,500 audit (22 member farms are not 22 buyers), and the cave-matching $150 fee is paid by two cave owners, not the named cheesemaker payer, with buyer volume only a RECOMMENDATION.",
+    "findings": [
+     "Arithmetic verified: 11 deals x $380 = $4,180 gross (10 deals would fall short at $3,800), $44 direct cost, $4,136 net; Brain's link basis counts 12 deals needed — the 24.5 expected orders cover either count.",
+     "Ledger: the deliver step is day 18 with $44 cost while the ledger records that spend on day 20 'paid out of receipts'. Since buyers pay at checkout (price fact) and exposure is $0, this is consistent with no up-front capital, but the ledger day should match the step.",
+     "Owner hours: the card records humanHours 0.5 while the member's ownerHours is null (unknown, not zero). The contract sets no hours ceiling, so this does not bind; Brain's check lists delivery as PERSON-owned while the revision says BRAIN produces — the card's delivery fact ('A spreadsheet Brain produces') supports the revision.",
+     "Execution capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; connecting them is a routine setup step before day 1, not a gap in the evidence chain.",
+     "The 14 prior payers (and the three October buyers) may already sit on the 210-plant list; excluding them leaves ~196 contacts and ~22.9 expected orders, still double the 11 needed.",
+     "This revision is content-identical to rev_64af4e8c0df2_f48dd7 (same digest 64af4e8c0df2286fbb518ab3); judged afresh with the same result."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:41:46.298Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "b06f1d839258b239",
+    "openings": {
+     "cop_29ad623dd8334268aba2": "2b048317d4fe840b",
+     "cop_7d58fdae1fa9409da0d9": "3f5eadd01698dfe8",
+     "cop_8dcb708a6f694259b17d": "3ccb0dff22f04f14"
+    }
+   },
+   "at": "2026-11-28T04:43:20.548Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

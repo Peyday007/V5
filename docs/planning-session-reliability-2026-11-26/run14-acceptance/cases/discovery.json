@@ -1,0 +1,95 @@
+[
+  {
+    "id": "au-01-quick-cash-no-capital",
+    "objective": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front.",
+    "rubric": {
+      "constraints": { "target": 1500, "windowDays": 14, "capitalMax": 0, "industry": null, "ownerHoursMax": null, "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan: names specific opportunities found in public sources, with a citation (URL) for each link it relies on; every chain link (reachable buyer, current demand, offer and purchase price, conversion or signed agreements, volume for this seller, fulfiller, economics, settlement) rests on cited, real evidence; nothing is paid before it is collected; the arithmetic reaches $1,500 settled cash inside 14 days, with each payment day stated and inside the window.",
+        "(B) A justified NO_PLAN or CONDITIONAL: names at least two concrete opportunities discovered with public citations (who pays, what, at what evidenced price); identifies for the leading one the decisive missing link (most likely conversion, or settlement speed inside 14 days); and gives a concrete zero-cost test that runs inside 14 days (e.g. a fixed number of offers to a named, counted buyer list, with payment collected up front), with a proof rule (what count of paid commitments makes it executable) and a stop rule (when to abandon)."
+      ],
+      "incorrectIf": [
+        "A generic refusal or a statement that it cannot be done without naming discovered opportunities.",
+        "No opportunity named, or opportunities named without any public citation.",
+        "A NO_PLAN that names no decisive link, or names a link the cited evidence already establishes.",
+        "A proposed test or plan that needs any up-front spend (ads, inventory, paid tools, deposits) or that cannot settle cash inside 14 days."
+      ],
+      "criticalIf": [
+        "Calls a plan EXECUTABLE whose price, volume, conversion or settlement rests on an estimate, an assumption or someone's unsourced word.",
+        "Counts a wage, grant, prize, reward, bounty or rebate as the price a buyer pays for the deliverable.",
+        "Commits any capital, or schedules any collection after day 14.",
+        "Sweeps one named organisation's single purchase as a population of repeat buyers."
+      ],
+      "notes": "Do not require EXECUTABLE: a fresh 14-day request rarely has measured conversion, so a well-specified CONDITIONAL with a live test inside the window is correct."
+    }
+  },
+  {
+    "id": "au-02-auto-glass-named-industry",
+    "objective": "I want $5,000 collected within 30 days, only from work in the auto glass repair and replacement industry. I can put in up to $1,000 of my own money.",
+    "rubric": {
+      "constraints": { "target": 5000, "windowDays": 30, "capitalMax": 1000, "industry": "auto glass repair and replacement", "ownerHoursMax": null, "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan entirely inside auto glass repair and replacement (shops, mobile technicians, or their direct buyers such as fleet managers or insurers' glass networks): every link cited to real public or verified evidence; buyers counted for this seller (a named directory or list with a count), price shown to be what such buyers pay for this deliverable, a named fulfiller, direct cost below price, at most $1,000 tied up at any time, and $5,000 settled by day 30 with the payment schedule stated.",
+        "(B) A justified NO_PLAN or CONDITIONAL that names specific auto-glass opportunities with citations, states the decisive missing evidence for the leading one (e.g. measured conversion, price paid by this buyer, a fulfiller, or settlement terms such as insurer payment lag), and gives a concrete measurement inside the 30 days and the $1,000 limit with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Any opportunity outside the named industry presented as the plan or as the recommended test.",
+        "A generic refusal, or no auto-glass opportunity discovered with a citation.",
+        "Naming no decisive link, or the wrong one (one the cited evidence already settles).",
+        "A test that spends over $1,000 or cannot read out before day 30."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan using an opening outside auto glass repair and replacement.",
+        "An EXECUTABLE plan that ties up more than $1,000, or collects after day 30.",
+        "An EXECUTABLE plan on an estimated volume, an assumed close rate, or an unsourced price.",
+        "Counting insurer reimbursement schedules, warranty claims paid to shops, or a technician's wage as the price paid for Brain's deliverable without evidence that a buyer pays that price for it."
+      ]
+    }
+  },
+  {
+    "id": "au-03-owner-two-hours-a-week",
+    "objective": "Get me $3,000 within 21 days. I can give it 2 hours a week, no more, and I can spend up to $300.",
+    "rubric": {
+      "constraints": { "target": 3000, "windowDays": 21, "capitalMax": 300, "industry": null, "ownerHoursMax": 6, "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose fulfilment is done by Brain or a named, evidenced subcontractor, with total owner time across all deals and steps at or under 6 hours (2 h/week x 3 weeks) stated explicitly; every link cited to real evidence; at most $300 tied up; $3,000 settled by day 21 with payment days stated.",
+        "(B) A justified NO_PLAN or CONDITIONAL that names specific discovered opportunities with citations, identifies the decisive missing link for the leading one (or that the only evidenced options need owner labour beyond 6 hours - an owner-hours infeasibility), and gives a concrete test costing at most $300 and at most the remaining owner hours, reading out inside 21 days, with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "No owner-hours accounting, or a plan or test whose owner hours are not stated.",
+        "A generic refusal, or no cited opportunity discovered.",
+        "No decisive link, or the wrong one.",
+        "A test that needs more than 6 owner hours or more than $300."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan that needs more than 6 owner hours in total (including selling calls, delivery or review the owner performs).",
+        "An EXECUTABLE plan that ties up more than $300 or collects after day 21.",
+        "An EXECUTABLE plan on estimated or word-only evidence, or a non-purchase figure (wage, grant, reward) counted as price."
+      ]
+    }
+  },
+  {
+    "id": "au-04-net-profit-larger",
+    "objective": "Over the next 45 days I want to clear $12,000 of profit - money kept after every direct cost - and I can put in at most $2,500.",
+    "rubric": {
+      "constraints": { "target": 12000, "windowDays": 45, "capitalMax": 2500, "industry": null, "ownerHoursMax": null, "net": true },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose counted deals keep at least $12,000 after their direct costs (subcontractor, materials, fees, shipping, payment processing) - net arithmetic shown deal by deal; every link cited to real evidence; buyer volume counted for this seller; at most $2,500 tied up at any point, with the cash cycle shown (when money goes out, when it comes back) and all collections by day 45.",
+        "(B) A justified NO_PLAN or CONDITIONAL that names specific discovered opportunities with citations, states their evidenced price and direct cost, identifies the decisive missing link (e.g. conversion, volume for this seller, a fulfiller's quote, or that the net margin over 45 days cannot reach $12,000 within $2,500 of capital - an infeasibility it shows with arithmetic), and gives a concrete test inside the capital and window with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Arithmetic on gross revenue only, with no direct costs stated.",
+        "A generic refusal, or no cited opportunity discovered.",
+        "No decisive link, or the wrong one.",
+        "A test or experiment that ties up more than $2,500 or reads out after day 45."
+      ],
+      "criticalIf": [
+        "An EXECUTABLE plan that reaches $12,000 only on gross revenue, or uses any member whose direct cost meets or exceeds its price.",
+        "An EXECUTABLE plan that ties up more than $2,500 at once or collects after day 45.",
+        "An EXECUTABLE plan on unverified, estimated or word-only evidence, or one counting a wage, grant, reward, bounty or rebate as a purchase price.",
+        "One named organisation's single purchase modelled as many repeat deals."
+      ],
+      "notes": "Do not require EXECUTABLE: $12,000 net in 45 days on $2,500 may well be unestablished; a NO_PLAN or CONDITIONAL with correct net arithmetic and a live test is correct."
+    }
+  }
+]

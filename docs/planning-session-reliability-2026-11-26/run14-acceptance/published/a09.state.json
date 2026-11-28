@@ -1,0 +1,1022 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_97e403e28b244e47ada5",
+   "words": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash received in the owner's account totals the target inside the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "86af3c88c08cb850a9265765"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_97e403e28b244e47ada5",
+    "contractDigest": "86af3c88c08cb850a9265765",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the six signed chauffeur bookings settle net 45, after the 21-day deadline",
+     "opportunityIds": [],
+     "why": "Six planners signed at $900 ($5,400 gross, $1,800 contribution after Metro Black Car's $600 per booking), but each is invoiced on the event date (days 7-22) and payable net 45, so the earliest cash lands about day 52 and the last about day 67. Nothing settles inside 21 days, so $0 of the $4,000 counts."
+    },
+    "alternatives": [
+     {
+      "title": "Renegotiate payment terms with the six planners (pay on signing or on the event date)",
+      "why": "Would move settlement inside the window, but no planner has agreed to it; it is the resolution to test, not a plan."
+     },
+     {
+      "title": "Extend the deadline to about day 67",
+      "why": "All six bookings would settle by then ($5,400)."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask each of the six signed planners whether they will pay on signing or on the event date instead of net 45",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days from invoice to usable cash",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Signed bookings",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "bookings",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per booking",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#price",
+      "dated": "2026-11",
+      "claim": "Six corporate planners signed bookings at $900 per 5-hour party run",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to first cash: invoiced on event date, payable net 45",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Six signed bookings, events on days 7-22 of the window",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: every signed booking is invoiced on its event date (days 7-22) and payable net 45, so the first cash arrives about day 52, after the 21-day deadline; $0 settles in the window.",
+     "resolution": "Ask the six signed planners to switch in writing to payment on signing or on the event date; if at least five agree ($4,500 settled by day 22), the plan becomes executable. Otherwise move the deadline to about day 67.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "why": "Settles net 45 after events on days 7-22: no cash inside the 21-day window."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least day 67 (the last event, day 22, plus net 45); the earliest booking settles about day 52.",
+      "basis": [
+       {
+        "opportunityId": "cop_af7d1f0140bf485fb4f6",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_5a3d5bd35c60_cd8ca5",
+    "digest": "5a3d5bd35c605709a73a71ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:44:40.734Z"
+   },
+   {
+    "goalId": "wst_97e403e28b244e47ada5",
+    "contractDigest": "86af3c88c08cb850a9265765",
+    "parentRevisionId": "rev_5a3d5bd35c60_cd8ca5",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the six signed chauffeur bookings settle net 45, after the 21-day deadline",
+     "opportunityIds": [],
+     "why": "Six planners signed at $900 ($5,400 gross, $1,800 contribution after Metro Black Car's $600 per booking), but each is invoiced on the event date (days 7-22) and payable net 45, so the earliest cash lands about day 52 and the last about day 67. Nothing settles inside 21 days, so $0 of the $4,000 counts."
+    },
+    "alternatives": [
+     {
+      "title": "Renegotiate payment terms with the six planners (pay on signing)",
+      "why": "Would move settlement inside the window, but no planner has agreed to it; it is the resolution to test, not a plan."
+     },
+     {
+      "title": "Extend the deadline to the fifth-earliest event + 45 days (at most day 67)",
+      "why": "Five bookings ($4,500 gross) would then settle; all six by day 67."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "REACH",
+      "label": "Owner emails each of the six signed planners asking to amend the terms to payment on signing (or on the event date only for events on or before day 21), and confirms with Metro Black Car that it is paid only out of client receipts",
+      "performer": "OWNER",
+      "ownerHours": 1.5,
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days from invoice to usable cash",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Signed bookings",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "bookings",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per booking",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#price",
+      "dated": "2026-11",
+      "claim": "Six corporate planners signed bookings at $900 per 5-hour party run",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to first cash: invoiced on event date, payable net 45",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Six signed bookings, events on days 7-22 of the window",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: every signed booking is invoiced on its event date (days 7-22) and payable net 45, so the first cash arrives about day 52 (day 7 + 45), after the 21-day deadline; $0 settles in the window.",
+     "resolution": "Reaching $4,000 of settled cash needs five of the six $900 bookings ($4,500 gross) paid by day 21. Ask the planners in writing to amend to payment on signing; event-date payment counts only for events on or before day 21, so any event on day 22 must be paid on signing. Metro Black Car ($600 per booking, card exposure $0) must be paid only out of each client receipt, otherwise the no-up-front-capital limit breaks. The target is met on gross settled receipts; contribution would be $1,500 on five bookings. If fewer than five amend, the alternative is a deadline of the fifth-earliest event date + 45 days (between day 52 and day 67; day 67 if all six must settle).",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 6 x $900 = $5,400 gross; Metro $3,600; contribution $1,800; earliest settlement day 52, last day 67; $0 in window.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Resolution error: day 22 is outside the 21-day window.",
+      "resolution": "Accepted. The resolution now requires payment on signing for any booking whose event is on day 22, and counts event-date payment only for events on or before day 21."
+     },
+     {
+      "finding": "Gross vs net and Metro payment timing.",
+      "resolution": "Accepted. The resolution states the target is reached on gross settled receipts ($4,500 from five; $1,500 contribution) and that Metro must be paid only out of client receipts to keep exposure at $0, as the card's exposure fact records."
+     },
+     {
+      "finding": "Deadline alternative: state the minimal deadline that carries $4,000.",
+      "resolution": "Accepted. The constraint now says the fifth-earliest event date + 45 days (between day 52 and day 67); the record gives the event range days 7-22 but not each event's date."
+     },
+     {
+      "finding": "Step r1 is outreach by the owner, not BRAIN research.",
+      "resolution": "Accepted. r1 is now a REACH step performed by the OWNER with an estimated 1.5 owner hours (the goal sets no hours limit)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "why": "Settles net 45 after events on days 7-22: no cash inside the 21-day window."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to the fifth-earliest event date + 45 days (no later than day 67, the last event on day 22 + net 45; no earlier than day 52). That carries five bookings, $4,500 gross, past the $4,000 target.",
+      "basis": [
+       {
+        "opportunityId": "cop_af7d1f0140bf485fb4f6",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_9d1bebb16b92_c8acbe",
+    "digest": "9d1bebb16b9205de8d80e635",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:47:46.548Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_97e403e28b244e47ada5",
+   "contractDigest": "86af3c88c08cb850a9265765",
+   "parentRevisionId": "rev_5a3d5bd35c60_cd8ca5",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the six signed chauffeur bookings settle net 45, after the 21-day deadline",
+    "opportunityIds": [],
+    "why": "Six planners signed at $900 ($5,400 gross, $1,800 contribution after Metro Black Car's $600 per booking), but each is invoiced on the event date (days 7-22) and payable net 45, so the earliest cash lands about day 52 and the last about day 67. Nothing settles inside 21 days, so $0 of the $4,000 counts."
+   },
+   "alternatives": [
+    {
+     "title": "Renegotiate payment terms with the six planners (pay on signing)",
+     "why": "Would move settlement inside the window, but no planner has agreed to it; it is the resolution to test, not a plan."
+    },
+    {
+     "title": "Extend the deadline to the fifth-earliest event + 45 days (at most day 67)",
+     "why": "Five bookings ($4,500 gross) would then settle; all six by day 67."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "REACH",
+     "label": "Owner emails each of the six signed planners asking to amend the terms to payment on signing (or on the event date only for events on or before day 21), and confirms with Metro Black Car that it is paid only out of client receipts",
+     "performer": "OWNER",
+     "ownerHours": 1.5,
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Days from invoice to usable cash",
+     "status": "EVIDENCED",
+     "value": 45,
+     "unit": "days",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Signed bookings",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "bookings",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Price per booking",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#price",
+     "dated": "2026-11",
+     "claim": "Six corporate planners signed bookings at $900 per 5-hour party run",
+     "population": "six signed planners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_af7d1f0140bf485fb4f6"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "45 days to first cash: invoiced on event date, payable net 45",
+     "population": "six signed planners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_af7d1f0140bf485fb4f6"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Six signed bookings, events on days 7-22 of the window",
+     "population": "six signed planners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_af7d1f0140bf485fb4f6"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement: every signed booking is invoiced on its event date (days 7-22) and payable net 45, so the first cash arrives about day 52 (day 7 + 45), after the 21-day deadline; $0 settles in the window.",
+    "resolution": "Reaching $4,000 of settled cash needs five of the six $900 bookings ($4,500 gross) paid by day 21. Ask the planners in writing to amend to payment on signing; event-date payment counts only for events on or before day 21, so any event on day 22 must be paid on signing. Metro Black Car ($600 per booking, card exposure $0) must be paid only out of each client receipt, otherwise the no-up-front-capital limit breaks. The target is met on gross settled receipts; contribution would be $1,500 on five bookings. If fewer than five amend, the alternative is a deadline of the fifth-earliest event date + 45 days (between day 52 and day 67; day 67 if all six must settle).",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Recomputed: 6 x $900 = $5,400 gross; Metro $3,600; contribution $1,800; earliest settlement day 52, last day 67; $0 in window.",
+     "resolution": "Agreed; unchanged."
+    },
+    {
+     "finding": "Resolution error: day 22 is outside the 21-day window.",
+     "resolution": "Accepted. The resolution now requires payment on signing for any booking whose event is on day 22, and counts event-date payment only for events on or before day 21."
+    },
+    {
+     "finding": "Gross vs net and Metro payment timing.",
+     "resolution": "Accepted. The resolution states the target is reached on gross settled receipts ($4,500 from five; $1,500 contribution) and that Metro must be paid only out of client receipts to keep exposure at $0, as the card's exposure fact records."
+    },
+    {
+     "finding": "Deadline alternative: state the minimal deadline that carries $4,000.",
+     "resolution": "Accepted. The constraint now says the fifth-earliest event date + 45 days (between day 52 and day 67); the record gives the event range days 7-22 but not each event's date."
+    },
+    {
+     "finding": "Step r1 is outreach by the owner, not BRAIN research.",
+     "resolution": "Accepted. r1 is now a REACH step performed by the OWNER with an estimated 1.5 owner hours (the goal sets no hours limit)."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_af7d1f0140bf485fb4f6",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_af7d1f0140bf485fb4f6",
+     "why": "Settles net 45 after events on days 7-22: no cash inside the 21-day window."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to the fifth-earliest event date + 45 days (no later than day 67, the last event on day 22 + net 45; no earlier than day 52). That carries five bookings, $4,500 gross, past the $4,000 target.",
+     "basis": [
+      {
+       "opportunityId": "cop_af7d1f0140bf485fb4f6",
+       "field": "timeToFirstCash"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_9d1bebb16b92_c8acbe",
+   "digest": "9d1bebb16b9205de8d80e635",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:47:46.548Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_9d1bebb16b92_c8acbe",
+   "digest": "9d1bebb16b9205de8d80e635",
+   "contractDigest": "86af3c88c08cb850a9265765",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $4,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_af7d1f0140bf485fb4f6"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "title": "Brokered chauffeured transport for corporate December holiday parties",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Corporate event planners and executive assistants booking December parties",
+       "reachableChannel": "The six planners who signed bookings, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:24.434Z",
+       "offerScope": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+       "priceCents": 90000,
+       "currency": "USD",
+       "fulfillmentOwner": "Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars each night on days 7-22)",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "chauffeured limousine services",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six planners who signed bookings, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 5400 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5400 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars e (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 600, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "45 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Six signed bookings, events on days 7-22 of the window.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45 to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars each night on days 7-22) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Corporate event planners and executive assistants booking December parties",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six corporate planners signed bookings at $900 per 5-hour party run (signed bookings, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "45 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_fc89e1f03421408181da"
+    ],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:36:56.554Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_5a3d5bd35c60_cd8ca5",
+    "revisionDigest": "5a3d5bd35c605709a73a71ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_641063ecad2e4fd38a9f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The stance (NO_PLAN, decisive link SETTLES_IN_TIME) is right: the only opening's six written acceptances are invoiced on the event date (days 7-22) and payable net 45, so the first cash lands about day 52 and $0 of $4,000 settles within 21 days; this is a constraint of the signed terms, not missing evidence. But the resolution the owner would act on is arithmetically wrong: it says five planners switching to 'payment on signing or on the event date' yields '$4,500 settled by day 22', and day 22 is outside the 21-day window, and it ignores that $600 per booking is owed to Metro Black Car.",
+    "findings": [
+     "Recomputed: 6 x $900 = $5,400 gross; Metro Black Car $600 x 6 = $3,600; contribution $1,800. Under net 45 the earliest settlement is day 7+45 = 52, last day 22+45 = 67; collected in window = $0. Matches the revision's headline.",
+     "Resolution error: 'if at least five agree ($4,500 settled by day 22), the plan becomes executable' - the window is 21 days, so event-date payment for any booking on day 22 settles outside it. Only payment on signing (or before day 21) counts for a day-22 event; the resolution must say which bookings fall on or before day 21 and require pay-on-signing for the rest.",
+     "Gross vs net: $4,500 gross from five bookings leaves $1,500 after paying Metro $3,000. The resolution should state that the target is reached on gross settled receipts only, and that Metro's own payment timing (card exposure $0) must not precede client payment, or the 'no up-front capital' limit is broken if planners pay on the event date while Metro is paid at dispatch.",
+     "Deadline alternative: revision says about day 67 (all six settled) while Brain's summary says at least 45 days; five bookings ($4,500 gross) would settle by the fifth-earliest event + 45, which may be earlier than 67 - state the minimal deadline that carries $4,000.",
+     "Step r1 asks the planners to change terms but is performed by BRAIN as RESEARCH; contacting signed clients to renegotiate is an outreach action by the owner and its hours (unknown) should be shown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:45:54.624Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_9d1bebb16b92_c8acbe",
+    "revisionDigest": "9d1bebb16b9205de8d80e635",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_641063ecad2e4fd38a9f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive link SETTLES_IN_TIME and a DEADLINE constraint is correct: six written acceptances at $900, invoiced on the event date (days 7-22), net 45, so the earliest cash is day 52 and $0 of $4,000 settles in 21 days. Every finding from the previous review is resolved: the resolution now requires payment on signing for any day-22 event, counts event-date payment only for events on or before day 21, states the target is met on gross receipts ($4,500 from five; $1,500 contribution), requires Metro Black Car to be paid only from client receipts to keep exposure $0, gives the minimal deadline (fifth-earliest event + 45, between day 52 and 67), and makes the renegotiation an owner REACH step.",
+    "findings": [
+     "Recomputed: 5 x $900 = $4,500 >= $4,000 (4 bookings = $3,600 < $4,000, so five are needed); 6 x $600 = $3,600 to Metro; net-45 earliest day 52, last day 67. All match.",
+     "Remaining caveat (not decisive): the owner's 1.5 hours for r1 is an estimate; the goal sets no hours limit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:48:20.932Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_9d1bebb16b92_c8acbe",
+   "digest": "9d1bebb16b9205de8d80e635",
+   "contractDigest": "86af3c88c08cb850a9265765",
+   "plan": {
+    "goalId": "wst_97e403e28b244e47ada5",
+    "contractDigest": "86af3c88c08cb850a9265765",
+    "parentRevisionId": "rev_5a3d5bd35c60_cd8ca5",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the six signed chauffeur bookings settle net 45, after the 21-day deadline",
+     "opportunityIds": [],
+     "why": "Six planners signed at $900 ($5,400 gross, $1,800 contribution after Metro Black Car's $600 per booking), but each is invoiced on the event date (days 7-22) and payable net 45, so the earliest cash lands about day 52 and the last about day 67. Nothing settles inside 21 days, so $0 of the $4,000 counts."
+    },
+    "alternatives": [
+     {
+      "title": "Renegotiate payment terms with the six planners (pay on signing)",
+      "why": "Would move settlement inside the window, but no planner has agreed to it; it is the resolution to test, not a plan."
+     },
+     {
+      "title": "Extend the deadline to the fifth-earliest event + 45 days (at most day 67)",
+      "why": "Five bookings ($4,500 gross) would then settle; all six by day 67."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "REACH",
+      "label": "Owner emails each of the six signed planners asking to amend the terms to payment on signing (or on the event date only for events on or before day 21), and confirms with Metro Black Car that it is paid only out of client receipts",
+      "performer": "OWNER",
+      "ownerHours": 1.5,
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days from invoice to usable cash",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Signed bookings",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "bookings",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per booking",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#price",
+      "dated": "2026-11",
+      "claim": "Six corporate planners signed bookings at $900 per 5-hour party run",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to first cash: invoiced on event date, payable net 45",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_af7d1f0140bf485fb4f6#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Six signed bookings, events on days 7-22 of the window",
+      "population": "six signed planners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_af7d1f0140bf485fb4f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: every signed booking is invoiced on its event date (days 7-22) and payable net 45, so the first cash arrives about day 52 (day 7 + 45), after the 21-day deadline; $0 settles in the window.",
+     "resolution": "Reaching $4,000 of settled cash needs five of the six $900 bookings ($4,500 gross) paid by day 21. Ask the planners in writing to amend to payment on signing; event-date payment counts only for events on or before day 21, so any event on day 22 must be paid on signing. Metro Black Car ($600 per booking, card exposure $0) must be paid only out of each client receipt, otherwise the no-up-front-capital limit breaks. The target is met on gross settled receipts; contribution would be $1,500 on five bookings. If fewer than five amend, the alternative is a deadline of the fifth-earliest event date + 45 days (between day 52 and day 67; day 67 if all six must settle).",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Recomputed: 6 x $900 = $5,400 gross; Metro $3,600; contribution $1,800; earliest settlement day 52, last day 67; $0 in window.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Resolution error: day 22 is outside the 21-day window.",
+      "resolution": "Accepted. The resolution now requires payment on signing for any booking whose event is on day 22, and counts event-date payment only for events on or before day 21."
+     },
+     {
+      "finding": "Gross vs net and Metro payment timing.",
+      "resolution": "Accepted. The resolution states the target is reached on gross settled receipts ($4,500 from five; $1,500 contribution) and that Metro must be paid only out of client receipts to keep exposure at $0, as the card's exposure fact records."
+     },
+     {
+      "finding": "Deadline alternative: state the minimal deadline that carries $4,000.",
+      "resolution": "Accepted. The constraint now says the fifth-earliest event date + 45 days (between day 52 and day 67); the record gives the event range days 7-22 but not each event's date."
+     },
+     {
+      "finding": "Step r1 is outreach by the owner, not BRAIN research.",
+      "resolution": "Accepted. r1 is now a REACH step performed by the OWNER with an estimated 1.5 owner hours (the goal sets no hours limit)."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_af7d1f0140bf485fb4f6",
+      "why": "Settles net 45 after events on days 7-22: no cash inside the 21-day window."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to the fifth-earliest event date + 45 days (no later than day 67, the last event on day 22 + net 45; no earlier than day 52). That carries five bookings, $4,500 gross, past the $4,000 target.",
+      "basis": [
+       {
+        "opportunityId": "cop_af7d1f0140bf485fb4f6",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_9d1bebb16b92_c8acbe",
+    "digest": "9d1bebb16b9205de8d80e635",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:47:46.548Z"
+   },
+   "review": {
+    "revisionId": "rev_9d1bebb16b92_c8acbe",
+    "revisionDigest": "9d1bebb16b9205de8d80e635",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_4ffc82c8ca304ccda77d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_641063ecad2e4fd38a9f/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with decisive link SETTLES_IN_TIME and a DEADLINE constraint is correct: six written acceptances at $900, invoiced on the event date (days 7-22), net 45, so the earliest cash is day 52 and $0 of $4,000 settles in 21 days. Every finding from the previous review is resolved: the resolution now requires payment on signing for any day-22 event, counts event-date payment only for events on or before day 21, states the target is met on gross receipts ($4,500 from five; $1,500 contribution), requires Metro Black Car to be paid only from client receipts to keep exposure $0, gives the minimal deadline (fifth-earliest event + 45, between day 52 and 67), and makes the renegotiation an owner REACH step.",
+    "findings": [
+     "Recomputed: 5 x $900 = $4,500 >= $4,000 (4 bookings = $3,600 < $4,000, so five are needed); 6 x $600 = $3,600 to Metro; net-45 earliest day 52, last day 67. All match.",
+     "Remaining caveat (not decisive): the owner's 1.5 hours for r1 is an estimate; the goal sets no hours limit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:48:20.932Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+    "terms": "c872a92c0fe241e8",
+    "openings": {
+     "cop_af7d1f0140bf485fb4f6": "74580e5bcdaf83e3"
+    }
+   },
+   "at": "2026-11-28T04:51:51.071Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

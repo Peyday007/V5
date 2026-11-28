@@ -1,0 +1,163 @@
+{
+ "caseId": "at-08-wisp-grant-as-price",
+ "keys": {
+  "cop_4e8bfce1deee49daa4fc": "grantMap"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Unserved-location eligibility workbook for broadband grant a\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Unserved-location eligibility workbook for broadband grant a\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 148500× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Unserved-location eligibility workbook for broadband grant application\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_4e8bfce1deee49daa4fc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+    "owner": "PERSON",
+    "cost": 20
+   },
+   {
+    "label": "Collect payment for \"Unserved-location eligibility workbook for broadband grant applications by small\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_4e8bfce1deee49daa4fc",
+    "title": "Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 8000,
+    "potentialReach": 8000,
+    "card": {
+     "payer": "Owners and network engineers at small fixed-wireless internet providers",
+     "reachableChannel": "Provider contacts on the state broadband office's eligible-applicant list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:19.612Z",
+     "offerScope": "Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs",
+     "priceCents": 200000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "rural fixed-wireless internet providers",
+     "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Provider contacts on the state broadband office's eligible-applicant list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 2000 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 8 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "5 deal(s) needed, 75 available in the window (75 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 20, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state broadband office's eligible-applicant list names 75 fixed-wireless providers for the current round, each with a published contact.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "8 paid orders from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$20",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners and network engineers at small fixed-wireless internet providers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect (programme guidelines, Oct 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 800000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:38:00.977Z"
+ }
+}
