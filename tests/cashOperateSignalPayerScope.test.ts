@@ -269,6 +269,15 @@ describe('a payer the source states', () => {
     expect(await listNeeds({ projectId, states: ['WITHDRAWN'] })).toEqual([]);
   });
 
+  it('is never read from a source claim the gate did not accept', async () => {
+    const github = await signal(GITHUB);
+    const claimId = await harvestedFrom(github.id, GITHUB);
+    await getDb().run('UPDATE research_claims SET accepted = 0 WHERE id = ?', [claimId] as never[]);
+    const gaps = await reconcileDiscoverableGaps(projectId);
+    expect((await getOpportunity(github.id))!.payer).toBeNull();
+    expect(gaps.filter((one) => one.opportunityId === github.id).map((one) => one.field)).toContain('payer');
+  });
+
   it('is never read from an opening with no accepted source claim', async () => {
     const github = await signal(GITHUB);
     await reconcileDiscoverableGaps(projectId);

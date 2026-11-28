@@ -549,7 +549,9 @@ export function statedPayer(text: string | null | undefined): string | null {
 async function fillStatedPayer(opportunity: CashOpportunity): Promise<CashOpportunity> {
   if (opportunity.payer !== null || !opportunity.sourceClaimId) return opportunity;
   const claim = await getClaim(opportunity.sourceClaimId);
-  if (!claim || !claim.sourceUrl) return opportunity;
+  // Only a claim the gate accepted, with the source it rests on, is evidence:
+  // a rejected or unsourced sentence never becomes a load-bearing field.
+  if (!claim || !claim.accepted || !claim.sourceUrl) return opportunity;
   const payer = statedPayer(claim.claim);
   if (!payer) return opportunity;
   const written = await writeEvidenceAnswer({ opportunity, field: 'payer', claim: { ...claim, claim: payer }, needId: null });
