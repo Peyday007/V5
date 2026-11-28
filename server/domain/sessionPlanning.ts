@@ -496,6 +496,8 @@ export interface BrainFacts {
   rejectedSources?: Record<string, string>;
   /** Openings whose card states their revenue as hourly pay (`wageWording`), read with `fulfilment` for WAGE_AS_PRICE. */
   wagePriced?: string[];
+  /** The openings a revision must account for (the goal's own and those weighed); absent, every admitted one. */
+  accountFor?: string[];
 }
 
 /** Whether a card's revenue text describes hourly pay for labour (a wage) rather than a price for an offer. */
@@ -770,7 +772,7 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
 
   if (brain) {
     const accounted = new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId), ...(r.excluded ?? []).map((x) => x.opportunityId)]);
-    for (const id of brain.admittedOpportunityIds) if (!accounted.has(id)) add('OPENING_UNACCOUNTED', `opening ${id} is on this goal but the revision neither weighs it (\`chain\`) nor sets it aside (\`excluded\` with why, e.g. outside the objective's scope)`, id);
+    for (const id of brain.accountFor ?? brain.admittedOpportunityIds) if (!accounted.has(id)) add('OPENING_UNACCOUNTED', `opening ${id} is on this goal but the revision neither weighs it (\`chain\`) nor sets it aside (\`excluded\` with why, e.g. outside the objective's scope)`, id);
   }
 
   // Stance-specific completeness.

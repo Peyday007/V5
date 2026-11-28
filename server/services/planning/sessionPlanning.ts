@@ -257,6 +257,8 @@ async function planningContextFull(goalId: string) {
       return run ? { at: run.at, completed: run.completed, verdict: run.verdict, summary: run.summary, openings: run.openings ?? [], excluded: run.excluded ?? [], scope: run.scope ?? null, nextTest: run.nextTest } : null;
     })(),
     questions: await openQuestions(goalId),
+    // The openings a revision must account for in `chain` or `excluded` (OPENING_UNACCOUNTED).
+    mustAccount: await accountForIds(goalId),
   };
 }
 
@@ -500,6 +502,17 @@ export async function admittedIds(goalId: string): Promise<string[]> {
   // An opening Brain's planner excluded is still this goal's opening: a session may build on it once it states why the
   // exclusion is wrong (EXCLUSION_DISPUTE_UNSTATED), so it is admitted (run 8, ah-06: all three openings excluded).
   return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId), ...(run?.excluded ?? []).map((x) => x.opportunityId)])];
+}
+
+/**
+ * The openings a revision must account for (OPENING_UNACCOUNTED): the goal's own and those Brain's planner weighed.
+ * Not every opening the planner set aside project-wide — production, 2026-11-28, Cash Mode 1: 514 excluded openings
+ * made 539 problems no revision could clear. Those stay admissible to build on (`admittedIds`), each with its reason.
+ */
+export async function accountForIds(goalId: string): Promise<string[]> {
+  const linked = (await listLinks(goalId)).filter((l) => l.kind === 'OPPORTUNITY').map((l) => l.ref);
+  const run = (await events(goalId, PLANNING_EVENTS.brain)).pop()?.detail['summary'] as BrainRunSummary | undefined;
+  return [...new Set([...linked, ...(run?.openings ?? []).map((o) => o.opportunityId)])];
 }
 
 // ---------------------------------------------------------------------------- executors and fulfilment
@@ -960,7 +973,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed), rejectedSources: await rejectedSourcesOf(goalId), wagePriced: await wagePricedOf(weighed) };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed), rejectedSources: await rejectedSourcesOf(goalId), wagePriced: await wagePricedOf(weighed), accountFor: await accountForIds(goalId) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

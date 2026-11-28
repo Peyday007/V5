@@ -80,3 +80,21 @@ describe('run 15, av-04 (critical): one organisation’s single order is one dea
     expect(problems(short).some((x) => /the strategy's members bring 3050/.test(x.detail))).toBe(true);
   });
 });
+
+describe('production app journey (2026-11-28, 07:50Z): a revision accounts for the goal’s openings, not every one set aside project-wide', () => {
+  it('OPENING_UNACCOUNTED reads accountFor (the goal’s own and weighed openings); an excluded opening stays admissible to build on', () => {
+    const s = read('a04');
+    const plan = s.final.plan;
+    const own = [...new Set([...plan.strategy.opportunityIds, ...(plan.chain ?? []).map((c) => c.opportunityId), ...(plan.excluded ?? []).map((x) => x.opportunityId)])];
+    const projectWide = Array.from({ length: 514 }, (_, i) => `cop_setaside_${i}`);
+    const brain = (accountFor?: string[]): BrainFacts => ({ admittedOpportunityIds: [...own, ...projectWide], integrity: [], completed: true, error: null, ...(accountFor ? { accountFor } : {}) });
+    const unaccounted = (b: BrainFacts) => checkRevision(s.contract, plan, b, '2026-11-28').filter((x) => x.code === 'OPENING_UNACCOUNTED');
+    // Before: every project-wide exclusion was owed an entry (production: 539 problems).
+    expect(unaccounted(brain())).toHaveLength(514);
+    expect(unaccounted(brain(own))).toEqual([]);
+    // Control: an own opening left out is still refused, and building on a set-aside one is still admitted.
+    expect(unaccounted(brain([...own, 'cop_goal_own_missing']))).toHaveLength(1);
+    const onSetAside = { ...plan, strategy: { ...plan.strategy, opportunityIds: [...plan.strategy.opportunityIds, projectWide[0]!] } };
+    expect(checkRevision(s.contract, onSetAside, brain(own), '2026-11-28').filter((x) => x.code === 'OPPORTUNITY_NOT_ADMITTED')).toEqual([]);
+  });
+});
