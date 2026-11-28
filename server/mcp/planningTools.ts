@@ -191,9 +191,25 @@ const verifyResearchTool: McpTool = {
       await authorize(principal, projectId, 'WRITE', 'queue:complete');
       if (!(await leasedVerificationFor(principal.id, requiredString(args, 'need_id')))) throw notFoundError();
     }
-    return { projectId, value: await guarded(() => verifyResearch({ goalId, needId: requiredString(args, 'need_id'), verifier: sessionExecutor(principal, args), verdicts: (Array.isArray(args['verdicts']) ? args['verdicts'] : []) as never, sufficiency: args['sufficiency'] === 'SUFFICIENT' ? 'SUFFICIENT' : 'INSUFFICIENT' })) };
+    return { projectId, value: await guarded(() => verifyResearch({ goalId, needId: requiredString(args, 'need_id'), verifier: sessionExecutor(principal, args), verdicts: verdictsArg(args) as never, sufficiency: sufficiencyArg(args) })) };
   },
 };
+
+/*
+ * A verification is a judgement of every claim; a call without one is not a verdict of INSUFFICIENT (run 11, d01: a call
+ * with no verdicts and no sufficiency was taken as one, blocked the fragment, and the verifier's real reading was then
+ * refused as already judged). The schema already marks both required; the transport now refuses rather than defaults.
+ */
+export function verdictsArg(args: Record<string, unknown>): unknown[] {
+  const v = args['verdicts'];
+  if (!Array.isArray(v) || v.length === 0) throw invalidInput('`verdicts` is required: one verdict per submitted claim (see brain_planning_context)');
+  return v;
+}
+export function sufficiencyArg(args: Record<string, unknown>): 'SUFFICIENT' | 'INSUFFICIENT' {
+  const s = args['sufficiency'];
+  if (s !== 'SUFFICIENT' && s !== 'INSUFFICIENT') throw invalidInput('`sufficiency` is required: SUFFICIENT or INSUFFICIENT');
+  return s;
+}
 
 const revisionTool: McpTool = {
   name: 'brain_planning_submit_revision',
@@ -205,7 +221,8 @@ const revisionTool: McpTool = {
     'reasoning, reach with its calibration, answers to the last review). Every opening on the goal goes in `chain` (weighed) or ' +
     '`excluded` (with why, e.g. outside a changed objective). A no-plan or conditional result states `members` for every opening ' +
     'it weighs: deals needed at its price, direct cost, capital per cycle and `settlesDay`, null exactly where that link is ' +
-    'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished. Brain checks ' +
+    'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished, and states ' +
+    '`validation.threshold` {paid, of, reach} so passing it carries the target. Brain checks ' +
     'it against the contract and its planner and returns every concrete problem to revise.',
   inputSchema: { type: 'object', properties: { revision: { type: 'object' }, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: submit revision', ...MUTATING, idempotentHint: false },

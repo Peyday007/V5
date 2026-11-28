@@ -1,0 +1,221 @@
+{
+ "caseId": "an-09-listing-photos-hours-cut",
+ "keys": {
+  "cop_5ac76b6b2ea24121a411": "listingShoots"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "No found opening is far enough along to model; 7 constructed estimate(s) were modelled: the best combination (1 of them) reaches the target in 29.1% of worlds, which is coverage of assumed inputs, not a probability, and settles a median USD 1,513, short of the USD 2,500 target. The reconstruction is hypothetical: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 1408× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Residential listing agents at two local brokera\" needs [figure withheld] and keeps [figure withheld], 299× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted.",
+  "acceptance": "NO_CANDIDATE",
+  "considered": [],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Residential listing agents at two local brokerages",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Residential listing agents at two local brokerages",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 29.808543182348686
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Find an independent provider who performs \"Listing photo shoots for residential real-estate agents\" for its buyers, at a quoted cost a deal: the card names the owner doing physical work, which the owner does not do.",
+  "openings": [],
+  "excluded": [
+   {
+    "opportunityId": "cop_5ac76b6b2ea24121a411",
+    "title": "Listing photo shoots for residential real-estate agents",
+    "reason": "needs the owner's physical work: the service (\"on site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "Residential listing agents at two local brokerages",
+     "reachableChannel": "The ten agents who signed shoot orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:36.347Z",
+     "offerScope": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+     "priceCents": 32500,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 4,
+     "requiredCapabilities": [],
+     "industry": "real-estate listing photography",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32500,
+      "currency": "USD",
+      "deliverable": "25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell 25 edited listing photos delivered within 24 hours, shot by the owner on site. Each shoot takes 4 hours of the owner's own time (travel, 1.5 hours on site, editing); the owner can do up to 2 shoots a day from day 1, and nobody else is established to shoot. Agents pay by card on delivery; funds settle 2 days later. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$15",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Residential listing agents at two local brokerages",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Ten listing agents signed shoot orders at $325 each, for listings going live within the next 3 weeks.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 21,
+   "hoursCeiling": 12,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 4
+  },
+  "at": "2026-11-27T23:27:44.262Z"
+ }
+}

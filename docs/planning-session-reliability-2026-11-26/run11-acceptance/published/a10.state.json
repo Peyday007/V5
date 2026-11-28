@@ -1,0 +1,973 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_580f9d4d4ead4987afa1",
+   "words": "Collect $5,000 of settled cash within 14 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "USD 5,000 of settled cash received within 14 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "5f2e2205d1fef0e2502683ec"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_580f9d4d4ead4987afa1",
+    "contractDigest": "5f2e2205d1fef0e2502683ec",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan settles inside 14 days",
+     "opportunityIds": [],
+     "why": "The only opening (six signed $1,500 traffic-control plan orders = $9,000) pays net 45 from invoice on delivery day 3, so the first usable cash arrives on day 48, 34 days after the 14-day deadline. Nothing settles inside the window."
+    },
+    "alternatives": [
+     {
+      "title": "Fulfil the six signed orders on their net-45 terms",
+      "why": "Rejected inside this goal: cash settles day 48, after the 14-day deadline; it would meet the target if the deadline were moved to at least 48 days."
+     },
+     {
+      "title": "Renegotiate to payment on delivery",
+      "why": "Not established: each signed order states net 45; no buyer has agreed to pay sooner, so it cannot be counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six project managers who signed whether any will pay on delivery (card/ACH) instead of net 45, and record any written change of terms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 48,
+      "unit": "days",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 150000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "cash settling within 14 days",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "48 days to first cash",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#price",
+      "dated": "2026-11-24",
+      "claim": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice (invoiced on delivery, day 3)",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: every signed order pays net 45 from an invoice issued on delivery (day 3), so the earliest settled cash is day 48 against a 14-day deadline; $0 of the $5,000 settles in the window.",
+     "resolution": "Either the owner moves the deadline to at least 48 days (the six orders then bring $9,000 against $3,600 of engineer cost invoiced net 60), or Brain obtains written agreement from enough of the signers (at least 4 x $1,500) to pay on delivery, which would make it executable inside 14 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 48 days from now, when the net-45 invoices issued on day 3 settle.",
+      "basis": [
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "timeToFirstCash"
+       },
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_564a4c16fb6c_3b5d89",
+    "digest": "564a4c16fb6cce3e8b9fb5fe",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6f591575013749dcbb86/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:26.654Z"
+   },
+   {
+    "goalId": "wst_580f9d4d4ead4987afa1",
+    "contractDigest": "5f2e2205d1fef0e2502683ec",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan settles inside 14 days",
+     "opportunityIds": [],
+     "why": "The only opening (six signed $1,500 traffic-control plan orders = $9,000) pays net 45 from invoice on delivery day 3, so the first usable cash arrives on day 48, 34 days after the 14-day deadline. Nothing settles inside the window."
+    },
+    "alternatives": [
+     {
+      "title": "Fulfil the six signed orders on their net-45 terms",
+      "why": "Rejected inside this goal: cash settles day 48, after the 14-day deadline; it would meet the target if the deadline were moved to at least 48 days."
+     },
+     {
+      "title": "Renegotiate to payment on delivery",
+      "why": "Not established: each signed order states net 45; no buyer has agreed to pay sooner, so it cannot be counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six project managers who signed whether any will pay on delivery (card/ACH) instead of net 45, and record any written change of terms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 48,
+      "unit": "days",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 150000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "cash settling within 14 days",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "48 days to first cash",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#price",
+      "dated": "2026-11-24",
+      "claim": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice (invoiced on delivery, day 3)",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: every signed order pays net 45 from an invoice issued on delivery (day 3), so the earliest settled cash is day 48 against a 14-day deadline; $0 of the $5,000 settles in the window.",
+     "resolution": "Either the owner moves the deadline to at least 48 days (the six orders then bring $9,000 against $3,600 of engineer cost invoiced net 60), or Brain obtains written agreement from enough of the signers (at least 4 x $1,500) to pay on delivery, which would make it executable inside 14 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "deals": 4,
+      "price": 1500,
+      "directCost": 600,
+      "capital": 0,
+      "settlesDay": 48
+     }
+    ],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 48 days from now, when the net-45 invoices issued on day 3 settle.",
+      "basis": [
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "timeToFirstCash"
+       },
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_961e8e319bb9_59f42c",
+    "digest": "961e8e319bb94a7d72bdd921",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6f591575013749dcbb86/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:37.246Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_580f9d4d4ead4987afa1",
+   "contractDigest": "5f2e2205d1fef0e2502683ec",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan settles inside 14 days",
+    "opportunityIds": [],
+    "why": "The only opening (six signed $1,500 traffic-control plan orders = $9,000) pays net 45 from invoice on delivery day 3, so the first usable cash arrives on day 48, 34 days after the 14-day deadline. Nothing settles inside the window."
+   },
+   "alternatives": [
+    {
+     "title": "Fulfil the six signed orders on their net-45 terms",
+     "why": "Rejected inside this goal: cash settles day 48, after the 14-day deadline; it would meet the target if the deadline were moved to at least 48 days."
+    },
+    {
+     "title": "Renegotiate to payment on delivery",
+     "why": "Not established: each signed order states net 45; no buyer has agreed to pay sooner, so it cannot be counted."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask the six project managers who signed whether any will pay on delivery (card/ACH) instead of net 45, and record any written change of terms",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s2"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 48,
+     "unit": "days",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed orders",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "orders",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per order",
+     "status": "EVIDENCED",
+     "value": 150000,
+     "unit": "cents",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "cash settling within 14 days",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "cents",
+     "sources": [
+      "s1",
+      "s2"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "48 days to first cash",
+     "population": "the six signing paving project managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e73492ae9f1441edb0ca"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#price",
+     "dated": "2026-11-24",
+     "claim": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice (invoiced on delivery, day 3)",
+     "population": "the six signing paving project managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e73492ae9f1441edb0ca"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement timing: every signed order pays net 45 from an invoice issued on delivery (day 3), so the earliest settled cash is day 48 against a 14-day deadline; $0 of the $5,000 settles in the window.",
+    "resolution": "Either the owner moves the deadline to at least 48 days (the six orders then bring $9,000 against $3,600 of engineer cost invoiced net 60), or Brain obtains written agreement from enough of the signers (at least 4 x $1,500) to pay on delivery, which would make it executable inside 14 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_e73492ae9f1441edb0ca",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_e73492ae9f1441edb0ca",
+     "deals": 4,
+     "price": 1500,
+     "directCost": 600,
+     "capital": 0,
+     "settlesDay": 48
+    }
+   ],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 48 days from now, when the net-45 invoices issued on day 3 settle.",
+     "basis": [
+      {
+       "opportunityId": "cop_e73492ae9f1441edb0ca",
+       "field": "timeToFirstCash"
+      },
+      {
+       "opportunityId": "cop_e73492ae9f1441edb0ca",
+       "field": "price"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_961e8e319bb9_59f42c",
+   "digest": "961e8e319bb94a7d72bdd921",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_6f591575013749dcbb86/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:12:37.246Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_961e8e319bb9_59f42c",
+   "digest": "961e8e319bb94a7d72bdd921",
+   "contractDigest": "5f2e2205d1fef0e2502683ec",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $5,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 48 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_e73492ae9f1441edb0ca"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "title": "Stamped temporary traffic-control plans for paving contractors",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Project managers at paving contractors on state DOT resurfacing jobs",
+       "reachableChannel": "The six project managers who signed plan orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:43.774Z",
+       "offerScope": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoices net 60)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "highway paving contractors",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3).",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The six project managers who signed plan orders"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 9000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 9000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoice (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 600, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "48 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain drafts each lane-closure traffic-control plan; a contracted professional engineer reviews and stamps it within 3 days. Each signed order states payment terms of net 45 days from invoice, invoiced on delivery (day 3). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Ridgeway Traffic Engineering, PE (quoted $600 a stamp, 3-day turnaround, invoices net 60) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Project managers at paving contractors on state DOT resurfacing jobs",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "48 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_2ab1e063028941fda730",
+     "cnd_d30cf2f060924185b43c"
+    ],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:55.407Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_961e8e319bb9_59f42c",
+    "revisionDigest": "961e8e319bb94a7d72bdd921",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6f591575013749dcbb86/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d850025097c646ef9a55/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance. The only opening (cop_e73492ae9f1441edb0ca) has six WRITTEN_ACCEPTANCE agreements at $1,500 = $9,000, but every agreement's deliverable states net 45 from an invoice issued on delivery day 3, so the earliest settlement is day 48 against a 14-day window: $0 settles in time. This is a genuine constraint, not missing evidence: even with every buyer and every fact established, the signed terms put the cash outside the window. Recomputed: 4 x $1,500 = $6,000 >= $5,000 (3 x $1,500 = $4,500 would fall short), so the stated resolution (4 signers agreeing in writing to pay on delivery, or a deadline >= 48 days) is arithmetically right. Engineer cost $600/stamp invoiced net 60 means no up-front capital, consistent with exposure cap 0. Decisive link SETTLES_IN_TIME matches Brain's own link check (48 days vs 14) and the DEADLINE constraint cites the card's timeToFirstCash and price fields.",
+    "findings": [
+     "Decisive gap correctly named: SETTLES_IN_TIME, basis card timeToFirstCash = 48 days and each agreement's net-45 term.",
+     "Arithmetic verified: 6 x $1,500 = $9,000 at day 48; 0 in window; resolution threshold of 4 pay-on-delivery signers is the minimum that clears $5,000.",
+     "Minor: the alternatives do not mention invoice factoring/early-payment discount as a route to in-window cash; no evidence on the card supports one, so it does not change the stance.",
+     "The RESEARCH step (asking the six signers for pay-on-delivery terms) is the correct next test and takes no orders before fulfilment is shown possible (Ridgeway PE quote on card)."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:14:23.734Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_961e8e319bb9_59f42c",
+   "digest": "961e8e319bb94a7d72bdd921",
+   "contractDigest": "5f2e2205d1fef0e2502683ec",
+   "plan": {
+    "goalId": "wst_580f9d4d4ead4987afa1",
+    "contractDigest": "5f2e2205d1fef0e2502683ec",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan settles inside 14 days",
+     "opportunityIds": [],
+     "why": "The only opening (six signed $1,500 traffic-control plan orders = $9,000) pays net 45 from invoice on delivery day 3, so the first usable cash arrives on day 48, 34 days after the 14-day deadline. Nothing settles inside the window."
+    },
+    "alternatives": [
+     {
+      "title": "Fulfil the six signed orders on their net-45 terms",
+      "why": "Rejected inside this goal: cash settles day 48, after the 14-day deadline; it would meet the target if the deadline were moved to at least 48 days."
+     },
+     {
+      "title": "Renegotiate to payment on delivery",
+      "why": "Not established: each signed order states net 45; no buyer has agreed to pay sooner, so it cannot be counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the six project managers who signed whether any will pay on delivery (card/ACH) instead of net 45, and record any written change of terms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 48,
+      "unit": "days",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed orders",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "orders",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per order",
+      "status": "EVIDENCED",
+      "value": 150000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "cash settling within 14 days",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "48 days to first cash",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_e73492ae9f1441edb0ca#price",
+      "dated": "2026-11-24",
+      "claim": "Six paving project managers signed plan orders at $1,500 each, payable net 45 from invoice (invoiced on delivery, day 3)",
+      "population": "the six signing paving project managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e73492ae9f1441edb0ca"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: every signed order pays net 45 from an invoice issued on delivery (day 3), so the earliest settled cash is day 48 against a 14-day deadline; $0 of the $5,000 settles in the window.",
+     "resolution": "Either the owner moves the deadline to at least 48 days (the six orders then bring $9,000 against $3,600 of engineer cost invoiced net 60), or Brain obtains written agreement from enough of the signers (at least 4 x $1,500) to pay on delivery, which would make it executable inside 14 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e73492ae9f1441edb0ca",
+      "deals": 4,
+      "price": 1500,
+      "directCost": 600,
+      "capital": 0,
+      "settlesDay": 48
+     }
+    ],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 48 days from now, when the net-45 invoices issued on day 3 settle.",
+      "basis": [
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "timeToFirstCash"
+       },
+       {
+        "opportunityId": "cop_e73492ae9f1441edb0ca",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_961e8e319bb9_59f42c",
+    "digest": "961e8e319bb94a7d72bdd921",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6f591575013749dcbb86/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:37.246Z"
+   },
+   "review": {
+    "revisionId": "rev_961e8e319bb9_59f42c",
+    "revisionDigest": "961e8e319bb94a7d72bdd921",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6f591575013749dcbb86/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d850025097c646ef9a55/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance. The only opening (cop_e73492ae9f1441edb0ca) has six WRITTEN_ACCEPTANCE agreements at $1,500 = $9,000, but every agreement's deliverable states net 45 from an invoice issued on delivery day 3, so the earliest settlement is day 48 against a 14-day window: $0 settles in time. This is a genuine constraint, not missing evidence: even with every buyer and every fact established, the signed terms put the cash outside the window. Recomputed: 4 x $1,500 = $6,000 >= $5,000 (3 x $1,500 = $4,500 would fall short), so the stated resolution (4 signers agreeing in writing to pay on delivery, or a deadline >= 48 days) is arithmetically right. Engineer cost $600/stamp invoiced net 60 means no up-front capital, consistent with exposure cap 0. Decisive link SETTLES_IN_TIME matches Brain's own link check (48 days vs 14) and the DEADLINE constraint cites the card's timeToFirstCash and price fields.",
+    "findings": [
+     "Decisive gap correctly named: SETTLES_IN_TIME, basis card timeToFirstCash = 48 days and each agreement's net-45 term.",
+     "Arithmetic verified: 6 x $1,500 = $9,000 at day 48; 0 in window; resolution threshold of 4 pay-on-delivery signers is the minimum that clears $5,000.",
+     "Minor: the alternatives do not mention invoice factoring/early-payment discount as a route to in-window cash; no evidence on the card supports one, so it does not change the stance.",
+     "The RESEARCH step (asking the six signers for pay-on-delivery terms) is the correct next test and takes no orders before fulfilment is shown possible (Ridgeway PE quote on card)."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:14:23.734Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 14 days using no up-front capital.",
+    "terms": "641acf675f460cca",
+    "openings": {
+     "cop_e73492ae9f1441edb0ca": "151fa5144bb9250f"
+    }
+   },
+   "at": "2026-11-27T23:18:11.599Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

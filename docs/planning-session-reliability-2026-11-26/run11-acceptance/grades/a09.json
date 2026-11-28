@@ -1,0 +1,37 @@
+{
+  "id": "an-09-listing-photos-hours-cut",
+  "step": 1,
+  "heldOut": true,
+  "expect": "NO_PLAN",
+  "published": true,
+  "revisions": 5,
+  "reviews": 3,
+  "reviewVerdicts": [
+    "REVISE",
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_f20df00c6e43_f7c6f9",
+  "stance": "NO_PLAN",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_28f506d4978c4983a4c5/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "NO_PLAN",
+  "pass": true,
+  "outcome": "NO_PLAN_JUSTIFIED_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "no plan (NO_PLAN); names FULFILMENT",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "no plan expected: the verdict level decides"
+  }
+}

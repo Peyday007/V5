@@ -1,0 +1,165 @@
+{
+ "caseId": "an-12-ambulance-counted-market",
+ "keys": {
+  "cop_27a171c8c3534cd5ac5b": "inspectionBinders"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Annual inspection-readiness binders for ground ambulance ser\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 50490× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Annual inspection-readiness binders for ground ambulance services\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_27a171c8c3534cd5ac5b"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Annual inspection-readiness binders for ground ambulance services\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Annual inspection-readiness binders for ground ambulance services\"",
+    "owner": "PERSON",
+    "cost": 6
+   },
+   {
+    "label": "Collect payment for \"Annual inspection-readiness binders for ground ambulance services\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish how many buyers for \"Annual inspection-readiness binders for ground ambulance services\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+  "openings": [
+   {
+    "opportunityId": "cop_27a171c8c3534cd5ac5b",
+    "title": "Annual inspection-readiness binders for ground ambulance services",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 600,
+    "potentialReach": 100000,
+    "card": {
+     "payer": "Operations directors at licensed ground ambulance services",
+     "reachableChannel": "Email to the operations contact listed in the state EMS office's licence register",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:58.269Z",
+     "offerScope": "Brain compiles the service's vehicle and equipment logs into the state's annual inspection checklist binder. Paid by card on delivery; funds settle in 3 days.",
+     "priceCents": 60000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "ground ambulance services",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the operations contact listed in the state EMS office's licence registe"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 600 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 12 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "27 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state EMS office licenses exactly 140 ground ambulance services; each faces one state inspection a year and needs one binder for it.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain compiles the service's vehicle and equipment logs into the state's annual inspection checklist binder. Paid by card on delivery; funds settle in 3 days. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "12 agreements from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Operations directors at licensed ground ambulance services",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Twelve ambulance services paid $600 each for the binder in the last 45 days (card receipts on file).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 10000000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:56.260Z"
+ }
+}

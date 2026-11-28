@@ -1,0 +1,15 @@
+{
+  "cases": 12,
+  "passed": 12,
+  "reliability": 1,
+  "wilson95": {
+    "low": 0.7574992425007574,
+    "high": 0.9999999999999998
+  },
+  "criticalFailures": 0,
+  "published": 12,
+  "usable": 12,
+  "e2e": 12,
+  "e2eFailures": {},
+  "failures": []
+}

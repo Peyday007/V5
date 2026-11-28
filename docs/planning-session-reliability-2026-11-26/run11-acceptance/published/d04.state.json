@@ -1,0 +1,4136 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_0de6ed2f194545dda0da",
+   "words": "Collect $12,000 of settled cash within 45 days. I can put up to $2,500 into it.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": 250000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "Settled cash received totalling $12,000 within 45 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "d7218a55dbb7fb4d6a3b6576"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_0de6ed2f194545dda0da",
+    "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: test whether small brands pay $2,500 upfront for a subcontracted website-in-a-week",
+     "opportunityIds": [],
+     "why": "No verified evidence that buyers of this kind currently pay $2,500 for a website-in-a-week: the only page showing paid projects (a Contra seller at $4,800 with 11 paid projects) was rejected by verification as a different population and offer, and no survey reports current small-business website spend. Without an established price and buying signal, no plan reaches $12,000."
+    },
+    "alternatives": [
+     {
+      "title": "$499 demo-first website rebuild for local businesses",
+      "why": "Would need 25 sales; at $250 subcontract cost each that is $6,250 of spend against a $2,500 cap, and no buyer price was verified"
+     },
+     {
+      "title": "One-time Google Business Profile optimization at $397",
+      "why": "Needs 31 sales; the only listing at this price shows no sales"
+     },
+     {
+      "title": "Upwork fixed-price website jobs",
+      "why": "Job prices and win rate unread; payout waits for client approval plus a 5-day hold"
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Paid-offer test: publish the $2,500 website-in-a-week on Contra and send 1,000 cold emails via Instantly Growth (1 month, $47) to small brands without a current site",
+      "performer": "BRAIN",
+      "costCents": 4700,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_ins",
+       "s_contra"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OFFER",
+      "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "t1",
+      "evidence": [
+       "s_contra"
+      ],
+      "priceCents": 250000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "RESEARCH",
+      "label": "Ask the subcontractor for a written quote for the exact scope (4-7 pages + brand board, 5 business days) at <= $300 before accepting any order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "s_fiv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth, one month",
+      "stepId": "t1"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents per sale",
+      "sources": [
+       "s_contra"
+      ],
+      "needs": "A buyer paying the offer price (paid-offer test)"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per email",
+      "sources": [],
+      "needs": "Paid-offer test"
+     },
+     {
+      "name": "directCost",
+      "status": "ESTIMATE",
+      "value": 30000,
+      "unit": "cents per build",
+      "sources": [
+       "s_fiv"
+      ],
+      "needs": "Written subcontractor quote"
+     },
+     {
+      "name": "settle",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "days from payment to bank",
+      "sources": [
+       "s_cpay"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+      "dated": "2026-11-27",
+      "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+      "population": "Small brands buying a website-in-a-week on Contra",
+      "matchesBuyer": true,
+      "id": "s_contra",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+      "dated": "2026-11-27",
+      "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_fiv",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "dated": "2026-11-27",
+      "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+      "population": "Contra freelancers",
+      "matchesBuyer": false,
+      "id": "s_cpay",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-27",
+      "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+      "population": "Tool pricing",
+      "matchesBuyer": false,
+      "id": "s_ins",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_usaf",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_clutchp",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://webliftup-site.pages.dev/",
+      "dated": "2026-11-24",
+      "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+      "population": "Local small businesses",
+      "matchesBuyer": true,
+      "id": "s_wlu",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+      "dated": "2026-03-25",
+      "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+      "population": "US small businesses with websites",
+      "matchesBuyer": true,
+      "id": "s_c18",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+      "dated": "2026-11-27",
+      "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+      "population": "Local businesses",
+      "matchesBuyer": true,
+      "id": "s_gbp",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+      "dated": "2026-11-27",
+      "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_gbpf",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026-11-27",
+      "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_uph",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     },
+     {
+      "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+      "dated": "2026-11-27",
+      "claim": "Connects cost $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_upc",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     }
+    ],
+    "validation": {
+     "proof": "By day 15: at least one small brand pays $2,500 upfront for the website-in-a-week (from <=1,000 emails plus the Contra listing) and the subcontractor confirms the scope at <= $300 in writing",
+     "stop": [
+      "Zero paid orders after 1,000 emails and 14 days: stop; $47 spent, nothing else committed",
+      "Subcontractor will not commit to the scope at <= $300: stop before accepting payment"
+     ],
+     "continue": [
+      "One or more paid orders by day 15: re-plan as a conditional plan for 5 sales by day 36 (settled by day 43) inside the $2,500 cap"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": {
+     "decisiveGap": "No verified evidence that buyers of this kind currently pay $2,500 for a website-in-a-week: the only page showing paid projects (a Contra seller at $4,800 with 11 paid projects) was rejected by verification as a different population and offer, and no survey reports current small-business website spend. Without an established price and buying signal, no plan reaches $12,000.",
+     "resolution": "Run the paid-offer test (cost $47, inside the cap). Proof: By day 15: at least one small brand pays $2,500 upfront for the website-in-a-week (from <=1,000 emails plus the Contra listing) and the subcontractor confirms the scope at <= $300 in writing. Stop: Zero paid orders after 1,000 emails and 14 days: stop; $47 spent, nothing else committed. Continue: One or more paid orders by day 15: re-plan as a conditional plan for 5 sales by day 36 (settled by day 43) inside the $2,500 cap.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_d7e682b1b6e5_ff0b45",
+    "digest": "d7e682b1b6e56033fed1be46",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:35:52.873Z"
+   },
+   {
+    "goalId": "wst_0de6ed2f194545dda0da",
+    "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: test whether small brands pay $2,500 upfront for a subcontracted website-in-a-week",
+     "opportunityIds": [],
+     "why": "No verified evidence that buyers of this kind currently pay $2,500 for a website-in-a-week: the only page showing paid projects (a Contra seller at $4,800 with 11 paid projects) was rejected by verification as a different population and offer, and no survey reports current small-business website spend. Without an established price and buying signal, no plan reaches $12,000."
+    },
+    "alternatives": [
+     {
+      "title": "$499 demo-first website rebuild for local businesses",
+      "why": "Would need 25 sales; at $250 subcontract cost each that is $6,250 of spend against a $2,500 cap, and no buyer price was verified"
+     },
+     {
+      "title": "One-time Google Business Profile optimization at $397",
+      "why": "Needs 31 sales; the only listing at this price shows no sales"
+     },
+     {
+      "title": "Upwork fixed-price website jobs",
+      "why": "Job prices and win rate unread; payout waits for client approval plus a 5-day hold"
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Paid-offer test: publish the $2,500 website-in-a-week on Contra and send 1,000 cold emails via Instantly Growth (1 month, $47) to small brands without a current site",
+      "performer": "BRAIN",
+      "costCents": 4700,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_ins",
+       "s_contra"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "OFFER",
+      "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "t1",
+      "evidence": [
+       "s_contra"
+      ],
+      "priceCents": 250000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "t3",
+      "kind": "RESEARCH",
+      "label": "Ask the subcontractor for a written quote for the exact scope (4-7 pages + brand board, 5 business days) at <= $300 before accepting any order",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "s_fiv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth, one month",
+      "stepId": "t1"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents per sale",
+      "sources": [
+       "s_contra"
+      ],
+      "needs": "A buyer paying the offer price (paid-offer test)"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per email",
+      "sources": [],
+      "needs": "Paid-offer test"
+     },
+     {
+      "name": "directCost",
+      "status": "ESTIMATE",
+      "value": 30000,
+      "unit": "cents per build",
+      "sources": [
+       "s_fiv"
+      ],
+      "needs": "Written subcontractor quote"
+     },
+     {
+      "name": "settle",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "days from payment to bank",
+      "sources": [
+       "s_cpay"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+      "dated": "2026-11-27",
+      "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+      "population": "Small brands buying a website-in-a-week on Contra",
+      "matchesBuyer": true,
+      "id": "s_contra",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+      "dated": "2026-11-27",
+      "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_fiv",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "dated": "2026-11-27",
+      "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+      "population": "Contra freelancers",
+      "matchesBuyer": false,
+      "id": "s_cpay",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-27",
+      "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+      "population": "Tool pricing",
+      "matchesBuyer": false,
+      "id": "s_ins",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_usaf",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_clutchp",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://webliftup-site.pages.dev/",
+      "dated": "2026-11-24",
+      "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+      "population": "Local small businesses",
+      "matchesBuyer": true,
+      "id": "s_wlu",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+      "dated": "2026-03-25",
+      "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+      "population": "US small businesses with websites",
+      "matchesBuyer": true,
+      "id": "s_c18",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+      "dated": "2026-11-27",
+      "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+      "population": "Local businesses",
+      "matchesBuyer": true,
+      "id": "s_gbp",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+      "dated": "2026-11-27",
+      "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_gbpf",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026-11-27",
+      "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_uph",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     },
+     {
+      "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+      "dated": "2026-11-27",
+      "claim": "Connects cost $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_upc",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     }
+    ],
+    "validation": {
+     "proof": "By day 15: at least one small brand pays $2,500 upfront for the website-in-a-week (from <=1,000 emails plus the Contra listing) and the subcontractor confirms the scope at <= $300 in writing",
+     "stop": [
+      "Zero paid orders after 1,000 emails and 14 days: stop; $47 spent, nothing else committed",
+      "Subcontractor will not commit to the scope at <= $300: stop before accepting payment"
+     ],
+     "continue": [
+      "One or more paid orders by day 15: re-plan as a conditional plan for 5 sales by day 36 (settled by day 43) inside the $2,500 cap"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": {
+     "decisiveGap": "No verified evidence that buyers of this kind currently pay $2,500 for a website-in-a-week: the only page showing paid projects (a Contra seller at $4,800 with 11 paid projects) was rejected by verification as a different population and offer, and no survey reports current small-business website spend. Without an established price and buying signal, no plan reaches $12,000.",
+     "resolution": "Run the paid-offer test (cost $47, inside the cap). Proof: By day 15: at least one small brand pays $2,500 upfront for the website-in-a-week (from <=1,000 emails plus the Contra listing) and the subcontractor confirms the scope at <= $300 in writing. Stop: Zero paid orders after 1,000 emails and 14 days: stop; $47 spent, nothing else committed. Continue: One or more paid orders by day 15: re-plan as a conditional plan for 5 sales by day 36 (settled by day 43) inside the $2,500 cap.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "deals": 5,
+      "price": 2500,
+      "directCost": 300,
+      "capital": 350,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "deals": 20,
+      "price": 600,
+      "directCost": 340,
+      "capital": 30,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "deals": 25,
+      "price": 499,
+      "directCost": 250,
+      "capital": 47,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "deals": 31,
+      "price": 397,
+      "directCost": 50,
+      "capital": 47,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0ff45a7b4799_0ad804",
+    "digest": "0ff45a7b4799284342c6987b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:36:07.747Z"
+   },
+   {
+    "goalId": "wst_0de6ed2f194545dda0da",
+    "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+    "parentRevisionId": "rev_0ff45a7b4799_0ad804",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Website-in-a-week at $2,500 for small brands, subcontracted build, sold via Contra and cold email — after a 15-day paid-offer test",
+     "opportunityIds": [
+      "cop_3ce14e6c2acd44878d0d"
+     ],
+     "why": "Five sales at $2,500 ($12,500) clear $12,000; spend is $47 + 5 x $300 = $1,547 inside the $2,500 cap, and each build is ordered only after its buyer pays. Nothing yet shows buyers pay $2,500 or how many would buy, so the first 15 days are a $47 paid-offer test that measures demand, price acceptance and close rate, while the subcontractor quote and Contra's release rule are confirmed before any money is taken."
+    },
+    "alternatives": [
+     {
+      "title": "$499 demo-first website rebuild for local businesses",
+      "why": "25 sales x $250 builds = $6,250 of spend against a $2,500 cap"
+     },
+     {
+      "title": "One-time Google Business Profile optimization at $397",
+      "why": "31 x $50 + $47 = $1,597 fits the cap, but the only listing at this price shows no sales and 31 closes at an unknown rate is far more than 5"
+     },
+     {
+      "title": "Upwork fixed-price website jobs",
+      "why": "Job prices and win rate unread; 20 wins needed; payout waits for approval plus a 5-day hold"
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Publish the $2,500 website-in-a-week as a Contra service listing and send cold email to small brands via Instantly Growth (one month, $47; outreach runs to day 26)",
+      "performer": "BRAIN",
+      "costCents": 4700,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_ins",
+       "s_contra"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "terms",
+      "kind": "RESEARCH",
+      "label": "Before accepting any money: get the subcontractor's written quote for the exact scope (4-7 pages + brand board, <=7 days, <= $300) and confirm in Contra's terms when an upfront service payment is released to the freelancer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "s_fiv",
+       "s_cpay"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "terms",
+      "evidence": [
+       "s_contra"
+      ],
+      "priceCents": 250000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation through day 15: does any small brand pay $2,500 upfront from <=1,000 emails plus the Contra listing?",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "offer",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes each sales call and accepts each paid order (5 deals, ~0.5 h each, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "priceCents": 250000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Order each build from the subcontractor only after the buyer has paid ($300 x 5)",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 150000,
+      "day": 10,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_fiv",
+       "directCost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Subcontractor builds and launches each site within 7 days of order; Brain QA",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 0,
+      "day": 17,
+      "dependsOn": "order",
+      "evidence": [
+       "s_fiv"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "approve",
+      "kind": "OTHER",
+      "label": "Owner approves each delivered site (5 x ~0.5 h, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "deliver",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Payment released on approval (assumed worst case), Contra standard payout 4-7 business days: each sale settles within 17 days of its sale date, last by day 43",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 27,
+      "dependsOn": "approve",
+      "evidence": [
+       "s_cpay",
+       "settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth, one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 1",
+      "settlesDay": 27,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 1",
+      "stepId": "order"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 2",
+      "settlesDay": 31,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 2",
+      "stepId": "order"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 3",
+      "settlesDay": 35,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 3",
+      "stepId": "order"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 4",
+      "settlesDay": 39,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 4",
+      "stepId": "order"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 5",
+      "settlesDay": 43,
+      "stepId": "collect"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 5",
+      "stepId": "order"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents per sale buyers accept",
+      "sources": [
+       "s_contra"
+      ],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per email",
+      "sources": [],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "directCost",
+      "status": "ESTIMATE",
+      "value": 30000,
+      "unit": "cents per build",
+      "sources": [
+       "s_fiv"
+      ],
+      "needs": "Written subcontractor quote"
+     },
+     {
+      "name": "settle",
+      "status": "ESTIMATE",
+      "value": 17,
+      "unit": "days from payment to settled cash",
+      "sources": [
+       "s_cpay"
+      ],
+      "needs": "Contra's release rule for upfront service payments"
+     },
+     {
+      "name": "ownerHours",
+      "status": "ESTIMATE",
+      "value": 5,
+      "unit": "owner hours in the window",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+      "dated": "2026-11-27",
+      "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+      "population": "Small brands buying a website-in-a-week on Contra",
+      "matchesBuyer": true,
+      "id": "s_contra",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+      "dated": "2026-11-27",
+      "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_fiv",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "dated": "2026-11-27",
+      "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+      "population": "Contra freelancers",
+      "matchesBuyer": false,
+      "id": "s_cpay",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-27",
+      "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+      "population": "Tool pricing",
+      "matchesBuyer": false,
+      "id": "s_ins",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_usaf",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_clutchp",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://webliftup-site.pages.dev/",
+      "dated": "2026-11-24",
+      "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+      "population": "Local small businesses",
+      "matchesBuyer": true,
+      "id": "s_wlu",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+      "dated": "2026-03-25",
+      "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+      "population": "US small businesses with websites",
+      "matchesBuyer": true,
+      "id": "s_c18",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+      "dated": "2026-11-27",
+      "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+      "population": "Local businesses",
+      "matchesBuyer": true,
+      "id": "s_gbp",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+      "dated": "2026-11-27",
+      "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_gbpf",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026-11-27",
+      "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_uph",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     },
+     {
+      "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+      "dated": "2026-11-27",
+      "claim": "Connects cost $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_upc",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     }
+    ],
+    "validation": {
+     "proof": "By day 15: (a) at least one small brand has paid $2,500 upfront for the website-in-a-week, (b) the subcontractor has confirmed the scope at <= $300 in <= 7 days in writing, and (c) Contra's terms show payment released no later than buyer approval",
+     "stop": [
+      "No paid order by day 15 after 1,000 emails: stop; $47 spent, nothing else committed",
+      "No written subcontractor quote at <= $300 for the scope: stop before accepting payment",
+      "Contra releases upfront payments later than approval + 7 days: move collection to a direct card invoice or stop selling after day 26"
+     ],
+     "continue": [
+      "One or more paid orders by day 15: keep selling to 5 paid orders, last accepted by day 26 so it settles by day 43",
+      "Fewer than 1 paid order per 500 emails by day 20: stop new outreach"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "5 sales x $2,500 = $12,500 >= $12,000; spend $1,547 <= $2,500 cap.",
+      "resolution": "Accepted; the ledger keeps exactly this: $47 tooling + 5 x $300 builds."
+     },
+     {
+      "finding": "Stance mismatch: a paid-offer test that accepts money belongs to a CONDITIONAL plan, not NO_PLAN.",
+      "resolution": "Accepted: stance is now CONDITIONAL, with members' settlesDay and the full cash ledger for the five sales."
+     },
+     {
+      "finding": "FULFILMENT and SETTLES_IN_TIME unestablished and absent from validation.decides.",
+      "resolution": "Accepted: both are in validation.decides and resolves; a day-2 step obtains the subcontractor's written quote and Contra's release rule before any money is accepted."
+     },
+     {
+      "finding": "Contra release timing for upfront service payments is not on the cited page; release-on-delivery pushes late sales past day 45.",
+      "resolution": "Accepted: the schedule now assumes the worst case (release on approval ~8 days after sale, then standard payout 4-7 business days = 17 days), so the last sale is accepted by day 26 and settles by day 43; a stop rule covers a slower release."
+     },
+     {
+      "finding": "Owner hours not estimated.",
+      "resolution": "Accepted: OWNER steps for sales calls (5 x 0.5 h) and approvals (5 x 0.5 h), 5 h in total, recorded as an estimate."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "deals": 5,
+      "price": 2500,
+      "directCost": 300,
+      "capital": 0,
+      "settlesDay": 43
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e74b9695568a_a19d34",
+    "digest": "e74b9695568a8337589b68e7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:41:39.805Z"
+   },
+   {
+    "goalId": "wst_0de6ed2f194545dda0da",
+    "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+    "parentRevisionId": "rev_0ff45a7b4799_0ad804",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Website-in-a-week at $2,500 for small brands, subcontracted build, sold via Contra and cold email — after a 15-day paid-offer test",
+     "opportunityIds": [
+      "cop_3ce14e6c2acd44878d0d"
+     ],
+     "why": "Five sales at $2,500 ($12,500) clear $12,000; spend is $47 + 5 x $300 = $1,547 inside the $2,500 cap, and each build is ordered only after its buyer pays. Nothing yet shows buyers pay $2,500 or how many would buy, so the first 15 days are a $47 paid-offer test that measures demand, price acceptance and close rate, while the subcontractor quote and Contra's release rule are confirmed before any money is taken."
+    },
+    "alternatives": [
+     {
+      "title": "$499 demo-first website rebuild for local businesses",
+      "why": "25 sales x $250 builds = $6,250 of spend against a $2,500 cap"
+     },
+     {
+      "title": "One-time Google Business Profile optimization at $397",
+      "why": "31 x $50 + $47 = $1,597 fits the cap, but the only listing at this price shows no sales and 31 closes at an unknown rate is far more than 5"
+     },
+     {
+      "title": "Upwork fixed-price website jobs",
+      "why": "Job prices and win rate unread; 20 wins needed; payout waits for approval plus a 5-day hold"
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Publish the $2,500 website-in-a-week as a Contra service listing and send cold email to small brands via Instantly Growth (one month, $47; outreach runs to day 26)",
+      "performer": "BRAIN",
+      "costCents": 4700,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_ins",
+       "s_contra"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "terms",
+      "kind": "RESEARCH",
+      "label": "Before accepting any money: get the subcontractor's written quote for the exact scope (4-7 pages + brand board, <=7 days, <= $300) and confirm in Contra's terms when an upfront service payment is released to the freelancer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "s_fiv",
+       "s_cpay"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "terms",
+      "evidence": [
+       "s_contra"
+      ],
+      "priceCents": 250000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation through day 15: does any small brand pay $2,500 upfront from <=1,000 emails plus the Contra listing?",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "offer",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes each sales call and accepts each paid order (5 deals, ~0.5 h each, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "priceCents": 250000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Order each build from the subcontractor only after the buyer has paid ($300 x 5)",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 150000,
+      "day": 10,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_fiv",
+       "directCost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Subcontractor builds and launches each site within 7 days of order; Brain QA",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 0,
+      "day": 17,
+      "dependsOn": "order",
+      "evidence": [
+       "s_fiv"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "approve",
+      "kind": "OTHER",
+      "label": "Owner approves each delivered site (5 x ~0.5 h, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "deliver",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Payment released on approval (assumed worst case), Contra standard payout 4-7 business days: each sale settles within 17 days of its sale date, last by day 43",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 27,
+      "dependsOn": "approve",
+      "evidence": [
+       "s_cpay",
+       "settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth, one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 1",
+      "settlesDay": 27,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 1",
+      "stepId": "order"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 2",
+      "settlesDay": 31,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 2",
+      "stepId": "order"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 3",
+      "settlesDay": 35,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 3",
+      "stepId": "order"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 4",
+      "settlesDay": 39,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 4",
+      "stepId": "order"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 5",
+      "settlesDay": 43,
+      "stepId": "collect"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 5",
+      "stepId": "order"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents per sale buyers accept",
+      "sources": [
+       "s_contra"
+      ],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per email",
+      "sources": [],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "directCost",
+      "status": "ESTIMATE",
+      "value": 30000,
+      "unit": "cents per build",
+      "sources": [
+       "s_fiv"
+      ],
+      "needs": "Written subcontractor quote"
+     },
+     {
+      "name": "settle",
+      "status": "ESTIMATE",
+      "value": 17,
+      "unit": "days from payment to settled cash",
+      "sources": [
+       "s_cpay"
+      ],
+      "needs": "Contra's release rule for upfront service payments"
+     },
+     {
+      "name": "ownerHours",
+      "status": "ESTIMATE",
+      "value": 5,
+      "unit": "owner hours in the window",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+      "dated": "2026-11-27",
+      "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+      "population": "Small brands buying a website-in-a-week on Contra",
+      "matchesBuyer": true,
+      "id": "s_contra",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+      "dated": "2026-11-27",
+      "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_fiv",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "dated": "2026-11-27",
+      "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+      "population": "Contra freelancers",
+      "matchesBuyer": false,
+      "id": "s_cpay",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-27",
+      "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+      "population": "Tool pricing",
+      "matchesBuyer": false,
+      "id": "s_ins",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_usaf",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_clutchp",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://webliftup-site.pages.dev/",
+      "dated": "2026-11-24",
+      "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+      "population": "Local small businesses",
+      "matchesBuyer": true,
+      "id": "s_wlu",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+      "dated": "2026-03-25",
+      "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+      "population": "US small businesses with websites",
+      "matchesBuyer": true,
+      "id": "s_c18",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+      "dated": "2026-11-27",
+      "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+      "population": "Local businesses",
+      "matchesBuyer": true,
+      "id": "s_gbp",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+      "dated": "2026-11-27",
+      "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_gbpf",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026-11-27",
+      "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_uph",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     },
+     {
+      "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+      "dated": "2026-11-27",
+      "claim": "Connects cost $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_upc",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     }
+    ],
+    "validation": {
+     "proof": "By day 15: (a) at least one small brand has paid $2,500 upfront for the website-in-a-week, (b) the subcontractor has confirmed the scope at <= $300 in <= 7 days in writing, and (c) Contra's terms show payment released no later than buyer approval",
+     "stop": [
+      "No paid order by day 15 after 1,000 emails: stop; $47 spent, nothing else committed",
+      "No written subcontractor quote at <= $300 for the scope: stop before accepting payment",
+      "Contra releases upfront payments later than approval + 7 days: move collection to a direct card invoice or stop selling after day 26"
+     ],
+     "continue": [
+      "One or more paid orders by day 15: keep selling to 5 paid orders, last accepted by day 26 so it settles by day 43",
+      "Fewer than 1 paid order per 500 emails by day 20: stop new outreach"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "5 sales x $2,500 = $12,500 >= $12,000; spend $1,547 <= $2,500 cap.",
+      "resolution": "Accepted; the ledger keeps exactly this: $47 tooling + 5 x $300 builds."
+     },
+     {
+      "finding": "Stance mismatch: a paid-offer test that accepts money belongs to a CONDITIONAL plan, not NO_PLAN.",
+      "resolution": "Accepted: stance is now CONDITIONAL, with members' settlesDay and the full cash ledger for the five sales."
+     },
+     {
+      "finding": "FULFILMENT and SETTLES_IN_TIME unestablished and absent from validation.decides.",
+      "resolution": "Accepted: both are in validation.decides and resolves; a day-2 step obtains the subcontractor's written quote and Contra's release rule before any money is accepted."
+     },
+     {
+      "finding": "Contra release timing for upfront service payments is not on the cited page; release-on-delivery pushes late sales past day 45.",
+      "resolution": "Accepted: the schedule now assumes the worst case (release on approval ~8 days after sale, then standard payout 4-7 business days = 17 days), so the last sale is accepted by day 26 and settles by day 43; a stop rule covers a slower release."
+     },
+     {
+      "finding": "Owner hours not estimated.",
+      "resolution": "Accepted: OWNER steps for sales calls (5 x 0.5 h) and approvals (5 x 0.5 h), 5 h in total, recorded as an estimate."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "deals": 5,
+      "price": 2500,
+      "directCost": 300,
+      "capital": 0,
+      "settlesDay": 43
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "deals": 20,
+      "price": 600,
+      "directCost": 340,
+      "capital": 30,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "deals": 25,
+      "price": 499,
+      "directCost": 250,
+      "capital": 47,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "deals": 31,
+      "price": 397,
+      "directCost": 50,
+      "capital": 47,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ea31974a7082_278bec",
+    "digest": "ea31974a70823e911ca791eb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:41:48.394Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_0de6ed2f194545dda0da",
+   "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+   "parentRevisionId": "rev_0ff45a7b4799_0ad804",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Website-in-a-week at $2,500 for small brands, subcontracted build, sold via Contra and cold email — after a 15-day paid-offer test",
+    "opportunityIds": [
+     "cop_3ce14e6c2acd44878d0d"
+    ],
+    "why": "Five sales at $2,500 ($12,500) clear $12,000; spend is $47 + 5 x $300 = $1,547 inside the $2,500 cap, and each build is ordered only after its buyer pays. Nothing yet shows buyers pay $2,500 or how many would buy, so the first 15 days are a $47 paid-offer test that measures demand, price acceptance and close rate, while the subcontractor quote and Contra's release rule are confirmed before any money is taken."
+   },
+   "alternatives": [
+    {
+     "title": "$499 demo-first website rebuild for local businesses",
+     "why": "25 sales x $250 builds = $6,250 of spend against a $2,500 cap"
+    },
+    {
+     "title": "One-time Google Business Profile optimization at $397",
+     "why": "31 x $50 + $47 = $1,597 fits the cap, but the only listing at this price shows no sales and 31 closes at an unknown rate is far more than 5"
+    },
+    {
+     "title": "Upwork fixed-price website jobs",
+     "why": "Job prices and win rate unread; 20 wins needed; payout waits for approval plus a 5-day hold"
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Publish the $2,500 website-in-a-week as a Contra service listing and send cold email to small brands via Instantly Growth (one month, $47; outreach runs to day 26)",
+     "performer": "BRAIN",
+     "costCents": 4700,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_ins",
+      "s_contra"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "terms",
+     "kind": "RESEARCH",
+     "label": "Before accepting any money: get the subcontractor's written quote for the exact scope (4-7 pages + brand board, <=7 days, <= $300) and confirm in Contra's terms when an upfront service payment is released to the freelancer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": null,
+     "evidence": [
+      "s_fiv",
+      "s_cpay"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "terms",
+     "evidence": [
+      "s_contra"
+     ],
+     "priceCents": 250000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Validation through day 15: does any small brand pay $2,500 upfront from <=1,000 emails plus the Contra listing?",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 15,
+     "dependsOn": "offer",
+     "evidence": [
+      "closeRate"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Owner takes each sales call and accepts each paid order (5 deals, ~0.5 h each, estimate)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "offer",
+     "evidence": [
+      "ownerHours"
+     ],
+     "ownerHours": 2.5,
+     "priceCents": 250000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "order",
+     "kind": "ORDER",
+     "label": "Order each build from the subcontractor only after the buyer has paid ($300 x 5)",
+     "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+     "costCents": 150000,
+     "day": 10,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_fiv",
+      "directCost"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Subcontractor builds and launches each site within 7 days of order; Brain QA",
+     "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+     "costCents": 0,
+     "day": 17,
+     "dependsOn": "order",
+     "evidence": [
+      "s_fiv"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "approve",
+     "kind": "OTHER",
+     "label": "Owner approves each delivered site (5 x ~0.5 h, estimate)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 18,
+     "dependsOn": "deliver",
+     "evidence": [
+      "ownerHours"
+     ],
+     "ownerHours": 2.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Payment released on approval (assumed worst case), Contra standard payout 4-7 business days: each sale settles within 17 days of its sale date, last by day 43",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 27,
+     "dependsOn": "approve",
+     "evidence": [
+      "s_cpay",
+      "settle"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 4700,
+     "label": "Instantly Growth, one month",
+     "stepId": "reach"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 250000,
+     "label": "Buyer pays upfront via Contra, deal 1",
+     "settlesDay": 27,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 30000,
+     "label": "Subcontractor build, deal 1",
+     "stepId": "order"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 250000,
+     "label": "Buyer pays upfront via Contra, deal 2",
+     "settlesDay": 31,
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 30000,
+     "label": "Subcontractor build, deal 2",
+     "stepId": "order"
+    },
+    {
+     "day": 18,
+     "kind": "RECEIPT",
+     "amountCents": 250000,
+     "label": "Buyer pays upfront via Contra, deal 3",
+     "settlesDay": 35,
+     "stepId": "collect"
+    },
+    {
+     "day": 18,
+     "kind": "SPEND",
+     "amountCents": 30000,
+     "label": "Subcontractor build, deal 3",
+     "stepId": "order"
+    },
+    {
+     "day": 22,
+     "kind": "RECEIPT",
+     "amountCents": 250000,
+     "label": "Buyer pays upfront via Contra, deal 4",
+     "settlesDay": 39,
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 30000,
+     "label": "Subcontractor build, deal 4",
+     "stepId": "order"
+    },
+    {
+     "day": 26,
+     "kind": "RECEIPT",
+     "amountCents": 250000,
+     "label": "Buyer pays upfront via Contra, deal 5",
+     "settlesDay": 43,
+     "stepId": "collect"
+    },
+    {
+     "day": 26,
+     "kind": "SPEND",
+     "amountCents": 30000,
+     "label": "Subcontractor build, deal 5",
+     "stepId": "order"
+    }
+   ],
+   "proofDay": 15,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "cents per sale buyers accept",
+     "sources": [
+      "s_contra"
+     ],
+     "needs": "The paid-offer test"
+    },
+    {
+     "name": "closeRate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per email",
+     "sources": [],
+     "needs": "The paid-offer test"
+    },
+    {
+     "name": "directCost",
+     "status": "ESTIMATE",
+     "value": 30000,
+     "unit": "cents per build",
+     "sources": [
+      "s_fiv"
+     ],
+     "needs": "Written subcontractor quote"
+    },
+    {
+     "name": "settle",
+     "status": "ESTIMATE",
+     "value": 17,
+     "unit": "days from payment to settled cash",
+     "sources": [
+      "s_cpay"
+     ],
+     "needs": "Contra's release rule for upfront service payments"
+    },
+    {
+     "name": "ownerHours",
+     "status": "ESTIMATE",
+     "value": 5,
+     "unit": "owner hours in the window",
+     "sources": [],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+     "dated": "2026-11-27",
+     "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+     "population": "Small brands buying a website-in-a-week on Contra",
+     "matchesBuyer": true,
+     "id": "s_contra",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+     "dated": "2026-11-27",
+     "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+     "population": "Subcontract supply",
+     "matchesBuyer": false,
+     "id": "s_fiv",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+     "dated": "2026-11-27",
+     "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+     "population": "Contra freelancers",
+     "matchesBuyer": false,
+     "id": "s_cpay",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://instantly.ai/pricing",
+     "dated": "2026-11-27",
+     "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+     "population": "Tool pricing",
+     "matchesBuyer": false,
+     "id": "s_ins",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+     "dated": "2025-12-18",
+     "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "id": "s_usaf",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://clutch.co/press-releases/smb-websites-2025",
+     "dated": "2025-08-21",
+     "claim": "17% of US small businesses have no website",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "id": "s_clutchp",
+     "opportunityId": "cop_3ce14e6c2acd44878d0d"
+    },
+    {
+     "url": "https://webliftup-site.pages.dev/",
+     "dated": "2026-11-24",
+     "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+     "population": "Local small businesses",
+     "matchesBuyer": true,
+     "id": "s_wlu",
+     "opportunityId": "cop_ac92206a80a240f1bddb"
+    },
+    {
+     "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+     "dated": "2026-03-25",
+     "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+     "population": "US small businesses with websites",
+     "matchesBuyer": true,
+     "id": "s_c18",
+     "opportunityId": "cop_ac92206a80a240f1bddb"
+    },
+    {
+     "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+     "dated": "2026-11-27",
+     "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+     "population": "Local businesses",
+     "matchesBuyer": true,
+     "id": "s_gbp",
+     "opportunityId": "cop_59b077de9f1a45d69564"
+    },
+    {
+     "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+     "dated": "2026-11-27",
+     "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+     "population": "Subcontract supply",
+     "matchesBuyer": false,
+     "id": "s_gbpf",
+     "opportunityId": "cop_59b077de9f1a45d69564"
+    },
+    {
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+     "dated": "2026-11-27",
+     "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+     "population": "Upwork freelancers",
+     "matchesBuyer": false,
+     "id": "s_uph",
+     "opportunityId": "cop_d23c3decd77e4e92a8f8"
+    },
+    {
+     "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+     "dated": "2026-11-27",
+     "claim": "Connects cost $0.15 each",
+     "population": "Upwork freelancers",
+     "matchesBuyer": false,
+     "id": "s_upc",
+     "opportunityId": "cop_d23c3decd77e4e92a8f8"
+    }
+   ],
+   "validation": {
+    "proof": "By day 15: (a) at least one small brand has paid $2,500 upfront for the website-in-a-week, (b) the subcontractor has confirmed the scope at <= $300 in <= 7 days in writing, and (c) Contra's terms show payment released no later than buyer approval",
+    "stop": [
+     "No paid order by day 15 after 1,000 emails: stop; $47 spent, nothing else committed",
+     "No written subcontractor quote at <= $300 for the scope: stop before accepting payment",
+     "Contra releases upfront payments later than approval + 7 days: move collection to a direct card invoice or stop selling after day 26"
+    ],
+    "continue": [
+     "One or more paid orders by day 15: keep selling to 5 paid orders, last accepted by day 26 so it settles by day 43",
+     "Fewer than 1 paid order per 500 emails by day 20: stop new outreach"
+    ],
+    "decides": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "5 sales x $2,500 = $12,500 >= $12,000; spend $1,547 <= $2,500 cap.",
+     "resolution": "Accepted; the ledger keeps exactly this: $47 tooling + 5 x $300 builds."
+    },
+    {
+     "finding": "Stance mismatch: a paid-offer test that accepts money belongs to a CONDITIONAL plan, not NO_PLAN.",
+     "resolution": "Accepted: stance is now CONDITIONAL, with members' settlesDay and the full cash ledger for the five sales."
+    },
+    {
+     "finding": "FULFILMENT and SETTLES_IN_TIME unestablished and absent from validation.decides.",
+     "resolution": "Accepted: both are in validation.decides and resolves; a day-2 step obtains the subcontractor's written quote and Contra's release rule before any money is accepted."
+    },
+    {
+     "finding": "Contra release timing for upfront service payments is not on the cited page; release-on-delivery pushes late sales past day 45.",
+     "resolution": "Accepted: the schedule now assumes the worst case (release on approval ~8 days after sale, then standard payout 4-7 business days = 17 days), so the last sale is accepted by day 26 and settles by day 43; a stop rule covers a slower release."
+    },
+    {
+     "finding": "Owner hours not estimated.",
+     "resolution": "Accepted: OWNER steps for sales calls (5 x 0.5 h) and approvals (5 x 0.5 h), 5 h in total, recorded as an estimate."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "timeToFirstCash",
+      "brain:SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_3ce14e6c2acd44878d0d",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_d23c3decd77e4e92a8f8",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_ac92206a80a240f1bddb",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_59b077de9f1a45d69564",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_3ce14e6c2acd44878d0d",
+     "deals": 5,
+     "price": 2500,
+     "directCost": 300,
+     "capital": 0,
+     "settlesDay": 43
+    },
+    {
+     "opportunityId": "cop_d23c3decd77e4e92a8f8",
+     "deals": 20,
+     "price": 600,
+     "directCost": 340,
+     "capital": 30,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_ac92206a80a240f1bddb",
+     "deals": 25,
+     "price": 499,
+     "directCost": 250,
+     "capital": 47,
+     "settlesDay": null
+    },
+    {
+     "opportunityId": "cop_59b077de9f1a45d69564",
+     "deals": 31,
+     "price": 397,
+     "directCost": 50,
+     "capital": 47,
+     "settlesDay": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_ea31974a7082_278bec",
+   "digest": "ea31974a70823e911ca791eb",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:41:48.394Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_ea31974a7082_278bec",
+   "digest": "ea31974a70823e911ca791eb",
+   "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 154700,
+    "committedOpenCents": 0,
+    "preProofCents": 64700,
+    "maxExposureCents": 154700,
+    "minCashCents": 95300,
+    "minCashDay": 26,
+    "collectedCents": 1250000,
+    "collectedInWindowCents": 1250000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 1095300
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_3ce14e6c2acd44878d0d",
+     "cop_d23c3decd77e4e92a8f8",
+     "cop_ac92206a80a240f1bddb",
+     "cop_59b077de9f1a45d69564"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "title": "Website-in-a-week for small brands at $2,500, built by a subcontracted designer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Small brands and solo businesses needing a new site and mini brand kit",
+       "reachableChannel": "Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly",
+       "offerScope": "Mini brand board + 4-7 page site launched in 5 business days",
+       "priceCents": 250000,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "peakFundingCents": 35000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Contra service listing (0% freelancer commission; client $29 per contract) plus "
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 2500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 300, tied up 350"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Mini brand board + 4-7 page site launched in 5 business days to Small brands and solo businesses needing a new site and mini brand kit, reached through Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly, at $2,500; Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$350",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Mini brand board + 4-7 page site launched in 5 business days",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Small brands and solo businesses needing a new site and mini brand kit",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$2,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$2,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder; https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "title": "Upwork fixed-price website jobs answered and subcontracted",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 600,
+      "card": {
+       "payer": "Upwork clients posting fixed-price website jobs",
+       "reachableChannel": "Upwork proposals (Connects $0.15 each, ~6-16 per proposal)",
+       "offerScope": "Proposal answering a posted fixed-price small-business website job",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr WordPress freelancer (5-page site for $250)",
+       "peakFundingCents": 3000,
+       "humanHours": 0.5,
+       "requiredCapabilities": [],
+       "industry": "Freelance web development",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Upwork proposals (Connects $0.15 each, ~6-16 per proposal)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 340, tied up 30"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Upwork proposals (Connects $0.15 each, ~6-16 per proposal)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Proposal answering a posted fixed-price small-business website job to Upwork clients posting fixed-price website jobs, reached through Upwork proposals (Connects $0.15 each, ~6-16 per proposal), at $600; Fiverr WordPress freelancer (5-page site for $250) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$340",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$30",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr WordPress freelancer (5-page site for $250).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Proposal answering a posted fixed-price small-business website job",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Upwork clients posting fixed-price website jobs",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.upwork.com/resources/how-to-get-more-connects; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; upwork fixed price website jobs",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "title": "Website rebuild for local small businesses, resold at $499, built by a Fiverr WordPress freelancer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 499,
+      "card": {
+       "payer": "US local small-business owners with outdated or no website",
+       "reachableChannel": "Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories",
+       "offerScope": "Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered",
+       "priceCents": 49900,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD')",
+       "peakFundingCents": 4700,
+       "humanHours": 0.25,
+       "requiredCapabilities": [],
+       "industry": "Local services / web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email via Instantly Growth plan ($47/mo) to local businesses found in publi"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 499 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 250, tied up 47"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "9 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered to US local small-business owners with outdated or no website, reached through Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories, at $499; Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD') delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$47",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD').",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.25 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local small-business owners with outdated or no website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$499",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$499",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://webliftup-site.pages.dev/; https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "9 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "title": "One-time Google Business Profile optimization, resold at $397, fulfilled by a Fiverr local-SEO seller",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 397,
+      "card": {
+       "payer": "US local service businesses (trades, salons, clinics) with incomplete Google Maps listings",
+       "reachableChannel": "Cold email via Instantly to businesses whose public GBP listings are incomplete",
+       "offerScope": "Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery",
+       "priceCents": 39700,
+       "currency": "USD",
+       "fulfillmentOwner": "Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery)",
+       "peakFundingCents": 4700,
+       "humanHours": 0.25,
+       "requiredCapabilities": [],
+       "industry": "Local SEO",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email via Instantly to businesses whose public GBP listings are incomplete"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 397 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 50, tied up 47"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "8 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email via Instantly to businesses whose public GBP listings are incomplete",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery to US local service businesses (trades, salons, clinics) with incomplete Google Maps listings, reached through Cold email via Instantly to businesses whose public GBP listings are incomplete, at $397; Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$50",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$47",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0.25 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "US local service businesses (trades, salons, clinics) with incomplete Google Maps listings",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$397",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$397",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset; https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing; https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "8 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:35:12.534Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_0ff45a7b4799_0ad804",
+    "revisionDigest": "0ff45a7b4799284342c6987b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b3ae9124569d45899e19/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The evidence reading is right: no opening has a verified buyer price or current demand (the Contra $4,800 listing is one seller's asking price with profile-wide stats; the 2018 Clutch survey is stale), so nothing reaches $12,000 on evidence. Arithmetic checked: $12,000 / $2,500 = 4.8, so 5 sales; 5 x $300 builds + $47 Instantly = $1,547 <= $2,500 total cap; the $499 route needs 25 sales x $250 = $6,250 > cap (correct). But: (1) the revision is labelled NO_PLAN while carrying a startable paid-offer test that takes a buyer's $2,500; that is a CONDITIONAL plan resting on CURRENT_DEMAND and OFFER_AND_PRICE and should be stated as one, with members' settlesDay and the cash ledger for the sale the test takes. (2) FULFILMENT is unestablished (a Fiverr gig title the author could not read, $195-$300 'basic 5-page packages' for a scope that adds a brand board) and the test sells before a written quote exists only by the stop rule; put FULFILMENT in decides. (3) SETTLES_IN_TIME is asserted, not shown: the continue rule's '5 sales by day 36 (settled by day 43)' assumes Contra releases an upfront payment at once; Contra's payout article (opened) gives a 4-day safety clearance and 0-3 / 4-7 business-day bank payouts but does not say when an upfront service payment is released. If release is on delivery, a day-36 sale + about 7 calendar days build + 4 days + up to 3 business days lands near day 50, past 45; the last sale date must be derived from the release rule, or SETTLES_IN_TIME must be in what the test measures. (4) Owner hours are null on every step; the goal sets no limit, but closing $2,500 sales and approving builds takes owner time and should be estimated as unknown, not omitted. (5) GBP alternative: 31 x $50 + $47 = $1,597 fits the cap; its rejection rests only on no observed sales, which is right, but say so rather than implying the cap.",
+    "findings": [
+     "5 sales x $2,500 = $12,500 >= $12,000; spend $1,547 <= $2,500 cap.",
+     "Stance mismatch: a paid-offer test that accepts money belongs to a CONDITIONAL plan, not NO_PLAN.",
+     "FULFILMENT and SETTLES_IN_TIME unestablished and absent from validation.decides.",
+     "Contra release timing for upfront service payments is not on the cited page; release-on-delivery pushes late sales past day 45.",
+     "Owner hours not estimated."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:37:50.928Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "link": "SETTLES_IN_TIME",
+      "basis": "EVIDENCE",
+      "field": "timeToFirstCash",
+      "why": "The card's 12 days to cash is a RECOMMENDATION; Contra's payout page does not state when an upfront service payment is released, so the 'settled by day 43' schedule is unshown."
+     },
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "link": "FULFILMENT",
+      "basis": "EVIDENCE",
+      "field": "fulfillment",
+      "why": "Fulfilment rests on Fiverr 'basic 5-page packages $195-$300' (RECOMMENDATION, page unread) for a scope that adds a brand board; no written quote exists."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_ea31974a7082_278bec",
+    "revisionDigest": "ea31974a70823e911ca791eb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b3ae9124569d45899e19/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and every earlier finding is answered. Price, demand, close rate, fulfilment, economics and settlement are all unestablished and all are in validation.decides; the test spends $47 before proof, and money is accepted only after the written subcontractor quote and Contra's release rule are confirmed. Arithmetic: 5 x $2,500 = $12,500 >= $12,000 (4 sales = $10,000 short); spend $47 + 5 x $300 = $1,547 <= $2,500 cap, each build ordered after its buyer pays; trace matches (spent $1,547, collected $12,500 in window, net $10,953). Owner time ~5 h, estimated (goal sets no limit). Settlement: on Contra's payout page, standard bank payout is 4-7 business days, which is the faster 0-3 plus the 4-day clearance, so release on approval about 8 days after sale + up to 7 business days gives the 17-day lag used; deal 5 (day 26) settles around day 43.",
+    "findings": [
+     "5 sales needed, $500 margin over target; spend well inside the cap.",
+     "Settlement slack is thin for deal 5: 7 business days can be 9-11 calendar days depending on weekends, so day 26 + 8 + 11 = day 45 at worst. Either accept the last sale by day 24 or use the faster payout (0-3 business days) for the last deal; the $500 margin can absorb its fee.",
+     "Everything rests on all 5 sales closing; the day-20 '1 per 500 emails' stop is the right guard.",
+     "Fulfilment is a $195-$300 Fiverr package for a scope that adds a brand board; the written quote must cover the brand board, or the offer must drop it."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:43:29.603Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_ea31974a7082_278bec",
+   "digest": "ea31974a70823e911ca791eb",
+   "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+   "plan": {
+    "goalId": "wst_0de6ed2f194545dda0da",
+    "contractDigest": "d7218a55dbb7fb4d6a3b6576",
+    "parentRevisionId": "rev_0ff45a7b4799_0ad804",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Website-in-a-week at $2,500 for small brands, subcontracted build, sold via Contra and cold email — after a 15-day paid-offer test",
+     "opportunityIds": [
+      "cop_3ce14e6c2acd44878d0d"
+     ],
+     "why": "Five sales at $2,500 ($12,500) clear $12,000; spend is $47 + 5 x $300 = $1,547 inside the $2,500 cap, and each build is ordered only after its buyer pays. Nothing yet shows buyers pay $2,500 or how many would buy, so the first 15 days are a $47 paid-offer test that measures demand, price acceptance and close rate, while the subcontractor quote and Contra's release rule are confirmed before any money is taken."
+    },
+    "alternatives": [
+     {
+      "title": "$499 demo-first website rebuild for local businesses",
+      "why": "25 sales x $250 builds = $6,250 of spend against a $2,500 cap"
+     },
+     {
+      "title": "One-time Google Business Profile optimization at $397",
+      "why": "31 x $50 + $47 = $1,597 fits the cap, but the only listing at this price shows no sales and 31 closes at an unknown rate is far more than 5"
+     },
+     {
+      "title": "Upwork fixed-price website jobs",
+      "why": "Job prices and win rate unread; 20 wins needed; payout waits for approval plus a 5-day hold"
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Publish the $2,500 website-in-a-week as a Contra service listing and send cold email to small brands via Instantly Growth (one month, $47; outreach runs to day 26)",
+      "performer": "BRAIN",
+      "costCents": 4700,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_ins",
+       "s_contra"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "terms",
+      "kind": "RESEARCH",
+      "label": "Before accepting any money: get the subcontractor's written quote for the exact scope (4-7 pages + brand board, <=7 days, <= $300) and confirm in Contra's terms when an upfront service payment is released to the freelancer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": null,
+      "evidence": [
+       "s_fiv",
+       "s_cpay"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the website-in-a-week at $2,500, paid upfront before any build is ordered",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "terms",
+      "evidence": [
+       "s_contra"
+      ],
+      "priceCents": 250000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation through day 15: does any small brand pay $2,500 upfront from <=1,000 emails plus the Contra listing?",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "offer",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Owner takes each sales call and accepts each paid order (5 deals, ~0.5 h each, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "priceCents": 250000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Order each build from the subcontractor only after the buyer has paid ($300 x 5)",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 150000,
+      "day": 10,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_fiv",
+       "directCost"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Subcontractor builds and launches each site within 7 days of order; Brain QA",
+      "performer": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+      "costCents": 0,
+      "day": 17,
+      "dependsOn": "order",
+      "evidence": [
+       "s_fiv"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "approve",
+      "kind": "OTHER",
+      "label": "Owner approves each delivered site (5 x ~0.5 h, estimate)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "deliver",
+      "evidence": [
+       "ownerHours"
+      ],
+      "ownerHours": 2.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Payment released on approval (assumed worst case), Contra standard payout 4-7 business days: each sale settles within 17 days of its sale date, last by day 43",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 27,
+      "dependsOn": "approve",
+      "evidence": [
+       "s_cpay",
+       "settle"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth, one month",
+      "stepId": "reach"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 1",
+      "settlesDay": 27,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 1",
+      "stepId": "order"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 2",
+      "settlesDay": 31,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 2",
+      "stepId": "order"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 3",
+      "settlesDay": 35,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 3",
+      "stepId": "order"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 4",
+      "settlesDay": 39,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 4",
+      "stepId": "order"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 250000,
+      "label": "Buyer pays upfront via Contra, deal 5",
+      "settlesDay": 43,
+      "stepId": "collect"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 30000,
+      "label": "Subcontractor build, deal 5",
+      "stepId": "order"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "cents per sale buyers accept",
+      "sources": [
+       "s_contra"
+      ],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per email",
+      "sources": [],
+      "needs": "The paid-offer test"
+     },
+     {
+      "name": "directCost",
+      "status": "ESTIMATE",
+      "value": 30000,
+      "unit": "cents per build",
+      "sources": [
+       "s_fiv"
+      ],
+      "needs": "Written subcontractor quote"
+     },
+     {
+      "name": "settle",
+      "status": "ESTIMATE",
+      "value": 17,
+      "unit": "days from payment to settled cash",
+      "sources": [
+       "s_cpay"
+      ],
+      "needs": "Contra's release rule for upfront service payments"
+     },
+     {
+      "name": "ownerHours",
+      "status": "ESTIMATE",
+      "value": 5,
+      "unit": "owner hours in the window",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "url": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive",
+      "dated": "2026-11-27",
+      "claim": "An existing Contra seller of a 'Website in a Week' (4-7 page site + mini brand kit in 5 business days), from $4,800, shows 11 paid projects and $50k+ earned",
+      "population": "Small brands buying a website-in-a-week on Contra",
+      "matchesBuyer": true,
+      "id": "s_contra",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder",
+      "dated": "2026-11-27",
+      "claim": "Fiverr seller offers '5 pages wordpress business website within 2 days for just 250 USD' (gig title; page itself not readable from here)",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_fiv",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "dated": "2026-11-27",
+      "claim": "Contra payouts: 4-day safety-clearance; faster bank payout 0-3 business days, standard 4-7",
+      "population": "Contra freelancers",
+      "matchesBuyer": false,
+      "id": "s_cpay",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-27",
+      "claim": "Instantly Outreach Growth plan $47/month, 5,000 emails monthly",
+      "population": "Tool pricing",
+      "matchesBuyer": false,
+      "id": "s_ins",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://usafacts.org/articles/what-role-do-small-businesses-play-in-the-economy/",
+      "dated": "2025-12-18",
+      "claim": "36.2 million US small businesses by June 2025 (SBA 2025 profile)",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_usaf",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "17% of US small businesses have no website",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "id": "s_clutchp",
+      "opportunityId": "cop_3ce14e6c2acd44878d0d"
+     },
+     {
+      "url": "https://webliftup-site.pages.dev/",
+      "dated": "2026-11-24",
+      "claim": "Web Lift Up sells a demo-first small-business website rebuild at $499 flat, 7-day launch, with named client case studies",
+      "population": "Local small businesses",
+      "matchesBuyer": true,
+      "id": "s_wlu",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://clutch.co/website-builders/resources/small-business-websites-2018",
+      "dated": "2026-03-25",
+      "claim": "28% of small businesses with websites spent under $500; 48% spent $500-$10,000 (2018 survey, n=351)",
+      "population": "US small businesses with websites",
+      "matchesBuyer": true,
+      "id": "s_c18",
+      "opportunityId": "cop_ac92206a80a240f1bddb"
+     },
+     {
+      "url": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset",
+      "dated": "2026-11-27",
+      "claim": "Contra listing sells a one-time GBP optimization at $397 (5 days); no sales count shown",
+      "population": "Local businesses",
+      "matchesBuyer": true,
+      "id": "s_gbp",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing",
+      "dated": "2026-11-27",
+      "claim": "Fiverr GBP optimization gigs listed 'Up to $50'",
+      "population": "Subcontract supply",
+      "matchesBuyer": false,
+      "id": "s_gbpf",
+      "opportunityId": "cop_59b077de9f1a45d69564"
+     },
+     {
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts",
+      "dated": "2026-11-27",
+      "claim": "Fixed-price payments go to Pending for a five-day security hold after client approval; clients have 14 days to approve",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_uph",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     },
+     {
+      "url": "https://www.upwork.com/resources/how-to-get-more-connects",
+      "dated": "2026-11-27",
+      "claim": "Connects cost $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": false,
+      "id": "s_upc",
+      "opportunityId": "cop_d23c3decd77e4e92a8f8"
+     }
+    ],
+    "validation": {
+     "proof": "By day 15: (a) at least one small brand has paid $2,500 upfront for the website-in-a-week, (b) the subcontractor has confirmed the scope at <= $300 in <= 7 days in writing, and (c) Contra's terms show payment released no later than buyer approval",
+     "stop": [
+      "No paid order by day 15 after 1,000 emails: stop; $47 spent, nothing else committed",
+      "No written subcontractor quote at <= $300 for the scope: stop before accepting payment",
+      "Contra releases upfront payments later than approval + 7 days: move collection to a direct card invoice or stop selling after day 26"
+     ],
+     "continue": [
+      "One or more paid orders by day 15: keep selling to 5 paid orders, last accepted by day 26 so it settles by day 43",
+      "Fewer than 1 paid order per 500 emails by day 20: stop new outreach"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "5 sales x $2,500 = $12,500 >= $12,000; spend $1,547 <= $2,500 cap.",
+      "resolution": "Accepted; the ledger keeps exactly this: $47 tooling + 5 x $300 builds."
+     },
+     {
+      "finding": "Stance mismatch: a paid-offer test that accepts money belongs to a CONDITIONAL plan, not NO_PLAN.",
+      "resolution": "Accepted: stance is now CONDITIONAL, with members' settlesDay and the full cash ledger for the five sales."
+     },
+     {
+      "finding": "FULFILMENT and SETTLES_IN_TIME unestablished and absent from validation.decides.",
+      "resolution": "Accepted: both are in validation.decides and resolves; a day-2 step obtains the subcontractor's written quote and Contra's release rule before any money is accepted."
+     },
+     {
+      "finding": "Contra release timing for upfront service payments is not on the cited page; release-on-delivery pushes late sales past day 45.",
+      "resolution": "Accepted: the schedule now assumes the worst case (release on approval ~8 days after sale, then standard payout 4-7 business days = 17 days), so the last sale is accepted by day 26 and settles by day 43; a stop rule covers a slower release."
+     },
+     {
+      "finding": "Owner hours not estimated.",
+      "resolution": "Accepted: OWNER steps for sales calls (5 x 0.5 h) and approvals (5 x 0.5 h), 5 h in total, recorded as an estimate."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_3ce14e6c2acd44878d0d",
+      "deals": 5,
+      "price": 2500,
+      "directCost": 300,
+      "capital": 0,
+      "settlesDay": 43
+     },
+     {
+      "opportunityId": "cop_d23c3decd77e4e92a8f8",
+      "deals": 20,
+      "price": 600,
+      "directCost": 340,
+      "capital": 30,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_ac92206a80a240f1bddb",
+      "deals": 25,
+      "price": 499,
+      "directCost": 250,
+      "capital": 47,
+      "settlesDay": null
+     },
+     {
+      "opportunityId": "cop_59b077de9f1a45d69564",
+      "deals": 31,
+      "price": 397,
+      "directCost": 50,
+      "capital": 47,
+      "settlesDay": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ea31974a7082_278bec",
+    "digest": "ea31974a70823e911ca791eb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:41:48.394Z"
+   },
+   "review": {
+    "revisionId": "rev_ea31974a7082_278bec",
+    "revisionDigest": "ea31974a70823e911ca791eb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_a9fdf65e729c48fbbbc4/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b3ae9124569d45899e19/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is right and every earlier finding is answered. Price, demand, close rate, fulfilment, economics and settlement are all unestablished and all are in validation.decides; the test spends $47 before proof, and money is accepted only after the written subcontractor quote and Contra's release rule are confirmed. Arithmetic: 5 x $2,500 = $12,500 >= $12,000 (4 sales = $10,000 short); spend $47 + 5 x $300 = $1,547 <= $2,500 cap, each build ordered after its buyer pays; trace matches (spent $1,547, collected $12,500 in window, net $10,953). Owner time ~5 h, estimated (goal sets no limit). Settlement: on Contra's payout page, standard bank payout is 4-7 business days, which is the faster 0-3 plus the 4-day clearance, so release on approval about 8 days after sale + up to 7 business days gives the 17-day lag used; deal 5 (day 26) settles around day 43.",
+    "findings": [
+     "5 sales needed, $500 margin over target; spend well inside the cap.",
+     "Settlement slack is thin for deal 5: 7 business days can be 9-11 calendar days depending on weekends, so day 26 + 8 + 11 = day 45 at worst. Either accept the last sale by day 24 or use the faster payout (0-3 business days) for the last deal; the $500 margin can absorb its fee.",
+     "Everything rests on all 5 sales closing; the day-20 '1 per 500 emails' stop is the right guard.",
+     "Fulfilment is a $195-$300 Fiverr package for a scope that adds a brand board; the written quote must cover the brand board, or the offer must drop it."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:43:29.603Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $12,000 of settled cash within 45 days. I can put up to $2,500 into it.",
+    "terms": "13fcd76b955da904",
+    "openings": {
+     "cop_3ce14e6c2acd44878d0d": "40ce896f2a820fb9",
+     "cop_59b077de9f1a45d69564": "62f73f28c47580ff",
+     "cop_ac92206a80a240f1bddb": "323ceba464b1ed2b",
+     "cop_d23c3decd77e4e92a8f8": "b01a286d836f1165"
+    }
+   },
+   "at": "2026-11-27T23:43:53.691Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

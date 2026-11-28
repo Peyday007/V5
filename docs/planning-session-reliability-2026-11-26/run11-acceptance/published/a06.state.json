@@ -1,0 +1,1658 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_a69b67de712348c5bb4c",
+   "words": "Collect $4,000 of settled cash within 35 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 35,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount is settled in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "83390bcb719138f046bf9b99"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_a69b67de712348c5bb4c",
+    "contractDigest": "83390bcb719138f046bf9b99",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Four signed holiday delivery blocks, run by Petal Route Couriers",
+     "opportunityIds": [
+      "cop_20b433d2bef04525aa92"
+     ],
+     "why": "Four shop owners signed $1,800 block orders in writing; Petal Route Couriers LLC confirmed in writing it can run all 400 deliveries days 7-21 at $1,100 a block, invoiced net 30. $7,200 settles by day 24 of 35 (even three blocks, $5,400, clear the $4,000 target). The courier is paid from receipts, so no capital is advanced. The work is the courier's, not the owner's: Brain's physical-work exclusion overlooks the named subcontractor."
+    },
+    "alternatives": [
+     {
+      "title": "Holiday window-display design",
+      "why": "Rejected: the $250 price is only the owner's say-so, and the 85-shop market yields about 12 deals at the measured rate, $3,000 short of the target even if the price held."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the four signed delivery-block orders at $1,800 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 180000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Petal Route Couriers LLC for four 100-delivery blocks over days 7-21 at $1,100 a block (net 30)",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Petal Route Couriers LLC runs the 400 deliveries, days 7 to 21",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 440000,
+      "day": 7,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect each shop's $1,800 within 3 days of its block's last delivery (cleared by day 24)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 21,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 720000,
+      "label": "Four shops pay $1,800 each for their blocks",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 51,
+      "kind": "SPEND",
+      "amountCents": 440000,
+      "label": "Pay Petal Route Couriers LLC's $4,400 invoice (net 30 after day 21)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "delivery block price",
+      "status": "EVIDENCED",
+      "value": 180000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed block orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier cost",
+      "status": "EVIDENCED",
+      "value": 110000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier capacity",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "deliveries over days 7-21",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash collected by day 24",
+      "status": "EVIDENCED",
+      "value": 720000,
+      "unit": "USD cents",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#price",
+      "dated": "2026-11-24",
+      "claim": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries (four written acceptances recorded).",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Petal Route Couriers LLC quoted $11 a delivery, $1,100 a block, invoiced net 30, and confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $1,100 per block.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "24 days to first cash.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s6",
+      "url": "https://brain.local/card/cop_a18aba395abf4042a0d5#price",
+      "dated": "2026-11-24",
+      "claim": "Only the owner says flower shops will pay $250 for a holiday window (PERSON, not evidence).",
+      "population": "Owners of independent flower shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a18aba395abf4042a0d5"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "why": "Price $250 is only the owner's statement (PERSON), not a price buyers are shown to pay; not needed since the delivery blocks clear the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "deals": 4,
+      "price": 1800,
+      "directCost": 1100,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "link": "FULFILMENT",
+      "reason": "Brain excluded this opening as needing the owner's physical work, but the card's fulfillmentOwner and EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block and confirmed in writing it can run all 400 deliveries days 7-21. The courier, not the owner, performs the physical work."
+     }
+    ],
+    "revisionId": "rev_cf7d07184554_41f50b",
+    "digest": "cf7d071845540b4650bea695",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:16.175Z"
+   },
+   {
+    "goalId": "wst_a69b67de712348c5bb4c",
+    "contractDigest": "83390bcb719138f046bf9b99",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Four signed holiday delivery blocks, run by Petal Route Couriers",
+     "opportunityIds": [
+      "cop_20b433d2bef04525aa92"
+     ],
+     "why": "Four shop owners signed $1,800 block orders in writing; Petal Route Couriers LLC confirmed in writing it can run all 400 deliveries days 7-21 at $1,100 a block, invoiced net 30. $7,200 settles by day 24 of 35 (even three blocks, $5,400, clear the $4,000 target). The courier is paid from receipts, so no capital is advanced. The work is the courier's, not the owner's: Brain's physical-work exclusion overlooks the named subcontractor."
+    },
+    "alternatives": [
+     {
+      "title": "Holiday window-display design",
+      "why": "Rejected: the $250 price is only the owner's say-so, and the 85-shop market yields about 12 deals at the measured rate, $3,000 short of the target even if the price held."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the four signed delivery-block orders at $1,800 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 180000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Petal Route Couriers LLC for four 100-delivery blocks over days 7-21 at $1,100 a block (net 30)",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Petal Route Couriers LLC runs the 400 deliveries, days 7 to 21",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 440000,
+      "day": 7,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect each shop's $1,800 within 3 days of its block's last delivery (cleared by day 24)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 21,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 720000,
+      "label": "Four shops pay $1,800 each for their blocks",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 51,
+      "kind": "SPEND",
+      "amountCents": 440000,
+      "label": "Pay Petal Route Couriers LLC's $4,400 invoice (net 30 after day 21)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "delivery block price",
+      "status": "EVIDENCED",
+      "value": 180000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed block orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier cost",
+      "status": "EVIDENCED",
+      "value": 110000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier capacity",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "deliveries over days 7-21",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash collected by day 24",
+      "status": "EVIDENCED",
+      "value": 720000,
+      "unit": "USD cents",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#price",
+      "dated": "2026-11-24",
+      "claim": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries (four written acceptances recorded).",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Petal Route Couriers LLC quoted $11 a delivery, $1,100 a block, invoiced net 30, and confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $1,100 per block.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "24 days to first cash.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s6",
+      "url": "https://brain.local/card/cop_a18aba395abf4042a0d5#price",
+      "dated": "2026-11-24",
+      "claim": "Only the owner says flower shops will pay $250 for a holiday window (PERSON, not evidence).",
+      "population": "Owners of independent flower shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a18aba395abf4042a0d5"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "why": "Price $250 is only the owner's statement (PERSON), not a price buyers are shown to pay; not needed since the delivery blocks clear the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "deals": 4,
+      "price": 1800,
+      "directCost": 1100,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "link": "EXCLUSION",
+      "reason": "Brain excluded this opening as needing the owner's physical work, but the card's fulfillmentOwner and EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block and confirmed in writing it can run all 400 deliveries days 7-21. The courier, not the owner, performs the physical work."
+     }
+    ],
+    "revisionId": "rev_b9277384055a_05ad11",
+    "digest": "b9277384055abd0f95a0d379",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:20.684Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_a69b67de712348c5bb4c",
+   "contractDigest": "83390bcb719138f046bf9b99",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Four signed holiday delivery blocks, run by Petal Route Couriers",
+    "opportunityIds": [
+     "cop_20b433d2bef04525aa92"
+    ],
+    "why": "Four shop owners signed $1,800 block orders in writing; Petal Route Couriers LLC confirmed in writing it can run all 400 deliveries days 7-21 at $1,100 a block, invoiced net 30. $7,200 settles by day 24 of 35 (even three blocks, $5,400, clear the $4,000 target). The courier is paid from receipts, so no capital is advanced. The work is the courier's, not the owner's: Brain's physical-work exclusion overlooks the named subcontractor."
+   },
+   "alternatives": [
+    {
+     "title": "Holiday window-display design",
+     "why": "Rejected: the $250 price is only the owner's say-so, and the 85-shop market yields about 12 deals at the measured rate, $3,000 short of the target even if the price held."
+    }
+   ],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm the four signed delivery-block orders at $1,800 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "priceCents": 180000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "order",
+     "kind": "ORDER",
+     "label": "Book Petal Route Couriers LLC for four 100-delivery blocks over days 7-21 at $1,100 a block (net 30)",
+     "performer": "Petal Route Couriers LLC",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "sell",
+     "evidence": [
+      "s2"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Petal Route Couriers LLC",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Petal Route Couriers LLC runs the 400 deliveries, days 7 to 21",
+     "performer": "Petal Route Couriers LLC",
+     "costCents": 440000,
+     "day": 7,
+     "dependsOn": "order",
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Petal Route Couriers LLC",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect each shop's $1,800 within 3 days of its block's last delivery (cleared by day 24)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 21,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s4",
+      "s5"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 21,
+     "kind": "RECEIPT",
+     "amountCents": 720000,
+     "label": "Four shops pay $1,800 each for their blocks",
+     "settlesDay": 24,
+     "stepId": "collect"
+    },
+    {
+     "day": 51,
+     "kind": "SPEND",
+     "amountCents": 440000,
+     "label": "Pay Petal Route Couriers LLC's $4,400 invoice (net 30 after day 21)",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 24,
+   "quantities": [
+    {
+     "name": "delivery block price",
+     "status": "EVIDENCED",
+     "value": 180000,
+     "unit": "USD cents per block",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signed block orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "courier cost",
+     "status": "EVIDENCED",
+     "value": 110000,
+     "unit": "USD cents per block",
+     "sources": [
+      "s2",
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "courier capacity",
+     "status": "EVIDENCED",
+     "value": 400,
+     "unit": "deliveries over days 7-21",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settled cash collected by day 24",
+     "status": "EVIDENCED",
+     "value": 720000,
+     "unit": "USD cents",
+     "sources": [
+      "s1",
+      "s4"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_20b433d2bef04525aa92#price",
+     "dated": "2026-11-24",
+     "claim": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries (four written acceptances recorded).",
+     "population": "Owners of independent flower shops in the metro area",
+     "matchesBuyer": true,
+     "opportunityId": "cop_20b433d2bef04525aa92"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_20b433d2bef04525aa92#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Petal Route Couriers LLC quoted $11 a delivery, $1,100 a block, invoiced net 30, and confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day.",
+     "population": "Owners of independent flower shops in the metro area",
+     "matchesBuyer": true,
+     "opportunityId": "cop_20b433d2bef04525aa92"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_20b433d2bef04525aa92#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $1,100 per block.",
+     "population": "Owners of independent flower shops in the metro area",
+     "matchesBuyer": true,
+     "opportunityId": "cop_20b433d2bef04525aa92"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_20b433d2bef04525aa92#captureMechanism",
+     "dated": "2026-11-24",
+     "claim": "Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+     "population": "Owners of independent flower shops in the metro area",
+     "matchesBuyer": true,
+     "opportunityId": "cop_20b433d2bef04525aa92"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_20b433d2bef04525aa92#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "24 days to first cash.",
+     "population": "Owners of independent flower shops in the metro area",
+     "matchesBuyer": true,
+     "opportunityId": "cop_20b433d2bef04525aa92"
+    },
+    {
+     "id": "s6",
+     "url": "https://brain.local/card/cop_a18aba395abf4042a0d5#price",
+     "dated": "2026-11-24",
+     "claim": "Only the owner says flower shops will pay $250 for a holiday window (PERSON, not evidence).",
+     "population": "Owners of independent flower shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a18aba395abf4042a0d5"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_20b433d2bef04525aa92",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_a18aba395abf4042a0d5",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_a18aba395abf4042a0d5",
+     "why": "Price $250 is only the owner's statement (PERSON), not a price buyers are shown to pay; not needed since the delivery blocks clear the target."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_20b433d2bef04525aa92",
+     "deals": 4,
+     "price": 1800,
+     "directCost": 1100,
+     "capital": 0,
+     "settlesDay": 24
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_20b433d2bef04525aa92",
+     "link": "EXCLUSION",
+     "reason": "Brain excluded this opening as needing the owner's physical work, but the card's fulfillmentOwner and EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block and confirmed in writing it can run all 400 deliveries days 7-21. The courier, not the owner, performs the physical work."
+    }
+   ],
+   "revisionId": "rev_b9277384055a_05ad11",
+   "digest": "b9277384055abd0f95a0d379",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:13:20.684Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_b9277384055a_05ad11",
+   "digest": "b9277384055abd0f95a0d379",
+   "contractDigest": "83390bcb719138f046bf9b99",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 440000,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 21,
+    "collectedCents": 720000,
+    "collectedInWindowCents": 720000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 280000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 11050× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Holiday window-display design for flower shops\" needs [figure withheld] and keeps [figure withheld], 130× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown p), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_a18aba395abf4042a0d5"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Holiday window-display design for flower shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Holiday window-display design for flower shops\"",
+      "owner": "PERSON",
+      "cost": 120
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the supply",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Get written terms from a supplier",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Validate the offer with buyers to be found",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Collect payment for \"Holiday window-display design for flower shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Order the run from the supplier",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "title": "Holiday window-display design for flower shops",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Owners of independent flower shops",
+       "reachableChannel": "Email to the metro florists' association member list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:09.164Z",
+       "offerScope": "A freelance visual merchandiser dresses the shop window for the holiday season.",
+       "priceCents": 25000,
+       "currency": "USD",
+       "fulfillmentOwner": "A freelance visual merchandiser (quoted $120 a window)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "retail florists",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the metro florists' association member list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 9 accepted of 40 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "17 deal(s) needed at the measured rate means asking 120 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 12"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by A freelance visual merchandiser (quoted $120 a window) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 120, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 35 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The metro florists' association lists 85 member shops, each with a street-front window.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A freelance visual merchandiser dresses the shop window for the holiday season. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "9 agreements from 40 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$120",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A freelance visual merchandiser (quoted $120 a window) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent flower shops",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The owner says flower shops will pay $250 for a holiday window.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "title": "Holiday overflow delivery blocks for independent flower shops",
+      "reason": "needs the owner's physical work: delivering it needs physical work (\"courier\") and nothing names an independent supplier or subcontractor to perform it; the owner does no physical work",
+      "card": {
+       "payer": "Owners of independent flower shops in the metro area",
+       "reachableChannel": "The four shop owners who signed block orders",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:09.164Z",
+       "offerScope": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+       "priceCents": 180000,
+       "currency": "USD",
+       "fulfillmentOwner": "Petal Route Couriers LLC (quoted $11 a delivery, $1,100 a block, invoiced net 30; confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day)",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "retail florists",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1100",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Petal Route Couriers LLC (quoted $11 a delivery, $1,100 a block, invoiced net 30; confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent flower shops in the metro area",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries ($18 a delivery).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "24 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [
+     "cnd_e35767507423459f97b4"
+    ],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 35,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:11:21.003Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b9277384055a_05ad11",
+    "revisionDigest": "b9277384055abd0f95a0d379",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_18be3d84db41474d82d2/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right, and the disagreement with Brain's exclusion is correct. Brain excluded cop_20b433d2bef04525aa92 because 'nothing names an independent supplier or subcontractor', but the card's fulfillmentOwner and its EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block net 30 and confirmed in writing it can run all 400 deliveries days 7-21 (up to 40/day). The courier, the recorded fulfiller, performs the physical work, not the owner. Every link is established on the record: four WRITTEN_ACCEPTANCE agreements at $1,800 each (a real price these buyers signed, not a benchmark), so conversion and volume are the four signed buyers themselves; fulfilment capacity 15 days x 40 = 600 >= 400 deliveries; each shop pays within 3 days of its block's last delivery (day 21), clearing by day 24 of 35. Arithmetic recomputed: 4 x $1,800 = $7,200 settled by day 24 >= $4,000; three blocks ($5,400) would still clear it. Courier cost 4 x $1,100 = $4,400 is invoiced net 30 and falls due about day 51, paid from receipts, so no capital is advanced and pre-proof spend is $0. The excluded window-display opening is correctly rejected: $250 is only the owner's word (PERSON), and 85 shops x 9/40 = ~19 at most, 17 needed even at that unproven price.",
+    "findings": [
+     "The target is met as gross settled cash, which is the contract's metric; the owner's net from the plan is $7,200 - $4,400 = $2,800, and a $4,400 courier payable is outstanding at day 35. Booking the courier on day 1 is a commitment owed even if a shop defaults; the four signed orders back it, but the owner should know the obligation precedes the receipts.",
+     "If any shop pays late or disputes, three paid blocks still reach $5,400, so a single default does not break the target."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:36.221Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_b9277384055a_05ad11",
+   "digest": "b9277384055abd0f95a0d379",
+   "contractDigest": "83390bcb719138f046bf9b99",
+   "plan": {
+    "goalId": "wst_a69b67de712348c5bb4c",
+    "contractDigest": "83390bcb719138f046bf9b99",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Four signed holiday delivery blocks, run by Petal Route Couriers",
+     "opportunityIds": [
+      "cop_20b433d2bef04525aa92"
+     ],
+     "why": "Four shop owners signed $1,800 block orders in writing; Petal Route Couriers LLC confirmed in writing it can run all 400 deliveries days 7-21 at $1,100 a block, invoiced net 30. $7,200 settles by day 24 of 35 (even three blocks, $5,400, clear the $4,000 target). The courier is paid from receipts, so no capital is advanced. The work is the courier's, not the owner's: Brain's physical-work exclusion overlooks the named subcontractor."
+    },
+    "alternatives": [
+     {
+      "title": "Holiday window-display design",
+      "why": "Rejected: the $250 price is only the owner's say-so, and the 85-shop market yields about 12 deals at the measured rate, $3,000 short of the target even if the price held."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the four signed delivery-block orders at $1,800 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 180000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Book Petal Route Couriers LLC for four 100-delivery blocks over days 7-21 at $1,100 a block (net 30)",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Petal Route Couriers LLC runs the 400 deliveries, days 7 to 21",
+      "performer": "Petal Route Couriers LLC",
+      "costCents": 440000,
+      "day": 7,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Petal Route Couriers LLC",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect each shop's $1,800 within 3 days of its block's last delivery (cleared by day 24)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 21,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 720000,
+      "label": "Four shops pay $1,800 each for their blocks",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 51,
+      "kind": "SPEND",
+      "amountCents": 440000,
+      "label": "Pay Petal Route Couriers LLC's $4,400 invoice (net 30 after day 21)",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "delivery block price",
+      "status": "EVIDENCED",
+      "value": 180000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signed block orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier cost",
+      "status": "EVIDENCED",
+      "value": 110000,
+      "unit": "USD cents per block",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "courier capacity",
+      "status": "EVIDENCED",
+      "value": 400,
+      "unit": "deliveries over days 7-21",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settled cash collected by day 24",
+      "status": "EVIDENCED",
+      "value": 720000,
+      "unit": "USD cents",
+      "sources": [
+       "s1",
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#price",
+      "dated": "2026-11-24",
+      "claim": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries (four written acceptances recorded).",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Petal Route Couriers LLC quoted $11 a delivery, $1,100 a block, invoiced net 30, and confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $1,100 per block.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_20b433d2bef04525aa92#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "24 days to first cash.",
+      "population": "Owners of independent flower shops in the metro area",
+      "matchesBuyer": true,
+      "opportunityId": "cop_20b433d2bef04525aa92"
+     },
+     {
+      "id": "s6",
+      "url": "https://brain.local/card/cop_a18aba395abf4042a0d5#price",
+      "dated": "2026-11-24",
+      "claim": "Only the owner says flower shops will pay $250 for a holiday window (PERSON, not evidence).",
+      "population": "Owners of independent flower shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a18aba395abf4042a0d5"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a18aba395abf4042a0d5",
+      "why": "Price $250 is only the owner's statement (PERSON), not a price buyers are shown to pay; not needed since the delivery blocks clear the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "deals": 4,
+      "price": 1800,
+      "directCost": 1100,
+      "capital": 0,
+      "settlesDay": 24
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_20b433d2bef04525aa92",
+      "link": "EXCLUSION",
+      "reason": "Brain excluded this opening as needing the owner's physical work, but the card's fulfillmentOwner and EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block and confirmed in writing it can run all 400 deliveries days 7-21. The courier, not the owner, performs the physical work."
+     }
+    ],
+    "revisionId": "rev_b9277384055a_05ad11",
+    "digest": "b9277384055abd0f95a0d379",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:20.684Z"
+   },
+   "review": {
+    "revisionId": "rev_b9277384055a_05ad11",
+    "revisionDigest": "b9277384055abd0f95a0d379",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_65d6f7cfe1a1488ab832/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_18be3d84db41474d82d2/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is right, and the disagreement with Brain's exclusion is correct. Brain excluded cop_20b433d2bef04525aa92 because 'nothing names an independent supplier or subcontractor', but the card's fulfillmentOwner and its EVIDENCE fulfillment fact name Petal Route Couriers LLC, which quoted $1,100 a block net 30 and confirmed in writing it can run all 400 deliveries days 7-21 (up to 40/day). The courier, the recorded fulfiller, performs the physical work, not the owner. Every link is established on the record: four WRITTEN_ACCEPTANCE agreements at $1,800 each (a real price these buyers signed, not a benchmark), so conversion and volume are the four signed buyers themselves; fulfilment capacity 15 days x 40 = 600 >= 400 deliveries; each shop pays within 3 days of its block's last delivery (day 21), clearing by day 24 of 35. Arithmetic recomputed: 4 x $1,800 = $7,200 settled by day 24 >= $4,000; three blocks ($5,400) would still clear it. Courier cost 4 x $1,100 = $4,400 is invoiced net 30 and falls due about day 51, paid from receipts, so no capital is advanced and pre-proof spend is $0. The excluded window-display opening is correctly rejected: $250 is only the owner's word (PERSON), and 85 shops x 9/40 = ~19 at most, 17 needed even at that unproven price.",
+    "findings": [
+     "The target is met as gross settled cash, which is the contract's metric; the owner's net from the plan is $7,200 - $4,400 = $2,800, and a $4,400 courier payable is outstanding at day 35. Booking the courier on day 1 is a commitment owed even if a shop defaults; the four signed orders back it, but the owner should know the obligation precedes the receipts.",
+     "If any shop pays late or disputes, three paid blocks still reach $5,400, so a single default does not break the target."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:36.221Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 35 days using no up-front capital.",
+    "terms": "cb2835b7a3e14f36",
+    "openings": {
+     "cop_20b433d2bef04525aa92": "0268ec71710aaaea",
+     "cop_a18aba395abf4042a0d5": "d658590a61402ae3"
+    }
+   },
+   "at": "2026-11-27T23:20:18.485Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

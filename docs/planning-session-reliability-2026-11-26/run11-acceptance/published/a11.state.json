@@ -1,0 +1,1535 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_9941f2272ac44f08b987",
+   "words": "Collect $10,000 of settled cash within 40 days with at most $1,500 of capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1000000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 40,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 2000000,
+    "proofCondition": "USD 10,000 of settled cash received within 40 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {
+    "capital": "The owner's message (OBJECTIVE.txt) says at most $1,500 of capital; the goal's stored terms were since changed to a $20,000 capital ceiling, which is the goal's current term, so the contract follows the stored ceiling."
+   },
+   "version": 2,
+   "digest": "c48804bd90f8499737a4746f"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_9941f2272ac44f08b987",
+    "contractDigest": "2f113e66475c03ac92e414d4",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan fits the $1,500 capital ceiling",
+     "opportunityIds": [],
+     "why": "The only opening (two signed $13,500 ultrasound purchase agreements) requires paying the refurbisher $9,200 in full before a unit ships, while neither clinic prepays and pays only on installation (cleared day 14). One unit already clears the $10,000 target, but it needs $9,200 of capital at once against a $1,500 ceiling."
+    },
+    "alternatives": [
+     {
+      "title": "Sell one installed unit to one signed clinic",
+      "why": "Would settle $13,500 on day 14 (inside 40 days) for $9,200 cost, but ties up $9,200 before shipment, 6x the $1,500 capital ceiling."
+     },
+     {
+      "title": "Ask a clinic to prepay or the refurbisher to accept payment on installation",
+      "why": "Not established: the card states neither clinic will prepay and the refurbisher must be paid in full before shipping."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask Clearview Imaging Refurb whether it will ship against a deposit within $1,500 with the balance paid from the clinic's ACH on installation, and record any written change of terms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s3"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "capital tied up per unit before shipment",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "capital ceiling",
+      "status": "EVIDENCED",
+      "value": 150000,
+      "unit": "cents",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "price per installed unit",
+      "status": "EVIDENCED",
+      "value": 1350000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cleared cash",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#exposure",
+      "dated": "2026-11-24",
+      "claim": "$9,200 exposure per unit",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#price",
+      "dated": "2026-11-24",
+      "claim": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit",
+      "population": "the two signing rural urgent-care clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#directCosts",
+      "dated": "2026-11-24",
+      "claim": "$9,200 per unit, paid in full before shipment",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "14 days to first cash",
+      "population": "the two signing clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Capital: the refurbisher must be paid $9,200 in full before a unit ships and neither clinic prepays, so even the single unit that clears the target needs $9,200 committed at once against the $1,500 ceiling. Every other chain link is established (two written agreements at $13,500, quoted fulfiller with stock, cash cleared day 14).",
+     "resolution": "The owner allows at least $9,200 of capital (one unit: $13,500 settles day 14, $4,300 contribution), or Brain obtains written terms from Clearview to ship against at most $1,500 up front with the balance due on installation.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "deals": 1,
+      "price": 13500,
+      "directCost": 9200,
+      "capital": 9200,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "CAPITAL",
+      "suggestion": "Allow the goal to commit at least $9,200 at once (one refurbished unit paid before shipment); the $13,500 it brings settles on day 14.",
+      "basis": [
+       {
+        "opportunityId": "cop_5b3e9a55e80342daa091",
+        "field": "exposure"
+       },
+       {
+        "opportunityId": "cop_5b3e9a55e80342daa091",
+        "field": "directCosts"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_b71c2c2cf05b_7fdf58",
+    "digest": "b71c2c2cf05b8883a2b5507e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:54.398Z"
+   },
+   {
+    "goalId": "wst_9941f2272ac44f08b987",
+    "contractDigest": "2f113e66475c03ac92e414d4",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan fits the $1,500 capital ceiling",
+     "opportunityIds": [],
+     "why": "The only opening (two signed $13,500 ultrasound purchase agreements) requires paying the refurbisher $9,200 in full before a unit ships, while neither clinic prepays and pays only on installation (cleared day 14). One unit already clears the $10,000 target, but it needs $9,200 of capital at once against a $1,500 ceiling."
+    },
+    "alternatives": [
+     {
+      "title": "Sell one installed unit to one signed clinic",
+      "why": "Would settle $13,500 on day 14 (inside 40 days) for $9,200 cost, but ties up $9,200 before shipment, 6x the $1,500 capital ceiling."
+     },
+     {
+      "title": "Ask a clinic to prepay or the refurbisher to accept payment on installation",
+      "why": "Not established: the card states neither clinic will prepay and the refurbisher must be paid in full before shipping."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask Clearview Imaging Refurb whether it will ship against a deposit within $1,500 with the balance paid from the clinic's ACH on installation, and record any written change of terms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s3"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "capital tied up per unit before shipment",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s1",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per installed unit",
+      "status": "EVIDENCED",
+      "value": 1350000,
+      "unit": "cents",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cleared cash",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#exposure",
+      "dated": "2026-11-24",
+      "claim": "$9,200 exposure per unit",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#price",
+      "dated": "2026-11-24",
+      "claim": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit",
+      "population": "the two signing rural urgent-care clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#directCosts",
+      "dated": "2026-11-24",
+      "claim": "$9,200 per unit, paid in full before shipment",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "14 days to first cash",
+      "population": "the two signing clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Capital: the refurbisher must be paid $9,200 in full before a unit ships and neither clinic prepays, so even the single unit that clears the target needs $9,200 committed at once against the $1,500 ceiling. Every other chain link is established (two written agreements at $13,500, quoted fulfiller with stock, cash cleared day 14).",
+     "resolution": "The owner allows at least $9,200 of capital (one unit: $13,500 settles day 14, $4,300 contribution), or Brain obtains written terms from Clearview to ship against at most $1,500 up front with the balance due on installation.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "deals": 1,
+      "price": 13500,
+      "directCost": 9200,
+      "capital": 9200,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "CAPITAL",
+      "suggestion": "Allow the goal to commit at least $9,200 at once (one refurbished unit paid before shipment); the $13,500 it brings settles on day 14.",
+      "basis": [
+       {
+        "opportunityId": "cop_5b3e9a55e80342daa091",
+        "field": "exposure"
+       },
+       {
+        "opportunityId": "cop_5b3e9a55e80342daa091",
+        "field": "directCosts"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_1bbdc2d75dfe_135e99",
+    "digest": "1bbdc2d75dfe6a078dce0aa7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:12:59.052Z"
+   },
+   {
+    "goalId": "wst_9941f2272ac44f08b987",
+    "contractDigest": "c48804bd90f8499737a4746f",
+    "parentRevisionId": "rev_1bbdc2d75dfe_135e99",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the two signed refurbished ultrasound units through Clearview",
+     "opportunityIds": [
+      "cop_5b3e9a55e80342daa091"
+     ],
+     "why": "The goal's capital ceiling is now $20,000. Two clinics signed written purchase agreements at $13,500 per installed unit; Clearview Imaging Refurb quoted $9,200 per unit including freight and installation with two units in stock, paid in full before shipping. Paying for both units on day 1 ties up $18,400 (inside $20,000); they ship day 11, install day 12 and the clinics' ACH clears day 14: $27,000 settled against the $10,000 target, $8,600 contribution. Either unit alone clears the target."
+    },
+    "alternatives": [
+     {
+      "title": "Order one unit only",
+      "why": "Ties up $9,200 and settles $13,500 on day 14, enough for the target, but leaves no margin if one clinic fails to pay; with the ceiling at $20,000 both signed units fit."
+     },
+     {
+      "title": "Ask Clearview to ship against a deposit",
+      "why": "Unneeded now that the capital ceiling covers full prepayment; not established on the record."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm installation dates (day 12) with the two practice managers who signed purchase agreements at $13,500",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 1350000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Pay Clearview Imaging Refurb $9,200 per unit in full for two units (freight and installation included)",
+      "performer": "Clearview Imaging Refurb",
+      "costCents": 1840000,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Clearview Imaging Refurb",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Clearview ships both units (day 11) and installs them at the two clinics (day 12)",
+      "performer": "Clearview Imaging Refurb",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s4"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Clearview Imaging Refurb",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice both clinics on installation; ACH clears 2 days later",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s1",
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 1840000,
+      "label": "Clearview: two refurbished units at $9,200, paid before shipping",
+      "stepId": "order"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 1350000,
+      "label": "Clinic 1 pays on installation by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 1350000,
+      "label": "Clinic 2 pays on installation by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "signed purchase agreements",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "agreements",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per installed unit",
+      "status": "EVIDENCED",
+      "value": 1350000,
+      "unit": "cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "refurbisher cost per unit incl. freight and installation",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "capital tied up per unit",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cleared cash",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#price",
+      "dated": "2026-11-24",
+      "claim": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+      "population": "the two signing rural urgent-care clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Clearview Imaging Refurb quoted $9,200 per unit including freight and installation; two units in stock.",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#directCosts",
+      "dated": "2026-11-24",
+      "claim": "$9,200 direct cost per unit",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Refurbisher paid in full before shipping; ships 10 days after payment, installs day 12; clinic pays on installation by ACH, cleared day 14.",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#exposure",
+      "dated": "2026-11-24",
+      "claim": "$9,200 exposure per unit",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "deals": 2,
+      "price": 13500,
+      "directCost": 9200,
+      "capital": 9200,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_705c2619a9ab_343fee",
+    "digest": "705c2619a9ab802faa4688c9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:23:34.870Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_9941f2272ac44f08b987",
+   "contractDigest": "c48804bd90f8499737a4746f",
+   "parentRevisionId": "rev_1bbdc2d75dfe_135e99",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the two signed refurbished ultrasound units through Clearview",
+    "opportunityIds": [
+     "cop_5b3e9a55e80342daa091"
+    ],
+    "why": "The goal's capital ceiling is now $20,000. Two clinics signed written purchase agreements at $13,500 per installed unit; Clearview Imaging Refurb quoted $9,200 per unit including freight and installation with two units in stock, paid in full before shipping. Paying for both units on day 1 ties up $18,400 (inside $20,000); they ship day 11, install day 12 and the clinics' ACH clears day 14: $27,000 settled against the $10,000 target, $8,600 contribution. Either unit alone clears the target."
+   },
+   "alternatives": [
+    {
+     "title": "Order one unit only",
+     "why": "Ties up $9,200 and settles $13,500 on day 14, enough for the target, but leaves no margin if one clinic fails to pay; with the ceiling at $20,000 both signed units fit."
+    },
+    {
+     "title": "Ask Clearview to ship against a deposit",
+     "why": "Unneeded now that the capital ceiling covers full prepayment; not established on the record."
+    }
+   ],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm installation dates (day 12) with the two practice managers who signed purchase agreements at $13,500",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1"
+     ],
+     "priceCents": 1350000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "order",
+     "kind": "ORDER",
+     "label": "Pay Clearview Imaging Refurb $9,200 per unit in full for two units (freight and installation included)",
+     "performer": "Clearview Imaging Refurb",
+     "costCents": 1840000,
+     "day": 1,
+     "dependsOn": "sell",
+     "evidence": [
+      "s2",
+      "s3"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Clearview Imaging Refurb",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Clearview ships both units (day 11) and installs them at the two clinics (day 12)",
+     "performer": "Clearview Imaging Refurb",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "order",
+     "evidence": [
+      "s2",
+      "s4"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Clearview Imaging Refurb",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Invoice both clinics on installation; ACH clears 2 days later",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s1",
+      "s4"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 1840000,
+     "label": "Clearview: two refurbished units at $9,200, paid before shipping",
+     "stepId": "order"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 1350000,
+     "label": "Clinic 1 pays on installation by ACH",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 1350000,
+     "label": "Clinic 2 pays on installation by ACH",
+     "settlesDay": 14,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 14,
+   "quantities": [
+    {
+     "name": "signed purchase agreements",
+     "status": "EVIDENCED",
+     "value": 2,
+     "unit": "agreements",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per installed unit",
+     "status": "EVIDENCED",
+     "value": 1350000,
+     "unit": "cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "refurbisher cost per unit incl. freight and installation",
+     "status": "EVIDENCED",
+     "value": 920000,
+     "unit": "cents",
+     "sources": [
+      "s2",
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "capital tied up per unit",
+     "status": "EVIDENCED",
+     "value": 920000,
+     "unit": "cents",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to cleared cash",
+     "status": "EVIDENCED",
+     "value": 14,
+     "unit": "days",
+     "sources": [
+      "s4"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#price",
+     "dated": "2026-11-24",
+     "claim": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+     "population": "the two signing rural urgent-care clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5b3e9a55e80342daa091"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#fulfillment",
+     "dated": "2026-11-24",
+     "claim": "Clearview Imaging Refurb quoted $9,200 per unit including freight and installation; two units in stock.",
+     "population": "Clearview Imaging Refurb",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5b3e9a55e80342daa091"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#directCosts",
+     "dated": "2026-11-24",
+     "claim": "$9,200 direct cost per unit",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5b3e9a55e80342daa091"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#captureMechanism",
+     "dated": "2026-11-24",
+     "claim": "Refurbisher paid in full before shipping; ships 10 days after payment, installs day 12; clinic pays on installation by ACH, cleared day 14.",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5b3e9a55e80342daa091"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#exposure",
+     "dated": "2026-11-24",
+     "claim": "$9,200 exposure per unit",
+     "population": "this offer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_5b3e9a55e80342daa091"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_5b3e9a55e80342daa091",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_5b3e9a55e80342daa091",
+     "deals": 2,
+     "price": 13500,
+     "directCost": 9200,
+     "capital": 9200,
+     "settlesDay": 14
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_705c2619a9ab_343fee",
+   "digest": "705c2619a9ab802faa4688c9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_79554e0d6bcc4a029f83/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:23:34.870Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_705c2619a9ab_343fee",
+   "digest": "705c2619a9ab802faa4688c9",
+   "contractDigest": "c48804bd90f8499737a4746f",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 1840000,
+    "committedOpenCents": 0,
+    "preProofCents": 1840000,
+    "maxExposureCents": 1840000,
+    "minCashCents": 160000,
+    "minCashDay": 1,
+    "collectedCents": 2700000,
+    "collectedInWindowCents": 2700000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 860000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Refurbished point-of-care ultrasound units for rural urgent-\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Refurbished point-of-care ultrasound units for rural urgent-\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 1 unmeasured assumption(s) hold (Fulfil \"Constructed: Reverse: own the buyer, pay a supplier to deliver, and keep the mar\" through a supplier at the c…) it would reach 82.1% (p50 $35,565): a hypothesis to test by running each one's kill criterion, not evidence. The plan's steps are for \"Refurbished point-of-care ultrasound units for rural urgent-care clini\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_5b3e9a55e80342daa091"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+      "owner": "PERSON",
+      "cost": 9200
+     },
+     {
+      "label": "Collect payment for \"Refurbished point-of-care ultrasound units for rural urgent-care clinics\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "title": "Refurbished point-of-care ultrasound units for rural urgent-care clinics",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 10000,
+      "potentialReach": 10000,
+      "card": {
+       "payer": "Practice managers at rural urgent-care clinics",
+       "reachableChannel": "The two practice managers who signed purchase agreements",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:06:51.217Z",
+       "offerScope": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+       "priceCents": 1350000,
+       "currency": "USD",
+       "fulfillmentOwner": "Clearview Imaging Refurb (quoted $9,200 per unit including freight and installation; two units in stock)",
+       "peakFundingCents": 920000,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "refurbished medical imaging equipment",
+       "mechanism": "RESALE_OR_ASSET",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 1350000,
+        "currency": "USD",
+        "deliverable": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 1350000,
+        "currency": "USD",
+        "deliverable": "A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The two practice managers who signed purchase agreements"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 27000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 27000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Clearview Imaging Refurb (quoted $9,200 per unit including freight and installat (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 9200, tied up 9200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "14 days to usable cash against 40 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A refurbished ultrasound unit, installed. The refurbisher must be paid in full ($9,200) before it ships; it ships 10 days after payment and installs on day 12. Each clinic pays only on installation, by ACH, cleared 2 days later (day 14). Neither clinic will prepay. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$9200",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$9200",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Clearview Imaging Refurb (quoted $9,200 per unit including freight and installation; two units in stock) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Practice managers at rural urgent-care clinics",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_66dbd0d71fa947a7b2e1"
+    ],
+    "scope": {
+     "targetCents": 1000000,
+     "daysLeft": 40,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:22:34.131Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_1bbdc2d75dfe_135e99",
+    "revisionDigest": "1bbdc2d75dfe6a078dce0aa7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3c4105c6be834c0496b9/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN on a CAPITAL constraint is right. Every chain link of cop_5b3e9a55e80342daa091 is established (two WRITTEN_ACCEPTANCE agreements at $13,500, Clearview quote $9,200 incl. freight/install with two units in stock, cash cleared day 14 inside 40), so there is no missing evidence to name and decisiveLinks is correctly empty. The binding limit is the exposure cap: the card says the refurbisher must be paid $9,200 in full before shipping and neither clinic prepays, so even one unit (which alone clears the target: $13,500 >= $10,000) needs $9,200 committed at once versus the $1,500 ceiling (6.1x). No combination fits: zero units fit under $1,500 and there is no smaller lot. This is a constraint even with all evidence, not a gap. Resolution (allow >= $9,200, or written terms from Clearview to ship against <= $1,500 with the balance on installation) is the right pair, and the RESEARCH step asks the fulfiller, not buyers, so no orders are taken before fulfilment is shown possible.",
+    "findings": [
+     "Recomputed: one unit $13,500 - $9,200 = $4,300 contribution, settles day 14; capital needed $9,200 vs cap $1,500.",
+     "Two units would be $27,000 against $18,400 capital; still outside the cap, so the constraint does not depend on the unit count.",
+     "Constraint basis cites card exposure ($9,200) and directCosts ($9,200), both EVIDENCE facts.",
+     "Brain's own check agrees (NOT_VIABLE, capital >= $9,200)."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:15:47.876Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_705c2619a9ab_343fee",
+    "revisionDigest": "705c2619a9ab802faa4688c9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3c4105c6be834c0496b9/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "With the contract's capital ceiling now $20,000, EXECUTABLE is right. Every link of cop_5b3e9a55e80342daa091 is established on the record (Brain's link check: all ok, missing []): two WRITTEN_ACCEPTANCE agreements at $13,500 per installed unit, Clearview quote $9,200 incl. freight and installation with two units in stock, payment in full before shipping, ships 10 days after payment, installs day 12, clinic ACH clears day 14. Recomputed: capital 2 x $9,200 = $18,400 <= $20,000 (one unit $9,200 alone also fits and alone clears the target, $13,500 >= $10,000); settled $27,000 on day 14, inside 40; contribution $27,000 - $18,400 = $8,600; Brain's trace matches (spent 1,840,000c, collected 2,700,000c in window, max exposure 1,840,000c, net 860,000c). Fulfilment is shown possible by the quoted supplier with stock before any money moves; the buyers are already signed, so nothing is sold ahead of fulfilment. Cash ledger matches the steps.",
+    "findings": [
+     "Capital $18,400 of $20,000 at peak (day 1 to day 14); $1,600 headroom.",
+     "Timeline consistent with the card: pay day 1, ship day 11, install day 12, ACH clears day 14.",
+     "Operational note, not a stance issue: PAY_A_SUPPLIER is NOT_DECLARED and SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED, so the owner or a connected channel must make the $18,400 payment and send the invoices.",
+     "Risk note: ordering both units puts $18,400 at risk on two clinics paying on installation; ordering one ($9,200) still meets the target with half the exposure. Both fit the limits, so the author's choice is acceptable, but the owner should see that one unit is sufficient."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:24:24.351Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_705c2619a9ab_343fee",
+   "digest": "705c2619a9ab802faa4688c9",
+   "contractDigest": "c48804bd90f8499737a4746f",
+   "plan": {
+    "goalId": "wst_9941f2272ac44f08b987",
+    "contractDigest": "c48804bd90f8499737a4746f",
+    "parentRevisionId": "rev_1bbdc2d75dfe_135e99",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the two signed refurbished ultrasound units through Clearview",
+     "opportunityIds": [
+      "cop_5b3e9a55e80342daa091"
+     ],
+     "why": "The goal's capital ceiling is now $20,000. Two clinics signed written purchase agreements at $13,500 per installed unit; Clearview Imaging Refurb quoted $9,200 per unit including freight and installation with two units in stock, paid in full before shipping. Paying for both units on day 1 ties up $18,400 (inside $20,000); they ship day 11, install day 12 and the clinics' ACH clears day 14: $27,000 settled against the $10,000 target, $8,600 contribution. Either unit alone clears the target."
+    },
+    "alternatives": [
+     {
+      "title": "Order one unit only",
+      "why": "Ties up $9,200 and settles $13,500 on day 14, enough for the target, but leaves no margin if one clinic fails to pay; with the ceiling at $20,000 both signed units fit."
+     },
+     {
+      "title": "Ask Clearview to ship against a deposit",
+      "why": "Unneeded now that the capital ceiling covers full prepayment; not established on the record."
+     }
+    ],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm installation dates (day 12) with the two practice managers who signed purchase agreements at $13,500",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1"
+      ],
+      "priceCents": 1350000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order",
+      "kind": "ORDER",
+      "label": "Pay Clearview Imaging Refurb $9,200 per unit in full for two units (freight and installation included)",
+      "performer": "Clearview Imaging Refurb",
+      "costCents": 1840000,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "s2",
+       "s3"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Clearview Imaging Refurb",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Clearview ships both units (day 11) and installs them at the two clinics (day 12)",
+      "performer": "Clearview Imaging Refurb",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "order",
+      "evidence": [
+       "s2",
+       "s4"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Clearview Imaging Refurb",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Invoice both clinics on installation; ACH clears 2 days later",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s1",
+       "s4"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 1840000,
+      "label": "Clearview: two refurbished units at $9,200, paid before shipping",
+      "stepId": "order"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 1350000,
+      "label": "Clinic 1 pays on installation by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 1350000,
+      "label": "Clinic 2 pays on installation by ACH",
+      "settlesDay": 14,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "signed purchase agreements",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "agreements",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per installed unit",
+      "status": "EVIDENCED",
+      "value": 1350000,
+      "unit": "cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "refurbisher cost per unit incl. freight and installation",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s2",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "capital tied up per unit",
+      "status": "EVIDENCED",
+      "value": 920000,
+      "unit": "cents",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cleared cash",
+      "status": "EVIDENCED",
+      "value": 14,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#price",
+      "dated": "2026-11-24",
+      "claim": "Two clinic practice managers signed purchase agreements at $13,500 per installed unit.",
+      "population": "the two signing rural urgent-care clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#fulfillment",
+      "dated": "2026-11-24",
+      "claim": "Clearview Imaging Refurb quoted $9,200 per unit including freight and installation; two units in stock.",
+      "population": "Clearview Imaging Refurb",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#directCosts",
+      "dated": "2026-11-24",
+      "claim": "$9,200 direct cost per unit",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#captureMechanism",
+      "dated": "2026-11-24",
+      "claim": "Refurbisher paid in full before shipping; ships 10 days after payment, installs day 12; clinic pays on installation by ACH, cleared day 14.",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_5b3e9a55e80342daa091#exposure",
+      "dated": "2026-11-24",
+      "claim": "$9,200 exposure per unit",
+      "population": "this offer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_5b3e9a55e80342daa091"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_5b3e9a55e80342daa091",
+      "deals": 2,
+      "price": 13500,
+      "directCost": 9200,
+      "capital": 9200,
+      "settlesDay": 14
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_705c2619a9ab_343fee",
+    "digest": "705c2619a9ab802faa4688c9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:23:34.870Z"
+   },
+   "review": {
+    "revisionId": "rev_705c2619a9ab_343fee",
+    "revisionDigest": "705c2619a9ab802faa4688c9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_79554e0d6bcc4a029f83/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_3c4105c6be834c0496b9/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "With the contract's capital ceiling now $20,000, EXECUTABLE is right. Every link of cop_5b3e9a55e80342daa091 is established on the record (Brain's link check: all ok, missing []): two WRITTEN_ACCEPTANCE agreements at $13,500 per installed unit, Clearview quote $9,200 incl. freight and installation with two units in stock, payment in full before shipping, ships 10 days after payment, installs day 12, clinic ACH clears day 14. Recomputed: capital 2 x $9,200 = $18,400 <= $20,000 (one unit $9,200 alone also fits and alone clears the target, $13,500 >= $10,000); settled $27,000 on day 14, inside 40; contribution $27,000 - $18,400 = $8,600; Brain's trace matches (spent 1,840,000c, collected 2,700,000c in window, max exposure 1,840,000c, net 860,000c). Fulfilment is shown possible by the quoted supplier with stock before any money moves; the buyers are already signed, so nothing is sold ahead of fulfilment. Cash ledger matches the steps.",
+    "findings": [
+     "Capital $18,400 of $20,000 at peak (day 1 to day 14); $1,600 headroom.",
+     "Timeline consistent with the card: pay day 1, ship day 11, install day 12, ACH clears day 14.",
+     "Operational note, not a stance issue: PAY_A_SUPPLIER is NOT_DECLARED and SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED, so the owner or a connected channel must make the $18,400 payment and send the invoices.",
+     "Risk note: ordering both units puts $18,400 at risk on two clinics paying on installation; ordering one ($9,200) still meets the target with half the exposure. Both fit the limits, so the author's choice is acceptable, but the owner should see that one unit is sufficient."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:24:24.351Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $10,000 of settled cash within 40 days with at most $1,500 of capital.",
+    "terms": "b98f6173e9465dac",
+    "openings": {
+     "cop_5b3e9a55e80342daa091": "3b4d5f8cf09a861f"
+    }
+   },
+   "at": "2026-11-27T23:25:38.377Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

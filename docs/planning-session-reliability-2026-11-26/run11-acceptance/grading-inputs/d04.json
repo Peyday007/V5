@@ -1,0 +1,595 @@
+{
+ "caseId": "ao-04-larger-target-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_3ce14e6c2acd44878d0d",
+   "cop_d23c3decd77e4e92a8f8",
+   "cop_ac92206a80a240f1bddb",
+   "cop_59b077de9f1a45d69564"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_3ce14e6c2acd44878d0d",
+    "title": "Website-in-a-week for small brands at $2,500, built by a subcontracted designer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Small brands and solo businesses needing a new site and mini brand kit",
+     "reachableChannel": "Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly",
+     "offerScope": "Mini brand board + 4-7 page site launched in 5 business days",
+     "priceCents": 250000,
+     "currency": "USD",
+     "fulfillmentOwner": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300)",
+     "peakFundingCents": 35000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Contra service listing (0% freelancer commission; client $29 per contract) plus "
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 2500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 300, tied up 350"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Mini brand board + 4-7 page site launched in 5 business days to Small brands and solo businesses needing a new site and mini brand kit, reached through Contra service listing (0% freelancer commission; client $29 per contract) plus cold email via Instantly, at $2,500; Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$350",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Fiverr WordPress agency/freelancer (basic 5-page packages $195-$300).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Mini brand board + 4-7 page site launched in 5 business days",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Small brands and solo businesses needing a new site and mini brand kit",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$2,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$2,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder; https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://help.contra.com/en/articles/10008642-payout-timelines-for-freelancers-on-contra",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_d23c3decd77e4e92a8f8",
+    "title": "Upwork fixed-price website jobs answered and subcontracted",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 600,
+    "card": {
+     "payer": "Upwork clients posting fixed-price website jobs",
+     "reachableChannel": "Upwork proposals (Connects $0.15 each, ~6-16 per proposal)",
+     "offerScope": "Proposal answering a posted fixed-price small-business website job",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "Fiverr WordPress freelancer (5-page site for $250)",
+     "peakFundingCents": 3000,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "Freelance web development",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Upwork proposals (Connects $0.15 each, ~6-16 per proposal)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 340, tied up 30"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Upwork proposals (Connects $0.15 each, ~6-16 per proposal)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Proposal answering a posted fixed-price small-business website job to Upwork clients posting fixed-price website jobs, reached through Upwork proposals (Connects $0.15 each, ~6-16 per proposal), at $600; Fiverr WordPress freelancer (5-page site for $250) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$340",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$30",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Fiverr WordPress freelancer (5-page site for $250).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Proposal answering a posted fixed-price small-business website job",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Upwork clients posting fixed-price website jobs",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.upwork.com/resources/how-to-get-more-connects; https://support.upwork.com/hc/en-us/articles/211063718-Get-Paid-for-Fixed-Price-Contracts; upwork fixed price website jobs",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_ac92206a80a240f1bddb",
+    "title": "Website rebuild for local small businesses, resold at $499, built by a Fiverr WordPress freelancer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 499,
+    "card": {
+     "payer": "US local small-business owners with outdated or no website",
+     "reachableChannel": "Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories",
+     "offerScope": "Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered",
+     "priceCents": 49900,
+     "currency": "USD",
+     "fulfillmentOwner": "Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD')",
+     "peakFundingCents": 4700,
+     "humanHours": 0.25,
+     "requiredCapabilities": [],
+     "industry": "Local services / web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email via Instantly Growth plan ($47/mo) to local businesses found in publi"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 499 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 250, tied up 47"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered to US local small-business owners with outdated or no website, reached through Cold email via Instantly Growth plan ($47/mo) to local businesses found in public directories, at $499; Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD') delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$47",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Fiverr seller wpalamin ('5 pages wordpress business website within 2 days for just 250 USD').",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.25 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Rebuilt 5-page WordPress business website launched within 7 days; one-time fee paid before the build is ordered",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local small-business owners with outdated or no website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$499",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$499",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://webliftup-site.pages.dev/; https://fiverr.com/wpalamin/be-expert-your-wordpress-website-using-divi-theme-or-divi-builder; https://www.businesswire.com/news/home/20250821848152/en/Clutch-Report-No-Code-Tools-Fuel-Website-Growth-Yet-17-of-Small-Businesses-are-Still-Offline; https://contra.com/s/2ZNbsqLR-website-in-a-week-design-intensive; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_59b077de9f1a45d69564",
+    "title": "One-time Google Business Profile optimization, resold at $397, fulfilled by a Fiverr local-SEO seller",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 397,
+    "card": {
+     "payer": "US local service businesses (trades, salons, clinics) with incomplete Google Maps listings",
+     "reachableChannel": "Cold email via Instantly to businesses whose public GBP listings are incomplete",
+     "offerScope": "Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery",
+     "priceCents": 39700,
+     "currency": "USD",
+     "fulfillmentOwner": "Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery)",
+     "peakFundingCents": 4700,
+     "humanHours": 0.25,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email via Instantly to businesses whose public GBP listings are incomplete"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 397 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 50, tied up 47"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "8 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email via Instantly to businesses whose public GBP listings are incomplete",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery to US local service businesses (trades, salons, clinics) with incomplete Google Maps listings, reached through Cold email via Instantly to businesses whose public GBP listings are incomplete, at $397; Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$50",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$47",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Fiverr GBP optimization seller (gigs listed 'Up to $50', 1-7 day delivery).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.25 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Category fix, description rewrite, services restructure, review-response setup, NAP check; 5-day delivery",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local service businesses (trades, salons, clinics) with incomplete Google Maps listings",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$397",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$397",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://contra.com/s/FXZFRksO-google-business-profile-optimization-full-reset; https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing; https://www.fiverr.com/gmb_special/optimize-your-google-my-business-listing; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "8 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:35:12.534Z"
+ }
+}

@@ -1,0 +1,1047 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_d15e1f39492c40418ae0",
+   "words": "Collect $9,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 900000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "The target amount is settled in the owner's account within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "56d40ac2261c726feae010e7"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_d15e1f39492c40418ae0",
+    "contractDigest": "56d40ac2261c726feae010e7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: one $3,200 buyer against a $9,000 target",
+     "opportunityIds": [],
+     "why": "The only evidenced sale is Harlan's $3,200 PO, which settles by day 32. The target needs at least two more $3,200 sales delivered by about day 13 (net 30), but the record establishes no population of other buyers: the payer and the reachable channel are Harlan alone, and nobody has counted how many shops buy this or how often. One organisation is not a market, so the remaining $5,800 rests on buyers nobody has shown exist."
+    },
+    "alternatives": [
+     {
+      "title": "Conditional test-sell to other AS9100 shops",
+      "why": "Not adopted: a close-rate test needs a population of reachable buyers first, and none is recorded; it becomes a conditional plan once the population and its channel are established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish how many AS9100-certified CNC machine shops need an internal-audit evidence pack now, and a channel that reaches them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the $3,200 pack to the reached shops and record each sale or refusal to measure the close rate",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "buyers beyond Harlan",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "shops",
+      "sources": [
+       "s2"
+      ],
+      "needs": "a sourced count of AS9100 shops buying this, with a channel to reach them"
+     },
+     {
+      "name": "close rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "agreements per offer",
+      "sources": [],
+      "needs": "a live offer to the population"
+     },
+     {
+      "name": "pack price",
+      "status": "EVIDENCED",
+      "value": 320000,
+      "unit": "USD cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement time",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "days",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#price",
+      "dated": "2026-11-24",
+      "claim": "Harlan Precision Machining's quality manager issued PO HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (one written acceptance).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#payer",
+      "dated": "2026-11-24",
+      "claim": "The payer is one organisation, Harlan Precision Machining; no other buyer, buyer count or channel to other shops is recorded.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "32 days to first cash (invoiced on delivery, net 30).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $30 per pack; Brain produces the spreadsheet.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer population beyond Harlan: only one organisation has agreed ($3,200), the target needs at least three $3,200 sales, and no record establishes how many other shops exist, buy this, or can be reached.",
+     "resolution": "Research and source a count of AS9100-certified CNC shops with a current internal-audit need and a channel to reach them; then offer the pack at $3,200 within the first days so at least two more orders are delivered by about day 13 and settle net 30 by day 45. Deliver Harlan's PO regardless.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e39f56b619ee_02a35d",
+    "digest": "e39f56b619ee7080018719c8",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d556972751ef40f9af79/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:13:58.809Z"
+   },
+   {
+    "goalId": "wst_d15e1f39492c40418ae0",
+    "contractDigest": "56d40ac2261c726feae010e7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: one $3,200 buyer against a $9,000 target",
+     "opportunityIds": [],
+     "why": "The only evidenced sale is Harlan's $3,200 PO, which settles by day 32. The target needs at least two more $3,200 sales delivered by about day 13 (net 30), but the record establishes no population of other buyers: the payer and the reachable channel are Harlan alone, and nobody has counted how many shops buy this or how often. One organisation is not a market, so the remaining $5,800 rests on buyers nobody has shown exist."
+    },
+    "alternatives": [
+     {
+      "title": "Conditional test-sell to other AS9100 shops",
+      "why": "Not adopted: a close-rate test needs a population of reachable buyers first, and none is recorded; it becomes a conditional plan once the population and its channel are established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish how many AS9100-certified CNC machine shops need an internal-audit evidence pack now, and a channel that reaches them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the $3,200 pack to the reached shops and record each sale or refusal to measure the close rate",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "buyers beyond Harlan",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "shops",
+      "sources": [
+       "s2"
+      ],
+      "needs": "a sourced count of AS9100 shops buying this, with a channel to reach them"
+     },
+     {
+      "name": "close rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "agreements per offer",
+      "sources": [],
+      "needs": "a live offer to the population"
+     },
+     {
+      "name": "pack price",
+      "status": "EVIDENCED",
+      "value": 320000,
+      "unit": "USD cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement time",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "days",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#price",
+      "dated": "2026-11-24",
+      "claim": "Harlan Precision Machining's quality manager issued PO HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (one written acceptance).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#payer",
+      "dated": "2026-11-24",
+      "claim": "The payer is one organisation, Harlan Precision Machining; no other buyer, buyer count or channel to other shops is recorded.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "32 days to first cash (invoiced on delivery, net 30).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $30 per pack; Brain produces the spreadsheet.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer population beyond Harlan: only one organisation has agreed ($3,200), the target needs at least three $3,200 sales, and no record establishes how many other shops exist, buy this, or can be reached.",
+     "resolution": "Research and source a count of AS9100-certified CNC shops with a current internal-audit need and a channel to reach them; then offer the pack at $3,200 within the first days so at least two more orders are delivered by about day 13 and settle net 30 by day 45. Deliver Harlan's PO regardless.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "deals": 3,
+      "price": 3200,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 32
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0689ab7428e4_a1b5f7",
+    "digest": "0689ab7428e49e7b88718796",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d556972751ef40f9af79/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:15:27.910Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_d15e1f39492c40418ae0",
+   "contractDigest": "56d40ac2261c726feae010e7",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No executable plan: one $3,200 buyer against a $9,000 target",
+    "opportunityIds": [],
+    "why": "The only evidenced sale is Harlan's $3,200 PO, which settles by day 32. The target needs at least two more $3,200 sales delivered by about day 13 (net 30), but the record establishes no population of other buyers: the payer and the reachable channel are Harlan alone, and nobody has counted how many shops buy this or how often. One organisation is not a market, so the remaining $5,800 rests on buyers nobody has shown exist."
+   },
+   "alternatives": [
+    {
+     "title": "Conditional test-sell to other AS9100 shops",
+     "why": "Not adopted: a close-rate test needs a population of reachable buyers first, and none is recorded; it becomes a conditional plan once the population and its channel are established."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Establish how many AS9100-certified CNC machine shops need an internal-audit evidence pack now, and a channel that reaches them",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "s2"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Offer the $3,200 pack to the reached shops and record each sale or refusal to measure the close rate",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "r1",
+     "evidence": [
+      "s1"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "buyers beyond Harlan",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "shops",
+     "sources": [
+      "s2"
+     ],
+     "needs": "a sourced count of AS9100 shops buying this, with a channel to reach them"
+    },
+    {
+     "name": "close rate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "agreements per offer",
+     "sources": [],
+     "needs": "a live offer to the population"
+    },
+    {
+     "name": "pack price",
+     "status": "EVIDENCED",
+     "value": 320000,
+     "unit": "USD cents",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "settlement time",
+     "status": "EVIDENCED",
+     "value": 32,
+     "unit": "days",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_dd6828fceb864333a73c#price",
+     "dated": "2026-11-24",
+     "claim": "Harlan Precision Machining's quality manager issued PO HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (one written acceptance).",
+     "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd6828fceb864333a73c"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_dd6828fceb864333a73c#payer",
+     "dated": "2026-11-24",
+     "claim": "The payer is one organisation, Harlan Precision Machining; no other buyer, buyer count or channel to other shops is recorded.",
+     "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd6828fceb864333a73c"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_dd6828fceb864333a73c#timeToFirstCash",
+     "dated": "2026-11-24",
+     "claim": "32 days to first cash (invoiced on delivery, net 30).",
+     "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd6828fceb864333a73c"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_dd6828fceb864333a73c#directCosts",
+     "dated": "2026-11-24",
+     "claim": "Direct cost $30 per pack; Brain produces the spreadsheet.",
+     "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_dd6828fceb864333a73c"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No buyer population beyond Harlan: only one organisation has agreed ($3,200), the target needs at least three $3,200 sales, and no record establishes how many other shops exist, buy this, or can be reached.",
+    "resolution": "Research and source a count of AS9100-certified CNC shops with a current internal-audit need and a channel to reach them; then offer the pack at $3,200 within the first days so at least two more orders are delivered by about day 13 and settle net 30 by day 45. Deliver Harlan's PO regardless.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_dd6828fceb864333a73c",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_dd6828fceb864333a73c",
+     "deals": 3,
+     "price": 3200,
+     "directCost": 30,
+     "capital": 0,
+     "settlesDay": 32
+    }
+   ],
+   "resolves": [
+    "MARKET_VOLUME",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_0689ab7428e4_a1b5f7",
+   "digest": "0689ab7428e49e7b88718796",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_d556972751ef40f9af79/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-27T23:15:27.910Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_0689ab7428e4_a1b5f7",
+   "digest": "0689ab7428e49e7b88718796",
+   "contractDigest": "56d40ac2261c726feae010e7",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: AS9100 internal-audit evidence pack for Harlan Precision Mac\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6275× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3170× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"AS9100 internal-audit evidence pack for Harlan Precision Machining\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_dd6828fceb864333a73c"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+      "owner": "PERSON",
+      "cost": 30
+     },
+     {
+      "label": "Collect payment for \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Sell \"AS9100 internal-audit evidence pack for Harlan Precision Machining\": offer it to its reachable buyers at 3200 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+    "openings": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "title": "AS9100 internal-audit evidence pack for Harlan Precision Machining",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6400,
+      "potentialReach": 9000,
+      "card": {
+       "payer": "Harlan Precision Machining, Inc. (quality manager)",
+       "reachableChannel": "Harlan's quality manager, who issued the order",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-24T23:05:58.495Z",
+       "offerScope": "Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30.",
+       "priceCents": 320000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "CNC machine shops",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 320000,
+        "currency": "USD",
+        "deliverable": "Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Harlan's quality manager, who issued the order"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-24"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3200 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (one agreement of 3200 is recorded) (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "32 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Harlan Precision Machining, Inc. (quality manager)",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Harlan Precision Machining's quality manager issued purchase order HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (dated 5 days ago).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "32 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_d7730e7618fe480085cd",
+     "cnd_58b29d5a10e348e19c9a"
+    ],
+    "scope": {
+     "targetCents": 900000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-27T23:09:55.263Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_0689ab7428e4_a1b5f7",
+    "revisionDigest": "0689ab7428e49e7b88718796",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d556972751ef40f9af79/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_119b0a4f674e40639951/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. The only opening cop_dd6828fceb864333a73c has one real purchase (Harlan's PO HPM-4471, $3,200, written acceptance), but payer and channel are Harlan alone: one organisation is not a population, and Brain's MARKET_VOLUME and CONVERSION links are both false on the card. Recomputed: ceil(9,000/3,200) = 3 sales, so two buyers beyond Harlan are needed. Net 30 on delivery with 32 days to cash means each extra pack must be delivered by about day 13 to settle by day 45. Harlan alone settles $3,200 by day 32, leaving $5,800 unsupported. $30 cost and $0 exposure are within limits; the only gap is who else buys. decisiveLinks = [MARKET_VOLUME] is the decisive gap the evidence decides (a sourced count of AS9100 shops with a current audit need and a channel) — it is missing evidence, not a constraint, and the resolution names it and keeps Harlan's PO delivered regardless.",
+    "findings": [
+     "The revision lists cop_dd6828fceb864333a73c as a member with 3 deals while the stance is NO_PLAN; members should hold only what an adopted plan sells (Harlan's 1 deal at most).",
+     "The timeline is tight: research, outreach and two more deliveries must all complete by about day 13, so the resolution should set a research deadline (e.g. day 3) after which the target is out of reach in this window."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:04.180Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_0689ab7428e4_a1b5f7",
+   "digest": "0689ab7428e49e7b88718796",
+   "contractDigest": "56d40ac2261c726feae010e7",
+   "plan": {
+    "goalId": "wst_d15e1f39492c40418ae0",
+    "contractDigest": "56d40ac2261c726feae010e7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: one $3,200 buyer against a $9,000 target",
+     "opportunityIds": [],
+     "why": "The only evidenced sale is Harlan's $3,200 PO, which settles by day 32. The target needs at least two more $3,200 sales delivered by about day 13 (net 30), but the record establishes no population of other buyers: the payer and the reachable channel are Harlan alone, and nobody has counted how many shops buy this or how often. One organisation is not a market, so the remaining $5,800 rests on buyers nobody has shown exist."
+    },
+    "alternatives": [
+     {
+      "title": "Conditional test-sell to other AS9100 shops",
+      "why": "Not adopted: a close-rate test needs a population of reachable buyers first, and none is recorded; it becomes a conditional plan once the population and its channel are established."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish how many AS9100-certified CNC machine shops need an internal-audit evidence pack now, and a channel that reaches them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Offer the $3,200 pack to the reached shops and record each sale or refusal to measure the close rate",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "s1"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "buyers beyond Harlan",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "shops",
+      "sources": [
+       "s2"
+      ],
+      "needs": "a sourced count of AS9100 shops buying this, with a channel to reach them"
+     },
+     {
+      "name": "close rate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "agreements per offer",
+      "sources": [],
+      "needs": "a live offer to the population"
+     },
+     {
+      "name": "pack price",
+      "status": "EVIDENCED",
+      "value": 320000,
+      "unit": "USD cents",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "settlement time",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "days",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#price",
+      "dated": "2026-11-24",
+      "claim": "Harlan Precision Machining's quality manager issued PO HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (one written acceptance).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#payer",
+      "dated": "2026-11-24",
+      "claim": "The payer is one organisation, Harlan Precision Machining; no other buyer, buyer count or channel to other shops is recorded.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#timeToFirstCash",
+      "dated": "2026-11-24",
+      "claim": "32 days to first cash (invoiced on delivery, net 30).",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_dd6828fceb864333a73c#directCosts",
+      "dated": "2026-11-24",
+      "claim": "Direct cost $30 per pack; Brain produces the spreadsheet.",
+      "population": "Harlan Precision Machining, Inc. (one CNC machine shop)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_dd6828fceb864333a73c"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No buyer population beyond Harlan: only one organisation has agreed ($3,200), the target needs at least three $3,200 sales, and no record establishes how many other shops exist, buy this, or can be reached.",
+     "resolution": "Research and source a count of AS9100-certified CNC shops with a current internal-audit need and a channel to reach them; then offer the pack at $3,200 within the first days so at least two more orders are delivered by about day 13 and settle net 30 by day 45. Deliver Harlan's PO regardless.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_dd6828fceb864333a73c",
+      "deals": 3,
+      "price": 3200,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 32
+     }
+    ],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0689ab7428e4_a1b5f7",
+    "digest": "0689ab7428e49e7b88718796",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d556972751ef40f9af79/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-27T23:15:27.910Z"
+   },
+   "review": {
+    "revisionId": "rev_0689ab7428e4_a1b5f7",
+    "revisionDigest": "0689ab7428e49e7b88718796",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d556972751ef40f9af79/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_119b0a4f674e40639951/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is right. The only opening cop_dd6828fceb864333a73c has one real purchase (Harlan's PO HPM-4471, $3,200, written acceptance), but payer and channel are Harlan alone: one organisation is not a population, and Brain's MARKET_VOLUME and CONVERSION links are both false on the card. Recomputed: ceil(9,000/3,200) = 3 sales, so two buyers beyond Harlan are needed. Net 30 on delivery with 32 days to cash means each extra pack must be delivered by about day 13 to settle by day 45. Harlan alone settles $3,200 by day 32, leaving $5,800 unsupported. $30 cost and $0 exposure are within limits; the only gap is who else buys. decisiveLinks = [MARKET_VOLUME] is the decisive gap the evidence decides (a sourced count of AS9100 shops with a current audit need and a channel) — it is missing evidence, not a constraint, and the resolution names it and keeps Harlan's PO delivered regardless.",
+    "findings": [
+     "The revision lists cop_dd6828fceb864333a73c as a member with 3 deals while the stance is NO_PLAN; members should hold only what an adopted plan sells (Harlan's 1 deal at most).",
+     "The timeline is tight: research, outreach and two more deliveries must all complete by about day 13, so the resolution should set a research deadline (e.g. day 3) after which the target is out of reach in this window."
+    ],
+    "resolution": null,
+    "at": "2026-11-27T23:18:04.180Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $9,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "ecb2403b61c8f47d",
+    "openings": {
+     "cop_dd6828fceb864333a73c": "d510b0c53208d9ed"
+    }
+   },
+   "at": "2026-11-27T23:20:17.981Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

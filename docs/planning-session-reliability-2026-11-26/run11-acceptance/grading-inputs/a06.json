@@ -1,0 +1,326 @@
+{
+ "caseId": "an-06-florist-holiday-delivery",
+ "keys": {
+  "cop_20b433d2bef04525aa92": "holidayDelivery",
+  "cop_a18aba395abf4042a0d5": "windowDisplays"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 11050× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Holiday window-display design for flower shops\" needs [figure withheld] and keeps [figure withheld], 130× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown p), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_a18aba395abf4042a0d5"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Holiday window-display design for flower shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Holiday window-display design for flower shops\"",
+    "owner": "PERSON",
+    "cost": 120
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the supply",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Get written terms from a supplier",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Validate the offer with buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Collect payment for \"Holiday window-display design for flower shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Order the run from the supplier",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_a18aba395abf4042a0d5",
+    "title": "Holiday window-display design for flower shops",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Owners of independent flower shops",
+     "reachableChannel": "Email to the metro florists' association member list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:09.164Z",
+     "offerScope": "A freelance visual merchandiser dresses the shop window for the holiday season.",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "A freelance visual merchandiser (quoted $120 a window)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "retail florists",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the metro florists' association member list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 9 accepted of 40 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "17 deal(s) needed at the measured rate means asking 120 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 12"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by A freelance visual merchandiser (quoted $120 a window) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 120, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 35 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The metro florists' association lists 85 member shops, each with a street-front window.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A freelance visual merchandiser dresses the shop window for the holiday season. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "9 agreements from 40 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$120",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A freelance visual merchandiser (quoted $120 a window) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent flower shops",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The owner says flower shops will pay $250 for a holiday window.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_20b433d2bef04525aa92",
+    "title": "Holiday overflow delivery blocks for independent flower shops",
+    "reason": "needs the owner's physical work: delivering it needs physical work (\"courier\") and nothing names an independent supplier or subcontractor to perform it; the owner does no physical work",
+    "card": {
+     "payer": "Owners of independent flower shops in the metro area",
+     "reachableChannel": "The four shop owners who signed block orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:09.164Z",
+     "offerScope": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+     "priceCents": 180000,
+     "currency": "USD",
+     "fulfillmentOwner": "Petal Route Couriers LLC (quoted $11 a delivery, $1,100 a block, invoiced net 30; confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day)",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "retail florists",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A block of 100 local deliveries during the peak fortnight (days 7 to 21 after the start), run by a contracted courier. Each shop pays its whole block within 3 days of the block's last delivery; funds clear by day 24. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1100",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Petal Route Couriers LLC (quoted $11 a delivery, $1,100 a block, invoiced net 30; confirmed in writing it can run all 400 deliveries over days 7 to 21, up to 40 a day) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent flower shops in the metro area",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four shop owners signed delivery-block orders at $1,800 for 100 deliveries ($18 a delivery).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "24 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [
+   "cnd_e35767507423459f97b4"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 35,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:11:21.003Z"
+ }
+}

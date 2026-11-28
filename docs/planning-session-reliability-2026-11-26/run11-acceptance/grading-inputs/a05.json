@@ -1,0 +1,168 @@
+{
+ "caseId": "an-05-cnc-one-purchase-order",
+ "keys": {
+  "cop_dd6828fceb864333a73c": "harlanAudit"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: AS9100 internal-audit evidence pack for Harlan Precision Mac\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6275× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 3170× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"AS9100 internal-audit evidence pack for Harlan Precision Machining\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_dd6828fceb864333a73c"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+    "owner": "PERSON",
+    "cost": 30
+   },
+   {
+    "label": "Collect payment for \"AS9100 internal-audit evidence pack for Harlan Precision Machining\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Sell \"AS9100 internal-audit evidence pack for Harlan Precision Machining\": offer it to its reachable buyers at 3200 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+  "openings": [
+   {
+    "opportunityId": "cop_dd6828fceb864333a73c",
+    "title": "AS9100 internal-audit evidence pack for Harlan Precision Machining",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6400,
+    "potentialReach": 9000,
+    "card": {
+     "payer": "Harlan Precision Machining, Inc. (quality manager)",
+     "reachableChannel": "Harlan's quality manager, who issued the order",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:05:58.495Z",
+     "offerScope": "Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30.",
+     "priceCents": 320000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "CNC machine shops",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 320000,
+      "currency": "USD",
+      "deliverable": "Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Harlan's quality manager, who issued the order"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (one agreement of 3200 is recorded) (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "32 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain assembles the shop's AS9100 internal-audit evidence pack from its own procedures and records; invoiced on delivery, net 30. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Harlan Precision Machining, Inc. (quality manager)",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Harlan Precision Machining's quality manager issued purchase order HPM-4471 for $3,200 for an AS9100 internal-audit evidence pack (dated 5 days ago).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "32 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_d7730e7618fe480085cd",
+   "cnd_58b29d5a10e348e19c9a"
+  ],
+  "scope": {
+   "targetCents": 900000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:55.263Z"
+ }
+}

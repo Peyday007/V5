@@ -1,0 +1,175 @@
+{
+ "caseId": "an-07-orchard-pruning-no-crew",
+ "keys": {
+  "cop_6d9220a65675480b9b5f": "dormantPruning"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Dormant-season pruning of apple orchard blocks\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3822× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Reverse: own the buyer, pay a supplier to deliv\" needs [figure withheld] and keeps [figure withheld], 950× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Dormant-season pruning of apple orchard blocks\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_6d9220a65675480b9b5f"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Dormant-season pruning of apple orchard blocks\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Dormant-season pruning of apple orchard blocks\"",
+    "owner": "PERSON",
+    "cost": 1300
+   },
+   {
+    "label": "Collect payment for \"Dormant-season pruning of apple orchard blocks\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish who would do the work for \"Dormant-season pruning of apple orchard blocks\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+  "openings": [
+   {
+    "opportunityId": "cop_6d9220a65675480b9b5f",
+    "title": "Dormant-season pruning of apple orchard blocks",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 5000,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Owners of mid-size apple orchards in the valley",
+     "reachableChannel": "The three orchard owners who signed orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-24T23:06:19.983Z",
+     "offerScope": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+     "priceCents": 225000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "apple orchards",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "Dormant pruning of one 5-acre orchard block, paid within 7 days of completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three orchard owners who signed orders"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-24"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 6750 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 6750 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1300, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Dormant pruning of one 5-acre orchard block, paid within 7 days of completion. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1300",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of mid-size apple orchards in the valley",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three orchard owners signed orders at $2,250 for a 5-acre block, matching the state extension service's custom-rate survey of $450 an acre.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_0cfc2004700645ca8344"
+  ],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-27T23:09:55.785Z"
+ }
+}
