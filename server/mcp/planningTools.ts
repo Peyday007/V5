@@ -152,7 +152,18 @@ const researchTool: McpTool = {
     type: 'object',
     properties: {
       goal_id: { type: 'string' }, need_id: { type: 'string' }, method: { type: 'string' },
-      claims: { type: 'array', items: { type: 'object' } }, unanswered: { type: 'boolean' }, ...SESSION,
+      claims: {
+        type: 'array',
+        items: {
+          type: 'object', required: ['claim', 'sourceUrl', 'evidenceExcerpt', 'evidenceLocator'],
+          properties: {
+            claim: { type: 'string' }, sourceUrl: { type: 'string', description: 'The page the claim comes from.' },
+            evidenceExcerpt: { type: 'string', description: 'The passage on that page, quoted.' }, evidenceLocator: { type: 'string', description: 'Where on the page (section, heading, row).' },
+            sourceTitle: { type: 'string' }, sourcePublisher: { type: 'string' }, sourceDate: { type: 'string' }, primarySource: { type: 'boolean' },
+          },
+        },
+      },
+      unanswered: { type: 'boolean' }, ...SESSION,
     },
     required: ['goal_id', 'need_id', 'method', 'session_id'],
     additionalProperties: false,
@@ -163,11 +174,7 @@ const researchTool: McpTool = {
     const projectId = await goalProject(goalId);
     await authorize(principal, projectId, 'WRITE', 'operator:act');
     const { answerResearch } = await import('../services/planning/sessionPlanning.ts');
-    const claims = Array.isArray(args['claims']) ? (args['claims'] as Record<string, unknown>[]).map((o) => ({
-      claim: String(o['claim'] ?? ''), sourceUrl: String(o['sourceUrl'] ?? o['url'] ?? ''), sourceTitle: o['sourceTitle'] == null ? null : String(o['sourceTitle']),
-      sourcePublisher: o['sourcePublisher'] == null ? null : String(o['sourcePublisher']), sourceDate: o['sourceDate'] == null ? null : String(o['sourceDate']),
-      evidenceExcerpt: String(o['evidenceExcerpt'] ?? ''), evidenceLocator: String(o['evidenceLocator'] ?? ''), primarySource: o['primarySource'] === true,
-    })) : [];
+    const claims = Array.isArray(args['claims']) ? (args['claims'] as Record<string, unknown>[]).map(claimArg) : [];
     return { projectId, value: await guarded(() => answerResearch({ goalId, needId: requiredString(args, 'need_id'), actor: sessionExecutor(principal, args), method: requiredString(args, 'method'), claims, unanswered: args['unanswered'] === true })) };
   },
 };
@@ -205,6 +212,30 @@ const verifyResearchTool: McpTool = {
  * with no verdicts and no sufficiency was taken as one, blocked the fragment, and the verifier's real reading was then
  * refused as already judged). The schema already marks both required; the transport now refuses rather than defaults.
  */
+/*
+ * One research claim, read under the names callers use (production, 2026-11-28, Cash Mode 1: claims sent as
+ * source_url / excerpt / locator / passage were recorded as NO_URL and NO_EVIDENCE although they carried both, because
+ * only the camelCase names were read). A claim naming no source or no passage under any of them is refused by name.
+ */
+export function claimArg(o: Record<string, unknown>, i = 0) {
+  const pick = (...keys: string[]): unknown => keys.map((k) => o[k]).find((v) => v !== undefined && v !== null && String(v).trim() !== '');
+  const text = (...keys: string[]) => { const v = pick(...keys); return v === undefined ? '' : String(v); };
+  const opt = (...keys: string[]) => { const v = pick(...keys); return v === undefined ? null : String(v); };
+  const out = {
+    claim: text('claim', 'statement'),
+    sourceUrl: text('sourceUrl', 'source_url', 'url', 'source'),
+    sourceTitle: opt('sourceTitle', 'source_title', 'title'),
+    sourcePublisher: opt('sourcePublisher', 'source_publisher', 'publisher'),
+    sourceDate: opt('sourceDate', 'source_date', 'publishedDate', 'date'),
+    evidenceExcerpt: text('evidenceExcerpt', 'evidence_excerpt', 'excerpt', 'quote', 'verbatim', 'passage'),
+    evidenceLocator: text('evidenceLocator', 'evidence_locator', 'locator', 'where', 'location'),
+    primarySource: (pick('primarySource', 'primary_source') === true) || pick('sourceClass') === 'PRIMARY',
+  };
+  const missing = [!out.claim && 'claim', !out.sourceUrl && 'sourceUrl', !out.evidenceExcerpt && 'evidenceExcerpt (the quoted passage)', !out.evidenceLocator && 'evidenceLocator (where on the page)'].filter(Boolean);
+  if (missing.length) throw invalidInput(`claims[${i}] needs ${missing.join(', ')}`);
+  return out;
+}
+
 export function verdictsArg(args: Record<string, unknown>): unknown[] {
   const v = args['verdicts'];
   if (!Array.isArray(v) || v.length === 0) throw invalidInput('`verdicts` is required: one verdict per submitted claim (see brain_planning_context)');

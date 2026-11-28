@@ -576,7 +576,12 @@ async function withExecutors(steps: PlanStepInput[], members: readonly string[],
 /** The research questions open on the openings this goal plans with, and what the session returned for each. */
 export async function openQuestions(goalId: string) {
   const { listNeeds } = await import('../../repos/cashPortfolio.ts');
-  const ids = new Set(await admittedIds(goalId));
+  /*
+   * The questions of the openings this goal weighs — its own, Brain's weighed ones, and any its latest revision builds
+   * on — not of every opening set aside project-wide (production, 2026-11-28, Cash Mode 1: 980 questions, 123 shown).
+   */
+  const latest = (await planningState(goalId).catch(() => null))?.current ?? null;
+  const ids = new Set([...(await accountForIds(goalId)), ...(latest ? [...latest.strategy.opportunityIds, ...(latest.chain ?? []).map((c) => c.opportunityId)] : [])]);
   const goal = await liveGoal(goalId);
   const projectId = goal.target?.projectId ?? goal.projectId;
   if (!projectId) return [];
