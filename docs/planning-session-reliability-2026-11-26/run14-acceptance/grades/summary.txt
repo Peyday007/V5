@@ -1,0 +1,16 @@
+a01 at-01-cheesemaker-listeria-workbook step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a02 at-02-kayak-outfitter-owner-hours step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a03 at-03-loan-signing-net step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a04 at-04-adoption-agency-scope-change step=1 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+a05 at-05-dialysis-water-no-technician step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a06 at-06-hobby-shop-price-said step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a07 at-07-community-radio-price-contradicted step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a08 at-08-wisp-grant-as-price step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a09 at-09-limo-net45-after-deadline step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a10 at-10-flight-school-owner-hours step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a11 at-11-shooting-range-market-too-small step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=True usable=True
+a12 at-12-alpaca-fleece-capital-raised step=1 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=True usable=True
+d01 au-01-quick-cash-no-capital stance=CONDITIONAL pass=False critical=True
+d02 au-02-auto-glass-named-industry stance=CONDITIONAL pass=True critical=False
+d03 au-03-owner-two-hours-a-week stance=NO_PLAN pass=False critical=False
+d04 au-04-net-profit-larger stance=CONDITIONAL pass=True critical=False

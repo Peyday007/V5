@@ -1,0 +1,784 @@
+[
+  {
+    "id": "at-01-cheesemaker-listeria-workbook",
+    "heldOut": true,
+    "description": "Three openings, one sound. (1) listeria: the state dairy-plant licence list counts 210 licensed cheese plants this seller can email; its own outreach measured 14 paid orders from 120 contacts (11.7%) at $380, a price its own October checkout records show three cheesemakers paid. $4,000 / $380 = 10.5, so 11 orders; at 11.7% that is ~95 contacts of the 210 counted (the full list carries ~24 orders, ~$9,300). Cost $4 a workbook, nothing tied up, Brain produces it. Calendar: contacts days 1-10, orders as they arrive, card payouts 2 days after each order, so the last of 11 orders settles by about day 14 of 30. (2) coop: one cooperative issued one RFQ for one $2,500 audit; its 22 member farms are not 22 buyers, so at most 1 deal (payerDealsMax), and it pays in 21 days. It is not needed. (3) caveMatch: how many cheesemakers want cave space is only Brain's estimate, so it may not carry the plan. Executable on listeria alone.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "artisan cheesemaking",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "listeria",
+        "title": "Environmental-monitoring (Listeria swab) program and log workbook for farmstead cheesemakers",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "artisan cheesemaking",
+        "payer": "Owners and head cheesemakers at licensed farmstead creameries",
+        "channel": "Contact emails published on the state dairy-plant licence list",
+        "offer": "A swab-site map, sampling schedule and corrective-action log set up for the plant, delivered as a workbook within 2 days of order",
+        "price": 380,
+        "priceEvidence": "This seller's own checkout records show three cheesemakers each paid $380 for the workbook in October 2026.",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 2,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state agriculture department's dairy-plant licence list names 210 licensed farmstead and artisan cheese plants, each with a published contact email; every licensed plant must keep an environmental-monitoring program, reviewed at its annual inspection.",
+        "conversion": {
+          "paid": 14,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "coop",
+        "title": "Aging-room humidity audit for Green Hollow Cheese Cooperative",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "artisan cheesemaking",
+        "payer": "Green Hollow Cheese Cooperative's buying committee",
+        "channel": "The cooperative's RFQ reply address",
+        "price": 2500,
+        "priceEvidence": "Green Hollow Cheese Cooperative's RFQ of 2026-11-20 offers $2,500 for one aging-room humidity audit.",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 21,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "Green Hollow Cheese Cooperative issued one RFQ for one audit; the cooperative has 22 member farms."
+      },
+      {
+        "key": "caveMatch",
+        "title": "Matching cheesemakers with spare commercial aging-cave space",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "artisan cheesemaking",
+        "payer": "Small cheesemakers short of aging space",
+        "channel": "The state cheese guild newsletter",
+        "price": 150,
+        "priceEvidence": "Two cave owners pay a $150 placement fee per matched cheesemaker (signed fee letters).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "Cheesemakers in the state probably need extra aging space every season.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 3,
+          "of": 40,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "caveMatch"
+      ],
+      "payerDealsMax": {
+        "coop": 1
+      }
+    }
+  },
+  {
+    "id": "at-02-kayak-outfitter-owner-hours",
+    "heldOut": true,
+    "description": "Owner time is 4 hours a week for 28 days = 16 hours. (1) checkin: the state river-outfitter licence registry counts 160 licensed outfitters this seller can email; its outreach measured 11 paid orders from 80 contacts (13.75%) at $450, the price its last nine setups were invoiced and paid at. $3,000 / $450 = 6.7, so 7 setups; at 13.75% that is ~51 contacts of 160. Brain does the setup; the owner reviews each for 0.25 h, so 7 x 0.25 = 1.75 owner hours of 16. Calendar: contacts days 1-5, setups delivered days 3-15, each paid on completion and cleared 5 days later, so all cash by day 20 of 28. Cost $12 a setup, nothing tied up. (2) rescueClass: four signed $900 classes ($3,600) but the owner teaches each for 10 hours; all four need 40 hours against 16, and one class alone is $900 - it cannot carry the target inside the hours. (3) shuttle: each run costs $135 from the van company against a $120 price - it loses money on every deal and may not be used. Executable on checkin, inside the owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "river kayak and canoe outfitters",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 28 days with no more than 4 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "checkin",
+        "title": "Digital waiver and river-trip roster check-in setup for kayak and canoe outfitters",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "river kayak and canoe outfitters",
+        "payer": "Owners and operations managers of licensed river outfitters",
+        "channel": "Contact emails listed in the state river-outfitter licence registry",
+        "offer": "Waiver form, trip roster and arrival check-in configured on the outfitter's booking system; paid on completion",
+        "price": 450,
+        "priceEvidence": "This seller's last nine outfitter setups were each invoiced and paid at $450 (invoices, Aug-Oct 2026).",
+        "cost": 12,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.25,
+        "performer": "BRAIN",
+        "volume": "The state's river-outfitter licence registry lists 160 licensed outfitters with contact emails; each must hold signed participant waivers for every trip and re-sets its waiver process before the spring season.",
+        "conversion": {
+          "paid": 11,
+          "of": 80,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "rescueClass",
+        "title": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "river kayak and canoe outfitters",
+        "payer": "Outfitter owners training their guide staff",
+        "channel": "Direct email to the outfitters who signed",
+        "price": 900,
+        "priceEvidence": "Four outfitters signed class bookings at $900 per class (signed bookings, Nov 2026).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 10,
+        "performer": "OWNER",
+        "agreements": [
+          900,
+          900,
+          900,
+          900
+        ]
+      },
+      {
+        "key": "shuttle",
+        "title": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "river kayak and canoe outfitters",
+        "payer": "Outfitters running self-guided trips",
+        "channel": "Direct email to the outfitters who signed",
+        "price": 120,
+        "priceEvidence": "Ten outfitters signed shuttle orders at $120 per run (signed orders, Nov 2026).",
+        "cost": 135,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Valley Van Shuttle LLC (written rate: $135 per run)",
+        "agreements": [
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120,
+          120
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 16,
+      "mustNotUse": [
+        "shuttle"
+      ]
+    }
+  },
+  {
+    "id": "at-03-loan-signing-net",
+    "heldOut": true,
+    "description": "A net objective: $2,000 kept after direct costs. Four title agencies signed standing orders with this seller for 32 completed loan signings at $175 (their fee schedules), scheduled on days 2-16 of the 30-day window. The signing-agent network does each for $95 (written rate), so each keeps $80. Net: 32 x $80 = $2,560 >= $2,000 (25 signings are needed: 25 x $80 = $2,000). Gross is $5,600, so a plan that counts only 12 signings ($2,100 gross, $960 net) reaches the gross figure but not the target. Calendar: the last signing is day 16; agencies pay 10 days after the signed package returns, so the last payment lands day 26 <= 30; the network is paid within 3 days of the agency paying for that signing, so the last network payment is day 29 <= 30 and no network payment precedes the receipt it is paid from - nothing is tied up. Capacity: 32 signings over 15 days is ~2.1 a day against the network capacity of 6 a day. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "mobile notary loan signing",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $2,000 of net settled cash after direct costs within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "signings",
+        "title": "Brokered mortgage loan-signing appointments completed by commissioned signing agents",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "mobile notary loan signing",
+        "payer": "Escrow officers and closing coordinators at independent title agencies",
+        "channel": "The standing-order email of the four agencies already ordering from this seller",
+        "offer": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "price": 175,
+        "priceEvidence": "The fee schedules of the four agencies ordering from this seller pay $175 per completed loan signing (fee schedules, Nov 2026).",
+        "cost": 95,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Tri-County Signing Agents Network (written rate: $95 per completed signing, paid by the seller within 3 days of the agency paying for that signing; can cover up to 6 signings a day)",
+        "volume": "Four title agencies signed standing orders with this seller for 32 loan signings, all scheduled on days 2-16 of the window.",
+        "agreements": [
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175,
+          175
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "at-04-adoption-agency-scope-change",
+    "heldOut": true,
+    "description": "First reading: an open $3,500 objective, which either sound opening meets. (1) hague: the state licensed child-placing agency list counts 95 private adoption agencies; this seller measured 12 paid orders from 60 contacts (20%) at $600, the price five agencies paid on its invoices. $3,500 / $600 = 5.8, so 6 orders, ~30 contacts of 95 (the list carries ~19 orders, ~$11,400). (2) cosmoExam: 140 state-licensed cosmetology schools, 15 paid orders from 100 contacts (15%) at $350; $3,500 needs 10 orders, ~67 contacts of 140. Then the owner restricts the goal to private adoption agencies: only hague may be used, and it carries the target alone. Calendar for hague: contacts days 1-5, delivery within 3 days of order, card payouts 7 days after delivery, so 6 orders settle by about day 15 of 30. Cost $8, nothing tied up, Brain produces it. Executable before and after; after the change cosmoExam is out of scope.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "private adoption agencies",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $3,500 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Generate $3,500 within 30 days in a single industry the owner names: private adoption agencies, using no up-front capital."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "hague",
+        "title": "Accreditation annual-report evidence workbook for private adoption agencies",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "private adoption agencies",
+        "payer": "Executive directors and compliance coordinators of licensed private adoption agencies",
+        "channel": "Contact emails published in the state's licensed child-placing agency list",
+        "offer": "A workbook that maps each annual-report standard to the agency's own case-file evidence, delivered within 3 days of order",
+        "price": 600,
+        "priceEvidence": "Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026).",
+        "cost": 8,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state's licensed child-placing agency list names 95 private adoption agencies with contact emails; each files an annual report to its accrediting entity and its state licensor.",
+        "conversion": {
+          "paid": 12,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "cosmoExam",
+        "title": "State-board practical-exam prep question bank licence for cosmetology schools",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "cosmetology schools",
+        "payer": "Directors of state-licensed cosmetology schools",
+        "channel": "Contact emails on the state cosmetology board's licensed-school list",
+        "price": 350,
+        "priceEvidence": "Cosmetology schools paid $350 per annual licence on this seller's checkout (Oct 2026 order records).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.25,
+        "performer": "BRAIN",
+        "volume": "The state cosmetology board's licensed-school list names 140 cosmetology schools; each enrols a new class every quarter.",
+        "conversion": {
+          "paid": 15,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "cosmoExam"
+      ]
+    }
+  },
+  {
+    "id": "at-05-dialysis-water-no-technician",
+    "heldOut": true,
+    "description": "Four independent dialysis clinics signed work orders at $1,600 for a quarterly reverse-osmosis disinfection and water-quality testing visit: $6,400 against $6,000, paid 15 days after the visit. But the visit must be done by a certified water-treatment technician, and nobody is established to do it - Brain cannot, the owner cannot, and no technician or firm has been engaged or quoted. Every other link is evidenced; no executable plan until a fulfiller is. The decisive gap is fulfilment.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "FULFILMENT",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "outpatient dialysis clinics",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "roWater",
+        "title": "Quarterly RO-system disinfection and water-quality testing visits for independent dialysis clinics",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "outpatient dialysis clinics",
+        "payer": "Clinic managers and chief technicians at independent outpatient dialysis clinics",
+        "channel": "The four clinic managers who signed, by email",
+        "offer": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+        "price": 1600,
+        "priceEvidence": "Four clinics signed work orders at $1,600 per quarterly disinfection-and-testing visit (signed orders, Nov 2026).",
+        "cost": 700,
+        "capital": 0,
+        "daysToCash": 15,
+        "hours": 2,
+        "performer": "NOBODY",
+        "volume": "Four clinics signed one visit each, to be done inside the window.",
+        "agreements": [
+          1600,
+          1600,
+          1600,
+          1600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "FULFILMENT"
+        ],
+        "opening": "roWater"
+      }
+    }
+  },
+  {
+    "id": "at-06-hobby-shop-price-said",
+    "heldOut": true,
+    "description": "An estate-consignment appraisal workbook for model-railroad and hobby shops: 340 shops are counted in the retailer association directory, a rate was measured, Brain produces it at $5 and pays out in 3 days. The only figure for what a shop pays is the owner saying \"$250\" - no order, invoice or listing shows any shop paying it. At $250, 10 sales would reach $2,500; at no evidenced price the arithmetic carries nothing. No executable plan; the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "model railroad and hobby shops",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "estate",
+        "title": "Estate-collection consignment appraisal workbook for model-railroad and hobby shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "model railroad and hobby shops",
+        "payer": "Owners of independent model-railroad and hobby shops",
+        "channel": "Member emails in the national hobby-retailer association's directory",
+        "price": 250,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says hobby-shop owners would pay $250 for the workbook.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The hobby-retailer association's directory lists 340 independent model-railroad and hobby shops; each takes estate collections on consignment every month.",
+        "conversion": {
+          "paid": 12,
+          "of": 90,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "estate"
+      }
+    }
+  },
+  {
+    "id": "at-07-community-radio-price-contradicted",
+    "heldOut": true,
+    "description": "Quarterly public-file preparation for community radio stations. The card says $1,200; a sourced price says $120. At $1,200, 5 stations reach $5,000; at $120, all 410 stations at the measured 10% are 41 x $120 = $4,920, under the target. The plan turns on which price is true, so no executable plan is established on a contested price; the decisive gap is the price (and the economics that rest on it).",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "community radio stations",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "publicFile",
+        "title": "Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "community radio stations",
+        "payer": "General managers and volunteer station coordinators at noncommercial community radio stations",
+        "channel": "Station contact addresses in the regulator's online public-file listings",
+        "price": 1200,
+        "priceContradiction": 120,
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The regulator's licence database lists 410 noncommercial FM stations in the region; each must post a quarterly issues/programs list to its online public file.",
+        "conversion": {
+          "paid": 20,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "publicFile"
+      }
+    }
+  },
+  {
+    "id": "at-08-wisp-grant-as-price",
+    "heldOut": true,
+    "description": "A location-eligibility workbook for small fixed-wireless internet providers. The $2,000 is what the state broadband office pays a provider per unserved location it connects - a grant paid by the state to the provider, for building service, not what a provider pays for a workbook. Every other link is evidenced (75 eligible providers listed, a measured rate, Brain produces it, $20 cost, 10 days to cash). At $2,000, 4 sales would make $8,000; at no evidenced purchase price, nothing. No plan; the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "rural fixed-wireless internet providers",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $8,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "grantMap",
+        "title": "Unserved-location eligibility workbook for broadband grant applications by small wireless ISPs",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "rural fixed-wireless internet providers",
+        "payer": "Owners and network engineers at small fixed-wireless internet providers",
+        "channel": "Provider contacts on the state broadband office's eligible-applicant list",
+        "price": 2000,
+        "priceEvidence": "The state broadband office's grant programme pays providers up to $2,000 per unserved location they connect (programme guidelines, Oct 2026).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state broadband office's eligible-applicant list names 75 fixed-wireless providers for the current round, each with a published contact.",
+        "conversion": {
+          "paid": 8,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "grantMap"
+      },
+      "notAPurchasePrice": [
+        "grantMap"
+      ]
+    }
+  },
+  {
+    "id": "at-09-limo-net45-after-deadline",
+    "heldOut": true,
+    "description": "Six corporate holiday-party bookings signed at $900 ($5,400 against $4,000), each fulfilled by a black-car company at $600 that can run three cars a night on days 7-22. Corporate accounts pay net 45 from the event date (stated on every booking). The earliest event is day 7, so the earliest payment is day 52; the last is day 67. The window is 21 days: no booking settles inside it, whatever the volume. Infeasible on the deadline; the settlement link carries it.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "SETTLES_IN_TIME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "chauffeured limousine services",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $4,000 of settled cash within 21 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "partyCars",
+        "title": "Brokered chauffeured transport for corporate December holiday parties",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "chauffeured limousine services",
+        "payer": "Corporate event planners and executive assistants booking December parties",
+        "channel": "The six planners who signed bookings, by email",
+        "offer": "A chauffeured car for a 5-hour party run; the client is invoiced on the event date, payable net 45",
+        "price": 900,
+        "priceEvidence": "Six corporate planners signed bookings at $900 per 5-hour party run (signed bookings, Nov 2026).",
+        "cost": 600,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 0.5,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Metro Black Car LLC (written rate: $600 per 5-hour booking; can run three cars each night on days 7-22)",
+        "volume": "Six signed bookings, events on days 7-22 of the window.",
+        "agreements": [
+          900,
+          900,
+          900,
+          900,
+          900,
+          900
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "at-10-flight-school-owner-hours",
+    "heldOut": true,
+    "description": "Five flight schools signed at $750 for a training-course outline and stage-check records revision that only the owner (a certificated chief instructor) can do, at 8 hours each. The objective allows 3 owner hours a week for 30 days = 12.9, so 13 hours: one revision (8 h, $750) fits, two (16 h) do not. $3,000 needs 4 revisions = 32 owner hours. Infeasible on owner hours; the fulfilment link carries it.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "flight schools",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days with no more than 3 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "tco",
+        "title": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "flight schools",
+        "payer": "Chief flight instructors and owners of certificated flight schools",
+        "channel": "The five schools that signed, by email",
+        "price": 750,
+        "priceEvidence": "Five flight schools signed engagements at $750 per course-outline revision (signed engagements, Nov 2026).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          750,
+          750,
+          750,
+          750,
+          750
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 13
+    }
+  },
+  {
+    "id": "at-11-shooting-range-market-too-small",
+    "heldOut": true,
+    "description": "A lead-exposure sampling log workbook for indoor shooting ranges, every link evidenced. But the market is counted: the state range registry lists 85 indoor ranges and each buys it once a year. Every range at $400 is 85 x $400 = $34,000, under the $60,000 target even at 100% conversion (the measured 18% gives ~15 sales, ~$6,100). The target is out of reach on this market as stated.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "indoor shooting ranges",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $60,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "leadLog",
+        "title": "Airborne-lead and surface-sampling log workbook for indoor shooting ranges",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "indoor shooting ranges",
+        "payer": "Range owners and range safety officers at indoor shooting ranges",
+        "channel": "Contact emails in the state's shooting-range registry",
+        "price": 400,
+        "priceEvidence": "Nine ranges each paid $400 for the workbook on this seller's checkout (Oct-Nov 2026).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state's shooting-range registry lists 85 indoor ranges; each buys one sampling-log workbook a year, for its annual exposure review.",
+        "conversion": {
+          "paid": 9,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "at-12-alpaca-fleece-capital-raised",
+    "heldOut": true,
+    "description": "A mini-mill signed two purchase agreements at $4,800 per graded 200-lb alpaca fleece lot; the fibre co-op sells each lot at $3,200, paid on pickup, and ships within 5 days; the mill pays 14 days after delivery. First reading: the objective allows $500 of capital and each lot ties up $3,200 before it pays, with nothing showing the mill prepays - infeasible on capital (the economics link). Then the owner raises the capital to $7,000: both lots ($6,400) fit. Calendar: day 1 pay the co-op $6,400, delivered by day 6, the mill pays $9,600 on day 20, inside the 40 days. $9,600 >= $6,000 ($3,200 kept). The mill is one payer with two signed lots, so at most 2 deals. Executable after the change.",
+    "dimensions": {
+      "capital": "large",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "alpaca fibre farming",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $6,000 of settled cash within 40 days with at most $500 of capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 7000
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 500
+    },
+    "openings": [
+      {
+        "key": "fleece",
+        "title": "Graded alpaca fleece lots bought from a fibre co-op and resold to a regional mini-mill",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "alpaca fibre farming",
+        "payer": "The fibre buyer at Ridgeline Mini-Mill, a regional mill spinning alpaca yarn",
+        "channel": "The mill's fibre buyer, who signed both agreements",
+        "offer": "One graded, skirted 200-lb lot of alpaca fleece delivered to the mill; the mill pays 14 days after delivery",
+        "price": 4800,
+        "priceEvidence": "Ridgeline Mini-Mill signed two purchase agreements at $4,800 per graded 200-lb lot (signed 2026-11-24).",
+        "cost": 3200,
+        "capital": 3200,
+        "daysToCash": 14,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "High Plains Alpaca Fibre Co-op (written quote: $3,200 per graded 200-lb lot, paid on pickup; ships within 5 days)",
+        "volume": "Ridgeline Mini-Mill signed for two lots; nothing says it buys more inside the window.",
+        "agreements": [
+          4800,
+          4800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 7000,
+      "payerDealsMax": {
+        "fleece": 2
+      }
+    }
+  }
+]

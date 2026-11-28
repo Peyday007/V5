@@ -1,0 +1,233 @@
+{
+ "caseId": "at-10-flight-school-owner-hours",
+ "keys": {
+  "cop_83344643029244b8b05d": "tco"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: the agreed deals need 40 owner hours, more than the 13 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5229× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Chief flight instructors and owners of certific\" needs [figure withheld] and keeps [figure withheld], 749× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"buyers to be found\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_83344643029244b8b05d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the supply",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with buyers to be found",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 4.831019445537701
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 3000 USD still needed — the openings held reach at most 3750 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_83344643029244b8b05d",
+    "title": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Chief flight instructors and owners of certificated flight schools",
+     "reachableChannel": "The five schools that signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:29.149Z",
+     "offerScope": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+     "priceCents": 75000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 8,
+     "requiredCapabilities": [],
+     "industry": "flight schools",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 75000,
+      "currency": "USD",
+      "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 75000,
+      "currency": "USD",
+      "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 75000,
+      "currency": "USD",
+      "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 75000,
+      "currency": "USD",
+      "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 75000,
+      "currency": "USD",
+      "deliverable": "Training-course outline and stage-check records revision for flight schools, done by the owner",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The five schools that signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3750 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3750 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by The owner, personally (a person says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Training-course outline and stage-check records revision for flight schools, done by the owner to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Chief flight instructors and owners of certificated flight schools",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Five flight schools signed engagements at $750 per course-outline revision (signed engagements, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": 13,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 3
+  },
+  "at": "2026-11-28T04:36:56.979Z"
+ }
+}

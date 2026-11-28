@@ -1,0 +1,396 @@
+{
+ "caseId": "at-01-cheesemaker-listeria-workbook",
+ "keys": {
+  "cop_7d58fdae1fa9409da0d9": "listeria",
+  "cop_8dcb708a6f694259b17d": "coop",
+  "cop_29ad623dd8334268aba2": "caveMatch"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Environmental-monitoring (Listeria swab) program and log wor\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Environmental-monitoring (Listeria swab) program and log wor\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 43616× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Environmental-monitoring (Listeria swab) program and log workbook for \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_7d58fdae1fa9409da0d9",
+   "cop_8dcb708a6f694259b17d",
+   "cop_29ad623dd8334268aba2"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+    "owner": "PERSON",
+    "cost": 4
+   },
+   {
+    "label": "Collect payment for \"Environmental-monitoring (Listeria swab) program and log workbook for farmstead \"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_7d58fdae1fa9409da0d9",
+    "title": "Environmental-monitoring (Listeria swab) program and log workbook for farmstead cheesemakers",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Owners and head cheesemakers at licensed farmstead creameries",
+     "reachableChannel": "Contact emails published on the state dairy-plant licence list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:45.995Z",
+     "offerScope": "A swab-site map, sampling schedule and corrective-action log set up for the plant, delivered as a workbook within 2 days of order",
+     "priceCents": 38000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "artisan cheesemaking",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Contact emails published on the state dairy-plant licence list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 380 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 14 accepted of 120 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "12 deal(s) needed, 210 available in the window (210 reachable buyers (210 licensed or registered plants), each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "2 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state agriculture department's dairy-plant licence list names 210 licensed farmstead and artisan cheese plants, each with a published contact email; every licensed plant must keep an environmental-monitoring program, reviewed at its annual inspection.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A swab-site map, sampling schedule and corrective-action log set up for the plant, delivered as a workbook within 2 days of order to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "14 paid orders from 120 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners and head cheesemakers at licensed farmstead creameries",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "This seller's own checkout records show three cheesemakers each paid $380 for the workbook in October 2026.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "2 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_8dcb708a6f694259b17d",
+    "title": "Aging-room humidity audit for Green Hollow Cheese Cooperative",
+    "missing": [
+     "CONVERSION"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Green Hollow Cheese Cooperative's buying committee",
+     "reachableChannel": "The cooperative's RFQ reply address",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:45.995Z",
+     "offerScope": "Aging-room humidity audit for Green Hollow Cheese Cooperative",
+     "priceCents": 250000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "artisan cheesemaking",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The cooperative's RFQ reply address"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 2500 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "2 deal(s) needed, 22 available in the window (22 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "21 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Green Hollow Cheese Cooperative issued one RFQ for one audit; the cooperative has 22 member farms.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Aging-room humidity audit for Green Hollow Cheese Cooperative to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Green Hollow Cheese Cooperative's buying committee",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Green Hollow Cheese Cooperative's RFQ of 2026-11-20 offers $2,500 for one aging-room humidity audit.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "21 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_29ad623dd8334268aba2",
+    "title": "Matching cheesemakers with spare commercial aging-cave space",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 150,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Small cheesemakers short of aging space",
+     "reachableChannel": "The state cheese guild newsletter",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:34:45.995Z",
+     "offerScope": "Matching cheesemakers with spare commercial aging-cave space",
+     "priceCents": 15000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "artisan cheesemaking",
+     "mechanism": "INFORMATION_ASYMMETRY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The state cheese guild newsletter"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 150 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 3 accepted of 40 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Cheesemakers in the state probably need extra aging space every season.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Matching cheesemakers with spare commercial aging-cave space to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "3 paid orders from 40 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Small cheesemakers short of aging space",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Two cave owners pay a $150 placement fee per matched cheesemaker (signed fee letters).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:39:06.248Z"
+ }
+}

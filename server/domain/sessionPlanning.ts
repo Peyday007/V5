@@ -448,6 +448,7 @@ export type CheckCode =
   | 'ARITHMETIC_UNSTATED'
   | 'PROOF_INSUFFICIENT'
   | 'REJECTED_EVIDENCE_USED'
+  | 'WAGE_AS_PRICE'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -482,6 +483,15 @@ export interface BrainFacts {
   discovered?: string[];
   /** Source URLs of claims Brain's evidence gate rejected on this goal (and accepted on none), each with its reason. */
   rejectedSources?: Record<string, string>;
+  /** Openings whose card states their revenue as hourly pay (`wageWording`), read with `fulfilment` for WAGE_AS_PRICE. */
+  wagePriced?: string[];
+}
+
+/** Whether a card's revenue text describes hourly pay for labour (a wage) rather than a price for an offer. */
+export function wageWording(text: string): boolean {
+  const pay = /\b(pay|pays|paid|earn|earns|earnings|wage|wages|salary|compensation)\b/i;
+  const hourly = /(per hour|an hour|\/\s?hr\b|\/\s?hour\b|\bhourly\b)/i;
+  return pay.test(text) && hourly.test(text);
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -844,6 +854,26 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
     }
     if (hours > 0 && allowed !== null && hours > allowed + 1e-9) {
       add('OWNER_HOURS_OVER', `the plan gives the owner ${hours} hours; the goal allows ${Math.round(allowed * 10) / 10} over the window`, null);
+    }
+    // A weekly allowance binds each week, not only the total (run 14, au-03: 3.5 owner hours in week 1 against "2
+    // hours a week, no more", inside the window's 6).
+    if (t.ownerHoursPerWeek !== null) {
+      const byWeek = new Map<number, number>();
+      for (const s of ownerSteps) if (typeof s.ownerHours === 'number' && typeof s.day === 'number') byWeek.set(Math.floor(s.day / 7), (byWeek.get(Math.floor(s.day / 7)) ?? 0) + s.ownerHours);
+      for (const [w, h] of [...byWeek].sort((a, b) => a[0] - b[0])) {
+        if (h > t.ownerHoursPerWeek + 1e-9) add('OWNER_HOURS_OVER', `week ${w + 1} (days ${w * 7}-${w * 7 + 6}) gives the owner ${Math.round(h * 10) / 10} hours; the goal allows ${t.ownerHoursPerWeek} a week`, null);
+      }
+    }
+  }
+
+  /*
+   * Pay for the owner's own hours is a wage, not a price a buyer pays for an offer (COMPLETION-SPEC §3; run 14,
+   * au-01: a platform's published hourly pay for work the owner performs was the plan's only "price"). An opening
+   * whose revenue is hourly pay and whose work is the owner's is set aside or shown to be a sale, never built on.
+   */
+  for (const id of r.strategy.opportunityIds) {
+    if (brain?.wagePriced?.includes(id) && brain.fulfilment?.[id]?.by === 'OWNER') {
+      add('WAGE_AS_PRICE', `${id}'s revenue is hourly pay for work the owner performs — a wage, not a price a buyer pays for an offer; set it aside (\`excluded\`) or build on an opening with a purchase price`, id);
     }
   }
 

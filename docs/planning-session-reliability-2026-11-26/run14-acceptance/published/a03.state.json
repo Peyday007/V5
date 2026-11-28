@@ -1,0 +1,2034 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_8df44ce6e8b548a09231",
+   "words": "Keep $2,000 of net settled cash after direct costs within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 200000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": null,
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a39a9f405efdaa2348e7e34b"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_8df44ce6e8b548a09231",
+    "contractDigest": "a39a9f405efdaa2348e7e34b",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Fulfil the 32 signed standing-order loan signings through Tri-County",
+     "opportunityIds": [
+      "cop_ee4f1e0d6ac44b2c8d03"
+     ],
+     "why": "32 signings are already under signed standing orders (32 written acceptances at $175) scheduled days 2-16; Tri-County's written rate is $95, paid only after the agency pays, so exposure is $0; capacity 6/day covers 32 signings over 15 days; agencies pay 10 days after each signing, so the last receipt is day 26 and the last supplier payment day 29, inside 30. Net = 32 x $80 = $2,560 >= $2,000 (25 signings would suffice, leaving 7 signings of slack)."
+    },
+    "alternatives": [],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the 32 signed standing-order loan signings with the four title agencies at $175 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "2c8d03-buyerVolume",
+       "2c8d03-price"
+      ],
+      "priceCents": 17500,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "order1",
+      "kind": "ORDER",
+      "label": "Assign signings 1-16 (days 2-9) to Tri-County at $95 per completed signing, paid within 3 days of the agency paying",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "sell",
+      "evidence": [
+       "2c8d03-fulfillment"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 1-16 (days 2-9; capacity 6/day)",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 9,
+      "dependsOn": "order1",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 17-32 (days 10-16; capacity 6/day)",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 16,
+      "dependsOn": "order1",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 1-16 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 19,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 17-32 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 26,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 19,
+      "stepId": "collect1"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 26,
+      "stepId": "collect2"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver2"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "signed signings",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 175,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor rate",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net per signing",
+      "status": "EVIDENCED",
+      "value": 80,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net settled",
+      "status": "EVIDENCED",
+      "value": 2560,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts",
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signings needed for $2,000 net",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cash",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-exposure",
+       "2c8d03-fulfillment"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "2c8d03-price",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#price",
+      "dated": "2026-11",
+      "claim": "Four agencies' fee schedules pay $175 per completed signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-buyerVolume",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#buyerVolume",
+      "dated": "2026-11",
+      "claim": "32 signings under signed standing orders, scheduled days 2-16",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-fulfillment",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#fulfillment",
+      "dated": "2026-11",
+      "claim": "Tri-County $95/signing, paid within 3 days of the agency paying, up to 6/day",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-directCosts",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#directCosts",
+      "dated": "2026-11",
+      "claim": "$95 per signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "10 days",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-exposure",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#exposure",
+      "dated": "2026-11",
+      "claim": "$0",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-payer",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#payer",
+      "dated": "2026-11",
+      "claim": "Escrow officers at independent title agencies",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "deals": 32,
+      "price": 175,
+      "directCost": 95,
+      "capital": 0,
+      "settlesDay": 26,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4324ced81598_aa4e67",
+    "digest": "4324ced81598c76150c60996",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3a14f29a4bf342588da4/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:52.695Z"
+   },
+   {
+    "goalId": "wst_8df44ce6e8b548a09231",
+    "contractDigest": "a39a9f405efdaa2348e7e34b",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Fulfil the 32 signed standing-order loan signings through Tri-County",
+     "opportunityIds": [
+      "cop_ee4f1e0d6ac44b2c8d03"
+     ],
+     "why": "32 signings are already under signed standing orders (32 written acceptances at $175) scheduled days 2-16; Tri-County's written rate is $95, paid only after the agency pays, so exposure is $0; capacity 6/day covers 32 signings over 15 days; agencies pay 10 days after each signing, so the last receipt is day 26 and the last supplier payment day 29, inside 30. Net = 32 x $80 = $2,560 >= $2,000 (25 signings would suffice, leaving 7 signings of slack)."
+    },
+    "alternatives": [],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the 32 signed standing-order loan signings with the four title agencies at $175 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "2c8d03-buyerVolume",
+       "2c8d03-price"
+      ],
+      "priceCents": 17500,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 1-16 (days 2-9; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 9,
+      "dependsOn": "sell",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 17-32 (days 10-16; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 16,
+      "dependsOn": "sell",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 1-16 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 19,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 17-32 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 26,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 19,
+      "stepId": "collect1"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 26,
+      "stepId": "collect2"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver2"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "signed signings",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 175,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor rate",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net per signing",
+      "status": "EVIDENCED",
+      "value": 80,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net settled",
+      "status": "EVIDENCED",
+      "value": 2560,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts",
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signings needed for $2,000 net",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cash",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-exposure",
+       "2c8d03-fulfillment"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "2c8d03-price",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#price",
+      "dated": "2026-11",
+      "claim": "Four agencies' fee schedules pay $175 per completed signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-buyerVolume",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#buyerVolume",
+      "dated": "2026-11",
+      "claim": "32 signings under signed standing orders, scheduled days 2-16",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-fulfillment",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#fulfillment",
+      "dated": "2026-11",
+      "claim": "Tri-County $95/signing, paid within 3 days of the agency paying, up to 6/day",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-directCosts",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#directCosts",
+      "dated": "2026-11",
+      "claim": "$95 per signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "10 days",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-exposure",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#exposure",
+      "dated": "2026-11",
+      "claim": "$0",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-payer",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#payer",
+      "dated": "2026-11",
+      "claim": "Escrow officers at independent title agencies",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "deals": 32,
+      "price": 175,
+      "directCost": 95,
+      "capital": 0,
+      "settlesDay": 26,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dd714930e2f4_6732a2",
+    "digest": "dd714930e2f42856d55d00de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3a14f29a4bf342588da4/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:57.988Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_8df44ce6e8b548a09231",
+   "contractDigest": "a39a9f405efdaa2348e7e34b",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Fulfil the 32 signed standing-order loan signings through Tri-County",
+    "opportunityIds": [
+     "cop_ee4f1e0d6ac44b2c8d03"
+    ],
+    "why": "32 signings are already under signed standing orders (32 written acceptances at $175) scheduled days 2-16; Tri-County's written rate is $95, paid only after the agency pays, so exposure is $0; capacity 6/day covers 32 signings over 15 days; agencies pay 10 days after each signing, so the last receipt is day 26 and the last supplier payment day 29, inside 30. Net = 32 x $80 = $2,560 >= $2,000 (25 signings would suffice, leaving 7 signings of slack)."
+   },
+   "alternatives": [],
+   "steps": [
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Confirm the 32 signed standing-order loan signings with the four title agencies at $175 each",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "2c8d03-buyerVolume",
+      "2c8d03-price"
+     ],
+     "priceCents": 17500,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver1",
+     "kind": "DELIVER",
+     "label": "Tri-County completes signings 1-16 (days 2-9; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+     "performer": "Tri-County Signing Agents Network",
+     "costCents": 152000,
+     "day": 9,
+     "dependsOn": "sell",
+     "evidence": [
+      "2c8d03-fulfillment",
+      "2c8d03-directCosts"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Tri-County Signing Agents Network",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver2",
+     "kind": "DELIVER",
+     "label": "Tri-County completes signings 17-32 (days 10-16; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+     "performer": "Tri-County Signing Agents Network",
+     "costCents": 152000,
+     "day": 16,
+     "dependsOn": "sell",
+     "evidence": [
+      "2c8d03-fulfillment",
+      "2c8d03-directCosts"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Tri-County Signing Agents Network",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect1",
+     "kind": "COLLECT",
+     "label": "Agencies pay $2,800 for signings 1-16 (10 days to cash)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 19,
+     "dependsOn": "deliver1",
+     "evidence": [
+      "2c8d03-timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect2",
+     "kind": "COLLECT",
+     "label": "Agencies pay $2,800 for signings 17-32 (10 days to cash)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 26,
+     "dependsOn": "deliver2",
+     "evidence": [
+      "2c8d03-timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 19,
+     "kind": "RECEIPT",
+     "amountCents": 280000,
+     "label": "16 signings x $175",
+     "settlesDay": 19,
+     "stepId": "collect1"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 152000,
+     "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+     "stepId": "deliver1"
+    },
+    {
+     "day": 26,
+     "kind": "RECEIPT",
+     "amountCents": 280000,
+     "label": "16 signings x $175",
+     "settlesDay": 26,
+     "stepId": "collect2"
+    },
+    {
+     "day": 29,
+     "kind": "SPEND",
+     "amountCents": 152000,
+     "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+     "stepId": "deliver2"
+    }
+   ],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "signed signings",
+     "status": "EVIDENCED",
+     "value": 32,
+     "unit": "signings",
+     "sources": [
+      "2c8d03-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 175,
+     "unit": "USD/signing",
+     "sources": [
+      "2c8d03-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "subcontractor rate",
+     "status": "EVIDENCED",
+     "value": 95,
+     "unit": "USD/signing",
+     "sources": [
+      "2c8d03-fulfillment",
+      "2c8d03-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net per signing",
+     "status": "EVIDENCED",
+     "value": 80,
+     "unit": "USD",
+     "sources": [
+      "2c8d03-price",
+      "2c8d03-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "net settled",
+     "status": "EVIDENCED",
+     "value": 2560,
+     "unit": "USD",
+     "sources": [
+      "2c8d03-price",
+      "2c8d03-directCosts",
+      "2c8d03-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "signings needed for $2,000 net",
+     "status": "EVIDENCED",
+     "value": 25,
+     "unit": "signings",
+     "sources": [
+      "2c8d03-price",
+      "2c8d03-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to cash",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "days",
+     "sources": [
+      "2c8d03-timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "USD",
+     "sources": [
+      "2c8d03-exposure",
+      "2c8d03-fulfillment"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "2c8d03-price",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#price",
+     "dated": "2026-11",
+     "claim": "Four agencies' fee schedules pay $175 per completed signing",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-buyerVolume",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#buyerVolume",
+     "dated": "2026-11",
+     "claim": "32 signings under signed standing orders, scheduled days 2-16",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-fulfillment",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#fulfillment",
+     "dated": "2026-11",
+     "claim": "Tri-County $95/signing, paid within 3 days of the agency paying, up to 6/day",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-directCosts",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#directCosts",
+     "dated": "2026-11",
+     "claim": "$95 per signing",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-timeToFirstCash",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "10 days",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-exposure",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#exposure",
+     "dated": "2026-11",
+     "claim": "$0",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    },
+    {
+     "id": "2c8d03-payer",
+     "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#payer",
+     "dated": "2026-11",
+     "claim": "Escrow officers at independent title agencies",
+     "population": "The four independent title agencies with signed standing orders",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+     "deals": 32,
+     "price": 175,
+     "directCost": 95,
+     "capital": 0,
+     "settlesDay": 26,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_dd714930e2f4_6732a2",
+   "digest": "dd714930e2f42856d55d00de",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_3a14f29a4bf342588da4/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:40:57.988Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_dd714930e2f4_6732a2",
+   "digest": "dd714930e2f42856d55d00de",
+   "contractDigest": "a39a9f405efdaa2348e7e34b",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 304000,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 128000,
+    "minCashDay": 22,
+    "collectedCents": 560000,
+    "collectedInWindowCents": 560000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 256000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Brokered mortgage loan-signing appointments completed by com\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Brokered mortgage loan-signing appointments completed by com\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2560× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Brokered mortgage loan-signing appointments completed by commissioned \".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_ee4f1e0d6ac44b2c8d03"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+      "owner": "PERSON",
+      "cost": 95
+     },
+     {
+      "label": "Collect payment for \"Brokered mortgage loan-signing appointments completed by commissioned signing ag\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "title": "Brokered mortgage loan-signing appointments completed by commissioned signing agents",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 2000,
+      "potentialReach": 2000,
+      "card": {
+       "payer": "Escrow officers and closing coordinators at independent title agencies",
+       "reachableChannel": "The standing-order email of the four agencies already ordering from this seller",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:55.545Z",
+       "offerScope": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+       "priceCents": 17500,
+       "currency": "USD",
+       "fulfillmentOwner": "Tri-County Signing Agents Network (written rate: $95 per completed signing, paid by the seller within 3 days of the agency paying for that signing; can cover up to 6 signings a day)",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [],
+       "industry": "mobile notary loan signing",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 17500,
+        "currency": "USD",
+        "deliverable": "A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The standing-order email of the four agencies already ordering from this seller"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 5600 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5600 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Tri-County Signing Agents Network (written rate: $95 per completed signing, paid (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 95, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Four title agencies signed standing orders with this seller for 32 loan signings, all scheduled on days 2-16 of the window.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A commissioned notary signing agent completes the borrower signing and returns the package within 24 hours to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$95",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Tri-County Signing Agents Network (written rate: $95 per completed signing, paid by the seller within 3 days of the agency paying for that signing; can cover up to 6 signings a day) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Escrow officers and closing coordinators at independent title agencies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The fee schedules of the four agencies ordering from this seller pay $175 per completed loan signing (fee schedules, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 200000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:37:51.329Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_dd714930e2f4_6732a2",
+    "revisionDigest": "dd714930e2f42856d55d00de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3a14f29a4bf342588da4/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_294dc02b026d4bf98b8d/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported for a net-contribution target. The 32 signings are under signed standing orders from four title agencies (buyerVolume EVIDENCE, 32 written acceptances at $175) and the $175 comes from the agencies' own fee schedules — a real purchase price for these buyers. The recorded fulfiller is Tri-County Signing Agents Network at a written $95 per signing, payable only within 3 days after the agency pays, so no capital goes out before cash comes in (exposure $0 fits the $0 cap). Recomputed: net $80 per signing; 32 x $80 = $2,560 >= $2,000; 25 signings suffice (25 x 80 = $2,000), so 7 cancellations can be absorbed. Timing: signings days 2-16 at up to 6/day (32 over 15 days averages ~2.1/day); 10 days to cash puts the last agency receipt at day 26 and the last Tri-County payment at day 29, both inside 30, so the whole contribution settles in the window. Ledger: $5,600 received, $3,040 paid, $2,560 net, minimum cash $1,280 on day 22 — never negative.",
+    "findings": [
+     "Arithmetic verified: 2 x 16 x $175 = $5,600 receipts; 2 x 16 x $95 = $3,040 supplier payments; net $2,560 against the $2,000 contribution target.",
+     "Settlement: day-16 signings pay by day 26 and Tri-County is paid by day 29; the contribution is fully net within the 30-day window with one day of margin — a late agency payment on the last batch would push the supplier payment, not the receipt, past day 30, but the receipts alone already settle in time.",
+     "Capacity: the card states the 32 signings are scheduled across days 2-16 but not their per-day distribution; if any day carries more than 6, Tri-County's cap would delay a signing. The 7-signing slack covers a few such slips.",
+     "Owner hours: the card records 0.2 human hours per signing (~6.4 h for coordination) while ownerHours is null; the contract sets no hours ceiling, so this does not bind."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:42:54.114Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_dd714930e2f4_6732a2",
+   "digest": "dd714930e2f42856d55d00de",
+   "contractDigest": "a39a9f405efdaa2348e7e34b",
+   "plan": {
+    "goalId": "wst_8df44ce6e8b548a09231",
+    "contractDigest": "a39a9f405efdaa2348e7e34b",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Fulfil the 32 signed standing-order loan signings through Tri-County",
+     "opportunityIds": [
+      "cop_ee4f1e0d6ac44b2c8d03"
+     ],
+     "why": "32 signings are already under signed standing orders (32 written acceptances at $175) scheduled days 2-16; Tri-County's written rate is $95, paid only after the agency pays, so exposure is $0; capacity 6/day covers 32 signings over 15 days; agencies pay 10 days after each signing, so the last receipt is day 26 and the last supplier payment day 29, inside 30. Net = 32 x $80 = $2,560 >= $2,000 (25 signings would suffice, leaving 7 signings of slack)."
+    },
+    "alternatives": [],
+    "steps": [
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Confirm the 32 signed standing-order loan signings with the four title agencies at $175 each",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "2c8d03-buyerVolume",
+       "2c8d03-price"
+      ],
+      "priceCents": 17500,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver1",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 1-16 (days 2-9; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 9,
+      "dependsOn": "sell",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver2",
+      "kind": "DELIVER",
+      "label": "Tri-County completes signings 17-32 (days 10-16; capacity 6/day) at Tri-County's written $95/signing, paid within 3 days of the agency paying",
+      "performer": "Tri-County Signing Agents Network",
+      "costCents": 152000,
+      "day": 16,
+      "dependsOn": "sell",
+      "evidence": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Tri-County Signing Agents Network",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect1",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 1-16 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 19,
+      "dependsOn": "deliver1",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect2",
+      "kind": "COLLECT",
+      "label": "Agencies pay $2,800 for signings 17-32 (10 days to cash)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 26,
+      "dependsOn": "deliver2",
+      "evidence": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 19,
+      "stepId": "collect1"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver1"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 280000,
+      "label": "16 signings x $175",
+      "settlesDay": 26,
+      "stepId": "collect2"
+     },
+     {
+      "day": 29,
+      "kind": "SPEND",
+      "amountCents": 152000,
+      "label": "Tri-County 16 x $95, paid within 3 days of agency payment",
+      "stepId": "deliver2"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "signed signings",
+      "status": "EVIDENCED",
+      "value": 32,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 175,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "subcontractor rate",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "USD/signing",
+      "sources": [
+       "2c8d03-fulfillment",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net per signing",
+      "status": "EVIDENCED",
+      "value": 80,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "net settled",
+      "status": "EVIDENCED",
+      "value": 2560,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts",
+       "2c8d03-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "signings needed for $2,000 net",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "signings",
+      "sources": [
+       "2c8d03-price",
+       "2c8d03-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to cash",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "2c8d03-timeToFirstCash"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "2c8d03-exposure",
+       "2c8d03-fulfillment"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "2c8d03-price",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#price",
+      "dated": "2026-11",
+      "claim": "Four agencies' fee schedules pay $175 per completed signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-buyerVolume",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#buyerVolume",
+      "dated": "2026-11",
+      "claim": "32 signings under signed standing orders, scheduled days 2-16",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-fulfillment",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#fulfillment",
+      "dated": "2026-11",
+      "claim": "Tri-County $95/signing, paid within 3 days of the agency paying, up to 6/day",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-directCosts",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#directCosts",
+      "dated": "2026-11",
+      "claim": "$95 per signing",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "10 days",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-exposure",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#exposure",
+      "dated": "2026-11",
+      "claim": "$0",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     },
+     {
+      "id": "2c8d03-payer",
+      "url": "https://brain.local/card/cop_ee4f1e0d6ac44b2c8d03#payer",
+      "dated": "2026-11",
+      "claim": "Escrow officers at independent title agencies",
+      "population": "The four independent title agencies with signed standing orders",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_ee4f1e0d6ac44b2c8d03",
+      "deals": 32,
+      "price": 175,
+      "directCost": 95,
+      "capital": 0,
+      "settlesDay": 26,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dd714930e2f4_6732a2",
+    "digest": "dd714930e2f42856d55d00de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3a14f29a4bf342588da4/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:57.988Z"
+   },
+   "review": {
+    "revisionId": "rev_dd714930e2f4_6732a2",
+    "revisionDigest": "dd714930e2f42856d55d00de",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3a14f29a4bf342588da4/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_294dc02b026d4bf98b8d/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported for a net-contribution target. The 32 signings are under signed standing orders from four title agencies (buyerVolume EVIDENCE, 32 written acceptances at $175) and the $175 comes from the agencies' own fee schedules — a real purchase price for these buyers. The recorded fulfiller is Tri-County Signing Agents Network at a written $95 per signing, payable only within 3 days after the agency pays, so no capital goes out before cash comes in (exposure $0 fits the $0 cap). Recomputed: net $80 per signing; 32 x $80 = $2,560 >= $2,000; 25 signings suffice (25 x 80 = $2,000), so 7 cancellations can be absorbed. Timing: signings days 2-16 at up to 6/day (32 over 15 days averages ~2.1/day); 10 days to cash puts the last agency receipt at day 26 and the last Tri-County payment at day 29, both inside 30, so the whole contribution settles in the window. Ledger: $5,600 received, $3,040 paid, $2,560 net, minimum cash $1,280 on day 22 — never negative.",
+    "findings": [
+     "Arithmetic verified: 2 x 16 x $175 = $5,600 receipts; 2 x 16 x $95 = $3,040 supplier payments; net $2,560 against the $2,000 contribution target.",
+     "Settlement: day-16 signings pay by day 26 and Tri-County is paid by day 29; the contribution is fully net within the 30-day window with one day of margin — a late agency payment on the last batch would push the supplier payment, not the receipt, past day 30, but the receipts alone already settle in time.",
+     "Capacity: the card states the 32 signings are scheduled across days 2-16 but not their per-day distribution; if any day carries more than 6, Tri-County's cap would delay a signing. The 7-signing slack covers a few such slips.",
+     "Owner hours: the card records 0.2 human hours per signing (~6.4 h for coordination) while ownerHours is null; the contract sets no hours ceiling, so this does not bind."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:42:54.114Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Keep $2,000 of net settled cash after direct costs within 30 days using no up-front capital.",
+    "terms": "8aed60e10cea6db3",
+    "openings": {
+     "cop_ee4f1e0d6ac44b2c8d03": "492eb7ef33083f57"
+    }
+   },
+   "at": "2026-11-28T04:43:21.261Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

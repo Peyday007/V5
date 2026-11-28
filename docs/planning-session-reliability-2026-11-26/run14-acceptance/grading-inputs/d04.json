@@ -1,0 +1,595 @@
+{
+ "caseId": "au-04-net-profit-larger",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed (net of direct costs) at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_02da4a34235042709531",
+   "cop_a11a5ea2635945428a00",
+   "cop_8e4f3860ff0a4f239eec",
+   "cop_e36cc5d8d80f47d78f9d"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_02da4a34235042709531",
+    "title": "Cold-email website rebuild for local service businesses, build subcontracted",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1123,
+    "card": {
+     "payer": "US local service businesses with outdated or missing websites",
+     "reachableChannel": "cold email via Instantly Growth plan",
+     "offerScope": "fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+     "peakFundingCents": 25000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "local services (trades, clinics, firms)",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email via Instantly Growth plan"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 377, tied up 250"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email via Instantly Growth plan",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec to US local service businesses with outdated or missing websites, reached through cold email via Instantly Growth plan, at $1,500; Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$377",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "fixed-scope 5-page mobile website rebuild with contact/quote forms and basic SEO, built by a hired Freelancer.com developer to Brain's spec",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local service businesses with outdated or missing websites",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/projects/web-design/emergency-management-website-creation; https://clutch.co/press-releases/smb-websites-2025; https://hunter.io/the-state-of-cold-email-2025; https://clutch.co/press-releases/smb-websites-2025; https://instantly.ai/pricing.md",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_a11a5ea2635945428a00",
+    "title": "Cold-email local business websites, build subcontracted to Freelancer.com freelancer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1100,
+    "card": {
+     "payer": "US local service businesses with outdated or missing websites",
+     "reachableChannel": "cold email via Instantly Growth plan",
+     "offerScope": "5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelancer.com web developer hired per project",
+     "peakFundingCents": 60000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "local services",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email via Instantly Growth plan"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 400, tied up 600"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email via Instantly Growth plan",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell 5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA to US local service businesses with outdated or missing websites, reached through cold email via Instantly Growth plan, at $1,500; Freelancer.com web developer hired per project delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelancer.com web developer hired per project.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "5-page mobile website rebuild, built by a hired Freelancer.com developer under Brain's spec and QA",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "US local service businesses with outdated or missing websites",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/projects/web-design/emergency-management-website-creation; https://clutch.co/press-releases/smb-websites-2025; https://hunter.io/the-state-of-cold-email-2025; https://instantly.ai/pricing.md",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_8e4f3860ff0a4f239eec",
+    "title": "Win posted $750-1500 website projects on Freelancer.com, subcontract the build",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 374,
+    "card": {
+     "payer": "small businesses and individuals who post fixed-price website projects on Freelancer.com",
+     "reachableChannel": "Freelancer.com project bids",
+     "offerScope": "responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs",
+     "priceCents": 83500,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build)",
+     "peakFundingCents": 39700,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "web design",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Freelancer.com project bids"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 835 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 461, tied up 397"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Freelancer.com project bids",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs to small businesses and individuals who post fixed-price website projects on Freelancer.com, reached through Freelancer.com project bids, at $835; Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$461",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$397",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelancer.com web developer hired per project (avg bid $366 on a comparable $250-750 posted site build).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "responsive portfolio/business website build built by a hired Freelancer.com developer to Brain's spec and QA, with handoff docs",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "small businesses and individuals who post fixed-price website projects on Freelancer.com",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$835",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$835",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/jobs/website-design/; https://www.freelancer.com/projects/web-design/bold-filmmaker-portfolio-website; https://www.freelancer.com/jobs/website-design/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_e36cc5d8d80f47d78f9d",
+    "title": "Win posted blog-article projects on Freelancer.com, subcontract the writing",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 191,
+    "card": {
+     "payer": "businesses posting fixed-price blog/article writing projects on Freelancer.com",
+     "reachableChannel": "Freelancer.com project bids",
+     "offerScope": "researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain",
+     "priceCents": 32400,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings)",
+     "peakFundingCents": 12000,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "content marketing",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Freelancer.com project bids"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 324 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 133, tied up 120"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "7 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Freelancer.com project bids",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain to businesses posting fixed-price blog/article writing projects on Freelancer.com, reached through Freelancer.com project bids, at $324; Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$133",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$120",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelancer.com article writer hired per project (competing writers bid ~$19/hr on article-writer postings).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "researched, cited 800-1,200 word blog articles with headline, meta description and CTA, written by a hired writer and checked by Brain",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "businesses posting fixed-price blog/article writing projects on Freelancer.com",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$324",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$324",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts; https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205; https://www.freelancer.com/feesandcharges; https://www.freelancer.com/projects/blog-writing/engaging-english-article-blog-writer; https://www.freelancer.com/jobs/article-writing/; https://www.freelancer.com/projects/blog-writing/sales-driven-product-blog-posts; https://www.freelancer.com/projects/blog-writing/engaging-informative-blog-articles-40839205; https://www.freelancer.com/jobs/article-writing/",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:58:23.101Z"
+ }
+}

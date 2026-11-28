@@ -1,0 +1,3084 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_09aef33dfca34a3887d7",
+   "words": "I want $5,000 collected within 30 days, only from work in the auto glass repair and replacement industry. I can put in up to $1,000 of my own money.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "COLLECTED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 100000,
+    "proofCondition": "first collected payment from an auto glass buyer",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "f389176c87408c07bf9853f3"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_09aef33dfca34a3887d7",
+    "contractDigest": "f389176c87408c07bf9853f3",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Month-one local SEO / Google Business Profile package sold to independent auto glass shops at $750, fulfilled by a subcontracted local-SEO freelancer",
+     "opportunityIds": [
+      "cop_d3b6fa0f8a1143c59888"
+     ],
+     "why": "Verified evidence puts what small-market auto glass shops pay for SEO at $700-$2,000 per month (BizIQ, Jul 2026), so $750 sits at the bottom of the paid range; 7,047 US auto glass replacement businesses are listed (NAICS Association), so 7 buyers is a tiny share. Only $100 of the owner's money is put in before any buyer pays; the freelancer is paid from each shop's payment. What nothing records is the close rate on cold outreach, a freelancer committed at <= $199 per shop, and Stripe's first-payout timing, so the plan is conditional on a 10-day market test."
+    },
+    "alternatives": [
+     {
+      "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+      "why": "Retail price is evidenced ($393 average, Glass.com 2026) but no installer's wholesale price exists, so the margin and the paid-ad cost per job are unknown and 13 jobs would be needed."
+     },
+     {
+      "title": "AI missed-call answering setup resold to auto glass shops",
+      "why": "Shops can buy the same tools self-serve from $49-$199/month, so a $300 setup premium is unevidenced, and 17 sales would be needed in 30 days."
+     },
+     {
+      "title": "Exclusive windshield leads sold per lead (refused at admission)",
+      "why": "Glass.com sells exclusive leads around $29 while clicks for 'windshield replacement' cost $15-$30 each, so cost per lead exceeds price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy a sending domain and one month of a cold-email tool; build a list of 600 independent auto glass shops from public map listings",
+      "performer": "BRAIN",
+      "costCents": 10000,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Brief two local-SEO freelancers and get a written fixed quote <= $199 per shop for the month-one package (fulfilment test)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Send the $750 month-one offer to the first 150 shops, then the remaining 450 after the day-10 check",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_price",
+       "q_buyers"
+      ],
+      "priceCents": 75000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Owner takes reply calls and sends a Stripe invoice for $750 to each shop that agrees",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 75000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Day-10 stop/continue check on paid shops and freelancer quote",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close",
+       "q_sub_cost"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelancer delivers the month-one package for each paid shop, paid from that shop's payment",
+      "performer": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+      "costCents": 139300,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect Stripe payouts for the 7 paid invoices",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_settle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 10000,
+      "label": "Sending domain + cold-email tool, one month",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "2 shops pay $750 (test cohort)",
+      "settlesDay": 17,
+      "stepId": "s7"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 39800,
+      "label": "Freelancer for the 2 test-cohort shops",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 375000,
+      "label": "5 more shops pay $750",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 99500,
+      "label": "Freelancer for the 5 further shops",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "EVIDENCED",
+      "value": 750,
+      "unit": "USD per shop, month one (inside the evidenced $700-$2,000/month range)",
+      "sources": [
+       "s1",
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_buyers",
+      "status": "EVIDENCED",
+      "value": 7047,
+      "unit": "US auto glass replacement business entities",
+      "sources": [
+       "s2",
+       "s4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_deals",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "paid shops needed ($5,250 >= $5,000)",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid shops per shop contacted",
+      "sources": [],
+      "needs": "the day-10 test: >= 2 paid of the first 150 contacted"
+     },
+     {
+      "name": "q_sub_cost",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per shop quoted by a local-SEO freelancer",
+      "sources": [],
+      "needs": "a written fixed quote <= $199 by day 5"
+     },
+     {
+      "name": "q_settle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from Stripe charge to usable cash on a new account",
+      "sources": [
+       "s8"
+      ],
+      "needs": "the first payout; Stripe states ~2 business days standard, first payouts longer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_d3b6fa0f8a1143c59888#revenueRange",
+      "dated": "2026-07-24",
+      "claim": "Auto glass SEO packages typically run $700 to $2,000 per month in small markets (verified)",
+      "population": "auto glass shops in small/mid markets",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_d3b6fa0f8a1143c59888#buyerVolume",
+      "dated": "2026",
+      "claim": "7,047 US business entities under NAICS 811122 Automotive Glass Replacement Shops (verified)",
+      "population": "US auto glass replacement shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s3",
+      "url": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/",
+      "dated": "2026-07-24",
+      "claim": "'SEO packages for auto glass typically run $700 to $2,000 per month.'",
+      "population": "auto glass shops buying SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.naics.com/naics-code-description/?code=81112",
+      "dated": "2026",
+      "claim": "'811122 | Automotive Glass Replacement Shops | 7,047' (US Business Entities)",
+      "population": "US auto glass replacement shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.glass.com/info/?p=48",
+      "dated": "2026",
+      "claim": "Average 2026 windshield replacement $393, median $354, from 10,000 VIN-based quotes",
+      "population": "US vehicle owners replacing a windshield",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8bd0dbf085e542aa9c74"
+     },
+     {
+      "id": "s6",
+      "url": "https://www.quo.com/answering-service/automotive",
+      "dated": "2026",
+      "claim": "Automotive AI answering services are sold self-serve from about $25-$49 per month",
+      "population": "auto repair and auto service shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.autoleap.com/air",
+      "dated": "2026",
+      "claim": "AutoLeap AIR AI receptionist for auto shops listed at $199/month + $100 setup (Growth tier)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s8",
+      "url": "https://stripe.com/us/resources/more/payouts-explained",
+      "dated": "2026",
+      "claim": "US Stripe payouts run on about a 2-business-day schedule; first payouts take longer",
+      "population": "US Stripe merchants",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 of the first 150 independent auto glass shops contacted have paid a $750 Stripe invoice, a freelancer has quoted <= $199 per shop in writing, and by day 17 the first Stripe payout has landed.",
+     "stop": [
+      "Fewer than 2 paid shops from the first 150 contacted by day 10: stop; only the $100 setup is lost",
+      "No freelancer quote <= $199 per shop by day 5: stop selling before taking any order",
+      "First Stripe payout not landed by day 17"
+     ],
+     "continue": [
+      "2+ paid of 150 by day 10 and a freelancer committed: send to the remaining 450 shops and close 5 more by day 20, collected by day 27"
+     ],
+     "decides": [
+      "CONVERSION",
+      "FULFILMENT",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 150,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "why": "No installer wholesale price or ad cost per job is evidenced, so economics are unknown; 13 retail jobs in 30 days with $1,000 of ads is unsupported."
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "why": "The same tools are sold self-serve from $49-$199/month, so a $300 reseller setup price is unevidenced, and 17 sales would be needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "deals": 7,
+      "price": 750,
+      "directCost": 199,
+      "capital": 100,
+      "settlesDay": 27,
+      "ownerHours": 1.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card's revenueRange is verified EVIDENCE: auto glass SEO packages 'typically run $700 to $2,000 per month' (BizIQ, 2026-07-24); the $750 month-one price is inside that paid range."
+     },
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "MARKET_VOLUME",
+      "reason": "The card's buyerVolume is verified EVIDENCE: 7,047 US auto glass replacement business entities; 7 buyers is about 0.1% of them, and the plan reaches 600."
+     }
+    ],
+    "revisionId": "rev_3639db48d9a0_79821d",
+    "digest": "3639db48d9a0618f0447c800",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:46:55.634Z"
+   },
+   {
+    "goalId": "wst_09aef33dfca34a3887d7",
+    "contractDigest": "f389176c87408c07bf9853f3",
+    "parentRevisionId": "rev_3639db48d9a0_79821d",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Month-one local SEO / Google Business Profile package sold to independent auto glass shops at $750, fulfilled by a subcontracted local-SEO freelancer",
+     "opportunityIds": [
+      "cop_d3b6fa0f8a1143c59888"
+     ],
+     "why": "An auto glass SEO vendor states its packages typically run $700-$2,000 per month (BizIQ, Jul 2026), so $750 is at the bottom of what sellers charge; the independent verifier rejected that as a buyer-paid price, and rejected the 7,047-entity NAICS listing as an undated, mismatched count, so price and volume are measured by the test itself (shops paying the invoice). Only $100 of the owner's money is put in before any buyer pays; the freelancer is paid from each shop's payment. What nothing records is whether shops pay $750, the close rate on cold outreach, a freelancer committed at <= $199 per shop, and Stripe's first-payout timing, so the plan is conditional on a 10-day market test."
+    },
+    "alternatives": [
+     {
+      "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+      "why": "Retail price is evidenced ($393 average, Glass.com 2026) but no installer's wholesale price exists, so the margin and the paid-ad cost per job are unknown and 13 jobs would be needed."
+     },
+     {
+      "title": "AI missed-call answering setup resold to auto glass shops",
+      "why": "Shops can buy the same tools self-serve from $49-$199/month, so a $300 setup premium is unevidenced, and 17 sales would be needed in 30 days."
+     },
+     {
+      "title": "Exclusive windshield leads sold per lead (refused at admission)",
+      "why": "Glass.com sells exclusive leads around $29 while clicks for 'windshield replacement' cost $15-$30 each, so cost per lead exceeds price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy a sending domain and one month of a cold-email tool; build a list of 600 independent auto glass shops from public map listings",
+      "performer": "BRAIN",
+      "costCents": 10000,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Brief two local-SEO freelancers and get a written fixed quote <= $199 per shop for the month-one package (fulfilment test)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Send the $750 month-one offer to the first 150 shops, then the remaining 450 after the day-10 check",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_price",
+       "q_buyers",
+       "s3"
+      ],
+      "priceCents": 75000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Owner takes reply calls and sends a Stripe invoice for $750 to each shop that agrees",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "q_close"
+      ],
+      "ownerHours": 7,
+      "priceCents": 75000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Day-10 stop/continue check on paid shops and freelancer quote",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close",
+       "q_sub_cost"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelancer delivers the month-one package for each paid shop, paid from that shop's payment",
+      "performer": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+      "costCents": 139300,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect Stripe payouts for the 7 paid invoices",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_settle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 10000,
+      "label": "Sending domain + cold-email tool, one month",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "2 shops pay $750 (test cohort)",
+      "settlesDay": 17,
+      "stepId": "s7"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 39800,
+      "label": "Freelancer for the 2 test-cohort shops",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 375000,
+      "label": "5 more shops pay $750",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 99500,
+      "label": "Freelancer for the 5 further shops",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 750,
+      "unit": "USD per shop, month one (bottom of a vendor's stated $700-$2,000/month package range)",
+      "sources": [
+       "s3"
+      ],
+      "needs": "shops paying the $750 invoice in the day-10 test"
+     },
+     {
+      "name": "q_buyers",
+      "status": "ESTIMATE",
+      "value": 7047,
+      "unit": "US auto glass replacement business entities (undated directory count; verifier rejected scope)",
+      "sources": [
+       "s4"
+      ],
+      "needs": "count of reachable independent shops while building the 600-shop list"
+     },
+     {
+      "name": "q_deals",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "paid shops needed ($5,250 >= $5,000)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid shops per shop contacted",
+      "sources": [],
+      "needs": "the day-10 test: >= 2 paid of the first 150 contacted"
+     },
+     {
+      "name": "q_sub_cost",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per shop quoted by a local-SEO freelancer",
+      "sources": [],
+      "needs": "a written fixed quote <= $199 by day 5"
+     },
+     {
+      "name": "q_settle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from Stripe charge to usable cash on a new account",
+      "sources": [
+       "s8"
+      ],
+      "needs": "the first payout; Stripe states ~2 business days standard, first payouts longer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s3",
+      "url": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/",
+      "dated": "2026-07-24",
+      "claim": "'SEO packages for auto glass typically run $700 to $2,000 per month.' (a vendor's own price framing, not a buyer-paid figure)",
+      "population": "auto glass shops buying SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.naics.com/naics-code-description/?code=81112",
+      "dated": "2026",
+      "claim": "'811122 | Automotive Glass Replacement Shops | 7,047' (US Business Entities)",
+      "population": "US auto glass replacement shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.glass.com/info/?p=48",
+      "dated": "2026",
+      "claim": "Average 2026 windshield replacement $393, median $354, from 10,000 VIN-based quotes",
+      "population": "US vehicle owners replacing a windshield",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8bd0dbf085e542aa9c74"
+     },
+     {
+      "id": "s6",
+      "url": "https://www.quo.com/answering-service/automotive",
+      "dated": "2026",
+      "claim": "Automotive AI answering services are sold self-serve from about $25-$49 per month",
+      "population": "auto repair and auto service shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.autoleap.com/air",
+      "dated": "2026",
+      "claim": "AutoLeap AIR AI receptionist for auto shops listed at $199/month + $100 setup (Growth tier)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s8",
+      "url": "https://stripe.com/us/resources/more/payouts-explained",
+      "dated": "2026",
+      "claim": "US Stripe payouts run on about a 2-business-day schedule; first payouts take longer",
+      "population": "US Stripe merchants",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     }
+    ],
+    "validation": {
+     "proof": "By day 10, at least 2 of the first 150 independent auto glass shops contacted have paid a $750 Stripe invoice, a freelancer has quoted <= $199 per shop in writing, and by day 17 the first Stripe payout has landed.",
+     "stop": [
+      "Fewer than 2 paid shops from the first 150 contacted by day 10: stop; only the $100 setup is lost",
+      "No freelancer quote <= $199 per shop by day 5: stop selling before taking any order",
+      "First Stripe payout not landed by day 17"
+     ],
+     "continue": [
+      "2+ paid of 150 by day 10 and a freelancer committed: send to the remaining 450 shops and close 5 more by day 20, collected by day 27"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 150,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "why": "No installer wholesale price or ad cost per job is evidenced, so economics are unknown; 13 retail jobs in 30 days with $1,000 of ads is unsupported."
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "why": "The same tools are sold self-serve from $49-$199/month, so a $300 reseller setup price is unevidenced, and 17 sales would be needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "deals": 7,
+      "price": 750,
+      "directCost": 199,
+      "capital": 100,
+      "settlesDay": 27,
+      "ownerHours": 1.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_6b5b3e5d8223_deeff2",
+    "digest": "6b5b3e5d82231d7b94032147",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:47:30.736Z"
+   },
+   {
+    "goalId": "wst_09aef33dfca34a3887d7",
+    "contractDigest": "f389176c87408c07bf9853f3",
+    "parentRevisionId": "rev_6b5b3e5d8223_deeff2",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Month-one local SEO / Google Business Profile package sold to independent auto glass shops at $750, fulfilled by a subcontracted local-SEO freelancer",
+     "opportunityIds": [
+      "cop_d3b6fa0f8a1143c59888"
+     ],
+     "why": "An auto glass SEO vendor states its packages typically run $700-$2,000 per month (BizIQ, Jul 2026), so $750 is at the bottom of what sellers charge; the independent verifier rejected that as a buyer-paid price, and rejected the 7,047-entity NAICS listing as an undated, mismatched count, so price and volume are measured by the test itself (shops paying the invoice). Only $100 of the owner's money is put in before any buyer pays; the freelancer is paid from each shop's payment. What nothing records is whether shops pay $750, the close rate on cold outreach, a freelancer committed at <= $199 per shop, and Stripe's first-payout timing, so the plan is conditional on a 10-day market test. Only the one-off month-one package is counted; no recurring month two is assumed. The owner sends from the cold-email tool and reads replies himself (Brain's sending is not connected)."
+    },
+    "alternatives": [
+     {
+      "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+      "why": "Retail price is evidenced ($393 average, Glass.com 2026) but no installer's wholesale price exists, so the margin and the paid-ad cost per job are unknown and 13 jobs would be needed."
+     },
+     {
+      "title": "AI missed-call answering setup resold to auto glass shops",
+      "why": "Shops can buy the same tools self-serve from $49-$199/month, so a $300 setup premium is unevidenced, and 17 sales would be needed in 30 days."
+     },
+     {
+      "title": "Exclusive windshield leads sold per lead (refused at admission)",
+      "why": "Glass.com sells exclusive leads around $29 while clicks for 'windshield replacement' cost $15-$30 each, so cost per lead exceeds price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner buys a sending domain and one month of a cold-email tool and builds a list of >= 600 independent auto glass shops with contactable emails from public map listings (measures reachable volume)",
+      "performer": "OWNER",
+      "costCents": 10000,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "ownerHours": 4,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Brief two local-SEO freelancers and get a written fixed quote <= $199 per shop for the month-one package, due by day 2 (fulfilment test, before any offer)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Only after s2's written quote and s1's list: owner sends the $750 month-one offer from the cold-email tool to the first 150 shops, then the remaining 450 after the day-10 check",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price",
+       "q_buyers",
+       "s3"
+      ],
+      "priceCents": 75000,
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Owner reads replies, takes calls and sends a Stripe invoice for $750 to each shop that agrees (freelancer already committed)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "q_close"
+      ],
+      "ownerHours": 8,
+      "priceCents": 75000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Day-10 stop/continue check on paid shops and freelancer quote",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close",
+       "q_sub_cost"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelancer delivers the month-one package for each paid shop, paid from that shop's payment",
+      "performer": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+      "costCents": 139300,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect Stripe payouts for the 7 paid invoices",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_settle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 10000,
+      "label": "Sending domain + cold-email tool, one month",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "2 shops pay $750 (test cohort)",
+      "settlesDay": 17,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 39800,
+      "label": "Freelancer orders for the 2 test-cohort shops, paid at order",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 375000,
+      "label": "5 more shops pay $750",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 99500,
+      "label": "Freelancer orders for the 5 further shops, paid at order",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 750,
+      "unit": "USD per shop, month one (bottom of a vendor's stated $700-$2,000/month package range)",
+      "sources": [
+       "s3"
+      ],
+      "needs": "shops paying the $750 invoice in the day-10 test"
+     },
+     {
+      "name": "q_buyers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "independent auto glass shops with a contactable email on the s1 list",
+      "sources": [
+       "s4"
+      ],
+      "needs": "s1's list count; >= 525 needed (7 deals / 1.33%); the 7,047 directory count was rejected and is not relied on"
+     },
+     {
+      "name": "q_deals",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "paid shops needed ($5,250 >= $5,000)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid shops per shop contacted",
+      "sources": [],
+      "needs": "the day-10 test: >= 2 paid of the first 150 contacted"
+     },
+     {
+      "name": "q_sub_cost",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per shop quoted by a local-SEO freelancer",
+      "sources": [],
+      "needs": "a written fixed quote <= $199 by day 2, before any offer is sent"
+     },
+     {
+      "name": "q_settle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from Stripe charge to usable cash on a new account",
+      "sources": [
+       "s8"
+      ],
+      "needs": "the first payout; Stripe states ~2 business days standard, first payouts longer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s3",
+      "url": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/",
+      "dated": "2026-07-24",
+      "claim": "'SEO packages for auto glass typically run $700 to $2,000 per month.' (a vendor's own price framing, not a buyer-paid figure)",
+      "population": "auto glass shops buying SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.naics.com/naics-code-description/?code=81112",
+      "dated": "2026",
+      "claim": "'811122 | Automotive Glass Replacement Shops | 7,047' (US Business Entities)",
+      "population": "US auto glass replacement shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.glass.com/info/?p=48",
+      "dated": "2026",
+      "claim": "Average 2026 windshield replacement $393, median $354, from 10,000 VIN-based quotes",
+      "population": "US vehicle owners replacing a windshield",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8bd0dbf085e542aa9c74"
+     },
+     {
+      "id": "s6",
+      "url": "https://www.quo.com/answering-service/automotive",
+      "dated": "2026",
+      "claim": "Automotive AI answering services are sold self-serve from about $25-$49 per month",
+      "population": "auto repair and auto service shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.autoleap.com/air",
+      "dated": "2026",
+      "claim": "AutoLeap AIR AI receptionist for auto shops listed at $199/month + $100 setup (Growth tier)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s8",
+      "url": "https://stripe.com/us/resources/more/payouts-explained",
+      "dated": "2026",
+      "claim": "US Stripe payouts run on about a 2-business-day schedule; first payouts take longer",
+      "population": "US Stripe merchants",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     }
+    ],
+    "validation": {
+     "proof": "By day 2 a freelancer has quoted <= $199 per shop in writing and s1 has listed >= 525 contactable independent shops; by day 10 at least 2 of the first 150 contacted have paid a $750 Stripe invoice; by day 17 the first payout has landed. Only the one-off month-one package is counted - no month two.",
+     "stop": [
+      "s1 finds fewer than 525 contactable independent shops: stop before sending (reach cannot carry 7 deals at 1.33%)",
+      "No freelancer quote <= $199 per shop by day 2: stop before any offer is sent",
+      "Fewer than 2 paid shops from the first 150 contacted by day 10: stop; only the $100 setup is lost",
+      "First Stripe payout not landed by day 17"
+     ],
+     "continue": [
+      "2+ paid of 150 by day 10 and a freelancer committed: send to the remaining 450 shops and close 5 more by day 20, collected by day 27"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 150,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Ledger arithmetic consistent",
+      "resolution": "Noted; freelancer orders are now shown leaving at order (day 12 and day 20); peak exposure $498 <= $1,000."
+     },
+     {
+      "finding": "Price not evidenced",
+      "resolution": "Accepted (in rev_6b5b3e5d8223_deeff2): q_price ASSUMED, OFFER_AND_PRICE in decides, measured by two paid $750 invoices."
+     },
+     {
+      "finding": "Buyer volume not evidenced",
+      "resolution": "Accepted: q_buyers is UNKNOWN, measured by s1's list before any offer, MARKET_VOLUME in decides, stop below 525 shops."
+     },
+     {
+      "finding": "Order of tests",
+      "resolution": "Accepted: s3 now depends on s2; no offer is sent until a written <= $199 quote exists (due day 2)."
+     },
+     {
+      "finding": "One-off vs retainer",
+      "resolution": "Accepted: only month one is counted; no month two in the ledger or target."
+     },
+     {
+      "finding": "SEND_A_MESSAGE not connected",
+      "resolution": "Accepted: the owner sends from the $100 cold-email tool and reads replies (s1/s3/s4 performer OWNER with hours)."
+     },
+     {
+      "finding": "s3/s4 do not depend on s2",
+      "resolution": "Accepted: s3 dependsOn s2 and is scheduled day 3, after the day-2 quote deadline."
+     },
+     {
+      "finding": "MARKET_VOLUME not in decides",
+      "resolution": "Accepted: added to decides; s1 measures contactable shops; stop if fewer than 525."
+     },
+     {
+      "finding": "SEND_A_MESSAGE / READ_REPLIES",
+      "resolution": "Accepted: owner performs s1, s3 and s4 with stated hours."
+     },
+     {
+      "finding": "Freelancer paid at order",
+      "resolution": "Accepted: SPEND moved to day 12 (and day 20 for cohort 2), $498 peak exposure."
+     },
+     {
+      "finding": "No answers to previous review",
+      "resolution": "Accepted: answers to rev_3639db48d9a0_79821d's findings are included."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "why": "No installer wholesale price or ad cost per job is evidenced, so economics are unknown; 13 retail jobs in 30 days with $1,000 of ads is unsupported."
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "why": "The same tools are sold self-serve from $49-$199/month, so a $300 reseller setup price is unevidenced, and 17 sales would be needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "deals": 7,
+      "price": 750,
+      "directCost": 199,
+      "capital": 100,
+      "settlesDay": 27,
+      "ownerHours": 1.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dea83243af2c_c1600d",
+    "digest": "dea83243af2c5ceb00572069",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:55:03.733Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_09aef33dfca34a3887d7",
+   "contractDigest": "f389176c87408c07bf9853f3",
+   "parentRevisionId": "rev_6b5b3e5d8223_deeff2",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Month-one local SEO / Google Business Profile package sold to independent auto glass shops at $750, fulfilled by a subcontracted local-SEO freelancer",
+    "opportunityIds": [
+     "cop_d3b6fa0f8a1143c59888"
+    ],
+    "why": "An auto glass SEO vendor states its packages typically run $700-$2,000 per month (BizIQ, Jul 2026), so $750 is at the bottom of what sellers charge; the independent verifier rejected that as a buyer-paid price, and rejected the 7,047-entity NAICS listing as an undated, mismatched count, so price and volume are measured by the test itself (shops paying the invoice). Only $100 of the owner's money is put in before any buyer pays; the freelancer is paid from each shop's payment. What nothing records is whether shops pay $750, the close rate on cold outreach, a freelancer committed at <= $199 per shop, and Stripe's first-payout timing, so the plan is conditional on a 10-day market test. Only the one-off month-one package is counted; no recurring month two is assumed. The owner sends from the cold-email tool and reads replies himself (Brain's sending is not connected)."
+   },
+   "alternatives": [
+    {
+     "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+     "why": "Retail price is evidenced ($393 average, Glass.com 2026) but no installer's wholesale price exists, so the margin and the paid-ad cost per job are unknown and 13 jobs would be needed."
+    },
+    {
+     "title": "AI missed-call answering setup resold to auto glass shops",
+     "why": "Shops can buy the same tools self-serve from $49-$199/month, so a $300 setup premium is unevidenced, and 17 sales would be needed in 30 days."
+    },
+    {
+     "title": "Exclusive windshield leads sold per lead (refused at admission)",
+     "why": "Glass.com sells exclusive leads around $29 while clicks for 'windshield replacement' cost $15-$30 each, so cost per lead exceeds price."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Owner buys a sending domain and one month of a cold-email tool and builds a list of >= 600 independent auto glass shops with contactable emails from public map listings (measures reachable volume)",
+     "performer": "OWNER",
+     "costCents": 10000,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "q_buyers"
+     ],
+     "ownerHours": 4,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "TEST",
+     "label": "Brief two local-SEO freelancers and get a written fixed quote <= $199 per shop for the month-one package, due by day 2 (fulfilment test, before any offer)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "q_sub_cost"
+     ],
+     "ownerHours": 2,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "Only after s2's written quote and s1's list: owner sends the $750 month-one offer from the cold-email tool to the first 150 shops, then the remaining 450 after the day-10 check",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "q_price",
+      "q_buyers",
+      "s3"
+     ],
+     "priceCents": 75000,
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "SELL",
+     "label": "Owner reads replies, takes calls and sends a Stripe invoice for $750 to each shop that agrees (freelancer already committed)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s3",
+     "evidence": [
+      "q_price",
+      "q_close"
+     ],
+     "ownerHours": 8,
+     "priceCents": 75000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "TEST",
+     "label": "Day-10 stop/continue check on paid shops and freelancer quote",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 10,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_close",
+      "q_sub_cost"
+     ],
+     "ownerHours": 0.5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Freelancer delivers the month-one package for each paid shop, paid from that shop's payment",
+     "performer": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+     "costCents": 139300,
+     "day": 12,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_sub_cost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Collect Stripe payouts for the 7 paid invoices",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 14,
+     "dependsOn": "s4",
+     "evidence": [
+      "q_settle"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 10000,
+     "label": "Sending domain + cold-email tool, one month",
+     "stepId": "s1"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "2 shops pay $750 (test cohort)",
+     "settlesDay": 17,
+     "stepId": "s7"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 39800,
+     "label": "Freelancer orders for the 2 test-cohort shops, paid at order",
+     "stepId": "s6"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 375000,
+     "label": "5 more shops pay $750",
+     "settlesDay": 27,
+     "stepId": "s7"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 99500,
+     "label": "Freelancer orders for the 5 further shops, paid at order",
+     "stepId": "s6"
+    }
+   ],
+   "proofDay": 17,
+   "quantities": [
+    {
+     "name": "q_price",
+     "status": "ASSUMED",
+     "value": 750,
+     "unit": "USD per shop, month one (bottom of a vendor's stated $700-$2,000/month package range)",
+     "sources": [
+      "s3"
+     ],
+     "needs": "shops paying the $750 invoice in the day-10 test"
+    },
+    {
+     "name": "q_buyers",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "independent auto glass shops with a contactable email on the s1 list",
+     "sources": [
+      "s4"
+     ],
+     "needs": "s1's list count; >= 525 needed (7 deals / 1.33%); the 7,047 directory count was rejected and is not relied on"
+    },
+    {
+     "name": "q_deals",
+     "status": "ESTIMATE",
+     "value": 7,
+     "unit": "paid shops needed ($5,250 >= $5,000)",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "q_close",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid shops per shop contacted",
+     "sources": [],
+     "needs": "the day-10 test: >= 2 paid of the first 150 contacted"
+    },
+    {
+     "name": "q_sub_cost",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per shop quoted by a local-SEO freelancer",
+     "sources": [],
+     "needs": "a written fixed quote <= $199 by day 2, before any offer is sent"
+    },
+    {
+     "name": "q_settle",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "days from Stripe charge to usable cash on a new account",
+     "sources": [
+      "s8"
+     ],
+     "needs": "the first payout; Stripe states ~2 business days standard, first payouts longer"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s3",
+     "url": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/",
+     "dated": "2026-07-24",
+     "claim": "'SEO packages for auto glass typically run $700 to $2,000 per month.' (a vendor's own price framing, not a buyer-paid figure)",
+     "population": "auto glass shops buying SEO",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d3b6fa0f8a1143c59888"
+    },
+    {
+     "id": "s4",
+     "url": "https://www.naics.com/naics-code-description/?code=81112",
+     "dated": "2026",
+     "claim": "'811122 | Automotive Glass Replacement Shops | 7,047' (US Business Entities)",
+     "population": "US auto glass replacement shops",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d3b6fa0f8a1143c59888"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.glass.com/info/?p=48",
+     "dated": "2026",
+     "claim": "Average 2026 windshield replacement $393, median $354, from 10,000 VIN-based quotes",
+     "population": "US vehicle owners replacing a windshield",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8bd0dbf085e542aa9c74"
+    },
+    {
+     "id": "s6",
+     "url": "https://www.quo.com/answering-service/automotive",
+     "dated": "2026",
+     "claim": "Automotive AI answering services are sold self-serve from about $25-$49 per month",
+     "population": "auto repair and auto service shops",
+     "matchesBuyer": false,
+     "opportunityId": "cop_65661868364d41169ff9"
+    },
+    {
+     "id": "s7",
+     "url": "https://www.autoleap.com/air",
+     "dated": "2026",
+     "claim": "AutoLeap AIR AI receptionist for auto shops listed at $199/month + $100 setup (Growth tier)",
+     "population": "auto repair shops",
+     "matchesBuyer": false,
+     "opportunityId": "cop_65661868364d41169ff9"
+    },
+    {
+     "id": "s8",
+     "url": "https://stripe.com/us/resources/more/payouts-explained",
+     "dated": "2026",
+     "claim": "US Stripe payouts run on about a 2-business-day schedule; first payouts take longer",
+     "population": "US Stripe merchants",
+     "matchesBuyer": false,
+     "opportunityId": "cop_d3b6fa0f8a1143c59888"
+    }
+   ],
+   "validation": {
+    "proof": "By day 2 a freelancer has quoted <= $199 per shop in writing and s1 has listed >= 525 contactable independent shops; by day 10 at least 2 of the first 150 contacted have paid a $750 Stripe invoice; by day 17 the first payout has landed. Only the one-off month-one package is counted - no month two.",
+    "stop": [
+     "s1 finds fewer than 525 contactable independent shops: stop before sending (reach cannot carry 7 deals at 1.33%)",
+     "No freelancer quote <= $199 per shop by day 2: stop before any offer is sent",
+     "Fewer than 2 paid shops from the first 150 contacted by day 10: stop; only the $100 setup is lost",
+     "First Stripe payout not landed by day 17"
+    ],
+    "continue": [
+     "2+ paid of 150 by day 10 and a freelancer committed: send to the remaining 450 shops and close 5 more by day 20, collected by day 27"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "CURRENT_DEMAND"
+    ],
+    "threshold": {
+     "paid": 2,
+     "of": 150,
+     "reach": 600
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Ledger arithmetic consistent",
+     "resolution": "Noted; freelancer orders are now shown leaving at order (day 12 and day 20); peak exposure $498 <= $1,000."
+    },
+    {
+     "finding": "Price not evidenced",
+     "resolution": "Accepted (in rev_6b5b3e5d8223_deeff2): q_price ASSUMED, OFFER_AND_PRICE in decides, measured by two paid $750 invoices."
+    },
+    {
+     "finding": "Buyer volume not evidenced",
+     "resolution": "Accepted: q_buyers is UNKNOWN, measured by s1's list before any offer, MARKET_VOLUME in decides, stop below 525 shops."
+    },
+    {
+     "finding": "Order of tests",
+     "resolution": "Accepted: s3 now depends on s2; no offer is sent until a written <= $199 quote exists (due day 2)."
+    },
+    {
+     "finding": "One-off vs retainer",
+     "resolution": "Accepted: only month one is counted; no month two in the ledger or target."
+    },
+    {
+     "finding": "SEND_A_MESSAGE not connected",
+     "resolution": "Accepted: the owner sends from the $100 cold-email tool and reads replies (s1/s3/s4 performer OWNER with hours)."
+    },
+    {
+     "finding": "s3/s4 do not depend on s2",
+     "resolution": "Accepted: s3 dependsOn s2 and is scheduled day 3, after the day-2 quote deadline."
+    },
+    {
+     "finding": "MARKET_VOLUME not in decides",
+     "resolution": "Accepted: added to decides; s1 measures contactable shops; stop if fewer than 525."
+    },
+    {
+     "finding": "SEND_A_MESSAGE / READ_REPLIES",
+     "resolution": "Accepted: owner performs s1, s3 and s4 with stated hours."
+    },
+    {
+     "finding": "Freelancer paid at order",
+     "resolution": "Accepted: SPEND moved to day 12 (and day 20 for cohort 2), $498 peak exposure."
+    },
+    {
+     "finding": "No answers to previous review",
+     "resolution": "Accepted: answers to rev_3639db48d9a0_79821d's findings are included."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_d3b6fa0f8a1143c59888",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_8bd0dbf085e542aa9c74",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_65661868364d41169ff9",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_8bd0dbf085e542aa9c74",
+     "why": "No installer wholesale price or ad cost per job is evidenced, so economics are unknown; 13 retail jobs in 30 days with $1,000 of ads is unsupported."
+    },
+    {
+     "opportunityId": "cop_65661868364d41169ff9",
+     "why": "The same tools are sold self-serve from $49-$199/month, so a $300 reseller setup price is unevidenced, and 17 sales would be needed."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_d3b6fa0f8a1143c59888",
+     "deals": 7,
+     "price": 750,
+     "directCost": 199,
+     "capital": 100,
+     "settlesDay": 27,
+     "ownerHours": 1.5
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_dea83243af2c_c1600d",
+   "digest": "dea83243af2c5ceb00572069",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_7efe47cd13ef4d4db181/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:55:03.733Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_dea83243af2c_c1600d",
+   "digest": "dea83243af2c5ceb00572069",
+   "contractDigest": "f389176c87408c07bf9853f3",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 149300,
+    "committedOpenCents": 0,
+    "preProofCents": 49800,
+    "maxExposureCents": 49800,
+    "minCashCents": 50200,
+    "minCashDay": 12,
+    "collectedCents": 525000,
+    "collectedInWindowCents": 525000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 375700
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Local SEO / Google Business Profile month-one package for in\", and what it is missing first is an offer and a price. Research first: the deep dive on \"Local SEO / Google Business Profile month-one package for in\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 2 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Raise price ×2.50 on 3 opening(s) (all of them)) it would reach 57.1% (p50 $6,750): a hypothesis to test by running each one's kill criterion, not evidence.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_65661868364d41169ff9",
+     "cop_8bd0dbf085e542aa9c74",
+     "cop_d3b6fa0f8a1143c59888"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dive on \"Local SEO / Google Business Profile month-one package for in\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 393,
+      "card": {
+       "payer": "Vehicle owners paying cash for windshield replacement",
+       "reachableChannel": "Local paid search / Facebook ads to a quote page",
+       "offerScope": "Mobile windshield replacement at a quoted price",
+       "priceCents": 39300,
+       "currency": "USD",
+       "fulfillmentOwner": "A local mobile auto glass installer (none yet agreed)",
+       "peakFundingCents": 100000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "auto glass repair and replacement",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Local paid search / Facebook ads to a quote page"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 393 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "costs or money tied up are not established"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Local paid search / Facebook ads to a quote page",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Mobile windshield replacement at a quoted price to Vehicle owners paying cash for windshield replacement, reached through Local paid search / Facebook ads to a quote page, at $393; A local mobile auto glass installer (none yet agreed) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$1,000",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A local mobile auto glass installer (none yet agreed).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Mobile windshield replacement at a quoted price",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Vehicle owners paying cash for windshield replacement",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$393",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$393",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.glass.com/info/?p=48; windshield replacement near me; https://biziq.com/?p=31385",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "title": "AI missed-call answering setup resold to auto glass shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Auto glass shops that miss inbound calls",
+       "reachableChannel": "Cold email / calls to shops",
+       "offerScope": "Setup plus first month of an AI receptionist configured for windshield quotes",
+       "priceCents": 30000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 5000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "auto glass repair and replacement",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email / calls to shops"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "68 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "17 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 49, tied up 50"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email / calls to shops",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "5,854 Auto glass shops that miss inbound calls (17 sales needed at $300; vendors sell automotive AI answering from $49-$199/month)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Setup plus first month of an AI receptionist configured for windshield quotes to Auto glass shops that miss inbound calls, reached through Cold email / calls to shops, at $300; the owner configures the shop's own AI answering account delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$49",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$50",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "the owner configures the shop's own AI answering account.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Setup plus first month of an AI receptionist configured for windshield quotes",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Auto glass shops that miss inbound calls",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.quo.com/answering-service/automotive; https://www.autoleap.com/air; https://shop-ware.com/ai-receptionist/; https://www.ibisworld.com/industry-statistics/number-of-businesses/auto-windshield-repair-services-united-states",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "title": "Local SEO / Google Business Profile month-one package for independent auto glass shops",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Independent auto glass repair/replacement shops",
+       "reachableChannel": "Cold email to independent shops found on maps/directories; paid by Stripe invoice",
+       "offerScope": "First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup",
+       "priceCents": 75000,
+       "currency": "USD",
+       "fulfillmentOwner": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+       "peakFundingCents": 10000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "auto glass repair and replacement",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email to independent shops found on maps/directories; paid by Stripe invoic"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "28 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "7 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 199, tied up 100"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email to independent shops found on maps/directories; paid by Stripe invoice",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "5,854 Independent auto glass repair/replacement shops (IBISWorld counts 5,854 US auto windshield repair businesses (2025); auto glass SEO packages typically $700-$2,000/month (BizIQ, Jul 2026); close rate unmeasured; 7 sales needed)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup to Independent auto glass repair/replacement shops, reached through Cold email to independent shops found on maps/directories; paid by Stripe invoice, at $750; A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$199",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Independent auto glass repair/replacement shops",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/; https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788; https://biziq.com/blog/local-auto-glass-seo-the-strategic-playbook-to-dominate-your-market-and-drive-high-intent-leads/; https://www.ibisworld.com/industry-statistics/number-of-businesses/auto-windshield-repair-services-united-states",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:45:53.298Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_3639db48d9a0_79821d",
+    "revisionDigest": "3639db48d9a0618f0447c800",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_118b4db9331d4b7192ea/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The plan treats as verified two figures the evidence gate rejected. The BizIQ '$700-$2,000 per month' is an SEO vendor's own description of monthly agency retainers, not a record of what independent shops paid for a one-off first-month package (claim rejected on verification); the NAICS 7,047 count has no year, does not separate independent shops, and gives no purchase frequency (rejected on scope). The card's revenueRange, price and buyerVolume are all RECOMMENDATION, and Brain's links mark OFFER_AND_PRICE and MARKET_VOLUME unestablished. As a CONDITIONAL plan it can still stand, but only if the test is what decides price, and it must not take shops' orders before a freelancer has committed in writing.",
+    "findings": [
+     "Recomputed: 7 x $750 = $5,250 >= $5,000 collected; freelancer 7 x $199 = $1,393; setup $100; net $3,757. Peak exposure: $100 setup + $398 for the first two freelancer orders (Fiverr/Upwork are paid at order, day 12, before the day-17 Stripe settlement) = $498 <= $1,000. Second cohort receipts day 20 settle day 27 <= 30. Arithmetic of the ledger is consistent.",
+     "Price is not evidenced: q_price 'EVIDENCED' and 'Verified evidence puts what shops pay at $700-$2,000' are false - the card's revenueRange/price are RECOMMENDATION and the BizIQ claim was rejected as a seller's benchmark. Mark q_price as the test's unknown and add OFFER_AND_PRICE to validation.decides (two paid $750 invoices are what would establish it).",
+     "Buyer volume is not evidenced: q_buyers 'EVIDENCED 7,047' was rejected (no year, not limited to independents, no frequency). 600 reachable shops from map listings is the plan's actual reach; that list count is a step output, and MARKET_VOLUME should be in decides or measured by s1 before s3.",
+     "Order of tests: the freelancer quote (s2) is due by day 5, but offers go out from day 2 and the owner invoices from day 5; the plan can take buyers' orders before fulfilment is shown possible. Require the written <= $199 quote before s3 sends any offer.",
+     "The offer is a one-off month-one package, but the source range is a monthly retainer; even a passing test at $750 says nothing about recurring revenue - do not count any month two.",
+     "s1/s3 rely on SEND_A_MESSAGE, which is NOT_CONNECTED; the plan should say who sends (the owner's own inbox or the $100 tool) and the owner hours for it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:52:44.701Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "No EVIDENCE fact holds a price buyers paid; the only submitted source (BizIQ, an SEO vendor's typical monthly retainer) was rejected on verification as not a buyer-paid price for this one-off package."
+     },
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "MARKET_VOLUME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "buyerVolume",
+      "why": "The NAICS 7,047 count was rejected (no year, not independent shops, no purchase frequency); the card's buyerVolume is a RECOMMENDATION."
+     },
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "No freelancer has quoted or committed; the fulfillment fact is a RECOMMENDATION from listing prices, and the plan sells before its own fulfilment test completes."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_6b5b3e5d8223_deeff2",
+    "revisionDigest": "6b5b3e5d82231d7b94032147",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_118b4db9331d4b7192ea/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "This revision correctly stops calling the BizIQ range and the NAICS count verified: price is now ASSUMED and measured by shops paying the $750 invoice, and OFFER_AND_PRICE is in validation.decides. The arithmetic carries: 2 paid of 150 (1.33%) on the 600-shop reach is 8 deals = $6,000 >= $5,000; 7 x $750 = $5,250 collected by day 27; peak exposure about $498 <= $1,000. But the test still takes buyers' orders before fulfilment is shown possible: s4 (owner invoices each shop that agrees, from day 5) depends only on s3, not on s2 (the freelancer's written <= $199 quote, due by day 5), and offers go out from day 2. A shop can agree and be invoiced before any freelancer has committed. Also, the 600 reachable independent shops are an estimate the plan does not measure.",
+    "findings": [
+     "Make s3 (or at least s4) depend on s2: no offer sent, or at minimum no invoice issued, until a freelancer has quoted <= $199 per shop in writing. As written the stop rule 'stop selling before taking any order' cannot hold, because invoicing begins on the same day the quote is due.",
+     "Add MARKET_VOLUME to validation.decides (or measure it in s1): the threshold extrapolation needs 600 independent shops with reachable emails; q_buyers is an undated, rejected directory count. State the stop if s1 finds fewer than ~525 contactable shops (7 deals / 1.33%).",
+     "s1/s3 rely on SEND_A_MESSAGE (NOT_CONNECTED) and READ_REPLIES (UNREAD); name who sends and the owner hours if Brain cannot.",
+     "The cash ledger pays the freelancer for the first cohort on day 17 while delivery starts day 12; Fiverr/Upwork orders are paid at order, so that $398 leaves on day 12, before the day-17 settlement - still inside the $1,000 exposure cap, but the ledger should show it.",
+     "No answers are recorded to the previous review's findings."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:53:51.100Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "No freelancer has quoted or committed (the fulfillment fact is a RECOMMENDATION from listing prices), and the plan's invoicing step does not wait for the fulfilment test."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_dea83243af2c_c1600d",
+    "revisionDigest": "dea83243af2c5ceb00572069",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_118b4db9331d4b7192ea/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance and every earlier finding is answered. Price ($750, ASSUMED), reach (contactable independent shops, UNKNOWN), close rate, fulfilment cost and first-payout timing are all treated as unknowns the test measures, and OFFER_AND_PRICE, MARKET_VOLUME, FULFILMENT, CONVERSION and CURRENT_DEMAND are in decides. The fulfilment test now precedes any offer (s3 depends on s2; written <= $199 quote due day 2, offers day 3), so no buyer's order is taken before fulfilment is shown possible. The work is inside the auto glass industry, only the one-off month-one package is counted, and the owner performs sending with stated hours.",
+    "findings": [
+     "Recomputed: 7 x $750 = $5,250 collected >= $5,000; freelancer 7 x $199 = $1,393; setup $100; net $3,757. Exposure: $100 (day 0) + $398 at order (day 12) before the day-17 settlement = $498 <= $1,000; the day-20 $995 is paid from the $1,500 already settled. Threshold 2/150 = 1.33% x 600 = 8 deals >= 7, so passing at the threshold carries the target; stop below 525 contactable shops is consistent (7 / 0.0133).",
+     "Timing: cohort 2 closes by day 20 and settles day 27 <= 30 on Stripe's ~2 business days plus margin; a new account's first payout can take longer, which the day-17 stop covers.",
+     "Residual risk the owner should see: $750 rests on no buyer-paid record (the only figure is an SEO vendor's monthly retainer range); the first two invoices are the evidence."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:56:20.706Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_dea83243af2c_c1600d",
+   "digest": "dea83243af2c5ceb00572069",
+   "contractDigest": "f389176c87408c07bf9853f3",
+   "plan": {
+    "goalId": "wst_09aef33dfca34a3887d7",
+    "contractDigest": "f389176c87408c07bf9853f3",
+    "parentRevisionId": "rev_6b5b3e5d8223_deeff2",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Month-one local SEO / Google Business Profile package sold to independent auto glass shops at $750, fulfilled by a subcontracted local-SEO freelancer",
+     "opportunityIds": [
+      "cop_d3b6fa0f8a1143c59888"
+     ],
+     "why": "An auto glass SEO vendor states its packages typically run $700-$2,000 per month (BizIQ, Jul 2026), so $750 is at the bottom of what sellers charge; the independent verifier rejected that as a buyer-paid price, and rejected the 7,047-entity NAICS listing as an undated, mismatched count, so price and volume are measured by the test itself (shops paying the invoice). Only $100 of the owner's money is put in before any buyer pays; the freelancer is paid from each shop's payment. What nothing records is whether shops pay $750, the close rate on cold outreach, a freelancer committed at <= $199 per shop, and Stripe's first-payout timing, so the plan is conditional on a 10-day market test. Only the one-off month-one package is counted; no recurring month two is assumed. The owner sends from the cold-email tool and reads replies himself (Brain's sending is not connected)."
+    },
+    "alternatives": [
+     {
+      "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+      "why": "Retail price is evidenced ($393 average, Glass.com 2026) but no installer's wholesale price exists, so the margin and the paid-ad cost per job are unknown and 13 jobs would be needed."
+     },
+     {
+      "title": "AI missed-call answering setup resold to auto glass shops",
+      "why": "Shops can buy the same tools self-serve from $49-$199/month, so a $300 setup premium is unevidenced, and 17 sales would be needed in 30 days."
+     },
+     {
+      "title": "Exclusive windshield leads sold per lead (refused at admission)",
+      "why": "Glass.com sells exclusive leads around $29 while clicks for 'windshield replacement' cost $15-$30 each, so cost per lead exceeds price."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner buys a sending domain and one month of a cold-email tool and builds a list of >= 600 independent auto glass shops with contactable emails from public map listings (measures reachable volume)",
+      "performer": "OWNER",
+      "costCents": 10000,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_buyers"
+      ],
+      "ownerHours": 4,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Brief two local-SEO freelancers and get a written fixed quote <= $199 per shop for the month-one package, due by day 2 (fulfilment test, before any offer)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Only after s2's written quote and s1's list: owner sends the $750 month-one offer from the cold-email tool to the first 150 shops, then the remaining 450 after the day-10 check",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_price",
+       "q_buyers",
+       "s3"
+      ],
+      "priceCents": 75000,
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Owner reads replies, takes calls and sends a Stripe invoice for $750 to each shop that agrees (freelancer already committed)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s3",
+      "evidence": [
+       "q_price",
+       "q_close"
+      ],
+      "ownerHours": 8,
+      "priceCents": 75000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Day-10 stop/continue check on paid shops and freelancer quote",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_close",
+       "q_sub_cost"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Freelancer delivers the month-one package for each paid shop, paid from that shop's payment",
+      "performer": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+      "costCents": 139300,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_sub_cost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect Stripe payouts for the 7 paid invoices",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 14,
+      "dependsOn": "s4",
+      "evidence": [
+       "q_settle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 10000,
+      "label": "Sending domain + cold-email tool, one month",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "2 shops pay $750 (test cohort)",
+      "settlesDay": 17,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 39800,
+      "label": "Freelancer orders for the 2 test-cohort shops, paid at order",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 375000,
+      "label": "5 more shops pay $750",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 99500,
+      "label": "Freelancer orders for the 5 further shops, paid at order",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 17,
+    "quantities": [
+     {
+      "name": "q_price",
+      "status": "ASSUMED",
+      "value": 750,
+      "unit": "USD per shop, month one (bottom of a vendor's stated $700-$2,000/month package range)",
+      "sources": [
+       "s3"
+      ],
+      "needs": "shops paying the $750 invoice in the day-10 test"
+     },
+     {
+      "name": "q_buyers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "independent auto glass shops with a contactable email on the s1 list",
+      "sources": [
+       "s4"
+      ],
+      "needs": "s1's list count; >= 525 needed (7 deals / 1.33%); the 7,047 directory count was rejected and is not relied on"
+     },
+     {
+      "name": "q_deals",
+      "status": "ESTIMATE",
+      "value": 7,
+      "unit": "paid shops needed ($5,250 >= $5,000)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_close",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid shops per shop contacted",
+      "sources": [],
+      "needs": "the day-10 test: >= 2 paid of the first 150 contacted"
+     },
+     {
+      "name": "q_sub_cost",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per shop quoted by a local-SEO freelancer",
+      "sources": [],
+      "needs": "a written fixed quote <= $199 by day 2, before any offer is sent"
+     },
+     {
+      "name": "q_settle",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from Stripe charge to usable cash on a new account",
+      "sources": [
+       "s8"
+      ],
+      "needs": "the first payout; Stripe states ~2 business days standard, first payouts longer"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s3",
+      "url": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/",
+      "dated": "2026-07-24",
+      "claim": "'SEO packages for auto glass typically run $700 to $2,000 per month.' (a vendor's own price framing, not a buyer-paid figure)",
+      "population": "auto glass shops buying SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s4",
+      "url": "https://www.naics.com/naics-code-description/?code=81112",
+      "dated": "2026",
+      "claim": "'811122 | Automotive Glass Replacement Shops | 7,047' (US Business Entities)",
+      "population": "US auto glass replacement shops",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.glass.com/info/?p=48",
+      "dated": "2026",
+      "claim": "Average 2026 windshield replacement $393, median $354, from 10,000 VIN-based quotes",
+      "population": "US vehicle owners replacing a windshield",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8bd0dbf085e542aa9c74"
+     },
+     {
+      "id": "s6",
+      "url": "https://www.quo.com/answering-service/automotive",
+      "dated": "2026",
+      "claim": "Automotive AI answering services are sold self-serve from about $25-$49 per month",
+      "population": "auto repair and auto service shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s7",
+      "url": "https://www.autoleap.com/air",
+      "dated": "2026",
+      "claim": "AutoLeap AIR AI receptionist for auto shops listed at $199/month + $100 setup (Growth tier)",
+      "population": "auto repair shops",
+      "matchesBuyer": false,
+      "opportunityId": "cop_65661868364d41169ff9"
+     },
+     {
+      "id": "s8",
+      "url": "https://stripe.com/us/resources/more/payouts-explained",
+      "dated": "2026",
+      "claim": "US Stripe payouts run on about a 2-business-day schedule; first payouts take longer",
+      "population": "US Stripe merchants",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d3b6fa0f8a1143c59888"
+     }
+    ],
+    "validation": {
+     "proof": "By day 2 a freelancer has quoted <= $199 per shop in writing and s1 has listed >= 525 contactable independent shops; by day 10 at least 2 of the first 150 contacted have paid a $750 Stripe invoice; by day 17 the first payout has landed. Only the one-off month-one package is counted - no month two.",
+     "stop": [
+      "s1 finds fewer than 525 contactable independent shops: stop before sending (reach cannot carry 7 deals at 1.33%)",
+      "No freelancer quote <= $199 per shop by day 2: stop before any offer is sent",
+      "Fewer than 2 paid shops from the first 150 contacted by day 10: stop; only the $100 setup is lost",
+      "First Stripe payout not landed by day 17"
+     ],
+     "continue": [
+      "2+ paid of 150 by day 10 and a freelancer committed: send to the remaining 450 shops and close 5 more by day 20, collected by day 27"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 150,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Ledger arithmetic consistent",
+      "resolution": "Noted; freelancer orders are now shown leaving at order (day 12 and day 20); peak exposure $498 <= $1,000."
+     },
+     {
+      "finding": "Price not evidenced",
+      "resolution": "Accepted (in rev_6b5b3e5d8223_deeff2): q_price ASSUMED, OFFER_AND_PRICE in decides, measured by two paid $750 invoices."
+     },
+     {
+      "finding": "Buyer volume not evidenced",
+      "resolution": "Accepted: q_buyers is UNKNOWN, measured by s1's list before any offer, MARKET_VOLUME in decides, stop below 525 shops."
+     },
+     {
+      "finding": "Order of tests",
+      "resolution": "Accepted: s3 now depends on s2; no offer is sent until a written <= $199 quote exists (due day 2)."
+     },
+     {
+      "finding": "One-off vs retainer",
+      "resolution": "Accepted: only month one is counted; no month two in the ledger or target."
+     },
+     {
+      "finding": "SEND_A_MESSAGE not connected",
+      "resolution": "Accepted: the owner sends from the $100 cold-email tool and reads replies (s1/s3/s4 performer OWNER with hours)."
+     },
+     {
+      "finding": "s3/s4 do not depend on s2",
+      "resolution": "Accepted: s3 dependsOn s2 and is scheduled day 3, after the day-2 quote deadline."
+     },
+     {
+      "finding": "MARKET_VOLUME not in decides",
+      "resolution": "Accepted: added to decides; s1 measures contactable shops; stop if fewer than 525."
+     },
+     {
+      "finding": "SEND_A_MESSAGE / READ_REPLIES",
+      "resolution": "Accepted: owner performs s1, s3 and s4 with stated hours."
+     },
+     {
+      "finding": "Freelancer paid at order",
+      "resolution": "Accepted: SPEND moved to day 12 (and day 20 for cohort 2), $498 peak exposure."
+     },
+     {
+      "finding": "No answers to previous review",
+      "resolution": "Accepted: answers to rev_3639db48d9a0_79821d's findings are included."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_8bd0dbf085e542aa9c74",
+      "why": "No installer wholesale price or ad cost per job is evidenced, so economics are unknown; 13 retail jobs in 30 days with $1,000 of ads is unsupported."
+     },
+     {
+      "opportunityId": "cop_65661868364d41169ff9",
+      "why": "The same tools are sold self-serve from $49-$199/month, so a $300 reseller setup price is unevidenced, and 17 sales would be needed."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d3b6fa0f8a1143c59888",
+      "deals": 7,
+      "price": 750,
+      "directCost": 199,
+      "capital": 100,
+      "settlesDay": 27,
+      "ownerHours": 1.5
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dea83243af2c_c1600d",
+    "digest": "dea83243af2c5ceb00572069",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:55:03.733Z"
+   },
+   "review": {
+    "revisionId": "rev_dea83243af2c_c1600d",
+    "revisionDigest": "dea83243af2c5ceb00572069",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_7efe47cd13ef4d4db181/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_118b4db9331d4b7192ea/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance and every earlier finding is answered. Price ($750, ASSUMED), reach (contactable independent shops, UNKNOWN), close rate, fulfilment cost and first-payout timing are all treated as unknowns the test measures, and OFFER_AND_PRICE, MARKET_VOLUME, FULFILMENT, CONVERSION and CURRENT_DEMAND are in decides. The fulfilment test now precedes any offer (s3 depends on s2; written <= $199 quote due day 2, offers day 3), so no buyer's order is taken before fulfilment is shown possible. The work is inside the auto glass industry, only the one-off month-one package is counted, and the owner performs sending with stated hours.",
+    "findings": [
+     "Recomputed: 7 x $750 = $5,250 collected >= $5,000; freelancer 7 x $199 = $1,393; setup $100; net $3,757. Exposure: $100 (day 0) + $398 at order (day 12) before the day-17 settlement = $498 <= $1,000; the day-20 $995 is paid from the $1,500 already settled. Threshold 2/150 = 1.33% x 600 = 8 deals >= 7, so passing at the threshold carries the target; stop below 525 contactable shops is consistent (7 / 0.0133).",
+     "Timing: cohort 2 closes by day 20 and settles day 27 <= 30 on Stripe's ~2 business days plus margin; a new account's first payout can take longer, which the day-17 stop covers.",
+     "Residual risk the owner should see: $750 rests on no buyer-paid record (the only figure is an SEO vendor's monthly retainer range); the first two invoices are the evidence."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:56:20.706Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want $5,000 collected within 30 days, only from work in the auto glass repair and replacement industry. I can put in up to $1,000 of my own money.",
+    "terms": "053776f32fdcd648",
+    "openings": {
+     "cop_65661868364d41169ff9": "26fbf17ff993c201",
+     "cop_8bd0dbf085e542aa9c74": "1fc7f1a42678dea5",
+     "cop_d3b6fa0f8a1143c59888": "b6e262f4af070b2f"
+    }
+   },
+   "at": "2026-11-28T04:57:17.000Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

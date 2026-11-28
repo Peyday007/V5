@@ -1,0 +1,1733 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_e1ed4003051f451dbd22",
+   "words": "Collect $3,000 of settled cash within 28 days with no more than 4 hours a week of owner time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 28,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": null,
+    "ownerHoursPerWeek": 4,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a4abfef3b43f1704b987a184"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_e1ed4003051f451dbd22",
+    "contractDigest": "a4abfef3b43f1704b987a184",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell digital waiver and trip-roster check-in setup to the listed buyers",
+     "opportunityIds": [
+      "cop_d136f685482247d2b942"
+     ],
+     "why": "Nine prior setups were invoiced and paid at $450 (Aug-Oct 2026); conversion 11 paid of 80 contacts was measured on this offer's own sales; 160 licensed outfitters on the state registry; Brain produces the deliverable (PRODUCE_SPREADSHEET), so the owner spends 0 of the 16 allowed hours; $12 direct cost, $0 exposure, 5 days to cash. 7 deals x $450 = $3,150 >= $3,000; the full registry at 13.75% yields ~22 expected paid orders, three times the 7 needed."
+    },
+    "alternatives": [
+     {
+      "title": "One swiftwater class ($900, 10 owner hours) plus 5 waiver setups",
+      "why": "Fits the 16-hour ceiling, but spends owner time the waiver-only plan does not need."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 160 buyers from the published list (state river-outfitter licence registry)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "d2b942-buyerVolume",
+       "d2b942-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: digital waiver and trip-roster check-in setup at $450",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "d2b942-price"
+      ],
+      "priceCents": 45000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 7 paid orders at $450 (measured 11 paid of 80 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "d2b942-conversionRates",
+       "d2b942-price"
+      ],
+      "priceCents": 45000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (7 deals, $12 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 8400,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "d2b942-delivery",
+       "d2b942-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $3150 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 23,
+      "dependsOn": "deliver",
+      "evidence": [
+       "d2b942-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 315000,
+      "label": "7 x $450 settled",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 23,
+      "kind": "SPEND",
+      "amountCents": 8400,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 450,
+      "unit": "USD/deal",
+      "sources": [
+       "d2b942-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1375,
+      "unit": "paid orders/contact",
+      "sources": [
+       "d2b942-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 160,
+      "unit": "buyers",
+      "sources": [
+       "d2b942-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "deals",
+      "sources": [
+       "d2b942-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 22,
+      "unit": "deals",
+      "sources": [
+       "d2b942-conversionRates",
+       "d2b942-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "USD/deal",
+      "sources": [
+       "d2b942-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "d2b942-timeToFirstCash"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "d2b942-delivery"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "d2b942-price",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-conversionRates",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-buyerVolume",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-directCosts",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-exposure",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-timeToFirstCash",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-delivery",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-payer",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d136f685482247d2b942",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_453cc994fec846a7a72e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_453cc994fec846a7a72e",
+      "why": "The owner teaches each class personally at 10 hours per class; the goal allows 4 hours a week, 16 hours in the 28 days, so at most one class ($900) fits, and the four signed classes (40 hours) cannot all be delivered. Not needed: the waiver setup reaches the target with 0 owner hours."
+     },
+     {
+      "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+      "why": "Loses money: the signed price is $120 per run and the subcontractor's written rate is $135 per run (cost above price)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d136f685482247d2b942",
+      "deals": 7,
+      "price": 450,
+      "directCost": 12,
+      "capital": 0,
+      "settlesDay": 23,
+      "ownerHours": 0
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_bc862063b31b_d5b34c",
+    "digest": "bc862063b31bf81c43fcb39e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6128c6e5715c47b8a515/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:31.962Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_e1ed4003051f451dbd22",
+   "contractDigest": "a4abfef3b43f1704b987a184",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell digital waiver and trip-roster check-in setup to the listed buyers",
+    "opportunityIds": [
+     "cop_d136f685482247d2b942"
+    ],
+    "why": "Nine prior setups were invoiced and paid at $450 (Aug-Oct 2026); conversion 11 paid of 80 contacts was measured on this offer's own sales; 160 licensed outfitters on the state registry; Brain produces the deliverable (PRODUCE_SPREADSHEET), so the owner spends 0 of the 16 allowed hours; $12 direct cost, $0 exposure, 5 days to cash. 7 deals x $450 = $3,150 >= $3,000; the full registry at 13.75% yields ~22 expected paid orders, three times the 7 needed."
+   },
+   "alternatives": [
+    {
+     "title": "One swiftwater class ($900, 10 owner hours) plus 5 waiver setups",
+     "why": "Fits the 16-hour ceiling, but spends owner time the waiver-only plan does not need."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email 160 buyers from the published list (state river-outfitter licence registry)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "d2b942-buyerVolume",
+      "d2b942-payer"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer: digital waiver and trip-roster check-in setup at $450",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "d2b942-price"
+     ],
+     "priceCents": 45000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 7 paid orders at $450 (measured 11 paid of 80 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 18,
+     "dependsOn": "offer",
+     "evidence": [
+      "d2b942-conversionRates",
+      "d2b942-price"
+     ],
+     "priceCents": 45000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers each workbook/spreadsheet (7 deals, $12 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 8400,
+     "day": 18,
+     "dependsOn": "sell",
+     "evidence": [
+      "d2b942-delivery",
+      "d2b942-directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $3150 settled",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 23,
+     "dependsOn": "deliver",
+     "evidence": [
+      "d2b942-timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 23,
+     "kind": "RECEIPT",
+     "amountCents": 315000,
+     "label": "7 x $450 settled",
+     "settlesDay": 23,
+     "stepId": "collect"
+    },
+    {
+     "day": 23,
+     "kind": "SPEND",
+     "amountCents": 8400,
+     "label": "direct delivery cost, paid out of receipts",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 450,
+     "unit": "USD/deal",
+     "sources": [
+      "d2b942-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1375,
+     "unit": "paid orders/contact",
+     "sources": [
+      "d2b942-conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 160,
+     "unit": "buyers",
+     "sources": [
+      "d2b942-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "deals",
+     "sources": [
+      "d2b942-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "expected paid orders from full list",
+     "status": "EVIDENCED",
+     "value": 22,
+     "unit": "deals",
+     "sources": [
+      "d2b942-conversionRates",
+      "d2b942-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "USD/deal",
+     "sources": [
+      "d2b942-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "d2b942-timeToFirstCash"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "hours",
+     "sources": [
+      "d2b942-delivery"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "d2b942-price",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#price",
+     "dated": "2026-11",
+     "claim": "price",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-conversionRates",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#conversionRates",
+     "dated": "2026-11",
+     "claim": "conversionRates",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-buyerVolume",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#buyerVolume",
+     "dated": "2026-11",
+     "claim": "buyerVolume",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-directCosts",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#directCosts",
+     "dated": "2026-11",
+     "claim": "directCosts",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-exposure",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#exposure",
+     "dated": "2026-11",
+     "claim": "exposure",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-timeToFirstCash",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "timeToFirstCash",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-delivery",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#delivery",
+     "dated": "2026-11",
+     "claim": "delivery",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    },
+    {
+     "id": "d2b942-payer",
+     "url": "https://brain.local/card/cop_d136f685482247d2b942#payer",
+     "dated": "2026-11",
+     "claim": "payer",
+     "population": "Licensed river outfitters on the state registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d136f685482247d2b942"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_d136f685482247d2b942",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_453cc994fec846a7a72e",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_453cc994fec846a7a72e",
+     "why": "The owner teaches each class personally at 10 hours per class; the goal allows 4 hours a week, 16 hours in the 28 days, so at most one class ($900) fits, and the four signed classes (40 hours) cannot all be delivered. Not needed: the waiver setup reaches the target with 0 owner hours."
+    },
+    {
+     "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+     "why": "Loses money: the signed price is $120 per run and the subcontractor's written rate is $135 per run (cost above price)."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_d136f685482247d2b942",
+     "deals": 7,
+     "price": 450,
+     "directCost": 12,
+     "capital": 0,
+     "settlesDay": 23,
+     "ownerHours": 0
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_bc862063b31b_d5b34c",
+   "digest": "bc862063b31bf81c43fcb39e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_6128c6e5715c47b8a515/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:40:31.962Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_bc862063b31b_d5b34c",
+   "digest": "bc862063b31bf81c43fcb39e",
+   "contractDigest": "a4abfef3b43f1704b987a184",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 8400,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 306600,
+    "minCashDay": 23,
+    "collectedCents": 315000,
+    "collectedInWindowCents": 315000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 306600
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Every modelled opening at full reach\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Digital waiver and river-trip roster check-in setup for kaya\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 49056× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Digital waiver and river-trip roster check-in setup for kayak and cano\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_d136f685482247d2b942",
+     "cop_453cc994fec846a7a72e"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+      "owner": "PERSON",
+      "cost": 12
+     },
+     {
+      "label": "Collect payment for \"Digital waiver and river-trip roster check-in setup for kayak and canoe outfitte\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_453cc994fec846a7a72e",
+      "title": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Outfitter owners training their guide staff",
+       "reachableChannel": "Direct email to the outfitters who signed",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:50.722Z",
+       "offerScope": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+       "priceCents": 90000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 10,
+       "requiredCapabilities": [],
+       "industry": "river kayak and canoe outfitters",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 90000,
+        "currency": "USD",
+        "deliverable": "Swiftwater-rescue refresher class for outfitter guides, taught by the owner",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Direct email to the outfitters who signed"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 3600 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 3600 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by The owner, personally (a person says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 28 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Swiftwater-rescue refresher class for outfitter guides, taught by the owner to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Outfitter owners training their guide staff",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four outfitters signed class bookings at $900 per class (signed bookings, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_d136f685482247d2b942",
+      "title": "Digital waiver and river-trip roster check-in setup for kayak and canoe outfitters",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Owners and operations managers of licensed river outfitters",
+       "reachableChannel": "Contact emails listed in the state river-outfitter licence registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:50.722Z",
+       "offerScope": "Waiver form, trip roster and arrival check-in configured on the outfitter's booking system; paid on completion",
+       "priceCents": 45000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.25,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "river kayak and canoe outfitters",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Contact emails listed in the state river-outfitter licence registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 450 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 11 accepted of 80 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "8 deal(s) needed, 160 available in the window (160 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 12, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 28 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state's river-outfitter licence registry lists 160 licensed outfitters with contact emails; each must hold signed participant waivers for every trip and re-sets its waiver process before the spring season.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Waiver form, trip roster and arrival check-in configured on the outfitter's booking system; paid on completion to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "11 paid orders from 80 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$12",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners and operations managers of licensed river outfitters",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "This seller's last nine outfitter setups were each invoiced and paid at $450 (invoices, Aug-Oct 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+      "title": "Brokered vehicle-shuttle runs for self-guided river trips",
+      "missing": [
+       "ECONOMICS"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 1200,
+      "potentialReach": 1200,
+      "card": {
+       "payer": "Outfitters running self-guided trips",
+       "reachableChannel": "Direct email to the outfitters who signed",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:34:50.722Z",
+       "offerScope": "Brokered vehicle-shuttle runs for self-guided river trips",
+       "priceCents": 12000,
+       "currency": "USD",
+       "fulfillmentOwner": "Valley Van Shuttle LLC (written rate: $135 per run)",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [],
+       "industry": "river kayak and canoe outfitters",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 12000,
+        "currency": "USD",
+        "deliverable": "Brokered vehicle-shuttle runs for self-guided river trips",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brokered vehicle-shuttle runs for self-guided river trips to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$135",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Valley Van Shuttle LLC (written rate: $135 per run) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Outfitters running self-guided trips",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Ten outfitters signed shuttle orders at $120 per run (signed orders, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_6c0c0705ad33424896d6",
+     "cnd_ea9c937bc1104642a721"
+    ],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 28,
+     "hoursCeiling": 16,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 4
+    },
+    "at": "2026-11-28T04:37:35.917Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_bc862063b31b_d5b34c",
+    "revisionDigest": "bc862063b31bf81c43fcb39e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6128c6e5715c47b8a515/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7bb21ce152504a278f8d/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. Member cop_d136f685482247d2b942 has every link on this offer's own records: $450 is a real purchase price paid by this buyer type (nine outfitter setups invoiced and paid, Aug-Oct 2026); conversion 11/80 = 13.75% measured on this offer's own sales; 160 separate licensed outfitters on the state registry, each with a published email and a seasonal waiver need; Brain produces the deliverable (PRODUCE_SPREADSHEET proved); $12 cost < $450; $0 exposure; 5 days to cash. Recomputed: 7 x $450 = $3,150 >= $3,000 (6 would be $2,700, short); net $3,066 after $84 cost; 160 x 0.1375 = 22 expected paid orders vs 7 needed (even at a ~7% lower bound of 11/80, ~11 expected). Cash settles day 23 inside the 28-day window. Owner time: the card records 0.25 human hours per setup, so 7 setups is ~1.75 hours total, well inside 4 h/week (16 h in the window). Exclusions are right: the swiftwater class needs 10 owner hours per class, so only one of four signed $900 classes fits 16 hours; the shuttle runs lose $15 each ($135 subcontractor rate vs $120 signed price).",
+    "findings": [
+     "Owner hours are overstated as known zero: the revision records owner hours 0 (EVIDENCED, sourced to the delivery fact), but the card's humanHours is 0.25 per setup. Correct figure is ~1.75 hours for 7 setups; it fits the 4 h/week ceiling, so it does not change the stance, but the quantity should read 1.75, not 0.",
+     "Offer scope says the waiver form, roster and check-in are configured on each outfitter's booking system and paid on completion; the card's delivery fact says a spreadsheet Brain produces. Brain's FULFILMENT link stands on that record; the 0.25 h per setup is the plausible hands-on configuration time and is already within the limit.",
+     "Brain's MARKET_VOLUME basis counts 8 deals needed while the plan uses 7; 7 x $450 = $3,150 clears the gross target and $3,066 net also clears it; 22 expected orders cover either count.",
+     "The alternative (one $900 swiftwater class plus 5 setups = $3,150 with 10 + 1.25 owner hours) also fits, but correctly is not preferred since it spends owner time the waiver-only plan does not need.",
+     "Ledger records the $84 delivery cost on day 23 while the deliver step is day 18; with 'paid on completion' and $0 exposure the $12 per setup is a small advance before receipt — inconsistent with exposure $0 only if the cost is paid before the buyer pays; minor."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:42:28.258Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_bc862063b31b_d5b34c",
+   "digest": "bc862063b31bf81c43fcb39e",
+   "contractDigest": "a4abfef3b43f1704b987a184",
+   "plan": {
+    "goalId": "wst_e1ed4003051f451dbd22",
+    "contractDigest": "a4abfef3b43f1704b987a184",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell digital waiver and trip-roster check-in setup to the listed buyers",
+     "opportunityIds": [
+      "cop_d136f685482247d2b942"
+     ],
+     "why": "Nine prior setups were invoiced and paid at $450 (Aug-Oct 2026); conversion 11 paid of 80 contacts was measured on this offer's own sales; 160 licensed outfitters on the state registry; Brain produces the deliverable (PRODUCE_SPREADSHEET), so the owner spends 0 of the 16 allowed hours; $12 direct cost, $0 exposure, 5 days to cash. 7 deals x $450 = $3,150 >= $3,000; the full registry at 13.75% yields ~22 expected paid orders, three times the 7 needed."
+    },
+    "alternatives": [
+     {
+      "title": "One swiftwater class ($900, 10 owner hours) plus 5 waiver setups",
+      "why": "Fits the 16-hour ceiling, but spends owner time the waiver-only plan does not need."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 160 buyers from the published list (state river-outfitter licence registry)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "d2b942-buyerVolume",
+       "d2b942-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: digital waiver and trip-roster check-in setup at $450",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "d2b942-price"
+      ],
+      "priceCents": 45000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 7 paid orders at $450 (measured 11 paid of 80 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "d2b942-conversionRates",
+       "d2b942-price"
+      ],
+      "priceCents": 45000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (7 deals, $12 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 8400,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "d2b942-delivery",
+       "d2b942-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $3150 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 23,
+      "dependsOn": "deliver",
+      "evidence": [
+       "d2b942-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 315000,
+      "label": "7 x $450 settled",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 23,
+      "kind": "SPEND",
+      "amountCents": 8400,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 450,
+      "unit": "USD/deal",
+      "sources": [
+       "d2b942-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1375,
+      "unit": "paid orders/contact",
+      "sources": [
+       "d2b942-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 160,
+      "unit": "buyers",
+      "sources": [
+       "d2b942-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "deals",
+      "sources": [
+       "d2b942-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 22,
+      "unit": "deals",
+      "sources": [
+       "d2b942-conversionRates",
+       "d2b942-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "USD/deal",
+      "sources": [
+       "d2b942-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "d2b942-timeToFirstCash"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "d2b942-delivery"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "d2b942-price",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-conversionRates",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-buyerVolume",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-directCosts",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-exposure",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-timeToFirstCash",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-delivery",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     },
+     {
+      "id": "d2b942-payer",
+      "url": "https://brain.local/card/cop_d136f685482247d2b942#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed river outfitters on the state registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d136f685482247d2b942"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d136f685482247d2b942",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_453cc994fec846a7a72e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_453cc994fec846a7a72e",
+      "why": "The owner teaches each class personally at 10 hours per class; the goal allows 4 hours a week, 16 hours in the 28 days, so at most one class ($900) fits, and the four signed classes (40 hours) cannot all be delivered. Not needed: the waiver setup reaches the target with 0 owner hours."
+     },
+     {
+      "opportunityId": "cop_6ac9bf8d1d3848c6bbd8",
+      "why": "Loses money: the signed price is $120 per run and the subcontractor's written rate is $135 per run (cost above price)."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d136f685482247d2b942",
+      "deals": 7,
+      "price": 450,
+      "directCost": 12,
+      "capital": 0,
+      "settlesDay": 23,
+      "ownerHours": 0
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_bc862063b31b_d5b34c",
+    "digest": "bc862063b31bf81c43fcb39e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6128c6e5715c47b8a515/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:31.962Z"
+   },
+   "review": {
+    "revisionId": "rev_bc862063b31b_d5b34c",
+    "revisionDigest": "bc862063b31bf81c43fcb39e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6128c6e5715c47b8a515/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7bb21ce152504a278f8d/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. Member cop_d136f685482247d2b942 has every link on this offer's own records: $450 is a real purchase price paid by this buyer type (nine outfitter setups invoiced and paid, Aug-Oct 2026); conversion 11/80 = 13.75% measured on this offer's own sales; 160 separate licensed outfitters on the state registry, each with a published email and a seasonal waiver need; Brain produces the deliverable (PRODUCE_SPREADSHEET proved); $12 cost < $450; $0 exposure; 5 days to cash. Recomputed: 7 x $450 = $3,150 >= $3,000 (6 would be $2,700, short); net $3,066 after $84 cost; 160 x 0.1375 = 22 expected paid orders vs 7 needed (even at a ~7% lower bound of 11/80, ~11 expected). Cash settles day 23 inside the 28-day window. Owner time: the card records 0.25 human hours per setup, so 7 setups is ~1.75 hours total, well inside 4 h/week (16 h in the window). Exclusions are right: the swiftwater class needs 10 owner hours per class, so only one of four signed $900 classes fits 16 hours; the shuttle runs lose $15 each ($135 subcontractor rate vs $120 signed price).",
+    "findings": [
+     "Owner hours are overstated as known zero: the revision records owner hours 0 (EVIDENCED, sourced to the delivery fact), but the card's humanHours is 0.25 per setup. Correct figure is ~1.75 hours for 7 setups; it fits the 4 h/week ceiling, so it does not change the stance, but the quantity should read 1.75, not 0.",
+     "Offer scope says the waiver form, roster and check-in are configured on each outfitter's booking system and paid on completion; the card's delivery fact says a spreadsheet Brain produces. Brain's FULFILMENT link stands on that record; the 0.25 h per setup is the plausible hands-on configuration time and is already within the limit.",
+     "Brain's MARKET_VOLUME basis counts 8 deals needed while the plan uses 7; 7 x $450 = $3,150 clears the gross target and $3,066 net also clears it; 22 expected orders cover either count.",
+     "The alternative (one $900 swiftwater class plus 5 setups = $3,150 with 10 + 1.25 owner hours) also fits, but correctly is not preferred since it spends owner time the waiver-only plan does not need.",
+     "Ledger records the $84 delivery cost on day 23 while the deliver step is day 18; with 'paid on completion' and $0 exposure the $12 per setup is a small advance before receipt — inconsistent with exposure $0 only if the cost is paid before the buyer pays; minor."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:42:28.258Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 28 days with no more than 4 hours a week of owner time.",
+    "terms": "09b6a7b27916ea8f",
+    "openings": {
+     "cop_453cc994fec846a7a72e": "de78ad85d9b949ac",
+     "cop_6ac9bf8d1d3848c6bbd8": "4f8918effb1c04c2",
+     "cop_d136f685482247d2b942": "2a1677d596da524a"
+    }
+   },
+   "at": "2026-11-28T04:43:20.908Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

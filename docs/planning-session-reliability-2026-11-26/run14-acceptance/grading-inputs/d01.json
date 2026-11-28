@@ -1,0 +1,461 @@
+{
+ "caseId": "au-01-quick-cash-no-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: One-time Google Business Profi + AI-response evaluation work on\", and what it is missing first is an offer and a price. Research first: the deep dives on \"AI-response evaluation work on DataAnnotation (paid hourly v\", \"One-time Google Business Profile optimization for local busi\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 500× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"One-time Google Business Profile optimization for local busi\" needs [figure withheld] and keeps [figure withheld], 242× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_655b156375434e908300",
+   "cop_f256cacb2635453f995e",
+   "cop_15043896968f4016b6dc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"AI-response evaluation work on DataAnnotation (paid hourly v\", \"One-time Google Business Profile optimization for local busi\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_f256cacb2635453f995e",
+    "title": "One-time Google Business Profile optimization for local businesses",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "Local small-business owners (trades, salons, restaurants)",
+     "reachableChannel": "Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link",
+     "offerScope": "One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "local small business marketing",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email to businesses whose public profiles are incomplete, paid via Stripe P"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 8, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "9 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days to Local small-business owners (trades, salons, restaurants), reached through Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link, at $250; the owner, using AI-assisted audit checklists delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, using AI-assisted audit checklists.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Local small-business owners (trades, salons, restaurants)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; https://stan.store/cilloseodenver/p/gbp-audit--full-optimization-package-; google business profile optimization service price; https://stripe.com/us/resources/more/payouts-explained",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_15043896968f4016b6dc",
+    "title": "AI-assisted writing jobs won on Upwork (fixed-price)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "Clients posting fixed-price writing jobs on Upwork",
+     "reachableChannel": "Proposals on Upwork job posts using free Connects",
+     "offerScope": "Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "content writing / freelance services",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Proposals on Upwork job posts using free Connects"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 25, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Proposals on Upwork job posts using free Connects",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone to Clients posting fixed-price writing jobs on Upwork, reached through Proposals on Upwork job posts using free Connects, at $250; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$25",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "3 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Clients posting fixed-price writing jobs on Upwork",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://wise.com/gb/blog/upwork-payments; upwork fixed price writing jobs; https://www.upwork.com/resources/how-to-get-free-connects",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_655b156375434e908300",
+    "title": "AI-response evaluation work on DataAnnotation (paid hourly via PayPal)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "DataAnnotation (AI training-data platform)",
+     "reachableChannel": "Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard",
+     "offerScope": "Hourly evaluation of chatbot responses / AI outputs, paid per hour worked",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 20,
+     "requiredCapabilities": [],
+     "industry": "AI training data",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Apply on dataannotation.tech, pass the Starter Assessment, take projects in the "
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1 DataAnnotation (AI training-data platform) (One payer; volume limited by projects opened to the worker (not guaranteed) at a published starting rate of $25-$50/hr; $1,500 = 60 hours at $25)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Hourly evaluation of chatbot responses / AI outputs, paid per hour worked to DataAnnotation (AI training-data platform), reached through Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard, at $500; the owner delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "20 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Hourly evaluation of chatbot responses / AI outputs, paid per hour worked",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "DataAnnotation (AI training-data platform)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "DataAnnotation publishes a starting pay of $25-$50 per hour for evaluating chatbot responses, comparing AI outputs and testing image generation.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://dataannotation.tech/faqs; https://www.dataannotation.tech/; https://dataannotation.tech/faqs; https://redlib.hbubli.cc/r/dataannotation/comments/1agg5ov/dataannotation_faq_welcome_thread_part_2_read/ktdlbpp/?context=3",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:44:34.790Z"
+ }
+}

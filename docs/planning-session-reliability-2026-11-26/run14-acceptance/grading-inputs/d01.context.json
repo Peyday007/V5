@@ -1,0 +1,1306 @@
+{
+ "value": {
+  "goal": {
+   "id": "wst_b4d2f787c39747c1901a",
+   "title": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front.",
+   "intent": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front."
+  },
+  "contract": {
+   "goalId": "wst_b4d2f787c39747c1901a",
+   "words": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 150000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "first settled payment from a paying buyer",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "924941f807ead7c189ed4457"
+  },
+  "stored": {
+   "targetCents": 150000,
+   "currency": "USD",
+   "windowDays": 14,
+   "capitalCeilingCents": null,
+   "capitalBeforeProofCents": null,
+   "hoursCeiling": null,
+   "proven": false,
+   "projectId": "prj_0b493fe114e74de1b9dc"
+  },
+  "openings": [
+   {
+    "id": "cop_655b156375434e908300",
+    "title": "AI-response evaluation work on DataAnnotation (paid hourly via PayPal)",
+    "state": "DISCOVERED",
+    "origin": "ROUTE_PROPOSAL",
+    "facts": [
+     {
+      "field": "access",
+      "value": "Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1 DataAnnotation (AI training-data platform) (One payer; volume limited by projects opened to the worker (not guaranteed) at a published starting rate of $25-$50/hr; $1,500 = 60 hours at $25)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Hourly evaluation of chatbot responses / AI outputs, paid per hour worked to DataAnnotation (AI training-data platform), reached through Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard, at $500; the owner delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "20 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Hourly evaluation of chatbot responses / AI outputs, paid per hour worked",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "DataAnnotation (AI training-data platform)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "DataAnnotation publishes a starting pay of $25-$50 per hour for evaluating chatbot responses, comparing AI outputs and testing image generation.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://dataannotation.tech/faqs; https://www.dataannotation.tech/; https://dataannotation.tech/faqs; https://redlib.hbubli.cc/r/dataannotation/comments/1agg5ov/dataannotation_faq_welcome_thread_part_2_read/ktdlbpp/?context=3",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "id": "cop_15043896968f4016b6dc",
+    "title": "AI-assisted writing jobs won on Upwork (fixed-price)",
+    "state": "DISCOVERED",
+    "origin": "ROUTE_PROPOSAL",
+    "facts": [
+     {
+      "field": "access",
+      "value": "Proposals on Upwork job posts using free Connects",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone to Clients posting fixed-price writing jobs on Upwork, reached through Proposals on Upwork job posts using free Connects, at $250; the owner, drafting with AI tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$25",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, drafting with AI tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "3 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Clients posting fixed-price writing jobs on Upwork",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://wise.com/gb/blog/upwork-payments; upwork fixed price writing jobs; https://www.upwork.com/resources/how-to-get-free-connects",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "id": "cop_f256cacb2635453f995e",
+    "title": "One-time Google Business Profile optimization for local businesses",
+    "state": "DISCOVERED",
+    "origin": "ROUTE_PROPOSAL",
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days to Local small-business owners (trades, salons, restaurants), reached through Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link, at $250; the owner, using AI-assisted audit checklists delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$8",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner, using AI-assisted audit checklists.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Local small-business owners (trades, salons, restaurants)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; https://stan.store/cilloseodenver/p/gbp-audit--full-optimization-package-; google business profile optimization service price; https://stripe.com/us/resources/more/payouts-explained",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "9 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "exclusions": [],
+  "evidenceExclusions": [],
+  "openProblems": [],
+  "revisions": [
+   {
+    "revisionId": "rev_4cde085a6d4c_032b81",
+    "digest": "4cde085a6d4c0eb0e68a2371",
+    "stance": "CONDITIONAL",
+    "contractDigest": "924941f807ead7c189ed4457",
+    "stale": false
+   },
+   {
+    "revisionId": "rev_92380e3c0e3e_f89ddb",
+    "digest": "92380e3c0e3eb17053dae398",
+    "stance": "CONDITIONAL",
+    "contractDigest": "924941f807ead7c189ed4457",
+    "stale": false
+   },
+   {
+    "revisionId": "rev_b9668518e6b4_ee66ac",
+    "digest": "b9668518e6b40d32ffa8ac21",
+    "stance": "CONDITIONAL",
+    "contractDigest": "924941f807ead7c189ed4457",
+    "stale": false
+   },
+   {
+    "revisionId": "rev_fbaffa0f79f8_1a025d",
+    "digest": "fbaffa0f79f85e403aa007e9",
+    "stance": "CONDITIONAL",
+    "contractDigest": "924941f807ead7c189ed4457",
+    "stale": false
+   }
+  ],
+  "lastReview": {
+   "revisionId": "rev_fbaffa0f79f8_1a025d",
+   "revisionDigest": "fbaffa0f79f85e403aa007e9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_627ce103a6f646d080fa/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_cc7c37d3b2264c20a3a2/fleet-2",
+    "model": "claude-opus-5-5"
+   },
+   "verdict": "PASS",
+   "reasons": "CONDITIONAL is the right stance and the ledger now reconciles with its own assumptions. Price is the payer's own verified published rate ($25/hr floor), $0 cost and capital. The decisive unknowns (approval and eligibility by day 2, >= 60 open hours by day 3, hold <= 7 days, deposit <= 2 days) are each measured by the owner on a single hour before the bulk of the work can miss, with explicit stops. Recomputed: 60 h x $25 = $1,500; submissions days 2-5; transferable days 9-12; settled by days 11-14 under a 2-day deposit - inside 14 days. Passing the proof at its threshold (day-2 hour transferable by day 9 and deposited by day 11) implies the day-5 hours settle by day 14, so the threshold carries the target; if the deposit is slower the stop states the reduced in-window total (~$1,125).",
+   "findings": [
+    "Risk the owner should see plainly: approval within 2 days is faster than the FAQ's 'typically within a few days'; the plan correctly stops if it is later, but the likely outcome under a 3-4 day approval is that the target is missed, not that it is reached later.",
+    "Pace of about 15 h/day on four consecutive days is stated; the goal sets no hours limit. Work availability is not guaranteed by the FAQ and is gated by the day-3 stop.",
+    "Eligibility (English fluency, PayPal account, accepted country) is now part of the approval test - correct, as the FAQ lists no countries."
+   ],
+   "resolution": null,
+   "at": "2026-11-28T04:55:56.492Z",
+   "conditions": []
+  },
+  "final": {
+   "revisionId": "rev_fbaffa0f79f8_1a025d",
+   "digest": "fbaffa0f79f85e403aa007e9",
+   "contractDigest": "924941f807ead7c189ed4457",
+   "plan": {
+    "goalId": "wst_b4d2f787c39747c1901a",
+    "contractDigest": "924941f807ead7c189ed4457",
+    "parentRevisionId": "rev_b9668518e6b4_ee66ac",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Paid AI-response evaluation work on DataAnnotation, performed by the owner, cashed out to PayPal",
+     "opportunityIds": [
+      "cop_655b156375434e908300"
+     ],
+     "why": "It is the only opening whose price is evidenced by the payer itself ($25-$50/hr published, verified) and it needs no capital and no buyer-by-buyer selling. The decisive unknown is settlement: the only hold figure found (an unverified 2024 community FAQ) says hourly work becomes transferable 7 days after submission, and PayPal then deposits 'within a few days'. So all 60 hours must be submitted by day 5 and the hold must be measured first, on one hour submitted the day of approval; if hours are not transferable within 7 days, or approval is later than day 2, the target cannot settle by day 14 and the plan stops."
+    },
+    "alternatives": [
+     {
+      "title": "AI-assisted fixed-price writing jobs on Upwork",
+      "why": "No price buyers pay is evidenced on its card, a new profile's hire rate is unknown, and a fixed-price payment settles only after client approval (up to 14 days) plus a 5-day security hold, so cash may land after day 14."
+     },
+     {
+      "title": "One-time Google Business Profile optimization sold by cold email",
+      "why": "Only vendor asking prices ($49-$750) were found, not what buyers pay; the cold-email close rate is unmeasured and 6 sales are needed; kept as a parallel zero-cost fallback if DataAnnotation refuses the owner."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Owner applies on dataannotation.tech (English fluency, PayPal account, owner's country accepted) and completes the Starter Assessment",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "s2",
+       "q_rate"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Approval check by day 2: approved, eligible, >= 60 project hours open; submit 1 hour the same day and record when it becomes transferable",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "q_approval",
+       "q_hours_available",
+       "q_hold_days"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Owner works hours 2-30 on days 2-3 at >= $25/hr (about 15 h/day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "ownerHours": 29,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Owner works hours 31-60 on days 4-5 (last submission day 5, about 15 h/day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 4,
+      "dependsOn": "s3",
+      "evidence": [
+       "s1",
+       "q_hold_days"
+      ],
+      "ownerHours": 30,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "TEST",
+      "label": "Hold check by day 9: the day-2 hour is transferable (hold <= 7 days); request its transfer",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s2",
+      "evidence": [
+       "q_hold_days",
+       "q_deposit_days"
+      ],
+      "ownerHours": 0.5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Request each PayPal transfer the day hours become transferable (days 9-12)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "s5",
+      "evidence": [
+       "s2",
+       "q_hold_days"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "PayPal deposit for hours 1-20 (submitted days 2-3, transferable days 9-10)",
+      "settlesDay": 12,
+      "stepId": "s6"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "PayPal deposit for hours 21-40 (submitted days 3-4)",
+      "settlesDay": 13,
+      "stepId": "s6"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "PayPal deposit for hours 41-60 (submitted days 4-5, transferable day 12)",
+      "settlesDay": 14,
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 11,
+    "quantities": [
+     {
+      "name": "q_rate",
+      "status": "EVIDENCED",
+      "value": 25,
+      "unit": "USD per hour (published starting rate, low end)",
+      "sources": [
+       "s1",
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_hours_needed",
+      "status": "ESTIMATE",
+      "value": 60,
+      "unit": "owner hours ($1,500 / $25), worked days 2-5 at about 15 h/day",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_approval",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "owner approved after the Starter Assessment (yes/no)",
+      "sources": [
+       "s2"
+      ],
+      "needs": "apply on day 0; FAQ says approval 'typically ... within a few days'; must arrive by day 2, including owner eligibility (English fluency, PayPal, country)"
+     },
+     {
+      "name": "q_hours_available",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "project hours open to the owner within the window",
+      "sources": [
+       "s2"
+      ],
+      "needs": "the worker dashboard after approval; the FAQ guarantees no work"
+     },
+     {
+      "name": "q_hold_days",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from submitting hours until they can be transferred",
+      "sources": [
+       "s4"
+      ],
+      "needs": "measured on the 1 hour submitted at approval (step s2/s5); must be <= 7 days, as the 2024 community FAQ states, for the ledger to hold"
+     },
+     {
+      "name": "q_deposit_days",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "days from transfer request to PayPal deposit (FAQ: 'within a few days'); ledger assumes <= 2",
+      "sources": [
+       "s2"
+      ],
+      "needs": "the first transfer request (s5)"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_655b156375434e908300#revenueRange",
+      "dated": "2026",
+      "claim": "DataAnnotation publishes a starting pay of $25-$50 per hour (verified card evidence)",
+      "population": "DataAnnotation workers on general AI-evaluation projects",
+      "matchesBuyer": true,
+      "opportunityId": "cop_655b156375434e908300"
+     },
+     {
+      "id": "s2",
+      "url": "https://dataannotation.tech/faqs",
+      "dated": "2026",
+      "claim": "'Starting at $25-$50 per hour'; 'We send payments via PayPal. Deposits will be delivered within a few days after you request them.'; approval 'typically ... within a few days after completing the Starter Assessment'; work is not guaranteed",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_655b156375434e908300"
+     },
+     {
+      "id": "s3",
+      "url": "https://www.dataannotation.tech/",
+      "dated": "2026",
+      "claim": "DataAnnotation is currently recruiting generalist workers ('No coding or technical background needed'; roles up to $50/hr)",
+      "population": "applicants to DataAnnotation",
+      "matchesBuyer": true,
+      "opportunityId": "cop_655b156375434e908300"
+     },
+     {
+      "id": "s4",
+      "url": "https://redlib.hbubli.cc/r/dataannotation/comments/1agg5ov/dataannotation_faq_welcome_thread_part_2_read/ktdlbpp/?context=3",
+      "dated": "2024-02-01",
+      "claim": "Community FAQ (seen via search snippet, page not readable): hourly work becomes transferable 7 days after submission, per-task work after 3 days",
+      "population": "DataAnnotation workers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_655b156375434e908300"
+     },
+     {
+      "id": "s5",
+      "url": "https://wise.com/gb/blog/upwork-payments",
+      "dated": "2025-08-11",
+      "claim": "Upwork fixed-price clients have 14 days to accept; earnings then sit in a five-day security hold; fee 0-15%",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_15043896968f4016b6dc"
+     },
+     {
+      "id": "s6",
+      "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+      "dated": "2026",
+      "claim": "Upwork offers free Connects (monthly and new-freelancer bonus) so proposals need not cost money up front",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_15043896968f4016b6dc"
+     },
+     {
+      "id": "s7",
+      "url": "https://stan.store/cilloseodenver/p/gbp-audit--full-optimization-package-",
+      "dated": "2026",
+      "claim": "A consultant sells a 'GBP Audit & Full Optimization Package' at $497 (asking price, not a buyer-paid figure)",
+      "population": "local small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f256cacb2635453f995e"
+     },
+     {
+      "id": "s8",
+      "url": "https://stripe.com/us/resources/more/payouts-explained",
+      "dated": "2026",
+      "claim": "US Stripe payouts are on roughly a 2-business-day schedule; first payouts take longer",
+      "population": "US Stripe merchants",
+      "matchesBuyer": false,
+      "opportunityId": "cop_f256cacb2635453f995e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 2 the owner is approved and eligible with >= 60 hours of projects open at >= $25/hr; the hour submitted on day 2 is transferable by day 9 (hold <= 7 days) and its PayPal deposit lands by day 11 (<= 2 days), so hours submitted by day 5 settle by day 14.",
+     "stop": [
+      "Not approved, or ineligible, by day 2: stop (later hours cannot clear a 7-day hold plus a 2-day deposit by day 14)",
+      "Fewer than 60 project hours open by day 3, or rate below $25/hr",
+      "The day-2 hour is not transferable by day 9 (hold > 7 days): stop",
+      "The first deposit takes more than 2 days (not landed by day 11): the day-5 hours would settle after day 14 - stop counting them; in-window total falls to about $1,125"
+     ],
+     "continue": [
+      "Approved by day 2 with hours open: submit all 60 hours by day 5 at about 15 h/day",
+      "Day-2 hour transferable by day 9 and deposited by day 11: request every transfer the day hours clear"
+     ],
+     "decides": [
+      "SETTLES_IN_TIME",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 1,
+      "reach": 3
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Day-6 hours settle on day 15 under a 2-day deposit",
+      "resolution": "Accepted: all 60 hours are now submitted by day 5 (approval by day 2), so the last tranche is transferable day 12 and settles by day 14 under the <= 2-day deposit the ledger assumes."
+     },
+     {
+      "finding": "Fix schedule or threshold",
+      "resolution": "Accepted (a) with (b)'s guard: schedule moved to days 2-5, proof requires the day-2 hour transferable by day 9 and deposited by day 11, and a stop states the reduced in-window total (~$1,125) if the deposit takes longer."
+     },
+     {
+      "finding": "Workload about 15 h/day",
+      "resolution": "Accepted: the pace (about 15 h/day on days 2-5) is stated in steps s3/s4 and q_hours_needed; >= 60 open hours are required by day 3 (stop rule)."
+     },
+     {
+      "finding": "Otherwise sound",
+      "resolution": "Noted; unchanged."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_655b156375434e908300",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_15043896968f4016b6dc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_f256cacb2635453f995e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_15043896968f4016b6dc",
+      "why": "Price, demand and hire rate unevidenced, and fixed-price cash clears only after client approval (up to 14 days) plus a 5-day hold, so it cannot be counted on inside 14 days."
+     },
+     {
+      "opportunityId": "cop_f256cacb2635453f995e",
+      "why": "Only seller asking prices exist, no buyer-paid price; close rate unmeasured with 6 sales needed in 14 days; held as an untested zero-cost fallback, not a plan member."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_655b156375434e908300",
+      "deals": 3,
+      "price": 500,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": 20
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_655b156375434e908300",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The card's revenueRange is verified EVIDENCE: the payer itself publishes 'Starting at $25-$50 per hour'; 20 hours at the $25 floor is the $500 per unit priced."
+     },
+     {
+      "opportunityId": "cop_655b156375434e908300",
+      "link": "FULFILMENT",
+      "reason": "The card's fulfillmentOwner is the owner personally; the goal sets no owner-hours ceiling and requires no capability beyond the assessment the test measures."
+     },
+     {
+      "opportunityId": "cop_655b156375434e908300",
+      "link": "ECONOMICS",
+      "reason": "Direct cost and peak funding are both $0 on the card, against a $500 price: no cost can reach the price."
+     }
+    ],
+    "revisionId": "rev_fbaffa0f79f8_1a025d",
+    "digest": "fbaffa0f79f85e403aa007e9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_627ce103a6f646d080fa/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:55:02.615Z"
+   },
+   "review": {
+    "revisionId": "rev_fbaffa0f79f8_1a025d",
+    "revisionDigest": "fbaffa0f79f85e403aa007e9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_627ce103a6f646d080fa/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_cc7c37d3b2264c20a3a2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance and the ledger now reconciles with its own assumptions. Price is the payer's own verified published rate ($25/hr floor), $0 cost and capital. The decisive unknowns (approval and eligibility by day 2, >= 60 open hours by day 3, hold <= 7 days, deposit <= 2 days) are each measured by the owner on a single hour before the bulk of the work can miss, with explicit stops. Recomputed: 60 h x $25 = $1,500; submissions days 2-5; transferable days 9-12; settled by days 11-14 under a 2-day deposit - inside 14 days. Passing the proof at its threshold (day-2 hour transferable by day 9 and deposited by day 11) implies the day-5 hours settle by day 14, so the threshold carries the target; if the deposit is slower the stop states the reduced in-window total (~$1,125).",
+    "findings": [
+     "Risk the owner should see plainly: approval within 2 days is faster than the FAQ's 'typically within a few days'; the plan correctly stops if it is later, but the likely outcome under a 3-4 day approval is that the target is missed, not that it is reached later.",
+     "Pace of about 15 h/day on four consecutive days is stated; the goal sets no hours limit. Work availability is not guaranteed by the FAQ and is gated by the day-3 stop.",
+     "Eligibility (English fluency, PayPal account, accepted country) is now part of the approval test - correct, as the FAQ lists no countries."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:55:56.492Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Find me a way to bring in $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing can cost me anything up front.",
+    "terms": "16c9db08eeefbf8e",
+    "openings": {
+     "cop_15043896968f4016b6dc": "49d9876f5622fb95",
+     "cop_655b156375434e908300": "e10b69253925dffd",
+     "cop_f256cacb2635453f995e": "48250a4dfa2366e5"
+    }
+   },
+   "at": "2026-11-28T04:57:16.504Z"
+  },
+  "brain": {
+   "at": "2026-11-28T04:44:34.790Z",
+   "completed": true,
+   "verdict": "NEEDS_EVIDENCE",
+   "summary": "Not yet proven. The closest plan is \"Combined, fastest money first: One-time Google Business Profi + AI-response evaluation work on\", and what it is missing first is an offer and a price. Research first: the deep dives on \"AI-response evaluation work on DataAnnotation (paid hourly v\", \"One-time Google Business Profile optimization for local busi\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 500× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"One-time Google Business Profile optimization for local busi\" needs [figure withheld] and keeps [figure withheld], 242× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted.",
+   "openings": [
+    {
+     "opportunityId": "cop_f256cacb2635453f995e",
+     "title": "One-time Google Business Profile optimization for local businesses",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 250,
+     "card": {
+      "payer": "Local small-business owners (trades, salons, restaurants)",
+      "reachableChannel": "Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link",
+      "offerScope": "One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days",
+      "priceCents": 25000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 2,
+      "requiredCapabilities": [],
+      "industry": "local small business marketing",
+      "mechanism": "PRODUCTIZED_SERVICE",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Cold email to businesses whose public profiles are incomplete, paid via Stripe P"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 8, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "9 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days to Local small-business owners (trades, salons, restaurants), reached through Cold email to businesses whose public profiles are incomplete, paid via Stripe Payment Link, at $250; the owner, using AI-assisted audit checklists delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$8",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, using AI-assisted audit checklists.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "2 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "One-time Google Business Profile audit and optimization (categories, services, description, photos, Q&A), delivered in 3 days",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Local small-business owners (trades, salons, restaurants)",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://contra.com/s/YQcFBR7Z-i-will-professionally-optimize-your-google-business-profile; https://stan.store/cilloseodenver/p/gbp-audit--full-optimization-package-; google business profile optimization service price; https://stripe.com/us/resources/more/payouts-explained",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "9 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_15043896968f4016b6dc",
+     "title": "AI-assisted writing jobs won on Upwork (fixed-price)",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 250,
+     "card": {
+      "payer": "Clients posting fixed-price writing jobs on Upwork",
+      "reachableChannel": "Proposals on Upwork job posts using free Connects",
+      "offerScope": "Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone",
+      "priceCents": 25000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 3,
+      "requiredCapabilities": [],
+      "industry": "content writing / freelance services",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Proposals on Upwork job posts using free Connects"
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": true,
+       "basis": "a one-off needs its one buyer"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 25, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "10 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Proposals on Upwork job posts using free Connects",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone to Clients posting fixed-price writing jobs on Upwork, reached through Proposals on Upwork job posts using free Connects, at $250; the owner, drafting with AI tools delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$25",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner, drafting with AI tools.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "3 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "Blog posts / web copy drafted with AI and edited, delivered as a fixed-price milestone",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "Clients posting fixed-price writing jobs on Upwork",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "$250",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://wise.com/gb/blog/upwork-payments; upwork fixed price writing jobs; https://www.upwork.com/resources/how-to-get-free-connects",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    },
+    {
+     "opportunityId": "cop_655b156375434e908300",
+     "title": "AI-response evaluation work on DataAnnotation (paid hourly via PayPal)",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ],
+     "stage": "C_MARKET_TEST_READY",
+     "supportedReach": 0,
+     "potentialReach": 1500,
+     "card": {
+      "payer": "DataAnnotation (AI training-data platform)",
+      "reachableChannel": "Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard",
+      "offerScope": "Hourly evaluation of chatbot responses / AI outputs, paid per hour worked",
+      "priceCents": 50000,
+      "currency": "USD",
+      "fulfillmentOwner": "The owner, personally",
+      "peakFundingCents": 0,
+      "humanHours": 20,
+      "requiredCapabilities": [],
+      "industry": "AI training data",
+      "mechanism": "EXPLICIT_PAID_REQUEST",
+      "state": "DISCOVERED"
+     },
+     "agreements": [],
+     "links": [
+      {
+       "link": "REACHABLE_BUYER",
+       "ok": true,
+       "basis": "reach: Apply on dataannotation.tech, pass the Starter Assessment, take projects in the "
+      },
+      {
+       "link": "CURRENT_DEMAND",
+       "ok": false,
+       "basis": "no buying signal recorded"
+      },
+      {
+       "link": "OFFER_AND_PRICE",
+       "ok": false,
+       "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+      },
+      {
+       "link": "CONVERSION",
+       "ok": false,
+       "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+      },
+      {
+       "link": "MARKET_VOLUME",
+       "ok": false,
+       "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+      },
+      {
+       "link": "FULFILMENT",
+       "ok": false,
+       "basis": "nobody has established who would do the work"
+      },
+      {
+       "link": "ECONOMICS",
+       "ok": false,
+       "basis": "cost 0, tied up 0"
+      },
+      {
+       "link": "SETTLES_IN_TIME",
+       "ok": false,
+       "basis": "10 days to usable cash against 14 left"
+      }
+     ],
+     "facts": [
+      {
+       "field": "access",
+       "value": "Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "buyerVolume",
+       "value": "1 DataAnnotation (AI training-data platform) (One payer; volume limited by projects opened to the worker (not guaranteed) at a published starting rate of $25-$50/hr; $1,500 = 60 hours at $25)",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "captureMechanism",
+       "value": "Sell Hourly evaluation of chatbot responses / AI outputs, paid per hour worked to DataAnnotation (AI training-data platform), reached through Apply on dataannotation.tech, pass the Starter Assessment, take projects in the worker dashboard, at $500; the owner delivers it.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "directCosts",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "exposure",
+       "value": "$0",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "fulfillment",
+       "value": "the owner.",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "hours",
+       "value": "20 owner hours per sale",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "offer",
+       "value": "Hourly evaluation of chatbot responses / AI outputs, paid per hour worked",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "payer",
+       "value": "DataAnnotation (AI training-data platform)",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "price",
+       "value": "$500",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "revenueRange",
+       "value": "DataAnnotation publishes a starting pay of $25-$50 per hour for evaluating chatbot responses, comparing AI outputs and testing image generation.",
+       "kind": "EVIDENCE"
+      },
+      {
+       "field": "routeSearches",
+       "value": "https://dataannotation.tech/faqs; https://www.dataannotation.tech/; https://dataannotation.tech/faqs; https://redlib.hbubli.cc/r/dataannotation/comments/1agg5ov/dataannotation_faq_welcome_thread_part_2_read/ktdlbpp/?context=3",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "routeStage",
+       "value": "ROUTE",
+       "kind": "RECOMMENDATION"
+      },
+      {
+       "field": "timeToFirstCash",
+       "value": "10 days",
+       "kind": "RECOMMENDATION"
+      }
+     ]
+    }
+   ],
+   "excluded": [],
+   "scope": {
+    "targetCents": 150000,
+    "daysLeft": 14,
+    "hoursCeiling": null,
+    "industry": null,
+    "recurring": null,
+    "hoursPerWeek": null
+   },
+   "nextTest": "Research first: the deep dives on \"AI-response evaluation work on DataAnnotation (paid hourly v\", \"One-time Google Business Profile optimization for local busi\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find."
+  },
+  "questions": [
+   {
+    "needId": "cnd_6ec9458ddc9144d2a833",
+    "opportunityId": "cop_15043896968f4016b6dc",
+    "field": "revenueRange",
+    "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+    "settledWhen": "The revenueRange is recorded on this card.",
+    "parked": true,
+    "returned": null,
+    "submitted": []
+   },
+   {
+    "needId": "cnd_57103a89697b4639aa00",
+    "opportunityId": "cop_15043896968f4016b6dc",
+    "field": "buyerVolume",
+    "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+    "settledWhen": "The buyerVolume is recorded on this card.",
+    "parked": true,
+    "returned": null,
+    "submitted": []
+   },
+   {
+    "needId": "cnd_e098e806212140c78ad7",
+    "opportunityId": "cop_f256cacb2635453f995e",
+    "field": "revenueRange",
+    "ask": "Find what buyers are published as actually paying for this — a figure or a range, each with its source and date.",
+    "settledWhen": "The revenueRange is recorded on this card.",
+    "parked": true,
+    "returned": null,
+    "submitted": []
+   },
+   {
+    "needId": "cnd_b17ae59d9e264c1e8ac8",
+    "opportunityId": "cop_655b156375434e908300",
+    "field": "buyerVolume",
+    "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+    "settledWhen": "The buyerVolume is recorded on this card.",
+    "parked": true,
+    "returned": null,
+    "submitted": []
+   },
+   {
+    "needId": "cnd_90cbf0b73a7e4cada33c",
+    "opportunityId": "cop_f256cacb2635453f995e",
+    "field": "buyerVolume",
+    "ask": "Count how many buyers of exactly this kind exist and can be reached through a published channel — a directory, register, association list or marketplace category, with its number and source — and how often one buyer buys this (weekly, monthly, yearly or once). State both as numbers; \"many\" or \"thousands\" is not a count.",
+    "settledWhen": "The buyerVolume is recorded on this card.",
+    "parked": true,
+    "returned": null,
+    "submitted": []
+   }
+  ]
+ }
+}

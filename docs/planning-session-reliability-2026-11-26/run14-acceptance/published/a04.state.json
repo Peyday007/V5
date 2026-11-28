@@ -1,0 +1,1838 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_edb35e7baabb412f9d6e",
+   "words": "Generate $3,500 within 30 days in a single industry the owner names: private adoption agencies, using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 350000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": null,
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "d878d0661c19c5a1a5a2e4d3"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_edb35e7baabb412f9d6e",
+    "contractDigest": "dbc777f6c38fcb8edea51110",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell accreditation annual-report evidence workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_ad4e46f6105a4165842e"
+     ],
+     "why": "Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026); conversion 12 paid of 60 contacts was measured on this offer's own sales; 95 licensed agencies on the state list; Brain produces the workbook; $8 direct cost, $0 exposure, 7 days to cash. 6 deals x $600 = $3,600 >= $3,500; the full list at 20% yields ~19 expected paid orders, three times the 6 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Cosmetology-school question bank licence, 10 x $350",
+      "why": "Equally established; needs more deals (10) at a lower price, so kept as the fallback if adoption-agency orders lag by day 14."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 95 buyers from the published list (state licensed child-placing agency list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "65842e-buyerVolume",
+       "65842e-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: accreditation annual-report evidence workbook at $600",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 6 paid orders at $600 (measured 12 paid of 60 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "65842e-conversionRates",
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (6 deals, $8 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "65842e-delivery",
+       "65842e-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $3600 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 25,
+      "dependsOn": "deliver",
+      "evidence": [
+       "65842e-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 360000,
+      "label": "6 x $600 settled",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4800,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 600,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid orders/contact",
+      "sources": [
+       "65842e-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "buyers",
+      "sources": [
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 19,
+      "unit": "deals",
+      "sources": [
+       "65842e-conversionRates",
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days",
+      "sources": [
+       "65842e-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "65842e-price",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-conversionRates",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-buyerVolume",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-directCosts",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-exposure",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-delivery",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-payer",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_1d7e0714d0334f24a579",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1d7e0714d0334f24a579",
+      "why": "Also fully established (15 paid of 100, $350, 140 schools), held as the fallback/second channel; not needed to reach the target."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "deals": 6,
+      "price": 600,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 25,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_0d4737249051_4da5ea",
+    "digest": "0d47372490518dee00b5677c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:32.692Z"
+   },
+   {
+    "goalId": "wst_edb35e7baabb412f9d6e",
+    "contractDigest": "d878d0661c19c5a1a5a2e4d3",
+    "parentRevisionId": "rev_0d4737249051_4da5ea",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell accreditation annual-report evidence workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_ad4e46f6105a4165842e"
+     ],
+     "why": "The owner now names one industry, private adoption agencies, and this is the only opening in it. Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026); conversion 12 paid of 60 contacts was measured on this offer's own sales; 95 licensed agencies on the state list; Brain produces the workbook; $8 direct cost, $0 exposure, 7 days to cash. 6 deals x $600 = $3,600 >= $3,500; the full list at 20% yields ~19 expected paid orders, three times the 6 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell 7 workbooks instead of 6",
+      "why": "One deal of extra margin; the 95-agency list at 20% conversion supports either."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 95 buyers from the published list (state licensed child-placing agency list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "65842e-buyerVolume",
+       "65842e-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: accreditation annual-report evidence workbook at $600",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 6 paid orders at $600 (measured 12 paid of 60 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "65842e-conversionRates",
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (6 deals, $8 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "65842e-delivery",
+       "65842e-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $3600 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 25,
+      "dependsOn": "deliver",
+      "evidence": [
+       "65842e-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 360000,
+      "label": "6 x $600 settled",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4800,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 600,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid orders/contact",
+      "sources": [
+       "65842e-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "buyers",
+      "sources": [
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 19,
+      "unit": "deals",
+      "sources": [
+       "65842e-conversionRates",
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days",
+      "sources": [
+       "65842e-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "65842e-price",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-conversionRates",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-buyerVolume",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-directCosts",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-exposure",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-delivery",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-payer",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1d7e0714d0334f24a579",
+      "why": "Outside the single industry the owner names (private adoption agencies): it sells to cosmetology schools."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "deals": 6,
+      "price": 600,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 25,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_835356ea1d6d_a8be17",
+    "digest": "835356ea1d6dd5f59b69f65a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:04:04.350Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_edb35e7baabb412f9d6e",
+   "contractDigest": "d878d0661c19c5a1a5a2e4d3",
+   "parentRevisionId": "rev_0d4737249051_4da5ea",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell accreditation annual-report evidence workbook to the listed buyers",
+    "opportunityIds": [
+     "cop_ad4e46f6105a4165842e"
+    ],
+    "why": "The owner now names one industry, private adoption agencies, and this is the only opening in it. Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026); conversion 12 paid of 60 contacts was measured on this offer's own sales; 95 licensed agencies on the state list; Brain produces the workbook; $8 direct cost, $0 exposure, 7 days to cash. 6 deals x $600 = $3,600 >= $3,500; the full list at 20% yields ~19 expected paid orders, three times the 6 needed."
+   },
+   "alternatives": [
+    {
+     "title": "Sell 7 workbooks instead of 6",
+     "why": "One deal of extra margin; the 95-agency list at 20% conversion supports either."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email 95 buyers from the published list (state licensed child-placing agency list)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "65842e-buyerVolume",
+      "65842e-payer"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer: accreditation annual-report evidence workbook at $600",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "65842e-price"
+     ],
+     "priceCents": 60000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 6 paid orders at $600 (measured 12 paid of 60 contacts)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 18,
+     "dependsOn": "offer",
+     "evidence": [
+      "65842e-conversionRates",
+      "65842e-price"
+     ],
+     "priceCents": 60000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers each workbook/spreadsheet (6 deals, $8 direct cost each)",
+     "performer": "BRAIN",
+     "costCents": 4800,
+     "day": 18,
+     "dependsOn": "sell",
+     "evidence": [
+      "65842e-delivery",
+      "65842e-directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $3600 settled",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 25,
+     "dependsOn": "deliver",
+     "evidence": [
+      "65842e-timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 25,
+     "kind": "RECEIPT",
+     "amountCents": 360000,
+     "label": "6 x $600 settled",
+     "settlesDay": 25,
+     "stepId": "collect"
+    },
+    {
+     "day": 25,
+     "kind": "SPEND",
+     "amountCents": 4800,
+     "label": "direct delivery cost, paid out of receipts",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 7,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 600,
+     "unit": "USD/deal",
+     "sources": [
+      "65842e-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.2,
+     "unit": "paid orders/contact",
+     "sources": [
+      "65842e-conversionRates"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 95,
+     "unit": "buyers",
+     "sources": [
+      "65842e-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals needed",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "deals",
+     "sources": [
+      "65842e-price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "expected paid orders from full list",
+     "status": "EVIDENCED",
+     "value": 19,
+     "unit": "deals",
+     "sources": [
+      "65842e-conversionRates",
+      "65842e-buyerVolume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "USD/deal",
+     "sources": [
+      "65842e-directCosts"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days",
+     "sources": [
+      "65842e-timeToFirstCash"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "65842e-price",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#price",
+     "dated": "2026-11",
+     "claim": "price",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-conversionRates",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#conversionRates",
+     "dated": "2026-11",
+     "claim": "conversionRates",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-buyerVolume",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#buyerVolume",
+     "dated": "2026-11",
+     "claim": "buyerVolume",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-directCosts",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#directCosts",
+     "dated": "2026-11",
+     "claim": "directCosts",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-exposure",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#exposure",
+     "dated": "2026-11",
+     "claim": "exposure",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-timeToFirstCash",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "timeToFirstCash",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-delivery",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#delivery",
+     "dated": "2026-11",
+     "claim": "delivery",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    },
+    {
+     "id": "65842e-payer",
+     "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#payer",
+     "dated": "2026-11",
+     "claim": "payer",
+     "population": "Licensed private adoption agencies on the state child-placing agency list",
+     "matchesBuyer": true,
+     "opportunityId": "cop_ad4e46f6105a4165842e"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_ad4e46f6105a4165842e",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_1d7e0714d0334f24a579",
+     "why": "Outside the single industry the owner names (private adoption agencies): it sells to cosmetology schools."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_ad4e46f6105a4165842e",
+     "deals": 6,
+     "price": 600,
+     "directCost": 8,
+     "capital": 0,
+     "settlesDay": 25,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_835356ea1d6d_a8be17",
+   "digest": "835356ea1d6dd5f59b69f65a",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T05:04:04.350Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_835356ea1d6d_a8be17",
+   "digest": "835356ea1d6dd5f59b69f65a",
+   "contractDigest": "d878d0661c19c5a1a5a2e4d3",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4800,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 355200,
+    "minCashDay": 25,
+    "collectedCents": 360000,
+    "collectedInWindowCents": 360000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 355200
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Accreditation annual-report evidence workbook for private ad\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Accreditation annual-report evidence workbook for private ad\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 56240× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Accreditation annual-report evidence workbook for private adoption age\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_ad4e46f6105a4165842e"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+      "owner": "PERSON",
+      "cost": 8
+     },
+     {
+      "label": "Collect payment for \"Accreditation annual-report evidence workbook for private adoption agencies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "title": "Accreditation annual-report evidence workbook for private adoption agencies",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 3500,
+      "potentialReach": 3500,
+      "card": {
+       "payer": "Executive directors and compliance coordinators of licensed private adoption agencies",
+       "reachableChannel": "Contact emails published in the state's licensed child-placing agency list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:00.542Z",
+       "offerScope": "A workbook that maps each annual-report standard to the agency's own case-file evidence, delivered within 3 days of order",
+       "priceCents": 60000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "private adoption agencies",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Contact emails published in the state's licensed child-placing agency list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 600 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 12 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "7 deal(s) needed, 95 available in the window (95 reachable buyers, each buying about every 365 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 8, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state's licensed child-placing agency list names 95 private adoption agencies with contact emails; each files an annual report to its accrediting entity and its state licensor.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook that maps each annual-report standard to the agency's own case-file evidence, delivered within 3 days of order to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "12 paid orders from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$8",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Executive directors and compliance coordinators of licensed private adoption agencies",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1d7e0714d0334f24a579",
+      "title": "State-board practical-exam prep question bank licence for cosmetology schools",
+      "reason": "left out by the goal's own terms: outside the one industry this goal names (private adoption agencies): it is cosmetology schools",
+      "card": {
+       "payer": "Directors of state-licensed cosmetology schools",
+       "reachableChannel": "Contact emails on the state cosmetology board's licensed-school list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:00.542Z",
+       "offerScope": "State-board practical-exam prep question bank licence for cosmetology schools",
+       "priceCents": 35000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.25,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "cosmetology schools",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state cosmetology board's licensed-school list names 140 cosmetology schools; each enrols a new class every quarter.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell State-board practical-exam prep question bank licence for cosmetology schools to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "15 paid orders from 100 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$3",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Directors of state-licensed cosmetology schools",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Cosmetology schools paid $350 per annual licence on this seller's checkout (Oct 2026 order records).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 350000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": "private adoption agencies",
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T05:03:35.501Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_0d4737249051_4da5ea",
+    "revisionDigest": "0d47372490518dee00b5677c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a3246c7451994067a34a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance is supported. Member cop_ad4e46f6105a4165842e has every link on this offer's own records: $600 is a real purchase price (five adoption agencies paid on this seller's invoices, Sept-Oct 2026); conversion 12/60 = 20% measured on this offer's own sales; 95 separate licensed agencies on the state child-placing list, each with an annual-report obligation; Brain produces the workbook (PRODUCE_SPREADSHEET proved); $8 cost < $600; $0 exposure; 7 days to cash. Recomputed: 6 x $600 = $3,600 >= $3,500 (5 deals = $3,000, short); net $3,552 after $48 cost, still >= $3,500; 95 x 0.20 = 19 expected orders vs 6 needed (even at a ~11% lower bound of 12/60, ~10 expected). Orders closed by day 18 settle by day 25, inside 30. The fallback (cosmetology question bank, 15/100 at $350, 140 schools, 3 days to cash) is also fully established and independently could carry 10-11 deals, giving a second channel if the first lags.",
+    "findings": [
+     "Arithmetic verified: 6 x $600 = $3,600 gross; $48 direct cost; net $3,552. Brain's MARKET_VOLUME basis counts 7 deals needed; 19 expected orders cover either count.",
+     "Fallback card inconsistency: Brain's basis for the cosmetology opening says each school buys about every 91 days (quarterly enrolment), but the price fact is a $350 annual licence, so a school buys once a year. Within one 30-day window this still gives one purchase per school (140 available), so it does not change the fallback's sufficiency.",
+     "Owner hours: the card records 0.5 human hours per workbook (~3 h for 6) while ownerHours is null; the contract sets no hours ceiling.",
+     "Ledger books the $48 delivery cost on day 25 rather than the deliver step's day 18; with $0 exposure on the card this is a booking-date inconsistency only."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:43:18.633Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_835356ea1d6d_a8be17",
+    "revisionDigest": "835356ea1d6dd5f59b69f65a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a3246c7451994067a34a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance holds under the changed objective (contract v2: $3,500 within 30 days, in the single industry the owner names — private adoption agencies — with no up-front capital). The member cop_ad4e46f6105a4165842e is in that industry and is the only opening in it; the cosmetology question bank is now correctly excluded as outside the named industry rather than kept as a fallback. Every link stands on this offer's own records: $600 paid by five adoption agencies on this seller's invoices (Sept-Oct 2026) — a real purchase price for this buyer; 12/60 = 20% paid conversion on this offer's own sales; 95 separate licensed agencies on the state child-placing list; Brain produces the workbook (PRODUCE_SPREADSHEET); $8 cost; $0 exposure; 7 days to cash. Recomputed: 6 x $600 = $3,600 >= $3,500 (5 = $3,000 short); net $3,552; 95 x 0.20 = 19 expected orders vs 6-7 needed (at a ~11% lower bound on 12/60, ~10 expected). Orders by day 18 settle by day 25, inside 30.",
+    "findings": [
+     "Contract encoding: the v2 words restrict the goal to private adoption agencies, but contract.terms.exclusions is empty, so the industry restriction lives only in the words; the revision applies it correctly by hand.",
+     "With the fallback removed there is now a single opening; the 19-vs-6 expected-order margin is the only buffer, which remains ample. The alternative of selling 7 (Brain's count of deals needed) is supported by the same list.",
+     "Owner hours: card records 0.5 human hours per workbook (~3 h total) while ownerHours is null; no hours ceiling applies.",
+     "Ledger books the $48 delivery cost on day 25 rather than the deliver step's day 18; with $0 exposure on the card this is a booking-date inconsistency only.",
+     "Otherwise identical to rev_0d4737249051_4da5ea, which I passed under contract v1."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:04:58.557Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_835356ea1d6d_a8be17",
+   "digest": "835356ea1d6dd5f59b69f65a",
+   "contractDigest": "d878d0661c19c5a1a5a2e4d3",
+   "plan": {
+    "goalId": "wst_edb35e7baabb412f9d6e",
+    "contractDigest": "d878d0661c19c5a1a5a2e4d3",
+    "parentRevisionId": "rev_0d4737249051_4da5ea",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell accreditation annual-report evidence workbook to the listed buyers",
+     "opportunityIds": [
+      "cop_ad4e46f6105a4165842e"
+     ],
+     "why": "The owner now names one industry, private adoption agencies, and this is the only opening in it. Five adoption agencies each paid $600 for this workbook on this seller's invoices (Sept-Oct 2026); conversion 12 paid of 60 contacts was measured on this offer's own sales; 95 licensed agencies on the state list; Brain produces the workbook; $8 direct cost, $0 exposure, 7 days to cash. 6 deals x $600 = $3,600 >= $3,500; the full list at 20% yields ~19 expected paid orders, three times the 6 needed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell 7 workbooks instead of 6",
+      "why": "One deal of extra margin; the 95-agency list at 20% conversion supports either."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email 95 buyers from the published list (state licensed child-placing agency list)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "65842e-buyerVolume",
+       "65842e-payer"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer: accreditation annual-report evidence workbook at $600",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 6 paid orders at $600 (measured 12 paid of 60 contacts)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 18,
+      "dependsOn": "offer",
+      "evidence": [
+       "65842e-conversionRates",
+       "65842e-price"
+      ],
+      "priceCents": 60000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers each workbook/spreadsheet (6 deals, $8 direct cost each)",
+      "performer": "BRAIN",
+      "costCents": 4800,
+      "day": 18,
+      "dependsOn": "sell",
+      "evidence": [
+       "65842e-delivery",
+       "65842e-directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $3600 settled",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 25,
+      "dependsOn": "deliver",
+      "evidence": [
+       "65842e-timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 360000,
+      "label": "6 x $600 settled",
+      "settlesDay": 25,
+      "stepId": "collect"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 4800,
+      "label": "direct delivery cost, paid out of receipts",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 7,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 600,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.2,
+      "unit": "paid orders/contact",
+      "sources": [
+       "65842e-conversionRates"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 95,
+      "unit": "buyers",
+      "sources": [
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals needed",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "deals",
+      "sources": [
+       "65842e-price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "expected paid orders from full list",
+      "status": "EVIDENCED",
+      "value": 19,
+      "unit": "deals",
+      "sources": [
+       "65842e-conversionRates",
+       "65842e-buyerVolume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "USD/deal",
+      "sources": [
+       "65842e-directCosts"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days",
+      "sources": [
+       "65842e-timeToFirstCash"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "65842e-price",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#price",
+      "dated": "2026-11",
+      "claim": "price",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-conversionRates",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#conversionRates",
+      "dated": "2026-11",
+      "claim": "conversionRates",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-buyerVolume",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#buyerVolume",
+      "dated": "2026-11",
+      "claim": "buyerVolume",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-directCosts",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#directCosts",
+      "dated": "2026-11",
+      "claim": "directCosts",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-exposure",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#exposure",
+      "dated": "2026-11",
+      "claim": "exposure",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-timeToFirstCash",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "timeToFirstCash",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-delivery",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#delivery",
+      "dated": "2026-11",
+      "claim": "delivery",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     },
+     {
+      "id": "65842e-payer",
+      "url": "https://brain.local/card/cop_ad4e46f6105a4165842e#payer",
+      "dated": "2026-11",
+      "claim": "payer",
+      "population": "Licensed private adoption agencies on the state child-placing agency list",
+      "matchesBuyer": true,
+      "opportunityId": "cop_ad4e46f6105a4165842e"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_1d7e0714d0334f24a579",
+      "why": "Outside the single industry the owner names (private adoption agencies): it sells to cosmetology schools."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_ad4e46f6105a4165842e",
+      "deals": 6,
+      "price": 600,
+      "directCost": 8,
+      "capital": 0,
+      "settlesDay": 25,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_835356ea1d6d_a8be17",
+    "digest": "835356ea1d6dd5f59b69f65a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T05:04:04.350Z"
+   },
+   "review": {
+    "revisionId": "rev_835356ea1d6d_a8be17",
+    "revisionDigest": "835356ea1d6dd5f59b69f65a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dd22c4ee3d2b4932bc52/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a3246c7451994067a34a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE stance holds under the changed objective (contract v2: $3,500 within 30 days, in the single industry the owner names — private adoption agencies — with no up-front capital). The member cop_ad4e46f6105a4165842e is in that industry and is the only opening in it; the cosmetology question bank is now correctly excluded as outside the named industry rather than kept as a fallback. Every link stands on this offer's own records: $600 paid by five adoption agencies on this seller's invoices (Sept-Oct 2026) — a real purchase price for this buyer; 12/60 = 20% paid conversion on this offer's own sales; 95 separate licensed agencies on the state child-placing list; Brain produces the workbook (PRODUCE_SPREADSHEET); $8 cost; $0 exposure; 7 days to cash. Recomputed: 6 x $600 = $3,600 >= $3,500 (5 = $3,000 short); net $3,552; 95 x 0.20 = 19 expected orders vs 6-7 needed (at a ~11% lower bound on 12/60, ~10 expected). Orders by day 18 settle by day 25, inside 30.",
+    "findings": [
+     "Contract encoding: the v2 words restrict the goal to private adoption agencies, but contract.terms.exclusions is empty, so the industry restriction lives only in the words; the revision applies it correctly by hand.",
+     "With the fallback removed there is now a single opening; the 19-vs-6 expected-order margin is the only buffer, which remains ample. The alternative of selling 7 (Brain's count of deals needed) is supported by the same list.",
+     "Owner hours: card records 0.5 human hours per workbook (~3 h total) while ownerHours is null; no hours ceiling applies.",
+     "Ledger books the $48 delivery cost on day 25 rather than the deliver step's day 18; with $0 exposure on the card this is a booking-date inconsistency only.",
+     "Otherwise identical to rev_0d4737249051_4da5ea, which I passed under contract v1."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T05:04:58.557Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Generate $3,500 within 30 days in a single industry the owner names: private adoption agencies, using no up-front capital.",
+    "terms": "afc328ec1e09d81c",
+    "openings": {
+     "cop_1d7e0714d0334f24a579": "a8bda05713a76f58",
+     "cop_ad4e46f6105a4165842e": "2c34bf45536e812e"
+    }
+   },
+   "at": "2026-11-28T05:06:19.847Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

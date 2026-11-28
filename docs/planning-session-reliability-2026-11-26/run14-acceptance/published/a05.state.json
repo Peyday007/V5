@@ -1,0 +1,978 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_5798e975950f42d49260",
+   "words": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of at least 6000 USD received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "5d4769b5b4f64d7d65f1e5e8"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_5798e975950f42d49260",
+    "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a qualified fulfiller for the four signed RO-disinfection visits is named",
+     "opportunityIds": [],
+     "why": "Four clinics signed written work orders at $1,600 each ($6,400 >= $6,000 target), cost $700/visit, $0 exposure, cash in 15 days. But the deliverable is an on-site disinfection of a dialysis reverse-osmosis water system plus chemical/bacterial testing: physical, regulated clinical work. The card names no fulfillmentOwner and lists no requiredCapabilities Brain holds, so nobody is established to perform the visits; Brain cannot do on-site work and the owner's ability/willingness to do it is unstated."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the four visits himself",
+      "why": "Owner physical work is UNSTATED and no record shows he holds the water-treatment qualification dialysis clinics require; cannot be assumed."
+     },
+     {
+      "title": "Subcontract a dialysis water-treatment technician",
+      "why": "The preferred resolution, but no provider, price or availability is recorded; the $700 direct cost on the card is not tied to a named provider."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Identify and confirm a qualified dialysis water-treatment technician (or RO-vendor service company) who will perform four on-site disinfection+testing visits inside 15 days for <= $700 each, paid after the clinic pays",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_fulfil"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed work orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per visit",
+      "status": "EVIDENCED",
+      "value": 1600,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per visit",
+      "status": "EVIDENCED",
+      "value": 700,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "named qualified fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "s_fulfil"
+      ],
+      "needs": "A named technician/service company that commits to perform the visits on these terms"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed one visit each, to be done inside the window.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#price",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed work orders at $1,600 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $700 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_fulfil",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#fulfillmentOwner",
+      "dated": "2026-11-25",
+      "claim": "No fulfillment owner is recorded and requiredCapabilities is empty; nobody is established to do the on-site work.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "FULFILMENT: the four $1,600 orders are signed, but no one is established to perform on-site RO-system disinfection and water testing in dialysis clinics (no fulfillmentOwner on the card; Brain cannot do physical clinical work; owner capability unstated).",
+     "resolution": "Name a qualified dialysis water-treatment technician or RO-equipment service company that commits in writing to do the four visits within 15 days at <= $700 per visit, payable after each clinic pays (keeping $0 up-front capital); or the owner states he holds the qualification and will do the 8 hours of visits himself. Then re-plan as EXECUTABLE.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_29e74cc375f5_16eee8",
+    "digest": "29e74cc375f5fff825ee4350",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_503f269b3ca74905ad90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:39:13.039Z"
+   },
+   {
+    "goalId": "wst_5798e975950f42d49260",
+    "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a qualified fulfiller for the four signed RO-disinfection visits is named",
+     "opportunityIds": [],
+     "why": "Four clinics signed written work orders at $1,600 each ($6,400 >= $6,000 target), cost $700/visit, $0 exposure, cash in 15 days. But the deliverable is an on-site disinfection of a dialysis reverse-osmosis water system plus chemical/bacterial testing: physical, regulated clinical work. The card names no fulfillmentOwner and lists no requiredCapabilities Brain holds, so nobody is established to perform the visits; Brain cannot do on-site work and the owner's ability/willingness to do it is unstated."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the four visits himself",
+      "why": "Owner physical work is UNSTATED and no record shows he holds the water-treatment qualification dialysis clinics require; cannot be assumed."
+     },
+     {
+      "title": "Subcontract a dialysis water-treatment technician",
+      "why": "The preferred resolution, but no provider, price or availability is recorded; the $700 direct cost on the card is not tied to a named provider."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Identify and confirm a qualified dialysis water-treatment technician (or RO-vendor service company) who will perform four on-site disinfection+testing visits inside 15 days for <= $700 each, paid after the clinic pays",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_fulfil"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed work orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per visit",
+      "status": "EVIDENCED",
+      "value": 1600,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per visit",
+      "status": "EVIDENCED",
+      "value": 700,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "named qualified fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "s_fulfil"
+      ],
+      "needs": "A named technician/service company that commits to perform the visits on these terms"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed one visit each, to be done inside the window.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#price",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed work orders at $1,600 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $700 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_fulfil",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#fulfillmentOwner",
+      "dated": "2026-11-25",
+      "claim": "No fulfillment owner is recorded and requiredCapabilities is empty; nobody is established to do the on-site work.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "FULFILMENT: the four $1,600 orders are signed, but no one is established to perform on-site RO-system disinfection and water testing in dialysis clinics (no fulfillmentOwner on the card; Brain cannot do physical clinical work; owner capability unstated).",
+     "resolution": "Name a qualified dialysis water-treatment technician or RO-equipment service company that commits in writing to do the four visits within 15 days at <= $700 per visit, payable after each clinic pays (keeping $0 up-front capital); or the owner states he holds the qualification and will do the 8 hours of visits himself. Then re-plan as EXECUTABLE.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "deals": 4,
+      "price": 1600,
+      "directCost": 700,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_09e938028f9e_437a7e",
+    "digest": "09e938028f9ee26501cd31ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_503f269b3ca74905ad90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:39:20.543Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_5798e975950f42d49260",
+   "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until a qualified fulfiller for the four signed RO-disinfection visits is named",
+    "opportunityIds": [],
+    "why": "Four clinics signed written work orders at $1,600 each ($6,400 >= $6,000 target), cost $700/visit, $0 exposure, cash in 15 days. But the deliverable is an on-site disinfection of a dialysis reverse-osmosis water system plus chemical/bacterial testing: physical, regulated clinical work. The card names no fulfillmentOwner and lists no requiredCapabilities Brain holds, so nobody is established to perform the visits; Brain cannot do on-site work and the owner's ability/willingness to do it is unstated."
+   },
+   "alternatives": [
+    {
+     "title": "Owner performs the four visits himself",
+     "why": "Owner physical work is UNSTATED and no record shows he holds the water-treatment qualification dialysis clinics require; cannot be assumed."
+    },
+    {
+     "title": "Subcontract a dialysis water-treatment technician",
+     "why": "The preferred resolution, but no provider, price or availability is recorded; the $700 direct cost on the card is not tied to a named provider."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Identify and confirm a qualified dialysis water-treatment technician (or RO-vendor service company) who will perform four on-site disinfection+testing visits inside 15 days for <= $700 each, paid after the clinic pays",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_fulfil"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "signed work orders",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "orders",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per visit",
+     "status": "EVIDENCED",
+     "value": 1600,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per visit",
+     "status": "EVIDENCED",
+     "value": 700,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "named qualified fulfiller",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "provider",
+     "sources": [
+      "s_fulfil"
+     ],
+     "needs": "A named technician/service company that commits to perform the visits on these terms"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Four clinics signed one visit each, to be done inside the window.",
+     "population": "independent outpatient dialysis clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_36668e0f6c6b416fa790"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#price",
+     "dated": "2026-11-25",
+     "claim": "Four clinics signed work orders at $1,600 per visit.",
+     "population": "independent outpatient dialysis clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_36668e0f6c6b416fa790"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $700 per visit.",
+     "population": "independent outpatient dialysis clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_36668e0f6c6b416fa790"
+    },
+    {
+     "id": "s_fulfil",
+     "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#fulfillmentOwner",
+     "dated": "2026-11-25",
+     "claim": "No fulfillment owner is recorded and requiredCapabilities is empty; nobody is established to do the on-site work.",
+     "population": "independent outpatient dialysis clinics",
+     "matchesBuyer": true,
+     "opportunityId": "cop_36668e0f6c6b416fa790"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "FULFILMENT: the four $1,600 orders are signed, but no one is established to perform on-site RO-system disinfection and water testing in dialysis clinics (no fulfillmentOwner on the card; Brain cannot do physical clinical work; owner capability unstated).",
+    "resolution": "Name a qualified dialysis water-treatment technician or RO-equipment service company that commits in writing to do the four visits within 15 days at <= $700 per visit, payable after each clinic pays (keeping $0 up-front capital); or the owner states he holds the qualification and will do the 8 hours of visits himself. Then re-plan as EXECUTABLE.",
+    "decisiveLinks": [
+     "FULFILMENT"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_36668e0f6c6b416fa790",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_36668e0f6c6b416fa790",
+     "deals": 4,
+     "price": 1600,
+     "directCost": 700,
+     "capital": 0,
+     "settlesDay": 15,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_09e938028f9e_437a7e",
+   "digest": "09e938028f9ee26501cd31ad",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_503f269b3ca74905ad90/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:39:20.543Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_09e938028f9e_437a7e",
+   "digest": "09e938028f9ee26501cd31ad",
+   "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Quarterly RO-system disinfection and water-quality testing v\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3640× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Clinic managers and chief technicians at indepe\" needs [figure withheld] and keeps [figure withheld], 369× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Quarterly RO-system disinfection and water-quality testing visits for \".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_36668e0f6c6b416fa790"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+      "owner": "PERSON",
+      "cost": 700
+     },
+     {
+      "label": "Collect payment for \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish who would do the work for \"Quarterly RO-system disinfection and water-quality testing visits for independen\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+    "openings": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "title": "Quarterly RO-system disinfection and water-quality testing visits for independent dialysis clinics",
+      "missing": [
+       "FULFILMENT"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Clinic managers and chief technicians at independent outpatient dialysis clinics",
+       "reachableChannel": "The four clinic managers who signed, by email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:05.489Z",
+       "offerScope": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+       "priceCents": 160000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "outpatient dialysis clinics",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 160000,
+        "currency": "USD",
+        "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 160000,
+        "currency": "USD",
+        "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 160000,
+        "currency": "USD",
+        "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 160000,
+        "currency": "USD",
+        "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four clinic managers who signed, by email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 6400 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 6400 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 700, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "15 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Four clinics signed one visit each, to be done inside the window.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$700",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Clinic managers and chief technicians at independent outpatient dialysis clinics",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four clinics signed work orders at $1,600 per quarterly disinfection-and-testing visit (signed orders, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "15 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:36:53.347Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_09e938028f9e_437a7e",
+    "revisionDigest": "09e938028f9ee26501cd31ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_503f269b3ca74905ad90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_9dc8ea640bca431d8a32/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive gap correctly. The only opening (cop_36668e0f6c6b416fa790) has four signed $1,600 work orders: 4 x $1,600 = $6,400 >= $6,000, cost $700 < price, $0 exposure, 15 days to cash inside 30 — every commercial link holds. But the deliverable is on-site disinfection of a dialysis reverse-osmosis water system plus chemical and bacterial tests: physical, regulated clinical work. The card has no fulfillmentOwner and an empty requiredCapabilities, Brain cannot perform on-site work, and the owner's physical work and qualification are UNSTATED, so FULFILMENT is unestablished (Brain's own link agrees: 'nobody has established who would do the work'). This is missing evidence, correctly recorded as the decisive link rather than as a constraint, and it is not a CONDITIONAL case: who performs the visits is answered by research and a written commitment, not by a live market test, and taking the clinics' money before a performer is named would sell work nobody is shown able to do. The resolution is concrete (a named qualified technician or RO-service company committing in writing to four visits within 15 days at <= $700, paid after each clinic pays, or the owner stating he holds the qualification).",
+    "findings": [
+     "Arithmetic verified: $6,400 gross from four signed orders vs $6,000 target ($400 slack, so all four visits must be completed and paid); $2,800 direct cost leaves $3,600 net, irrelevant to a gross settled-cash target.",
+     "The $700 direct cost is not tied to a named provider; when a fulfiller is named, its rate must be <= $700 for the recorded economics to hold, and its payment terms must follow the clinic's payment to keep the $0 exposure cap.",
+     "Timing: a fulfiller must complete the four visits early enough that 15 days to cash lands inside day 30, i.e. visits by about day 15.",
+     "Ledger is empty, consistent with NO_PLAN; the research step r1 targets exactly the decisive link.",
+     "FULFILMENT unestablished: the card records no fulfillmentOwner and no requiredCapabilities for regulated on-site RO disinfection and testing (the decisive link this no-plan already names)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:43:51.194Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_09e938028f9e_437a7e",
+   "digest": "09e938028f9ee26501cd31ad",
+   "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+   "plan": {
+    "goalId": "wst_5798e975950f42d49260",
+    "contractDigest": "5d4769b5b4f64d7d65f1e5e8",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a qualified fulfiller for the four signed RO-disinfection visits is named",
+     "opportunityIds": [],
+     "why": "Four clinics signed written work orders at $1,600 each ($6,400 >= $6,000 target), cost $700/visit, $0 exposure, cash in 15 days. But the deliverable is an on-site disinfection of a dialysis reverse-osmosis water system plus chemical/bacterial testing: physical, regulated clinical work. The card names no fulfillmentOwner and lists no requiredCapabilities Brain holds, so nobody is established to perform the visits; Brain cannot do on-site work and the owner's ability/willingness to do it is unstated."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the four visits himself",
+      "why": "Owner physical work is UNSTATED and no record shows he holds the water-treatment qualification dialysis clinics require; cannot be assumed."
+     },
+     {
+      "title": "Subcontract a dialysis water-treatment technician",
+      "why": "The preferred resolution, but no provider, price or availability is recorded; the $700 direct cost on the card is not tied to a named provider."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Identify and confirm a qualified dialysis water-treatment technician (or RO-vendor service company) who will perform four on-site disinfection+testing visits inside 15 days for <= $700 each, paid after the clinic pays",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_fulfil"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "signed work orders",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "orders",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per visit",
+      "status": "EVIDENCED",
+      "value": 1600,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per visit",
+      "status": "EVIDENCED",
+      "value": 700,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "named qualified fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "s_fulfil"
+      ],
+      "needs": "A named technician/service company that commits to perform the visits on these terms"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed one visit each, to be done inside the window.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#price",
+      "dated": "2026-11-25",
+      "claim": "Four clinics signed work orders at $1,600 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $700 per visit.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     },
+     {
+      "id": "s_fulfil",
+      "url": "https://brain.local/card/cop_36668e0f6c6b416fa790#fulfillmentOwner",
+      "dated": "2026-11-25",
+      "claim": "No fulfillment owner is recorded and requiredCapabilities is empty; nobody is established to do the on-site work.",
+      "population": "independent outpatient dialysis clinics",
+      "matchesBuyer": true,
+      "opportunityId": "cop_36668e0f6c6b416fa790"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "FULFILMENT: the four $1,600 orders are signed, but no one is established to perform on-site RO-system disinfection and water testing in dialysis clinics (no fulfillmentOwner on the card; Brain cannot do physical clinical work; owner capability unstated).",
+     "resolution": "Name a qualified dialysis water-treatment technician or RO-equipment service company that commits in writing to do the four visits within 15 days at <= $700 per visit, payable after each clinic pays (keeping $0 up-front capital); or the owner states he holds the qualification and will do the 8 hours of visits himself. Then re-plan as EXECUTABLE.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_36668e0f6c6b416fa790",
+      "deals": 4,
+      "price": 1600,
+      "directCost": 700,
+      "capital": 0,
+      "settlesDay": 15,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_09e938028f9e_437a7e",
+    "digest": "09e938028f9ee26501cd31ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_503f269b3ca74905ad90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:39:20.543Z"
+   },
+   "review": {
+    "revisionId": "rev_09e938028f9e_437a7e",
+    "revisionDigest": "09e938028f9ee26501cd31ad",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_503f269b3ca74905ad90/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_9dc8ea640bca431d8a32/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive gap correctly. The only opening (cop_36668e0f6c6b416fa790) has four signed $1,600 work orders: 4 x $1,600 = $6,400 >= $6,000, cost $700 < price, $0 exposure, 15 days to cash inside 30 — every commercial link holds. But the deliverable is on-site disinfection of a dialysis reverse-osmosis water system plus chemical and bacterial tests: physical, regulated clinical work. The card has no fulfillmentOwner and an empty requiredCapabilities, Brain cannot perform on-site work, and the owner's physical work and qualification are UNSTATED, so FULFILMENT is unestablished (Brain's own link agrees: 'nobody has established who would do the work'). This is missing evidence, correctly recorded as the decisive link rather than as a constraint, and it is not a CONDITIONAL case: who performs the visits is answered by research and a written commitment, not by a live market test, and taking the clinics' money before a performer is named would sell work nobody is shown able to do. The resolution is concrete (a named qualified technician or RO-service company committing in writing to four visits within 15 days at <= $700, paid after each clinic pays, or the owner stating he holds the qualification).",
+    "findings": [
+     "Arithmetic verified: $6,400 gross from four signed orders vs $6,000 target ($400 slack, so all four visits must be completed and paid); $2,800 direct cost leaves $3,600 net, irrelevant to a gross settled-cash target.",
+     "The $700 direct cost is not tied to a named provider; when a fulfiller is named, its rate must be <= $700 for the recorded economics to hold, and its payment terms must follow the clinic's payment to keep the $0 exposure cap.",
+     "Timing: a fulfiller must complete the four visits early enough that 15 days to cash lands inside day 30, i.e. visits by about day 15.",
+     "Ledger is empty, consistent with NO_PLAN; the research step r1 targets exactly the decisive link.",
+     "FULFILMENT unestablished: the card records no fulfillmentOwner and no requiredCapabilities for regulated on-site RO disinfection and testing (the decisive link this no-plan already names)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:43:51.194Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "a1d602d61e0a382a",
+    "openings": {
+     "cop_36668e0f6c6b416fa790": "0e27693fc5975d80"
+    }
+   },
+   "at": "2026-11-28T04:44:53.872Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

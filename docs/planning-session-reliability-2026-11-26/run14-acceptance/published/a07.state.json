@@ -1,0 +1,888 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_a70d56793ca34da2b40f",
+   "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of at least 5000 USD received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "c4faaee0bc6c13e2c74b3472"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_a70d56793ca34da2b40f",
+    "contractDigest": "c4faaee0bc6c13e2c74b3472",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the price of the issues/programs list service is reconciled",
+     "opportunityIds": [],
+     "why": "The card contradicts itself on price: its price fact says $120 while its priceCents says $1,200. At $1,200 the $5,000 target needs 5 sales (~50 contacts at the measured 20/200 conversion) out of 410 stations; at $120 it needs 42 sales, i.e. ~420 contacts against a market of 410, which does not fit. A contradicted price is not established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,200",
+      "why": "Would be comfortable, but the card's own price fact says $120; choosing the favourable figure is not evidence."
+     },
+     {
+      "title": "Plan at $120",
+      "why": "41 sales from all 410 stations at 10% is about $4,920, short of $5,000; and $120 is itself contradicted, so it sets no ceiling either."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Reconcile the price: read the 20 recorded paid orders (amount paid) and published, dated prices stations pay for issues/programs list and public-file upkeep, to decide whether the price is $120 or $1,200",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_pricecents"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per quarterly list",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price",
+       "s_pricecents"
+      ],
+      "needs": "One established price: $120 (price fact) vs $1,200 (card priceCents) contradict"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable stations",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "stations",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#price",
+      "dated": "2026-11-25",
+      "claim": "Price $120.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_pricecents",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#priceCents",
+      "dated": "2026-11-25",
+      "claim": "Card priceCents 120000 ($1,200), contradicting the $120 price fact.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "20 paid orders from 200 contacts.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Regulator's licence database lists 410 noncommercial FM stations in the region, each posting a quarterly list.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $10.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the card's price fact ($120) contradicts its priceCents ($1,200), a tenfold difference that decides whether the 410-station market can carry $5,000 in 30 days (MARKET_VOLUME): 5 sales at $1,200 fit easily, 42 sales at $120 need more contacts than the market holds.",
+     "resolution": "Establish the actual price from the amounts paid on the 20 recorded orders or from published, dated prices for this service; correct the card. If $1,200 is confirmed, re-plan EXECUTABLE (5 sales, ~50 contacts, 5-day settlement); if $120, the target is out of reach at the measured conversion and the goal's target must be relaxed to about $4,900.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8b657f6bf2e849558519",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_8b657f6bf2e849558519",
+      "deals": null,
+      "price": null,
+      "directCost": 10,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_aa18feb65d37_e97c46",
+    "digest": "aa18feb65d378378c6467ae3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_776531d1316a42479417/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:01.374Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_a70d56793ca34da2b40f",
+   "contractDigest": "c4faaee0bc6c13e2c74b3472",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until the price of the issues/programs list service is reconciled",
+    "opportunityIds": [],
+    "why": "The card contradicts itself on price: its price fact says $120 while its priceCents says $1,200. At $1,200 the $5,000 target needs 5 sales (~50 contacts at the measured 20/200 conversion) out of 410 stations; at $120 it needs 42 sales, i.e. ~420 contacts against a market of 410, which does not fit. A contradicted price is not established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is."
+   },
+   "alternatives": [
+    {
+     "title": "Plan at $1,200",
+     "why": "Would be comfortable, but the card's own price fact says $120; choosing the favourable figure is not evidence."
+    },
+    {
+     "title": "Plan at $120",
+     "why": "41 sales from all 410 stations at 10% is about $4,920, short of $5,000; and $120 is itself contradicted, so it sets no ceiling either."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Reconcile the price: read the 20 recorded paid orders (amount paid) and published, dated prices stations pay for issues/programs list and public-file upkeep, to decide whether the price is $120 or $1,200",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price",
+      "s_pricecents"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price per quarterly list",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_price",
+      "s_pricecents"
+     ],
+     "needs": "One established price: $120 (price fact) vs $1,200 (card priceCents) contradict"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "paid/contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable stations",
+     "status": "EVIDENCED",
+     "value": 410,
+     "unit": "stations",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_8b657f6bf2e849558519#price",
+     "dated": "2026-11-25",
+     "claim": "Price $120.",
+     "population": "noncommercial community radio stations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8b657f6bf2e849558519"
+    },
+    {
+     "id": "s_pricecents",
+     "url": "https://brain.local/card/cop_8b657f6bf2e849558519#priceCents",
+     "dated": "2026-11-25",
+     "claim": "Card priceCents 120000 ($1,200), contradicting the $120 price fact.",
+     "population": "noncommercial community radio stations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8b657f6bf2e849558519"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_8b657f6bf2e849558519#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "20 paid orders from 200 contacts.",
+     "population": "noncommercial community radio stations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8b657f6bf2e849558519"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_8b657f6bf2e849558519#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Regulator's licence database lists 410 noncommercial FM stations in the region, each posting a quarterly list.",
+     "population": "noncommercial community radio stations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8b657f6bf2e849558519"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_8b657f6bf2e849558519#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $10.",
+     "population": "noncommercial community radio stations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_8b657f6bf2e849558519"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the card's price fact ($120) contradicts its priceCents ($1,200), a tenfold difference that decides whether the 410-station market can carry $5,000 in 30 days (MARKET_VOLUME): 5 sales at $1,200 fit easily, 42 sales at $120 need more contacts than the market holds.",
+    "resolution": "Establish the actual price from the amounts paid on the 20 recorded orders or from published, dated prices for this service; correct the card. If $1,200 is confirmed, re-plan EXECUTABLE (5 sales, ~50 contacts, 5-day settlement); if $120, the target is out of reach at the measured conversion and the goal's target must be relaxed to about $4,900.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_8b657f6bf2e849558519",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_8b657f6bf2e849558519",
+     "deals": null,
+     "price": null,
+     "directCost": 10,
+     "capital": 0,
+     "settlesDay": 5,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_aa18feb65d37_e97c46",
+   "digest": "aa18feb65d378378c6467ae3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_776531d1316a42479417/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:40:01.374Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_aa18feb65d37_e97c46",
+   "digest": "aa18feb65d378378c6467ae3",
+   "contractDigest": "c4faaee0bc6c13e2c74b3472",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 42250× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Quarterly issues/programs list and online public-file upkeep\" needs [figure withheld] and keeps [figure withheld], 650× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"General managers and volunteer station coordinators at noncommercial community radio stati\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_8b657f6bf2e849558519"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+      "owner": "PERSON",
+      "cost": 10
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach General managers and volunteer station coordinators at noncommercial community radio stati",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with General managers and volunteer station coordinators at noncommercial community radio stati",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 20.6954129783515
+     },
+     {
+      "label": "Collect payment for \"Quarterly issues/programs list and online public-file upkeep for noncommercial c\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_8b657f6bf2e849558519",
+      "title": "Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "General managers and volunteer station coordinators at noncommercial community radio stations",
+       "reachableChannel": "Station contact addresses in the regulator's online public-file listings",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:14.969Z",
+       "offerScope": "Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations",
+       "priceCents": 120000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "community radio stations",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Station contact addresses in the regulator's online public-file listings"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 20 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "43 deal(s) needed at the measured rate means asking 596 prospects, but the market holds only 410 (410 reachable buyers, each buying about every 91 days, so 1 purchase(s) each in 30 days): at that rate it yields about 29.6"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 10, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The regulator's licence database lists 410 noncommercial FM stations in the region; each must post a quarterly issues/programs list to its online public file.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Quarterly issues/programs list and online public-file upkeep for noncommercial community radio stations to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "20 paid orders from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "General managers and volunteer station coordinators at noncommercial community radio stations",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$120",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_a6d150f9b1364749bd5d"
+    ],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:37:47.882Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_aa18feb65d37_e97c46",
+    "revisionDigest": "aa18feb65d378378c6467ae3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_776531d1316a42479417/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bda85ef3cf32489ca6d8/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance today. The single opening (cop_8b657f6bf2e849558519) has reach (410 stations in the regulator's database), demand, conversion on this offer's own sales (20/200 = 10%), Brain fulfilment, $10 cost, $0 exposure and 5 days to cash. The price is not established: the card's price fact (EVIDENCE) reads $120 while its priceCents is $1,200, and Brain's own link says 'no single price on the card'. The ten-fold difference decides the outcome. Recomputed: at $120, ceil(5000/120) = 42 sales are needed, but 410 x 0.10 = 41 expected sales x $120 = $4,920 < $5,000 — even contacting the whole market at the measured rate falls short (Brain's MARKET_VOLUME link fails on the same basis); at $1,200, 5 sales (~50 contacts) would carry it comfortably. The revision refuses to pick the favourable figure, names OFFER_AND_PRICE and MARKET_VOLUME as the decisive links, and gives a branch-specific resolution (read the amounts paid on the 20 recorded orders; at $1,200 re-plan EXECUTABLE, at $120 the target is out of reach at measured conversion). Nothing unknown is treated as known and no ledger is claimed.",
+    "findings": [
+     "Arithmetic verified: $120 branch — 41 expected sales from all 410 stations = $4,920, $80 short (and $410 of direct cost makes net $4,510); $1,200 branch — 5 x $1,200 = $6,000 from ~50 contacts.",
+     "Weighting note: the $120 is the EVIDENCE fact while $1,200 is only the card's headline priceCents with no fact behind it; if the reconciliation cannot find a paid amount, the evidenced $120 should govern, which makes MARKET_VOLUME a true constraint (all the evidence cannot fit the target) rather than missing evidence.",
+     "The 20 earlier buyers came from 200 contacts that may overlap the 410 stations; because the service is quarterly they can rebuy, but the reachable pool of first-time contacts is at most ~210 if the 200 are excluded — this tightens the $120 branch further.",
+     "Research step r1 targets the decisive fact (amount paid on the 20 recorded orders) first — the cheapest way to settle the contradiction."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:44:43.776Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_aa18feb65d37_e97c46",
+   "digest": "aa18feb65d378378c6467ae3",
+   "contractDigest": "c4faaee0bc6c13e2c74b3472",
+   "plan": {
+    "goalId": "wst_a70d56793ca34da2b40f",
+    "contractDigest": "c4faaee0bc6c13e2c74b3472",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until the price of the issues/programs list service is reconciled",
+     "opportunityIds": [],
+     "why": "The card contradicts itself on price: its price fact says $120 while its priceCents says $1,200. At $1,200 the $5,000 target needs 5 sales (~50 contacts at the measured 20/200 conversion) out of 410 stations; at $120 it needs 42 sales, i.e. ~420 contacts against a market of 410, which does not fit. A contradicted price is not established, so neither OFFER_AND_PRICE nor MARKET_VOLUME is."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,200",
+      "why": "Would be comfortable, but the card's own price fact says $120; choosing the favourable figure is not evidence."
+     },
+     {
+      "title": "Plan at $120",
+      "why": "41 sales from all 410 stations at 10% is about $4,920, short of $5,000; and $120 is itself contradicted, so it sets no ceiling either."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Reconcile the price: read the 20 recorded paid orders (amount paid) and published, dated prices stations pay for issues/programs list and public-file upkeep, to decide whether the price is $120 or $1,200",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price",
+       "s_pricecents"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price per quarterly list",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price",
+       "s_pricecents"
+      ],
+      "needs": "One established price: $120 (price fact) vs $1,200 (card priceCents) contradict"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable stations",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "stations",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#price",
+      "dated": "2026-11-25",
+      "claim": "Price $120.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_pricecents",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#priceCents",
+      "dated": "2026-11-25",
+      "claim": "Card priceCents 120000 ($1,200), contradicting the $120 price fact.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "20 paid orders from 200 contacts.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Regulator's licence database lists 410 noncommercial FM stations in the region, each posting a quarterly list.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_8b657f6bf2e849558519#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $10.",
+      "population": "noncommercial community radio stations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_8b657f6bf2e849558519"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the card's price fact ($120) contradicts its priceCents ($1,200), a tenfold difference that decides whether the 410-station market can carry $5,000 in 30 days (MARKET_VOLUME): 5 sales at $1,200 fit easily, 42 sales at $120 need more contacts than the market holds.",
+     "resolution": "Establish the actual price from the amounts paid on the 20 recorded orders or from published, dated prices for this service; correct the card. If $1,200 is confirmed, re-plan EXECUTABLE (5 sales, ~50 contacts, 5-day settlement); if $120, the target is out of reach at the measured conversion and the goal's target must be relaxed to about $4,900.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_8b657f6bf2e849558519",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_8b657f6bf2e849558519",
+      "deals": null,
+      "price": null,
+      "directCost": 10,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_aa18feb65d37_e97c46",
+    "digest": "aa18feb65d378378c6467ae3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_776531d1316a42479417/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:40:01.374Z"
+   },
+   "review": {
+    "revisionId": "rev_aa18feb65d37_e97c46",
+    "revisionDigest": "aa18feb65d378378c6467ae3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_776531d1316a42479417/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bda85ef3cf32489ca6d8/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance today. The single opening (cop_8b657f6bf2e849558519) has reach (410 stations in the regulator's database), demand, conversion on this offer's own sales (20/200 = 10%), Brain fulfilment, $10 cost, $0 exposure and 5 days to cash. The price is not established: the card's price fact (EVIDENCE) reads $120 while its priceCents is $1,200, and Brain's own link says 'no single price on the card'. The ten-fold difference decides the outcome. Recomputed: at $120, ceil(5000/120) = 42 sales are needed, but 410 x 0.10 = 41 expected sales x $120 = $4,920 < $5,000 — even contacting the whole market at the measured rate falls short (Brain's MARKET_VOLUME link fails on the same basis); at $1,200, 5 sales (~50 contacts) would carry it comfortably. The revision refuses to pick the favourable figure, names OFFER_AND_PRICE and MARKET_VOLUME as the decisive links, and gives a branch-specific resolution (read the amounts paid on the 20 recorded orders; at $1,200 re-plan EXECUTABLE, at $120 the target is out of reach at measured conversion). Nothing unknown is treated as known and no ledger is claimed.",
+    "findings": [
+     "Arithmetic verified: $120 branch — 41 expected sales from all 410 stations = $4,920, $80 short (and $410 of direct cost makes net $4,510); $1,200 branch — 5 x $1,200 = $6,000 from ~50 contacts.",
+     "Weighting note: the $120 is the EVIDENCE fact while $1,200 is only the card's headline priceCents with no fact behind it; if the reconciliation cannot find a paid amount, the evidenced $120 should govern, which makes MARKET_VOLUME a true constraint (all the evidence cannot fit the target) rather than missing evidence.",
+     "The 20 earlier buyers came from 200 contacts that may overlap the 410 stations; because the service is quarterly they can rebuy, but the reachable pool of first-time contacts is at most ~210 if the 200 are excluded — this tightens the $120 branch further.",
+     "Research step r1 targets the decisive fact (amount paid on the 20 recorded orders) first — the cheapest way to settle the contradiction."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:44:43.776Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "6068d42e192a9a6e",
+    "openings": {
+     "cop_8b657f6bf2e849558519": "17e47c0ceda142e1"
+    }
+   },
+   "at": "2026-11-28T04:44:54.628Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

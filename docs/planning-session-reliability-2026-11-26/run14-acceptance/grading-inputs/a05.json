@@ -1,0 +1,186 @@
+{
+ "caseId": "at-05-dialysis-water-no-technician",
+ "keys": {
+  "cop_36668e0f6c6b416fa790": "roWater"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Quarterly RO-system disinfection and water-quality testing v\", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3640× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Clinic managers and chief technicians at indepe\" needs [figure withheld] and keeps [figure withheld], 369× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Quarterly RO-system disinfection and water-quality testing visits for \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_36668e0f6c6b416fa790"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+    "owner": "PERSON",
+    "cost": 700
+   },
+   {
+    "label": "Collect payment for \"Quarterly RO-system disinfection and water-quality testing visits for independen\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish who would do the work for \"Quarterly RO-system disinfection and water-quality testing visits for independen\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+  "openings": [
+   {
+    "opportunityId": "cop_36668e0f6c6b416fa790",
+    "title": "Quarterly RO-system disinfection and water-quality testing visits for independent dialysis clinics",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Clinic managers and chief technicians at independent outpatient dialysis clinics",
+     "reachableChannel": "The four clinic managers who signed, by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:05.489Z",
+     "offerScope": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+     "priceCents": 160000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "outpatient dialysis clinics",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 160000,
+      "currency": "USD",
+      "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 160000,
+      "currency": "USD",
+      "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 160000,
+      "currency": "USD",
+      "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 160000,
+      "currency": "USD",
+      "deliverable": "One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four clinic managers who signed, by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 6400 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 6400 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 700, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "15 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Four clinics signed one visit each, to be done inside the window.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One on-site disinfection of the reverse-osmosis water system plus the quarterly chemical and bacterial water tests to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$700",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Clinic managers and chief technicians at independent outpatient dialysis clinics",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Four clinics signed work orders at $1,600 per quarterly disinfection-and-testing visit (signed orders, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "15 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:36:53.347Z"
+ }
+}

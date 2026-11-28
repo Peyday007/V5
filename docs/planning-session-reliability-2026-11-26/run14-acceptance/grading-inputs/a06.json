@@ -1,0 +1,217 @@
+{
+ "caseId": "at-06-hobby-shop-price-said",
+ "keys": {
+  "cop_6c113dc4434d45cfb9c2": "estate"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 31115× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Estate-collection consignment appraisal workbook for model-r\" needs [figure withheld] and keeps [figure withheld], 245× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Owners of independent model-railroad and hobby shops\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_6c113dc4434d45cfb9c2"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+    "owner": "PERSON",
+    "cost": 5
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Owners of independent model-railroad and hobby shops",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Owners of independent model-railroad and hobby shops",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 9.971615932080505
+   },
+   {
+    "label": "Collect payment for \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_6c113dc4434d45cfb9c2",
+    "title": "Estate-collection consignment appraisal workbook for model-railroad and hobby shops",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Owners of independent model-railroad and hobby shops",
+     "reachableChannel": "Member emails in the national hobby-retailer association's directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T04:35:10.139Z",
+     "offerScope": "Estate-collection consignment appraisal workbook for model-railroad and hobby shops",
+     "priceCents": 25000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "model railroad and hobby shops",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Member emails in the national hobby-retailer association's directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 12 accepted of 90 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "11 deal(s) needed, 340 available in the window (340 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The hobby-retailer association's directory lists 340 independent model-railroad and hobby shops; each takes estate collections on consignment every month.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Estate-collection consignment appraisal workbook for model-railroad and hobby shops to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "12 paid orders from 90 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent model-railroad and hobby shops",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The owner says hobby-shop owners would pay $250 for the workbook.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_e3b17e8958324b7e9a2d"
+  ],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:37:30.881Z"
+ }
+}

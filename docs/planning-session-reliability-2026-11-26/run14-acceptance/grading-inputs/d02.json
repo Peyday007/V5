@@ -1,0 +1,462 @@
+{
+ "caseId": "au-02-auto-glass-named-industry",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Local SEO / Google Business Profile month-one package for in\", and what it is missing first is an offer and a price. Research first: the deep dive on \"Local SEO / Google Business Profile month-one package for in\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 2 unmeasured assumption(s) hold (Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Raise price ×2.50 on 3 opening(s) (all of them)) it would reach 57.1% (p50 $6,750): a hypothesis to test by running each one's kill criterion, not evidence.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_65661868364d41169ff9",
+   "cop_8bd0dbf085e542aa9c74",
+   "cop_d3b6fa0f8a1143c59888"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dive on \"Local SEO / Google Business Profile month-one package for in\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_8bd0dbf085e542aa9c74",
+    "title": "Consumer windshield replacement brokered to a subcontracted mobile installer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 393,
+    "card": {
+     "payer": "Vehicle owners paying cash for windshield replacement",
+     "reachableChannel": "Local paid search / Facebook ads to a quote page",
+     "offerScope": "Mobile windshield replacement at a quoted price",
+     "priceCents": 39300,
+     "currency": "USD",
+     "fulfillmentOwner": "A local mobile auto glass installer (none yet agreed)",
+     "peakFundingCents": 100000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "auto glass repair and replacement",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Local paid search / Facebook ads to a quote page"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 393 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "costs or money tied up are not established"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Local paid search / Facebook ads to a quote page",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Mobile windshield replacement at a quoted price to Vehicle owners paying cash for windshield replacement, reached through Local paid search / Facebook ads to a quote page, at $393; A local mobile auto glass installer (none yet agreed) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A local mobile auto glass installer (none yet agreed).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Mobile windshield replacement at a quoted price",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Vehicle owners paying cash for windshield replacement",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$393",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$393",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.glass.com/info/?p=48; windshield replacement near me; https://biziq.com/?p=31385",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_65661868364d41169ff9",
+    "title": "AI missed-call answering setup resold to auto glass shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Auto glass shops that miss inbound calls",
+     "reachableChannel": "Cold email / calls to shops",
+     "offerScope": "Setup plus first month of an AI receptionist configured for windshield quotes",
+     "priceCents": 30000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 5000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "auto glass repair and replacement",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email / calls to shops"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "68 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "17 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 49, tied up 50"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email / calls to shops",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "5,854 Auto glass shops that miss inbound calls (17 sales needed at $300; vendors sell automotive AI answering from $49-$199/month)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Setup plus first month of an AI receptionist configured for windshield quotes to Auto glass shops that miss inbound calls, reached through Cold email / calls to shops, at $300; the owner configures the shop's own AI answering account delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$49",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$50",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "the owner configures the shop's own AI answering account.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Setup plus first month of an AI receptionist configured for windshield quotes",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Auto glass shops that miss inbound calls",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.quo.com/answering-service/automotive; https://www.autoleap.com/air; https://shop-ware.com/ai-receptionist/; https://www.ibisworld.com/industry-statistics/number-of-businesses/auto-windshield-repair-services-united-states",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_d3b6fa0f8a1143c59888",
+    "title": "Local SEO / Google Business Profile month-one package for independent auto glass shops",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Independent auto glass repair/replacement shops",
+     "reachableChannel": "Cold email to independent shops found on maps/directories; paid by Stripe invoice",
+     "offerScope": "First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup",
+     "priceCents": 75000,
+     "currency": "USD",
+     "fulfillmentOwner": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package)",
+     "peakFundingCents": 10000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "auto glass repair and replacement",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email to independent shops found on maps/directories; paid by Stripe invoic"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "28 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "7 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 199, tied up 100"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email to independent shops found on maps/directories; paid by Stripe invoice",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "5,854 Independent auto glass repair/replacement shops (IBISWorld counts 5,854 US auto windshield repair businesses (2025); auto glass SEO packages typically $700-$2,000/month (BizIQ, Jul 2026); close rate unmeasured; 7 sales needed)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup to Independent auto glass repair/replacement shops, reached through Cold email to independent shops found on maps/directories; paid by Stripe invoice, at $750; A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$199",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "A Fiverr/Upwork GBP and local-SEO freelancer (listings at $49-$199 per package).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "First month of local SEO: Google Business Profile optimization, service-area pages, review-request setup",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Independent auto glass repair/replacement shops",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://biziq.com/blog/frequently-asked-questions-about-hiring-an-auto-glass-seo-specialist/; https://www.upwork.com/services/product/marketing-local-business-ranking-with-google-my-business-gmb-optimization-2047323573715807788; https://biziq.com/blog/local-auto-glass-seo-the-strategic-playbook-to-dominate-your-market-and-drive-high-intent-leads/; https://www.ibisworld.com/industry-statistics/number-of-businesses/auto-windshield-repair-services-united-states",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T04:45:53.298Z"
+ }
+}

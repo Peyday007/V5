@@ -1,0 +1,833 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_6df0ddbb11d14c829cf5",
+   "words": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Settled cash of at least 2500 USD received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "94962d97427a2590181bedbd"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_6df0ddbb11d14c829cf5",
+    "contractDigest": "94962d97427a2590181bedbd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a price buyers actually pay for the estate-consignment workbook is established",
+     "opportunityIds": [],
+     "why": "Reach (340-shop directory), demand (posted request 2026-11-25), conversion (12 paid of 90), fulfilment (Brain produces the spreadsheet), $5 cost, $0 exposure and 3-day settlement are on the card. The only price is the owner saying shops 'would pay $250' (a PERSON statement, not evidence of a purchase price). With no established price, neither the deal count nor whether $2,500 is reachable in 30 days can be computed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at the owner's $250 anyway",
+      "why": "Would need ~11 sales; the $250 is an unsupported guess, so the plan's arithmetic rests on nothing a buyer has paid."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish the price hobby-shop owners actually pay for an estate-collection consignment appraisal workbook: the price behind the 12 recorded paid orders, or published, dated prices for comparable appraisal/consignment tools",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "A price a buyer paid (an order record) or a published, dated price for this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.133,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 340,
+      "unit": "shops",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says hobby-shop owners would pay $250 for the workbook (PERSON statement).",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 90 contacts.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Association directory lists 340 independent model-railroad and hobby shops.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $5.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only price for the workbook is the owner's statement that shops 'would pay $250'; no buyer is shown paying any price, so the revenue per deal, and therefore whether $2,500 is reachable, is unestablished.",
+     "resolution": "Record the price actually paid on the 12 existing paid orders (order/payment records), or research published, dated prices hobby retailers pay for consignment-appraisal workbooks; if a paid price p is established, the plan needs ceil(2500/p) sales from the 340-shop directory at the measured 12/90 conversion and becomes EXECUTABLE.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_6c113dc4434d45cfb9c2",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_6c113dc4434d45cfb9c2",
+      "deals": null,
+      "price": null,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 3,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_3134d3c3acb6_6f1865",
+    "digest": "3134d3c3acb620195bb4c7b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6657bde6d7b24bba8fee/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:39:41.383Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_6df0ddbb11d14c829cf5",
+   "contractDigest": "94962d97427a2590181bedbd",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan until a price buyers actually pay for the estate-consignment workbook is established",
+    "opportunityIds": [],
+    "why": "Reach (340-shop directory), demand (posted request 2026-11-25), conversion (12 paid of 90), fulfilment (Brain produces the spreadsheet), $5 cost, $0 exposure and 3-day settlement are on the card. The only price is the owner saying shops 'would pay $250' (a PERSON statement, not evidence of a purchase price). With no established price, neither the deal count nor whether $2,500 is reachable in 30 days can be computed."
+   },
+   "alternatives": [
+    {
+     "title": "Sell at the owner's $250 anyway",
+     "why": "Would need ~11 sales; the $250 is an unsupported guess, so the plan's arithmetic rests on nothing a buyer has paid."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Establish the price hobby-shop owners actually pay for an estate-collection consignment appraisal workbook: the price behind the 12 recorded paid orders, or published, dated prices for comparable appraisal/consignment tools",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_price"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": "A price a buyer paid (an order record) or a published, dated price for this offer"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.133,
+     "unit": "paid/contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable shops",
+     "status": "EVIDENCED",
+     "value": 340,
+     "unit": "shops",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "USD",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#price",
+     "dated": "2026-11-25",
+     "claim": "The owner says hobby-shop owners would pay $250 for the workbook (PERSON statement).",
+     "population": "model-railroad and hobby shop owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6c113dc4434d45cfb9c2"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "12 paid orders from 90 contacts.",
+     "population": "model-railroad and hobby shop owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6c113dc4434d45cfb9c2"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Association directory lists 340 independent model-railroad and hobby shops.",
+     "population": "model-railroad and hobby shop owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6c113dc4434d45cfb9c2"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $5.",
+     "population": "model-railroad and hobby shop owners",
+     "matchesBuyer": true,
+     "opportunityId": "cop_6c113dc4434d45cfb9c2"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "OFFER_AND_PRICE: the only price for the workbook is the owner's statement that shops 'would pay $250'; no buyer is shown paying any price, so the revenue per deal, and therefore whether $2,500 is reachable, is unestablished.",
+    "resolution": "Record the price actually paid on the 12 existing paid orders (order/payment records), or research published, dated prices hobby retailers pay for consignment-appraisal workbooks; if a paid price p is established, the plan needs ceil(2500/p) sales from the 340-shop directory at the measured 12/90 conversion and becomes EXECUTABLE.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_6c113dc4434d45cfb9c2",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_6c113dc4434d45cfb9c2",
+     "deals": null,
+     "price": null,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 3,
+     "ownerHours": null
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_3134d3c3acb6_6f1865",
+   "digest": "3134d3c3acb620195bb4c7b0",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_6657bde6d7b24bba8fee/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T04:39:41.383Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_3134d3c3acb6_6f1865",
+   "digest": "3134d3c3acb620195bb4c7b0",
+   "contractDigest": "94962d97427a2590181bedbd",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 31115× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Estate-collection consignment appraisal workbook for model-r\" needs [figure withheld] and keeps [figure withheld], 245× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Owners of independent model-railroad and hobby shops\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_6c113dc4434d45cfb9c2"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Owners of independent model-railroad and hobby shops",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Owners of independent model-railroad and hobby shops",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 9.971615932080505
+     },
+     {
+      "label": "Collect payment for \"Estate-collection consignment appraisal workbook for model-railroad and hobby sh\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_6c113dc4434d45cfb9c2",
+      "title": "Estate-collection consignment appraisal workbook for model-railroad and hobby shops",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Owners of independent model-railroad and hobby shops",
+       "reachableChannel": "Member emails in the national hobby-retailer association's directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T04:35:10.139Z",
+       "offerScope": "Estate-collection consignment appraisal workbook for model-railroad and hobby shops",
+       "priceCents": 25000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "model railroad and hobby shops",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Member emails in the national hobby-retailer association's directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 12 accepted of 90 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "11 deal(s) needed, 340 available in the window (340 reachable buyers, each buying about every 30 days, so 1 purchase(s) each in 30 days)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The hobby-retailer association's directory lists 340 independent model-railroad and hobby shops; each takes estate collections on consignment every month.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Estate-collection consignment appraisal workbook for model-railroad and hobby shops to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "12 paid orders from 90 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent model-railroad and hobby shops",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The owner says hobby-shop owners would pay $250 for the workbook.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_e3b17e8958324b7e9a2d"
+    ],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T04:37:30.881Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_3134d3c3acb6_6f1865",
+    "revisionDigest": "3134d3c3acb620195bb4c7b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6657bde6d7b24bba8fee/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bf2a801594ce434a941a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive gap correctly. The single opening (cop_6c113dc4434d45cfb9c2) has reach (340-shop association directory), current demand (signal 2026-11-25), conversion measured on this offer's own sales (12/90 = 13.3%), Brain fulfilment (PRODUCE_SPREADSHEET), $5 cost, $0 exposure and 3 days to cash all on EVIDENCE. The only price is a PERSON fact: the owner says shops 'would pay $250'. That is someone's word, not a purchase price, so OFFER_AND_PRICE is unestablished and the revenue per deal — hence whether $2,500 is reachable — cannot be computed from evidence (Brain's planner agrees: 'price 250 USD is a guess'). The plan does not treat the $250 as known, records no ledger, and names OFFER_AND_PRICE as the decisive link with a concrete resolution: the price on the 12 existing paid orders, or a published dated price. If $250 were confirmed, ceil(2500/250) = 10 deals (11 with Brain's margin) against 340 x 0.133 = ~45 expected orders, settling in 3 days, would make it EXECUTABLE — so price is the only thing standing between this and a plan.",
+    "findings": [
+     "Price defect: the $250 is PERSON_WORD (owner's statement), not a purchase record; correctly not used.",
+     "The 12 paid orders recorded in conversionRates imply a price was actually paid on each; retrieving those order/payment records is the cheapest resolution and the plan's research step r1 targets it first.",
+     "Brain's MARKET_VOLUME basis treats each shop as buying every 30 days because shops take estate collections monthly; a workbook is plausibly a one-time purchase per shop, but within a single 30-day window this still gives at most one purchase per shop (340 available), so it does not affect sufficiency.",
+     "Stance check: this is not CONDITIONAL — the missing fact is an existing record that research can retrieve, not an unknown only a live test can measure; and no constraint is claimed, correctly, since the gap is missing evidence rather than a limit the evidence cannot fit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:44:12.369Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_3134d3c3acb6_6f1865",
+   "digest": "3134d3c3acb620195bb4c7b0",
+   "contractDigest": "94962d97427a2590181bedbd",
+   "plan": {
+    "goalId": "wst_6df0ddbb11d14c829cf5",
+    "contractDigest": "94962d97427a2590181bedbd",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan until a price buyers actually pay for the estate-consignment workbook is established",
+     "opportunityIds": [],
+     "why": "Reach (340-shop directory), demand (posted request 2026-11-25), conversion (12 paid of 90), fulfilment (Brain produces the spreadsheet), $5 cost, $0 exposure and 3-day settlement are on the card. The only price is the owner saying shops 'would pay $250' (a PERSON statement, not evidence of a purchase price). With no established price, neither the deal count nor whether $2,500 is reachable in 30 days can be computed."
+    },
+    "alternatives": [
+     {
+      "title": "Sell at the owner's $250 anyway",
+      "why": "Would need ~11 sales; the $250 is an unsupported guess, so the plan's arithmetic rests on nothing a buyer has paid."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish the price hobby-shop owners actually pay for an estate-collection consignment appraisal workbook: the price behind the 12 recorded paid orders, or published, dated prices for comparable appraisal/consignment tools",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_price"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": "A price a buyer paid (an order record) or a published, dated price for this offer"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.133,
+      "unit": "paid/contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable shops",
+      "status": "EVIDENCED",
+      "value": 340,
+      "unit": "shops",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says hobby-shop owners would pay $250 for the workbook (PERSON statement).",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 90 contacts.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Association directory lists 340 independent model-railroad and hobby shops.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_6c113dc4434d45cfb9c2#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $5.",
+      "population": "model-railroad and hobby shop owners",
+      "matchesBuyer": true,
+      "opportunityId": "cop_6c113dc4434d45cfb9c2"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "OFFER_AND_PRICE: the only price for the workbook is the owner's statement that shops 'would pay $250'; no buyer is shown paying any price, so the revenue per deal, and therefore whether $2,500 is reachable, is unestablished.",
+     "resolution": "Record the price actually paid on the 12 existing paid orders (order/payment records), or research published, dated prices hobby retailers pay for consignment-appraisal workbooks; if a paid price p is established, the plan needs ceil(2500/p) sales from the 340-shop directory at the measured 12/90 conversion and becomes EXECUTABLE.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_6c113dc4434d45cfb9c2",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_6c113dc4434d45cfb9c2",
+      "deals": null,
+      "price": null,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 3,
+      "ownerHours": null
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_3134d3c3acb6_6f1865",
+    "digest": "3134d3c3acb620195bb4c7b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6657bde6d7b24bba8fee/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T04:39:41.383Z"
+   },
+   "review": {
+    "revisionId": "rev_3134d3c3acb6_6f1865",
+    "revisionDigest": "3134d3c3acb620195bb4c7b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6657bde6d7b24bba8fee/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_bf2a801594ce434a941a/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive gap correctly. The single opening (cop_6c113dc4434d45cfb9c2) has reach (340-shop association directory), current demand (signal 2026-11-25), conversion measured on this offer's own sales (12/90 = 13.3%), Brain fulfilment (PRODUCE_SPREADSHEET), $5 cost, $0 exposure and 3 days to cash all on EVIDENCE. The only price is a PERSON fact: the owner says shops 'would pay $250'. That is someone's word, not a purchase price, so OFFER_AND_PRICE is unestablished and the revenue per deal — hence whether $2,500 is reachable — cannot be computed from evidence (Brain's planner agrees: 'price 250 USD is a guess'). The plan does not treat the $250 as known, records no ledger, and names OFFER_AND_PRICE as the decisive link with a concrete resolution: the price on the 12 existing paid orders, or a published dated price. If $250 were confirmed, ceil(2500/250) = 10 deals (11 with Brain's margin) against 340 x 0.133 = ~45 expected orders, settling in 3 days, would make it EXECUTABLE — so price is the only thing standing between this and a plan.",
+    "findings": [
+     "Price defect: the $250 is PERSON_WORD (owner's statement), not a purchase record; correctly not used.",
+     "The 12 paid orders recorded in conversionRates imply a price was actually paid on each; retrieving those order/payment records is the cheapest resolution and the plan's research step r1 targets it first.",
+     "Brain's MARKET_VOLUME basis treats each shop as buying every 30 days because shops take estate collections monthly; a workbook is plausibly a one-time purchase per shop, but within a single 30-day window this still gives at most one purchase per shop (340 available), so it does not affect sufficiency.",
+     "Stance check: this is not CONDITIONAL — the missing fact is an existing record that research can retrieve, not an unknown only a live test can measure; and no constraint is claimed, correctly, since the gap is missing evidence rather than a limit the evidence cannot fit."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T04:44:12.369Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "terms": "5f67e7635aeeb057",
+    "openings": {
+     "cop_6c113dc4434d45cfb9c2": "d2215c062dae2c90"
+    }
+   },
+   "at": "2026-11-28T04:44:54.261Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}
