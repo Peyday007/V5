@@ -1,0 +1,1326 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_af11526f6a134a8aa603",
+   "words": "Collect $7,000 of settled cash within 28 days using no up-front capital; I can give it at most 2 hours a week.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 700000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 28,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Target settled cash collected within the window",
+    "ownerHoursPerWeek": 2,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "8cbb5e0a56265f29492577a5"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_af11526f6a134a8aa603",
+    "contractDigest": "8cbb5e0a56265f29492577a5",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the four signed appraisal-document batches through Hollis Appraisal Group",
+     "opportunityIds": [
+      "cop_04bb0504aef442a5b140"
+     ],
+     "why": "Four independent jewelers accepted in writing a $2,250 batch of 15 insurance-replacement appraisal documents, paid by card on delivery. Hollis Appraisal Group (credentialed) quoted $70 per appraisal ($1,050 per batch) and can do 40 a week from Dec 1, so all 60 appraisals are done by about day 13; $9,000 is collected and settled by day 16, above the $7,000 target, with $0 exposure (Hollis is paid from each batch's receipt) and no owner hours (Brain sells and coordinates, Hollis fulfils)."
+    },
+    "alternatives": [
+     {
+      "title": "Only three batches",
+      "why": "3 x $2,250 = $6,750 falls short of $7,000; all four signed batches are needed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OFFER",
+      "label": "Confirm the four agreed $2,250 batch orders and collect each jeweler's item list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 225000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Hollis prepares and delivers batches 1-2 (30 appraisals, first week of capacity from Dec 1)",
+      "performer": "Hollis Appraisal Group",
+      "costCents": 210000,
+      "day": 7,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollis Appraisal Group",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect card payments for batches 1-2 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Hollis prepares and delivers batches 3-4 (30 appraisals)",
+      "performer": "Hollis Appraisal Group",
+      "costCents": 210000,
+      "day": 13,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollis Appraisal Group",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Collect card payments for batches 3-4 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "s4",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 450000,
+      "label": "Batches 1-2 paid by card on delivery",
+      "settlesDay": 10,
+      "stepId": "s3"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 210000,
+      "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+      "stepId": "s2"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 450000,
+      "label": "Batches 3-4 paid by card on delivery",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 210000,
+      "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "price per batch",
+      "status": "EVIDENCED",
+      "value": 2250,
+      "unit": "USD",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "written acceptances",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "batches",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfiller cost per batch",
+      "status": "EVIDENCED",
+      "value": 1050,
+      "unit": "USD",
+      "sources": [
+       "c3",
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfiller capacity",
+      "status": "EVIDENCED",
+      "value": 40,
+      "unit": "appraisals per week from Dec 1",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#price",
+      "dated": "2026-11-25",
+      "claim": "Price $2,250 per batch of 15",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances at $2,250 each, paid by card on delivery",
+      "population": "The four signed jewelers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $1,050 per batch",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Hollis Appraisal Group quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1",
+      "population": "Hollis Appraisal Group (fulfiller)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c6",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_04bb0504aef442a5b140",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_04bb0504aef442a5b140",
+      "deals": 4,
+      "price": 2250,
+      "directCost": 1050,
+      "capital": 0,
+      "settlesDay": 16,
+      "ownerHours": 0,
+      "dealsMax": 4
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ee538a196246_0b32d9",
+    "digest": "ee538a196246768278b94299",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_210d14dac23a4a1fad58/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:41.324Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_af11526f6a134a8aa603",
+   "contractDigest": "8cbb5e0a56265f29492577a5",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the four signed appraisal-document batches through Hollis Appraisal Group",
+    "opportunityIds": [
+     "cop_04bb0504aef442a5b140"
+    ],
+    "why": "Four independent jewelers accepted in writing a $2,250 batch of 15 insurance-replacement appraisal documents, paid by card on delivery. Hollis Appraisal Group (credentialed) quoted $70 per appraisal ($1,050 per batch) and can do 40 a week from Dec 1, so all 60 appraisals are done by about day 13; $9,000 is collected and settled by day 16, above the $7,000 target, with $0 exposure (Hollis is paid from each batch's receipt) and no owner hours (Brain sells and coordinates, Hollis fulfils)."
+   },
+   "alternatives": [
+    {
+     "title": "Only three batches",
+     "why": "3 x $2,250 = $6,750 falls short of $7,000; all four signed batches are needed."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "OFFER",
+     "label": "Confirm the four agreed $2,250 batch orders and collect each jeweler's item list",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "agreements",
+      "price"
+     ],
+     "priceCents": 225000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "DELIVER",
+     "label": "Hollis prepares and delivers batches 1-2 (30 appraisals, first week of capacity from Dec 1)",
+     "performer": "Hollis Appraisal Group",
+     "costCents": 210000,
+     "day": 7,
+     "dependsOn": "s1",
+     "evidence": [
+      "fulfillment",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hollis Appraisal Group",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "COLLECT",
+     "label": "Collect card payments for batches 1-2 on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "s2",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "DELIVER",
+     "label": "Hollis prepares and delivers batches 3-4 (30 appraisals)",
+     "performer": "Hollis Appraisal Group",
+     "costCents": 210000,
+     "day": 13,
+     "dependsOn": "s1",
+     "evidence": [
+      "fulfillment",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hollis Appraisal Group",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5",
+     "kind": "COLLECT",
+     "label": "Collect card payments for batches 3-4 on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 13,
+     "dependsOn": "s4",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 450000,
+     "label": "Batches 1-2 paid by card on delivery",
+     "settlesDay": 10,
+     "stepId": "s3"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 210000,
+     "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+     "stepId": "s2"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 450000,
+     "label": "Batches 3-4 paid by card on delivery",
+     "settlesDay": 16,
+     "stepId": "s5"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 210000,
+     "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 16,
+   "quantities": [
+    {
+     "name": "price per batch",
+     "status": "EVIDENCED",
+     "value": 2250,
+     "unit": "USD",
+     "sources": [
+      "c1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "written acceptances",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "batches",
+     "sources": [
+      "c2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "fulfiller cost per batch",
+     "status": "EVIDENCED",
+     "value": 1050,
+     "unit": "USD",
+     "sources": [
+      "c3",
+      "c4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "fulfiller capacity",
+     "status": "EVIDENCED",
+     "value": 40,
+     "unit": "appraisals per week from Dec 1",
+     "sources": [
+      "c4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "c5"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "hours",
+     "sources": [
+      "c4"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "c1",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#price",
+     "dated": "2026-11-25",
+     "claim": "Price $2,250 per batch of 15",
+     "population": "Independent jewelry store owners (the four signed jewelers)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    },
+    {
+     "id": "c2",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#agreements",
+     "dated": "2026-11-25",
+     "claim": "Four written acceptances at $2,250 each, paid by card on delivery",
+     "population": "The four signed jewelers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    },
+    {
+     "id": "c3",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $1,050 per batch",
+     "population": "Independent jewelry store owners (the four signed jewelers)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    },
+    {
+     "id": "c4",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#fulfillment",
+     "dated": "2026-11-25",
+     "claim": "Hollis Appraisal Group quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1",
+     "population": "Hollis Appraisal Group (fulfiller)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    },
+    {
+     "id": "c5",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "3 days to first cash",
+     "population": "Independent jewelry store owners (the four signed jewelers)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    },
+    {
+     "id": "c6",
+     "url": "https://brain.local/card/cop_04bb0504aef442a5b140#exposure",
+     "dated": "2026-11-25",
+     "claim": "Exposure $0",
+     "population": "Independent jewelry store owners (the four signed jewelers)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_04bb0504aef442a5b140"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_04bb0504aef442a5b140",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_04bb0504aef442a5b140",
+     "deals": 4,
+     "price": 2250,
+     "directCost": 1050,
+     "capital": 0,
+     "settlesDay": 16,
+     "ownerHours": 0,
+     "dealsMax": 4
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_ee538a196246_0b32d9",
+   "digest": "ee538a196246768278b94299",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_210d14dac23a4a1fad58/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:06:41.324Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_ee538a196246_0b32d9",
+   "digest": "ee538a196246768278b94299",
+   "contractDigest": "8cbb5e0a56265f29492577a5",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 420000,
+    "committedOpenCents": 0,
+    "preProofCents": 420000,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 7,
+    "collectedCents": 900000,
+    "collectedInWindowCents": 900000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 480000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Subcontracted insurance-appraisal documentation for independ\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Subcontracted insurance-appraisal documentation for independ\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4971× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Independent jewelry store owners — A batch of 1\" needs [figure withheld] and keeps [figure withheld], 403× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted insurance-appraisal documentation for independent jewele\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_04bb0504aef442a5b140"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+      "owner": "PERSON",
+      "cost": 1050
+     },
+     {
+      "label": "Collect payment for \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_04bb0504aef442a5b140",
+      "title": "Subcontracted insurance-appraisal documentation for independent jewelers",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 7000,
+      "potentialReach": 7000,
+      "card": {
+       "payer": "Independent jewelry store owners",
+       "reachableChannel": "The four signed jewelers",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:49.072Z",
+       "offerScope": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+       "priceCents": 225000,
+       "currency": "USD",
+       "fulfillmentOwner": "Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "independent jewelers",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 225000,
+        "currency": "USD",
+        "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four signed jewelers"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 9000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 9000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a we (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 1050, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 28 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1050",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Independent jewelry store owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$2250",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 700000,
+     "daysLeft": 28,
+     "hoursCeiling": 8,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 2
+    },
+    "at": "2026-11-28T07:04:17.397Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_ee538a196246_0b32d9",
+    "revisionDigest": "ee538a196246768278b94299",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_210d14dac23a4a1fad58/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_959d1ea078dd484c8e26/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: 4 written acceptances x $2,250 = $9,000 >= $7,000; Hollis 15 x $70 = $1,050 per batch, 4 x $1,050 = $4,200 total, below price; net $4,800. Card exposure $0 / peak funding $0 (EVIDENCE) supports paying Hollis from receipts, so no up-front capital. Capacity: 60 appraisals at 40/week from Dec 1 (about day 3-4) finishes in about 1.5 weeks, i.e. around day 13-14; card payments settle 3 days later, about day 16-17, well inside 28 days. Price is these buyers' own written acceptance, not a benchmark. Fulfiller in the steps (Hollis Appraisal Group, PROVIDER) is the card's recorded fulfillmentOwner, and the 'credentialed appraiser' requirement is met by that fulfiller. Owner hours: card humanHours 1 (even if per batch, 4 hours over 4 weeks = 1/week) fits the 2 h/week limit. All chain links are established from this offer's own record; I find no contradicting record. EXECUTABLE is right.",
+    "findings": [
+     "Zero slack on deal count: 3 batches = $6,750 < $7,000, so all four jewelers must pay; a single non-payment misses the target.",
+     "Timing is slightly optimistic: Hollis capacity starts Dec 1, so 30 appraisals are unlikely to be delivered by day 7 (about day 8-10 more realistic), and item lists must arrive first. Still settles inside the window with >10 days slack.",
+     "members[].ownerHours is 0 while the card records humanHours 1; it should carry the card's figure. It fits the 2 h/week ceiling either way.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; both must be connected before day 7 for confirmation and card collection."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:39.588Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_ee538a196246_0b32d9",
+   "digest": "ee538a196246768278b94299",
+   "contractDigest": "8cbb5e0a56265f29492577a5",
+   "plan": {
+    "goalId": "wst_af11526f6a134a8aa603",
+    "contractDigest": "8cbb5e0a56265f29492577a5",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the four signed appraisal-document batches through Hollis Appraisal Group",
+     "opportunityIds": [
+      "cop_04bb0504aef442a5b140"
+     ],
+     "why": "Four independent jewelers accepted in writing a $2,250 batch of 15 insurance-replacement appraisal documents, paid by card on delivery. Hollis Appraisal Group (credentialed) quoted $70 per appraisal ($1,050 per batch) and can do 40 a week from Dec 1, so all 60 appraisals are done by about day 13; $9,000 is collected and settled by day 16, above the $7,000 target, with $0 exposure (Hollis is paid from each batch's receipt) and no owner hours (Brain sells and coordinates, Hollis fulfils)."
+    },
+    "alternatives": [
+     {
+      "title": "Only three batches",
+      "why": "3 x $2,250 = $6,750 falls short of $7,000; all four signed batches are needed."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OFFER",
+      "label": "Confirm the four agreed $2,250 batch orders and collect each jeweler's item list",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 225000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Hollis prepares and delivers batches 1-2 (30 appraisals, first week of capacity from Dec 1)",
+      "performer": "Hollis Appraisal Group",
+      "costCents": 210000,
+      "day": 7,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollis Appraisal Group",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect card payments for batches 1-2 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "DELIVER",
+      "label": "Hollis prepares and delivers batches 3-4 (30 appraisals)",
+      "performer": "Hollis Appraisal Group",
+      "costCents": 210000,
+      "day": 13,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hollis Appraisal Group",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "COLLECT",
+      "label": "Collect card payments for batches 3-4 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 13,
+      "dependsOn": "s4",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 450000,
+      "label": "Batches 1-2 paid by card on delivery",
+      "settlesDay": 10,
+      "stepId": "s3"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 210000,
+      "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+      "stepId": "s2"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 450000,
+      "label": "Batches 3-4 paid by card on delivery",
+      "settlesDay": 16,
+      "stepId": "s5"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 210000,
+      "label": "Hollis: 30 appraisals x $70, paid from settled receipts",
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 16,
+    "quantities": [
+     {
+      "name": "price per batch",
+      "status": "EVIDENCED",
+      "value": 2250,
+      "unit": "USD",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "written acceptances",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "batches",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfiller cost per batch",
+      "status": "EVIDENCED",
+      "value": 1050,
+      "unit": "USD",
+      "sources": [
+       "c3",
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfiller capacity",
+      "status": "EVIDENCED",
+      "value": 40,
+      "unit": "appraisals per week from Dec 1",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#price",
+      "dated": "2026-11-25",
+      "claim": "Price $2,250 per batch of 15",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances at $2,250 each, paid by card on delivery",
+      "population": "The four signed jewelers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $1,050 per batch",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Hollis Appraisal Group quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1",
+      "population": "Hollis Appraisal Group (fulfiller)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     },
+     {
+      "id": "c6",
+      "url": "https://brain.local/card/cop_04bb0504aef442a5b140#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Independent jewelry store owners (the four signed jewelers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_04bb0504aef442a5b140"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_04bb0504aef442a5b140",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_04bb0504aef442a5b140",
+      "deals": 4,
+      "price": 2250,
+      "directCost": 1050,
+      "capital": 0,
+      "settlesDay": 16,
+      "ownerHours": 0,
+      "dealsMax": 4
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_ee538a196246_0b32d9",
+    "digest": "ee538a196246768278b94299",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_210d14dac23a4a1fad58/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:41.324Z"
+   },
+   "review": {
+    "revisionId": "rev_ee538a196246_0b32d9",
+    "revisionDigest": "ee538a196246768278b94299",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_210d14dac23a4a1fad58/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_959d1ea078dd484c8e26/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: 4 written acceptances x $2,250 = $9,000 >= $7,000; Hollis 15 x $70 = $1,050 per batch, 4 x $1,050 = $4,200 total, below price; net $4,800. Card exposure $0 / peak funding $0 (EVIDENCE) supports paying Hollis from receipts, so no up-front capital. Capacity: 60 appraisals at 40/week from Dec 1 (about day 3-4) finishes in about 1.5 weeks, i.e. around day 13-14; card payments settle 3 days later, about day 16-17, well inside 28 days. Price is these buyers' own written acceptance, not a benchmark. Fulfiller in the steps (Hollis Appraisal Group, PROVIDER) is the card's recorded fulfillmentOwner, and the 'credentialed appraiser' requirement is met by that fulfiller. Owner hours: card humanHours 1 (even if per batch, 4 hours over 4 weeks = 1/week) fits the 2 h/week limit. All chain links are established from this offer's own record; I find no contradicting record. EXECUTABLE is right.",
+    "findings": [
+     "Zero slack on deal count: 3 batches = $6,750 < $7,000, so all four jewelers must pay; a single non-payment misses the target.",
+     "Timing is slightly optimistic: Hollis capacity starts Dec 1, so 30 appraisals are unlikely to be delivered by day 7 (about day 8-10 more realistic), and item lists must arrive first. Still settles inside the window with >10 days slack.",
+     "members[].ownerHours is 0 while the card records humanHours 1; it should carry the card's figure. It fits the 2 h/week ceiling either way.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED; both must be connected before day 7 for confirmation and card collection."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:39.588Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $7,000 of settled cash within 28 days using no up-front capital; I can give it at most 2 hours a week.",
+    "terms": "99cdddc5e843b33a",
+    "openings": {
+     "cop_04bb0504aef442a5b140": "56b740746de7d2f1"
+    }
+   },
+   "at": "2026-11-28T07:09:24.559Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

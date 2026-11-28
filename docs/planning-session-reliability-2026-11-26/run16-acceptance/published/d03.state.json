@@ -1,0 +1,6040 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_7e4fba444e40470da8d0",
+   "words": "Target is $12,000 of settled cash in 45 days. I can invest up to $2,500, but I only have about 3 hours a week to give this, so Brain or contractors have to do the actual work.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 250000,
+    "proofCondition": "First paid order settled from a buyer, fulfilled by Brain or a contractor",
+    "ownerHoursPerWeek": 2.9556,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "05bfc039d6f3533fc1a391ed"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Small businesses are published as paying freelancers $2,000-$15,000 for a website (HubSpot, 2025-07-01); a $1,500 fixed-scope rebuild sits below that range, a global-median Upwork WordPress developer ($15-28/h, HubSpot 2025-05-09) builds it for ~$560, and 190,808 US plumbing/HVAC businesses exist to reach. Eight sales reach $12,000 settled within 45 days and use ~12 owner hours of closing calls. The close rate from cold email is unmeasured, so the plan starts with a bounded test."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "Sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price buyers pay, and needs access to client financial accounts; weaker price evidence than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Price per episode is low ($75-500 freelance, Twine), so 20 monthly packages would be needed for $12,000 in 45 days, more than the owner's 19 hours of closing allow."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan and lead credits, set up two sending domains, build a list of 1,500 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 20000,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "OFFER",
+      "label": "Send a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 (50% deposit), with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 3,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_hubspot_price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "TEST",
+      "label": "Validation: by day 14, from 1,000 contacted businesses, at least 1 paid deposit",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s2",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "SELL",
+      "label": "Owner takes 20-minute closing calls with interested replies and sends the Stripe deposit link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s2",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 12,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each site in 10 days from Brain's copy and mock; paid by fixed-price escrow",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 448000,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "COLLECT",
+      "label": "Collect 50% deposit at close and 50% at launch through Stripe; US payouts T+2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 12,
+      "dependsOn": "s4",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 20000,
+      "label": "Instantly Growth plan, lead credits and two sending domains/inboxes",
+      "stepId": "s1"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s5"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 1 (Stripe)",
+      "settlesDay": 24,
+      "stepId": "s6"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 1 (Stripe)",
+      "settlesDay": 25,
+      "stepId": "s6"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s5"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 2 (Stripe)",
+      "settlesDay": 18,
+      "stepId": "s6"
+     },
+     {
+      "day": 25,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 2 (Stripe)",
+      "settlesDay": 28,
+      "stepId": "s6"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s5"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 3 (Stripe)",
+      "settlesDay": 21,
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 3 (Stripe)",
+      "settlesDay": 31,
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s5"
+     },
+     {
+      "day": 21,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 4 (Stripe)",
+      "settlesDay": 24,
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 4 (Stripe)",
+      "settlesDay": 34,
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s5"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 5 (Stripe)",
+      "settlesDay": 27,
+      "stepId": "s6"
+     },
+     {
+      "day": 34,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 5 (Stripe)",
+      "settlesDay": 37,
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s5"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 6 (Stripe)",
+      "settlesDay": 30,
+      "stepId": "s6"
+     },
+     {
+      "day": 37,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 6 (Stripe)",
+      "settlesDay": 40,
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s5"
+     },
+     {
+      "day": 30,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 7 (Stripe)",
+      "settlesDay": 33,
+      "stepId": "s6"
+     },
+     {
+      "day": 40,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 7 (Stripe)",
+      "settlesDay": 43,
+      "stepId": "s6"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s5"
+     },
+     {
+      "day": 32,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% deposit, deal 8 (Stripe)",
+      "settlesDay": 35,
+      "stepId": "s6"
+     },
+     {
+      "day": 42,
+      "kind": "RECEIPT",
+      "amountCents": 75000,
+      "label": "50% on launch, deal 8 (Stripe)",
+      "settlesDay": 45,
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 560,
+      "unit": "USD per site (20 h at ~$28/h)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "Quotes from 3 Upwork developers for the fixed scope"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "EVIDENCED",
+      "value": 190808,
+      "unit": "US plumbing/HVAC businesses",
+      "sources": [
+       "src_naics"
+      ],
+      "needs": null
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid deposits per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid deposits of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "US plumbing/HVAC contractors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; lead credits from $47/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "At least 1 paid $750 deposit from 1,000 contacted home-service businesses by day 14, and a signed fixed-price Upwork quote at or below $560",
+     "stop": [
+      "Fewer than 1 paid deposit from 1,000 contacted by day 14",
+      "No Upwork developer quotes the fixed scope at or below $700",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "1 or more paid deposits from 1,000 contacted by day 14: send to the remaining list and scale to 8 sales",
+      "Deposits paid at the $1,500 price"
+     ],
+     "decides": [
+      "CONVERSION"
+     ],
+     "threshold": {
+      "paid": 1,
+      "of": 1000,
+      "reach": 1000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "CONVERSION"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 8,
+      "price": 1500,
+      "directCost": 560,
+      "capital": 200,
+      "settlesDay": 45,
+      "ownerHours": 12,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dd067f8dc012_432ce5",
+    "digest": "dd067f8dc012af754f582a83",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:12:09.499Z"
+   },
+   {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Eight upfront $1,500 sales reach $12,000 settled by day 39 with 12 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan (2 months) and lead credits, set up two sending domains, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 21500,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "Send a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid upfront, with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 14, of the first 1,000 businesses contacted, at least 3 have paid $1,500",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5c",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 21,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5d",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 28,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5e",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 35,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 0.4,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each paid site in 10 days from Brain's copy and mock; paid by fixed-price escrow after the buyer pays",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 448000,
+      "day": 11,
+      "dependsOn": "s5a",
+      "evidence": [
+       "fulfilmentCost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect the full $1,500 at close through Stripe; US payouts 2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 10,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 14400,
+      "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+      "stepId": "s1"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 2400,
+      "label": "Two sending domains",
+      "stepId": "s1"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth outreach, month 2",
+      "stepId": "s1"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 1 (Stripe)",
+      "settlesDay": 24,
+      "stepId": "s7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 2 (Stripe)",
+      "settlesDay": 17,
+      "stepId": "s7"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 3 (Stripe)",
+      "settlesDay": 21,
+      "stepId": "s7"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 4 (Stripe)",
+      "settlesDay": 24,
+      "stepId": "s7"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 5 (Stripe)",
+      "settlesDay": 28,
+      "stepId": "s7"
+     },
+     {
+      "day": 25,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 6 (Stripe)",
+      "settlesDay": 31,
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 7 (Stripe)",
+      "settlesDay": 35,
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 8 (Stripe)",
+      "settlesDay": 39,
+      "stepId": "s7"
+     },
+     {
+      "day": 36,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 14,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": "Paid orders at $1,500 in the day-14 test"
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 560,
+      "unit": "USD per site (20 h at ~$28/h)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "ESTIMATE",
+      "value": 190808,
+      "unit": "US plumbing/HVAC businesses",
+      "sources": [
+       "src_naics"
+      ],
+      "needs": "Verified count"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "US plumbing/HVAC contractors",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 14, at least 3 of the first 1,000 contacted home-service businesses have paid $1,500",
+     "stop": [
+      "No Upwork quote at or below $700 by day 3: do not sell",
+      "Fewer than 3 paid of the first 1,000 contacted by day 14",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "3 or more paid of 1,000 by day 14 and quotes in hand: send to the remaining 2,000 and close 8 sales by day 35"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 1000,
+      "reach": 3000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 8,
+      "price": 1500,
+      "directCost": 560,
+      "capital": 215,
+      "settlesDay": 39,
+      "ownerHours": 12,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_41d040c46258_0ee17b",
+    "digest": "41d040c46258636de59a0961",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:15.724Z"
+   },
+   {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": "rev_41d040c46258_0ee17b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Nine upfront $1,500 sales settle $13,105.80 after Stripe fees by day 42 (eight would settle only $11,649.60), with 13.5 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan (2 months) and lead credits, set up three sending domains with six inboxes and warm them up days 0-9, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 31100,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "From day 10 (after warm-up), send about 180 contacts a day a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid in full upfront (changed from the card's 50/50 terms so all cash settles inside the window), with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 18, of the first 1,000 businesses contacted (days 10-16), at least 3 have paid $1,500",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 18,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5c",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 21,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5d",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 28,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5e",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 35,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 1.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each paid site in 10 days from Brain's copy and mock; funded by fixed-price escrow once the buyer's payment has settled",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 558000,
+      "day": 26,
+      "dependsOn": "s5a",
+      "evidence": [
+       "fulfilmentCost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect the full $1,500 at close through Stripe (2.9% + 30c); US payouts 2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": 39420,
+      "day": 12,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 14400,
+      "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+      "stepId": "s1"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 12000,
+      "label": "Three sending domains and six inboxes for two months (estimate)",
+      "stepId": "s1"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth outreach, month 2",
+      "stepId": "s1"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 1 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 2 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 3 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 4 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 23,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 5 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 30,
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 6 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 33,
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 32,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 7 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 36,
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 33,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 8 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 39,
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 36,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 36,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 38,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 9 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 42,
+      "stepId": "s7"
+     },
+     {
+      "day": 38,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 39,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 39,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 9",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 18,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": "Paid orders at $1,500 in the day-14 test"
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 620,
+      "unit": "USD per site (20 h at ~$28/h plus up to 7.99% client fee and initiation fee)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "ESTIMATE",
+      "value": 190808,
+      "unit": "US plumbing/HVAC businesses",
+      "sources": [
+       "src_naics"
+      ],
+      "needs": "Verified count"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "All US plumbing/HVAC contractors, not only those with an outdated website; count undated, rejected at verification",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_fee",
+      "url": "https://www.upwork.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Client Marketplace fee up to 7.99% on the Basic plan plus a contract initiation fee",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 18, at least 3 of the first 1,000 contacted home-service businesses have paid $1,500",
+     "stop": [
+      "No Upwork quote at or below $700 by day 3: do not sell",
+      "Fewer than 3 paid of the first 1,000 contacted by day 18",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "3 or more paid of 1,000 by day 18 and quotes in hand: send to the remaining 2,000 and close 9 sales by day 38"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 1000,
+      "reach": 3000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Book Stripe fees and plan 9 deals",
+      "resolution": "Accepted: a FEE of $43.80 per charge is booked on the COLLECT step and the plan now takes 9 deals (threshold 3/1,000 over 3,000 contacts = 9), settling $13,105.80 after fees."
+     },
+     {
+      "finding": "State the payment-term change from 50/50 to 100% upfront",
+      "resolution": "Accepted: the offer step now states the change from the card's 50/50 terms to full payment upfront, so every receipt settles inside the window."
+     },
+     {
+      "finding": "Sending domains need warm-up",
+      "resolution": "Accepted: three domains with six inboxes warm up days 0-9; sending starts day 10 at about 180 contacts a day, the test reads on day 18 and selling runs to day 38."
+     },
+     {
+      "finding": "Upwork client marketplace fees not counted",
+      "resolution": "Accepted: up to 7.99% marketplace fee plus initiation fee (~$60 per build) is booked as a FEE on the DELIVER step; cost stays an ESTIMATE until the day-3 quotes."
+     },
+     {
+      "finding": "src_naics marked matchesBuyer true",
+      "resolution": "Accepted: marked matchesBuyer false and described as all plumbing/HVAC entities, undated and rejected at verification; the plan does not rely on it."
+     },
+     {
+      "finding": "Price correctly labelled ESTIMATE",
+      "resolution": "Kept: price remains an ESTIMATE measured by the paid test."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "directCosts",
+       "brain:ECONOMICS"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "fulfillmentOwner",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 9,
+      "price": 1500,
+      "directCost": 663.8,
+      "capital": 311,
+      "settlesDay": 42,
+      "ownerHours": 13.5,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_faafccaefac2_2b3758",
+    "digest": "faafccaefac2e8eb2eb64d4a",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:20:18.316Z"
+   },
+   {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": "rev_41d040c46258_0ee17b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Nine upfront $1,500 sales settle $13,105.80 after Stripe fees by day 42 (eight would settle only $11,649.60), with 13.5 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan (2 months) and lead credits, set up three sending domains with six inboxes and warm them up days 0-9, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 31100,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "From day 10 (after warm-up), send about 180 contacts a day a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid in full upfront (changed from the card's 50/50 terms so all cash settles inside the window), with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 18, of the first 1,000 businesses contacted (days 10-16), at least 3 have paid $1,500",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 18,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5c",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 21,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5d",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 28,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5e",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 35,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 1.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each paid site in 10 days from Brain's copy and mock; funded by fixed-price escrow once the buyer's payment has settled",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 558000,
+      "day": 26,
+      "dependsOn": "s5a",
+      "evidence": [
+       "fulfilmentCost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect the full $1,500 at close through Stripe (2.9% + 30c); US payouts 2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": 39420,
+      "day": 12,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 14400,
+      "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+      "stepId": "s1"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 12000,
+      "label": "Three sending domains and six inboxes for two months (estimate)",
+      "stepId": "s1"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth outreach, month 2",
+      "stepId": "s1"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 1 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 2 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 3 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 23,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 4 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 27,
+      "stepId": "s7"
+     },
+     {
+      "day": 23,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 5 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 30,
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 6 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 33,
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 32,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 7 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 36,
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 33,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 35,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 8 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 39,
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 36,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 36,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 38,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 9 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 42,
+      "stepId": "s7"
+     },
+     {
+      "day": 38,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 39,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 39,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 9",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 18,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": "Paid orders at $1,500 in the day-14 test"
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 620,
+      "unit": "USD per site (20 h at ~$28/h plus up to 7.99% client fee and initiation fee)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "US home-service businesses with an outdated or missing website",
+      "sources": [],
+      "needs": "Not needed beyond the 3,000 listed contacts; the test measures paid demand among them"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "All US plumbing/HVAC contractors, not only those with an outdated website; count undated, rejected at verification",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_fee",
+      "url": "https://www.upwork.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Client Marketplace fee up to 7.99% on the Basic plan plus a contract initiation fee",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 18, at least 3 of the first 1,000 contacted home-service businesses have paid $1,500",
+     "stop": [
+      "No Upwork quote at or below $700 by day 3: do not sell",
+      "Fewer than 3 paid of the first 1,000 contacted by day 18",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "3 or more paid of 1,000 by day 18 and quotes in hand: send to the remaining 2,000 and close 9 sales by day 38"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 1000,
+      "reach": 3000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Book Stripe fees and plan 9 deals",
+      "resolution": "Accepted: a FEE of $43.80 per charge is booked on the COLLECT step and the plan now takes 9 deals (threshold 3/1,000 over 3,000 contacts = 9), settling $13,105.80 after fees."
+     },
+     {
+      "finding": "State the payment-term change from 50/50 to 100% upfront",
+      "resolution": "Accepted: the offer step now states the change from the card's 50/50 terms to full payment upfront, so every receipt settles inside the window."
+     },
+     {
+      "finding": "Sending domains need warm-up",
+      "resolution": "Accepted: three domains with six inboxes warm up days 0-9; sending starts day 10 at about 180 contacts a day, the test reads on day 18 and selling runs to day 38."
+     },
+     {
+      "finding": "Upwork client marketplace fees not counted",
+      "resolution": "Accepted: up to 7.99% marketplace fee plus initiation fee (~$60 per build) is booked as a FEE on the DELIVER step; cost stays an ESTIMATE until the day-3 quotes."
+     },
+     {
+      "finding": "src_naics marked matchesBuyer true",
+      "resolution": "Accepted: marked matchesBuyer false and described as all plumbing/HVAC entities, undated and rejected at verification; the plan does not rely on it."
+     },
+     {
+      "finding": "Price correctly labelled ESTIMATE",
+      "resolution": "Kept: price remains an ESTIMATE measured by the paid test."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "directCosts",
+       "brain:ECONOMICS"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "fulfillmentOwner",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 9,
+      "price": 1500,
+      "directCost": 663.8,
+      "capital": 311,
+      "settlesDay": 42,
+      "ownerHours": 13.5,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_77f1626afcaa_6aa372",
+    "digest": "77f1626afcaa9e2427808c2e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:20:25.301Z"
+   },
+   {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": "rev_77f1626afcaa_6aa372",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Nine upfront $1,500 sales settle $13,105.80 after Stripe fees by day 42 (eight would settle only $11,649.60), with 13.5 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan (2 months) and lead credits, set up three sending domains with six inboxes and warm them up days 0-9, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 31100,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "From day 10 (after warm-up), send about 180 contacts a day a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid in full upfront (changed from the card's 50/50 terms so all cash settles inside the window), with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 24, of the first 1,000 businesses contacted (days 10-16), at least 4 have paid $1,500",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 24,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5c",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 21,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5d",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 28,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5e",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 35,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 1.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each paid site within 10 days of the buyer's payment; Brain funds the fixed-price escrow the day after each payment (deal 4 two days after, to stay inside the $2,500 exposure cap until the first Stripe payout on day 26); last site ships by day 45. If a buyer asks for a refund before delivery, the unworked escrow milestone is cancelled and the buyer refunded from settled cash",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 558000,
+      "day": 13,
+      "dependsOn": "s5a",
+      "evidence": [
+       "fulfilmentCost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect the full $1,500 at close through Stripe (2.9% + 30c); US payouts 2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": 39420,
+      "day": 12,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 14400,
+      "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+      "stepId": "s1"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 12000,
+      "label": "Three sending domains and six inboxes for two months (estimate)",
+      "stepId": "s1"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth outreach, month 2",
+      "stepId": "s1"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 1 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 2 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 3 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 4 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 28,
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 5 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 31,
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 6 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 33,
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 7 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 35,
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 33,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 8 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 37,
+      "stepId": "s7"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 34,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 34,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 9 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 38,
+      "stepId": "s7"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 9",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": "Paid orders at $1,500 in the day-14 test"
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 620,
+      "unit": "USD per site (20 h at ~$28/h plus up to 7.99% client fee and initiation fee)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "US home-service businesses with an outdated or missing website",
+      "sources": [],
+      "needs": "Not needed beyond the 3,000 listed contacts; the test measures paid demand among them"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "All US plumbing/HVAC contractors, not only those with an outdated website; count undated, rejected at verification",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_fee",
+      "url": "https://www.upwork.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Client Marketplace fee up to 7.99% on the Basic plan plus a contract initiation fee",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 24, at least 4 of the first 1,000 contacted home-service businesses have paid $1,500",
+     "stop": [
+      "No Upwork quote at or below $700 by day 3: do not sell",
+      "Fewer than 4 paid of the first 1,000 contacted by day 24",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "4 or more paid of 1,000 by day 24 and quotes in hand: send to the remaining 2,000 and close 9 sales by day 34; at the threshold rate 3,000 contacts yield 12 buyers, 3 more than the 9 needed, so one refund can be replaced"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 1000,
+      "reach": 3000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Fund each Upwork build when its buyer pays",
+      "resolution": "Accepted: each escrow is funded the day after its payment (deal 4 two days after, so peak exposure stays about $2,346 under the $2,500 cap before the first Stripe payout on day 26); every site ships within 10 days of payment."
+     },
+     {
+      "finding": "Make the ledger meet its own proof",
+      "resolution": "Accepted: the proof is now 4 paid of the first 1,000 by day 24, and the ledger shows 4 receipts on days 12, 16, 20 and 24."
+     },
+     {
+      "finding": "Deal 9 lands after the window; say how a refund before delivery is handled",
+      "resolution": "Accepted: the last sale closes day 34 and ships by day 45; a refund before delivery cancels the unworked Upwork milestone and is paid from settled cash."
+     },
+     {
+      "finding": "Zero slack in deal count",
+      "resolution": "Accepted: the proof bar is raised to 4 of 1,000, so 3,000 contacts yield 12 buyers at threshold against 9 needed."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 9,
+      "price": 1500,
+      "directCost": 663.8,
+      "capital": 311,
+      "settlesDay": 42,
+      "ownerHours": 13.5,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c86157bb6bb0_8396e7",
+    "digest": "c86157bb6bb0594d6867e21d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:23:17.197Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_7e4fba444e40470da8d0",
+   "contractDigest": "05bfc039d6f3533fc1a391ed",
+   "parentRevisionId": "rev_77f1626afcaa_6aa372",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+    "opportunityIds": [
+     "cop_459c5b67107145dc84ec"
+    ],
+    "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Nine upfront $1,500 sales settle $13,105.80 after Stripe fees by day 42 (eight would settle only $11,649.60), with 13.5 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+   },
+   "alternatives": [
+    {
+     "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+     "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+    },
+    {
+     "title": "Monthly podcast editing package, subcontracted",
+     "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Buy Instantly Growth plan (2 months) and lead credits, set up three sending domains with six inboxes and warm them up days 0-9, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+     "performer": "BRAIN",
+     "costCents": 31100,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "src_instantly"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "TEST",
+     "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+     "performer": "BRAIN",
+     "costCents": null,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_upwork_rate"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "OFFER",
+     "label": "From day 10 (after warm-up), send about 180 contacts a day a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid in full upfront (changed from the card's 50/50 terms so all cash settles inside the window), with a Brain-made homepage mock of their own site",
+     "performer": "BRAIN",
+     "costCents": null,
+     "day": 10,
+     "dependsOn": "s2",
+     "evidence": [
+      "price"
+     ],
+     "priceCents": 150000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "TEST",
+     "label": "Validation: by day 24, of the first 1,000 businesses contacted (days 10-16), at least 4 have paid $1,500",
+     "performer": "BRAIN",
+     "costCents": null,
+     "day": 24,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5a",
+     "kind": "SELL",
+     "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+     "performer": "OWNER",
+     "costCents": null,
+     "day": 7,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "ownerHours": 2.9,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5b",
+     "kind": "SELL",
+     "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+     "performer": "OWNER",
+     "costCents": null,
+     "day": 14,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "ownerHours": 2.9,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5c",
+     "kind": "SELL",
+     "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+     "performer": "OWNER",
+     "costCents": null,
+     "day": 21,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "ownerHours": 2.9,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5d",
+     "kind": "SELL",
+     "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+     "performer": "OWNER",
+     "costCents": null,
+     "day": 28,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "ownerHours": 2.9,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s5e",
+     "kind": "SELL",
+     "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+     "performer": "OWNER",
+     "costCents": null,
+     "day": 35,
+     "dependsOn": "s3",
+     "evidence": [
+      "closeRate"
+     ],
+     "ownerHours": 1.9,
+     "priceCents": 150000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "s6",
+     "kind": "DELIVER",
+     "label": "Upwork WordPress developer builds each paid site within 10 days of the buyer's payment; Brain funds the fixed-price escrow the day after each payment (deal 4 two days after, to stay inside the $2,500 exposure cap until the first Stripe payout on day 26); last site ships by day 45. If a buyer asks for a refund before delivery, the unworked escrow milestone is cancelled and the buyer refunded from settled cash",
+     "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+     "costCents": 558000,
+     "day": 13,
+     "dependsOn": "s5a",
+     "evidence": [
+      "fulfilmentCost"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s7",
+     "kind": "COLLECT",
+     "label": "Collect the full $1,500 at close through Stripe (2.9% + 30c); US payouts 2 business days, first payout 7-14 days",
+     "performer": "BRAIN",
+     "costCents": 39420,
+     "day": 12,
+     "dependsOn": "s5a",
+     "evidence": [
+      "src_stripe"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 14400,
+     "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+     "stepId": "s1"
+    },
+    {
+     "day": 0,
+     "kind": "SPEND",
+     "amountCents": 12000,
+     "label": "Three sending domains and six inboxes for two months (estimate)",
+     "stepId": "s1"
+    },
+    {
+     "day": 30,
+     "kind": "SPEND",
+     "amountCents": 4700,
+     "label": "Instantly Growth outreach, month 2",
+     "stepId": "s1"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 1 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 26,
+     "stepId": "s7"
+    },
+    {
+     "day": 12,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 1",
+     "stepId": "s7"
+    },
+    {
+     "day": 13,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 1",
+     "stepId": "s6"
+    },
+    {
+     "day": 13,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 1",
+     "stepId": "s6"
+    },
+    {
+     "day": 16,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 2 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 26,
+     "stepId": "s7"
+    },
+    {
+     "day": 16,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 2",
+     "stepId": "s7"
+    },
+    {
+     "day": 17,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 2",
+     "stepId": "s6"
+    },
+    {
+     "day": 17,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 2",
+     "stepId": "s6"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 3 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 26,
+     "stepId": "s7"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 3",
+     "stepId": "s7"
+    },
+    {
+     "day": 21,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 3",
+     "stepId": "s6"
+    },
+    {
+     "day": 21,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 3",
+     "stepId": "s6"
+    },
+    {
+     "day": 24,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 4 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 28,
+     "stepId": "s7"
+    },
+    {
+     "day": 24,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 4",
+     "stepId": "s7"
+    },
+    {
+     "day": 26,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 4",
+     "stepId": "s6"
+    },
+    {
+     "day": 26,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 4",
+     "stepId": "s6"
+    },
+    {
+     "day": 27,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 5 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 31,
+     "stepId": "s7"
+    },
+    {
+     "day": 27,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 5",
+     "stepId": "s7"
+    },
+    {
+     "day": 28,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 5",
+     "stepId": "s6"
+    },
+    {
+     "day": 28,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 5",
+     "stepId": "s6"
+    },
+    {
+     "day": 29,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 6 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 33,
+     "stepId": "s7"
+    },
+    {
+     "day": 29,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 6",
+     "stepId": "s7"
+    },
+    {
+     "day": 30,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 6",
+     "stepId": "s6"
+    },
+    {
+     "day": 30,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 6",
+     "stepId": "s6"
+    },
+    {
+     "day": 31,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 7 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 35,
+     "stepId": "s7"
+    },
+    {
+     "day": 31,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 7",
+     "stepId": "s7"
+    },
+    {
+     "day": 32,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 7",
+     "stepId": "s6"
+    },
+    {
+     "day": 32,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 7",
+     "stepId": "s6"
+    },
+    {
+     "day": 33,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 8 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 37,
+     "stepId": "s7"
+    },
+    {
+     "day": 33,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 8",
+     "stepId": "s7"
+    },
+    {
+     "day": 34,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 8",
+     "stepId": "s6"
+    },
+    {
+     "day": 34,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 8",
+     "stepId": "s6"
+    },
+    {
+     "day": 34,
+     "kind": "RECEIPT",
+     "amountCents": 150000,
+     "label": "Full $1,500 payment at close, deal 9 (Stripe; payments before the first payout arrive with it by day 26)",
+     "settlesDay": 38,
+     "stepId": "s7"
+    },
+    {
+     "day": 34,
+     "kind": "FEE",
+     "amountCents": 4380,
+     "label": "Stripe 2.9% + 30c on $1,500, deal 9",
+     "stepId": "s7"
+    },
+    {
+     "day": 35,
+     "kind": "SPEND",
+     "amountCents": 56000,
+     "label": "Upwork fixed-price escrow for site build, deal 9",
+     "stepId": "s6"
+    },
+    {
+     "day": 35,
+     "kind": "FEE",
+     "amountCents": 6000,
+     "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 9",
+     "stepId": "s6"
+    }
+   ],
+   "proofDay": 24,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "ESTIMATE",
+     "value": 1500,
+     "unit": "USD per site",
+     "sources": [
+      "src_hubspot_price"
+     ],
+     "needs": "Paid orders at $1,500 in the day-14 test"
+    },
+    {
+     "name": "fulfilmentCost",
+     "status": "ESTIMATE",
+     "value": 620,
+     "unit": "USD per site (20 h at ~$28/h plus up to 7.99% client fee and initiation fee)",
+     "sources": [
+      "src_upwork_rate"
+     ],
+     "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+    },
+    {
+     "name": "buyerPopulation",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "US home-service businesses with an outdated or missing website",
+     "sources": [],
+     "needs": "Not needed beyond the 3,000 listed contacts; the test measures paid demand among them"
+    },
+    {
+     "name": "closeRate",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per business contacted",
+     "sources": [],
+     "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+    },
+    {
+     "name": "settlementDays",
+     "status": "EVIDENCED",
+     "value": 2,
+     "unit": "business days after charge (first payout 7-14 days)",
+     "sources": [
+      "src_stripe"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_hubspot_price",
+     "url": "https://blog.hubspot.com/website/website-design-cost",
+     "dated": "2025-07-01",
+     "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+     "population": "US small businesses buying websites",
+     "matchesBuyer": false,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_naics",
+     "url": "https://www.naics.com/naics-code-description/?code=2382",
+     "dated": "2026",
+     "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+     "population": "All US plumbing/HVAC contractors, not only those with an outdated website; count undated, rejected at verification",
+     "matchesBuyer": false,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_upwork_rate",
+     "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+     "dated": "2025-05-09",
+     "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+     "population": "Upwork WordPress developers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_instantly",
+     "url": "https://instantly.ai/pricing",
+     "dated": "2026-11-28",
+     "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+     "population": "Outreach tool pricing",
+     "matchesBuyer": true,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_upwork_fee",
+     "url": "https://www.upwork.com/pricing",
+     "dated": "2026-11-28",
+     "claim": "Client Marketplace fee up to 7.99% on the Basic plan plus a contract initiation fee",
+     "population": "Upwork clients",
+     "matchesBuyer": true,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_stripe",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+     "population": "US Stripe accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_459c5b67107145dc84ec"
+    },
+    {
+     "id": "src_xendoo",
+     "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+     "dated": "2026",
+     "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+     "population": "US small businesses behind on books",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+    },
+    {
+     "id": "src_twine",
+     "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+     "dated": "2025",
+     "claim": "Freelance podcast editing rates about $75-$500 per episode",
+     "population": "Podcasters buying editing",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c5635771fa8341c7a2a1"
+    }
+   ],
+   "validation": {
+    "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 24, at least 4 of the first 1,000 contacted home-service businesses have paid $1,500",
+    "stop": [
+     "No Upwork quote at or below $700 by day 3: do not sell",
+     "Fewer than 4 paid of the first 1,000 contacted by day 24",
+     "Exposure would exceed $2,500"
+    ],
+    "continue": [
+     "4 or more paid of 1,000 by day 24 and quotes in hand: send to the remaining 2,000 and close 9 sales by day 34; at the threshold rate 3,000 contacts yield 12 buyers, 3 more than the 9 needed, so one refund can be replaced"
+    ],
+    "decides": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS"
+    ],
+    "threshold": {
+     "paid": 4,
+     "of": 1000,
+     "reach": 3000
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Fund each Upwork build when its buyer pays",
+     "resolution": "Accepted: each escrow is funded the day after its payment (deal 4 two days after, so peak exposure stays about $2,346 under the $2,500 cap before the first Stripe payout on day 26); every site ships within 10 days of payment."
+    },
+    {
+     "finding": "Make the ledger meet its own proof",
+     "resolution": "Accepted: the proof is now 4 paid of the first 1,000 by day 24, and the ledger shows 4 receipts on days 12, 16, 20 and 24."
+    },
+    {
+     "finding": "Deal 9 lands after the window; say how a refund before delivery is handled",
+     "resolution": "Accepted: the last sale closes day 34 and ships by day 45; a refund before delivery cancels the unworked Upwork milestone and is paid from settled cash."
+    },
+    {
+     "finding": "Zero slack in deal count",
+     "resolution": "Accepted: the proof bar is raised to 4 of 1,000, so 3,000 contacts yield 12 buyers at threshold against 9 needed."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_459c5b67107145dc84ec",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c5635771fa8341c7a2a1",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+     "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+    },
+    {
+     "opportunityId": "cop_c5635771fa8341c7a2a1",
+     "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_459c5b67107145dc84ec",
+     "deals": 9,
+     "price": 1500,
+     "directCost": 663.8,
+     "capital": 311,
+     "settlesDay": 42,
+     "ownerHours": 13.5,
+     "dealsMax": null
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "FULFILMENT",
+    "ECONOMICS",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c86157bb6bb0_8396e7",
+   "digest": "c86157bb6bb0594d6867e21d",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:23:17.197Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_c86157bb6bb0_8396e7",
+   "digest": "c86157bb6bb0594d6867e21d",
+   "contractDigest": "05bfc039d6f3533fc1a391ed",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 628520,
+    "committedOpenCents": 0,
+    "preProofCents": 229920,
+    "maxExposureCents": 229920,
+    "minCashCents": 20080,
+    "minCashDay": 24,
+    "collectedCents": 1350000,
+    "collectedInWindowCents": 1350000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 721480
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_459c5b67107145dc84ec",
+     "cop_e9f28dd2f05b4880b2e0",
+     "cop_c5635771fa8341c7a2a1"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "title": "Website rebuild for local home-service businesses, subcontracted build",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1500,
+      "card": {
+       "payer": "Owner of a local home-service business with an outdated or missing website",
+       "reachableChannel": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+       "offerScope": "Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "peakFundingCents": 20000,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "Local home services (plumbing, HVAC, roofing)",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email through an Instantly workspace (Growth plan $47/mo) to businesses lis"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 560, tied up 200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch to Owner of a local home-service business with an outdated or missing website, reached through Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call, at $1,500; Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$560",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owner of a local home-service business with an outdated or missing website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://blog.hubspot.com/website/website-design-cost; small business website cost 2025; https://blog.hubspot.com/website/wordpress-developer-salary; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "title": "Catch-up bookkeeping before tax season, subcontracted to a freelance bookkeeper",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 1200,
+      "card": {
+       "payer": "Small business owner months behind on books ahead of the 2026 tax filing season",
+       "reachableChannel": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+       "offerScope": "Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero",
+       "priceCents": 120000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance bookkeeper (Upwork) ~15 h",
+       "peakFundingCents": 20000,
+       "humanHours": 1.5,
+       "requiredCapabilities": [],
+       "industry": "Small-business bookkeeping",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email through an Instantly workspace (Growth plan $47/mo) to businesses lis"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 1200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 525, tied up 200"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero to Small business owner months behind on books ahead of the 2026 tax filing season, reached through Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call, at $1,200; Freelance bookkeeper (Upwork) ~15 h delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$525",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance bookkeeper (Upwork) ~15 h.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1.5 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Small business owner months behind on books ahead of the 2026 tax filing season",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$1,200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$1,200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://xendoo.com/catch-up-bookkeeping-cost; catch-up bookkeeping pricing 2025; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "title": "Monthly podcast editing package for B2B podcasts, subcontracted editor",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 600,
+      "card": {
+       "payer": "Host or marketing lead of a weekly B2B podcast",
+       "reachableChannel": "Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts",
+       "offerScope": "Edit, mix and master 4 episodes a month with show notes",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "Freelance podcast editor (Upwork/Contra) at ~$50 per episode",
+       "peakFundingCents": 15000,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Podcast production",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Cold email through an Instantly workspace to hosts of active B2B podcasts listed"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 200, tied up 150"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Edit, mix and master 4 episodes a month with show notes to Host or marketing lead of a weekly B2B podcast, reached through Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts, at $600; Freelance podcast editor (Upwork/Contra) at ~$50 per episode delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$200",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$150",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Freelance podcast editor (Upwork/Contra) at ~$50 per episode.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Edit, mix and master 4 episodes a month with show notes",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Host or marketing lead of a weekly B2B podcast",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$600",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know; podcast editing service pricing; https://instantly.ai/pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 45,
+     "hoursCeiling": 19,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 3
+    },
+    "at": "2026-11-28T07:12:33.080Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_41d040c46258_0ee17b",
+    "revisionDigest": "41d040c46258636de59a0961",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_2844f3af8b614eb4b4dc/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right stance and the structure is mostly good: builder quotes are obtained (day 1-3) before any offer goes out, the test (>= 3 paid of 1,000 by day 14) decides demand/price/conversion, exposure peaks at about $1,288 under the $2,500 cap, and owner closing time (4 x 2.9 h + 0.4 h = 12 h, i.e. 1.5 h x 8 deals) fits the ~3 h/week limit. But the target does not settle: the plan collects through Stripe yet books each receipt at the gross $1,500 and plans exactly 8 deals = $12,000 with no margin. Stripe's 2.9% + 30c is $43.80 per charge, so 8 charges settle $11,649.60, $350 short of $12,000 settled cash; nothing in the ledger records the fees. At the threshold rate (0.3%) the 3,000 contacts yield 9 paid, which would settle $13,105.80, so the fix is cheap: plan 9 deals and book the fees. The offer terms also contradict the card: the card's offerScope is 50% deposit / 50% on launch, while the plan charges the full $1,500 upfront at close without saying it changed the offer.",
+    "findings": [
+     "Book Stripe fees ($43.80 per $1,500 charge) in the cash ledger and plan 9 deals (threshold reach supports 9); 8 gross $1,500 receipts settle only $11,649.60.",
+     "State the payment-term change from the card (50/50) to 100% upfront, or keep 50/50 and re-time the second halves (launch ~day +10) inside day 45.",
+     "Two new sending domains set up on day 0 are unlikely to send 1,000 cold emails by day 14 without a warm-up period; the test timing should allow for warm-up or start with fewer contacts per day.",
+     "Upwork client-side marketplace fees on the $560 escrow are not counted; direct cost per site is an ESTIMATE until the day-3 quotes arrive, as the plan correctly says.",
+     "src_naics is marked matchesBuyer true, but the NAICS count was rejected at verification (all plumbing/HVAC entities, not those with an outdated website; undated). It is not needed for 9 deals but should not be cited as matching the buyer.",
+     "Price $1,500 is correctly labelled an ESTIMATE (HubSpot range is not a buyer-paid price); the test measures it."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:18:15.302Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "link": "ECONOMICS",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "directCosts",
+      "why": "Direct costs omit payment-processing fees and are a RECOMMENDATION; with fees, 8 deals settle below the target."
+     },
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION (Upwork developer at $15-28/h); the plan's day-3 quote gate is the right test and must pass before selling."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_77f1626afcaa_6aa372",
+    "revisionDigest": "77f1626afcaa9e2427808c2e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_2844f3af8b614eb4b4dc/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Most earlier findings are fixed, and the money arithmetic now holds. 9 x $1,500 = $13,500 gross. Stripe takes 9 x $43.80 = $394.20, so $13,105.80 settles, which clears $12,000. Direct cost per site is about $620 plus fees; peak exposure is about $439, inside $2,500. Owner closing time is 13.5 h over about 6 weeks, inside about 3 h/week. Domains warm up on days 0-9, and quotes are gated before any sale. At the threshold (3 of 1,000, 0.3%), 3,000 contacts yield 9 sales, exactly the 9 planned. Two defects remain in the ledger, and one threatens the settled cash. (1) Delivery breaks the offer's own promise. Buyers pay the full $1,500 upfront for a 10-day rebuild, but the ledger funds no Upwork escrow until day 26. Deal 1 (paid day 12) is then built around days 26-36, about 24 days after payment, and deals 2-4 wait 7-14 days before work starts. The exposure cap does not force this: funding each build at payment (3 builds = about $1,860, plus $311 outreach) stays under $2,500. A late delivery to a cold-email buyer who paid in full invites refunds and chargebacks that would claw back settled cash. (2) The proof is 3 paid of the first 1,000 contacts by day 18, but the ledger has only 2 receipts by day 18 (days 12 and 16; deal 3 on day 19). The ledger should show the threshold being met, or the proof day should move.",
+    "findings": [
+     "Fund each Upwork build when its buyer pays (or within 1-2 days), so every site ships within the promised 10 days. This stays inside the $2,500 exposure cap.",
+     "Make the ledger meet its own proof: 3 receipts by day 18, or move the proof day to match.",
+     "Deal 9 closes on day 38 and its site lands around day 48, after the window. Settled cash is unaffected, but the plan should say how a refund before delivery would be handled.",
+     "At threshold the plan has zero slack in deal count (9 of 9). One refund puts it at $11,649.60, below $12,000. A slightly higher proof bar (e.g. 4 of 1,000) would give margin."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:21:42.134Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_c86157bb6bb0_8396e7",
+    "revisionDigest": "c86157bb6bb0594d6867e21d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_2844f3af8b614eb4b4dc/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both remaining defects are fixed. Each Upwork escrow is funded the day after its buyer pays (days 13, 17, 21, 26, ...), so every site can ship within the promised 10 days. The ledger meets its own proof: the bar is 4 paid of the first 1,000 by day 24, and receipts land on days 12, 16, 20 and 24. Recomputed: 9 x $1,500 = $13,500. Stripe takes 9 x $43.80 = $394.20, so $13,105.80 settles, clearing $12,000. Direct costs are about $620 per site plus fees, below price. Peak exposure is $2,299.20 (Brain trace), inside the $2,500 cap; first Stripe payouts arrive on day 26. The threshold (0.4%) over 3,000 contacts implies about 12 sales against 9 planned, so passing at threshold carries the target with margin. Owner closing time is 13.5 h over about 6 weeks, inside about 3 h/week. Contractor quotes are gated (day 3) before any offer, so no order is taken before fulfilment is shown possible. The last receipt (day 34) settles day 38, and its site ships by day 45. The price is honestly an ESTIMATE that the test measures. CONDITIONAL is right.",
+    "findings": [
+     "Exposure peaks at $2,299 against a $2,500 cap, so headroom is small. If a quote comes in above $560 (the stop is at $700), four early escrows could breach the cap before the day-26 Stripe payout. Re-check exposure at the day-3 quotes.",
+     "The remaining 2,000 contacts go out only after the day-24 readout, at about 180/day (about 11 days), so deals 5-9 must close within days 27-34. This is tight but feasible; a shortfall shows by about day 32."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:23:54.869Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_c86157bb6bb0_8396e7",
+   "digest": "c86157bb6bb0594d6867e21d",
+   "contractDigest": "05bfc039d6f3533fc1a391ed",
+   "plan": {
+    "goalId": "wst_7e4fba444e40470da8d0",
+    "contractDigest": "05bfc039d6f3533fc1a391ed",
+    "parentRevisionId": "rev_77f1626afcaa_6aa372",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Fixed-price website rebuilds for local home-service businesses, built by an Upwork developer, sold by cold email",
+     "opportunityIds": [
+      "cop_459c5b67107145dc84ec"
+     ],
+     "why": "Published guides put small-business websites from freelancers at $2,000-$15,000 (HubSpot, 2025-07-01; an estimate, not a measured buyer price), global-median Upwork WordPress developers charge $15-28/h (HubSpot 2025-05-09), and 190,808 US plumbing/HVAC businesses exist to reach. Nine upfront $1,500 sales settle $13,105.80 after Stripe fees by day 42 (eight would settle only $11,649.60), with 13.5 owner hours spread under 3 a week. Demand, the price buyers accept, the close rate, the builder's real quote and therefore the economics are unmeasured, so the plan first gets builder quotes, then tests paid conversion on 1,000 contacts before scaling to 3,000."
+    },
+    "alternatives": [
+     {
+      "title": "Catch-up bookkeeping subcontracted to a freelance bookkeeper",
+      "why": "A sold offer exists (Xendoo catch-up from $295/month) but no published one-time project price, no bookkeeper capacity shown, and it needs access to client financial accounts; weaker than websites."
+     },
+     {
+      "title": "Monthly podcast editing package, subcontracted",
+      "why": "Freelance editing sells at $75-500 per episode (Twine), so about 20 packages at $600 would be needed for $12,000 in 45 days, which the owner's 19 closing hours cannot carry."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Buy Instantly Growth plan (2 months) and lead credits, set up three sending domains with six inboxes and warm them up days 0-9, build a list of 3,000 plumbing/HVAC/roofing businesses from Google Maps",
+      "performer": "BRAIN",
+      "costCents": 31100,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "src_instantly"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "TEST",
+      "label": "Fulfilment check before any sale: post the fixed 5-page scope on Upwork and obtain at least 2 fixed-price quotes at or below $560 with 10-day delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_upwork_rate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "OFFER",
+      "label": "From day 10 (after warm-up), send about 180 contacts a day a 3-step sequence offering a fixed-scope 5-page rebuild at $1,500 paid in full upfront (changed from the card's 50/50 terms so all cash settles inside the window), with a Brain-made homepage mock of their own site",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 10,
+      "dependsOn": "s2",
+      "evidence": [
+       "price"
+      ],
+      "priceCents": 150000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "TEST",
+      "label": "Validation: by day 24, of the first 1,000 businesses contacted (days 10-16), at least 4 have paid $1,500",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 24,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5a",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 7, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 7,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5b",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 14, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 14,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5c",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 21, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 21,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5d",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 28, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 28,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 2.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s5e",
+      "kind": "SELL",
+      "label": "Owner closing calls, week starting day 35, sends the Stripe payment link",
+      "performer": "OWNER",
+      "costCents": null,
+      "day": 35,
+      "dependsOn": "s3",
+      "evidence": [
+       "closeRate"
+      ],
+      "ownerHours": 1.9,
+      "priceCents": 150000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "s6",
+      "kind": "DELIVER",
+      "label": "Upwork WordPress developer builds each paid site within 10 days of the buyer's payment; Brain funds the fixed-price escrow the day after each payment (deal 4 two days after, to stay inside the $2,500 exposure cap until the first Stripe payout on day 26); last site ships by day 45. If a buyer asks for a refund before delivery, the unworked escrow milestone is cancelled and the buyer refunded from settled cash",
+      "performer": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+      "costCents": 558000,
+      "day": 13,
+      "dependsOn": "s5a",
+      "evidence": [
+       "fulfilmentCost"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s7",
+      "kind": "COLLECT",
+      "label": "Collect the full $1,500 at close through Stripe (2.9% + 30c); US payouts 2 business days, first payout 7-14 days",
+      "performer": "BRAIN",
+      "costCents": 39420,
+      "day": 12,
+      "dependsOn": "s5a",
+      "evidence": [
+       "src_stripe"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 14400,
+      "label": "Instantly Growth outreach ($47) and Supersonic lead credits ($97), month 1",
+      "stepId": "s1"
+     },
+     {
+      "day": 0,
+      "kind": "SPEND",
+      "amountCents": 12000,
+      "label": "Three sending domains and six inboxes for two months (estimate)",
+      "stepId": "s1"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 4700,
+      "label": "Instantly Growth outreach, month 2",
+      "stepId": "s1"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 1 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 1",
+      "stepId": "s7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 1",
+      "stepId": "s6"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 2 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 2",
+      "stepId": "s7"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 2",
+      "stepId": "s6"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 3 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 26,
+      "stepId": "s7"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 3",
+      "stepId": "s7"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 21,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 3",
+      "stepId": "s6"
+     },
+     {
+      "day": 24,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 4 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 28,
+      "stepId": "s7"
+     },
+     {
+      "day": 24,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 4",
+      "stepId": "s7"
+     },
+     {
+      "day": 26,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 26,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 4",
+      "stepId": "s6"
+     },
+     {
+      "day": 27,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 5 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 31,
+      "stepId": "s7"
+     },
+     {
+      "day": 27,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 5",
+      "stepId": "s7"
+     },
+     {
+      "day": 28,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 28,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 5",
+      "stepId": "s6"
+     },
+     {
+      "day": 29,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 6 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 33,
+      "stepId": "s7"
+     },
+     {
+      "day": 29,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 6",
+      "stepId": "s7"
+     },
+     {
+      "day": 30,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 30,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 6",
+      "stepId": "s6"
+     },
+     {
+      "day": 31,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 7 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 35,
+      "stepId": "s7"
+     },
+     {
+      "day": 31,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 7",
+      "stepId": "s7"
+     },
+     {
+      "day": 32,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 32,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 7",
+      "stepId": "s6"
+     },
+     {
+      "day": 33,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 8 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 37,
+      "stepId": "s7"
+     },
+     {
+      "day": 33,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 8",
+      "stepId": "s7"
+     },
+     {
+      "day": 34,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 8",
+      "stepId": "s6"
+     },
+     {
+      "day": 34,
+      "kind": "RECEIPT",
+      "amountCents": 150000,
+      "label": "Full $1,500 payment at close, deal 9 (Stripe; payments before the first payout arrive with it by day 26)",
+      "settlesDay": 38,
+      "stepId": "s7"
+     },
+     {
+      "day": 34,
+      "kind": "FEE",
+      "amountCents": 4380,
+      "label": "Stripe 2.9% + 30c on $1,500, deal 9",
+      "stepId": "s7"
+     },
+     {
+      "day": 35,
+      "kind": "SPEND",
+      "amountCents": 56000,
+      "label": "Upwork fixed-price escrow for site build, deal 9",
+      "stepId": "s6"
+     },
+     {
+      "day": 35,
+      "kind": "FEE",
+      "amountCents": 6000,
+      "label": "Upwork client marketplace fee (up to 7.99%) and contract initiation fee, deal 9",
+      "stepId": "s6"
+     }
+    ],
+    "proofDay": 24,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 1500,
+      "unit": "USD per site",
+      "sources": [
+       "src_hubspot_price"
+      ],
+      "needs": "Paid orders at $1,500 in the day-14 test"
+     },
+     {
+      "name": "fulfilmentCost",
+      "status": "ESTIMATE",
+      "value": 620,
+      "unit": "USD per site (20 h at ~$28/h plus up to 7.99% client fee and initiation fee)",
+      "sources": [
+       "src_upwork_rate"
+      ],
+      "needs": "At least 2 fixed-price Upwork quotes for the scope by day 3"
+     },
+     {
+      "name": "buyerPopulation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "US home-service businesses with an outdated or missing website",
+      "sources": [],
+      "needs": "Not needed beyond the 3,000 listed contacts; the test measures paid demand among them"
+     },
+     {
+      "name": "closeRate",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per business contacted",
+      "sources": [],
+      "needs": "Measured by the day-14 test: paid orders of 1,000 contacted"
+     },
+     {
+      "name": "settlementDays",
+      "status": "EVIDENCED",
+      "value": 2,
+      "unit": "business days after charge (first payout 7-14 days)",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_hubspot_price",
+      "url": "https://blog.hubspot.com/website/website-design-cost",
+      "dated": "2025-07-01",
+      "claim": "Freelancers: $2,000 to $15,000 for a small business website",
+      "population": "US small businesses buying websites",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_naics",
+      "url": "https://www.naics.com/naics-code-description/?code=2382",
+      "dated": "2026",
+      "claim": "238220 Plumbing, Heating, and Air-Conditioning Contractors: 190,808 US business entities",
+      "population": "All US plumbing/HVAC contractors, not only those with an outdated website; count undated, rejected at verification",
+      "matchesBuyer": false,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_rate",
+      "url": "https://blog.hubspot.com/website/wordpress-developer-salary",
+      "dated": "2025-05-09",
+      "claim": "When you include freelancers from other countries, the average goes down to $15-28/hour",
+      "population": "Upwork WordPress developers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_instantly",
+      "url": "https://instantly.ai/pricing",
+      "dated": "2026-11-28",
+      "claim": "Instantly Growth outreach plan $47/mo; Supersonic lead credits $97/mo",
+      "population": "Outreach tool pricing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_upwork_fee",
+      "url": "https://www.upwork.com/pricing",
+      "dated": "2026-11-28",
+      "claim": "Client Marketplace fee up to 7.99% on the Basic plan plus a contract initiation fee",
+      "population": "Upwork clients",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "United States: 2 business days settlement; first payout typically within 7-14 days",
+      "population": "US Stripe accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_459c5b67107145dc84ec"
+     },
+     {
+      "id": "src_xendoo",
+      "url": "https://xendoo.com/catch-up-bookkeeping-cost",
+      "dated": "2026",
+      "claim": "Specialized Catch-Up Bookkeeping Starting at $295/Month",
+      "population": "US small businesses behind on books",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0"
+     },
+     {
+      "id": "src_twine",
+      "url": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know",
+      "dated": "2025",
+      "claim": "Freelance podcast editing rates about $75-$500 per episode",
+      "population": "Podcasters buying editing",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c5635771fa8341c7a2a1"
+     }
+    ],
+    "validation": {
+     "proof": "By day 3, at least 2 fixed-price Upwork quotes at or below $560 for the scope; by day 24, at least 4 of the first 1,000 contacted home-service businesses have paid $1,500",
+     "stop": [
+      "No Upwork quote at or below $700 by day 3: do not sell",
+      "Fewer than 4 paid of the first 1,000 contacted by day 24",
+      "Exposure would exceed $2,500"
+     ],
+     "continue": [
+      "4 or more paid of 1,000 by day 24 and quotes in hand: send to the remaining 2,000 and close 9 sales by day 34; at the threshold rate 3,000 contacts yield 12 buyers, 3 more than the 9 needed, so one refund can be replaced"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 1000,
+      "reach": 3000
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Fund each Upwork build when its buyer pays",
+      "resolution": "Accepted: each escrow is funded the day after its payment (deal 4 two days after, so peak exposure stays about $2,346 under the $2,500 cap before the first Stripe payout on day 26); every site ships within 10 days of payment."
+     },
+     {
+      "finding": "Make the ledger meet its own proof",
+      "resolution": "Accepted: the proof is now 4 paid of the first 1,000 by day 24, and the ledger shows 4 receipts on days 12, 16, 20 and 24."
+     },
+     {
+      "finding": "Deal 9 lands after the window; say how a refund before delivery is handled",
+      "resolution": "Accepted: the last sale closes day 34 and ships by day 45; a refund before delivery cancels the unworked Upwork milestone and is paid from settled cash."
+     },
+     {
+      "finding": "Zero slack in deal count",
+      "resolution": "Accepted: the proof bar is raised to 4 of 1,000, so 3,000 contacts yield 12 buyers at threshold against 9 needed."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+      "why": "No published one-time catch-up price and no bookkeeper capacity shown; websites have stronger price and fulfilment evidence"
+     },
+     {
+      "opportunityId": "cop_c5635771fa8341c7a2a1",
+      "why": "At $600 a package, 20 sales are needed for $12,000 in 45 days, beyond the owner's 19 closing hours at 1 hour per deal"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_459c5b67107145dc84ec",
+      "deals": 9,
+      "price": 1500,
+      "directCost": 663.8,
+      "capital": 311,
+      "settlesDay": 42,
+      "ownerHours": 13.5,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c86157bb6bb0_8396e7",
+    "digest": "c86157bb6bb0594d6867e21d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:23:17.197Z"
+   },
+   "review": {
+    "revisionId": "rev_c86157bb6bb0_8396e7",
+    "revisionDigest": "c86157bb6bb0594d6867e21d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_8f50df0fdd944eb9b3d2/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_2844f3af8b614eb4b4dc/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Both remaining defects are fixed. Each Upwork escrow is funded the day after its buyer pays (days 13, 17, 21, 26, ...), so every site can ship within the promised 10 days. The ledger meets its own proof: the bar is 4 paid of the first 1,000 by day 24, and receipts land on days 12, 16, 20 and 24. Recomputed: 9 x $1,500 = $13,500. Stripe takes 9 x $43.80 = $394.20, so $13,105.80 settles, clearing $12,000. Direct costs are about $620 per site plus fees, below price. Peak exposure is $2,299.20 (Brain trace), inside the $2,500 cap; first Stripe payouts arrive on day 26. The threshold (0.4%) over 3,000 contacts implies about 12 sales against 9 planned, so passing at threshold carries the target with margin. Owner closing time is 13.5 h over about 6 weeks, inside about 3 h/week. Contractor quotes are gated (day 3) before any offer, so no order is taken before fulfilment is shown possible. The last receipt (day 34) settles day 38, and its site ships by day 45. The price is honestly an ESTIMATE that the test measures. CONDITIONAL is right.",
+    "findings": [
+     "Exposure peaks at $2,299 against a $2,500 cap, so headroom is small. If a quote comes in above $560 (the stop is at $700), four early escrows could breach the cap before the day-26 Stripe payout. Re-check exposure at the day-3 quotes.",
+     "The remaining 2,000 contacts go out only after the day-24 readout, at about 180/day (about 11 days), so deals 5-9 must close within days 27-34. This is tight but feasible; a shortfall shows by about day 32."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:23:54.869Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Target is $12,000 of settled cash in 45 days. I can invest up to $2,500, but I only have about 3 hours a week to give this, so Brain or contractors have to do the actual work.",
+    "terms": "97a2407b8d3656a7",
+    "openings": {
+     "cop_459c5b67107145dc84ec": "c8f43ee539afe35e",
+     "cop_c5635771fa8341c7a2a1": "3b5adee8f2a72c83",
+     "cop_e9f28dd2f05b4880b2e0": "0222f8109e50157b"
+    }
+   },
+   "at": "2026-11-28T07:25:24.587Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

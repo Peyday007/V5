@@ -1,0 +1,4980 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_a2da0a4fdbe645cfa456",
+   "words": "I want $6,000 of settled cash within 30 days, and it has to come from independent auto-parts stores — selling to them or doing work for them. I can put in up to $1,000.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": 100000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "First independent auto-parts store pays and cash settles",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [
+     "Buyers other than independent auto-parts stores"
+    ],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "0b8dab40176c23ac53500e66"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_a2da0a4fdbe645cfa456",
+    "contractDigest": "0b8dab40176c23ac53500e66",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+     "opportunityIds": [
+      "cop_63dc741f4f204c699a8e"
+     ],
+     "why": "4,317 independently-owned NAPA stores (GPC FY2025 10-K) plus Auto Value/Parts Plus independents give far more buyers than the 13 needed; aftermarket-shop website/local-search vendors publish $500 setup fees (AAM Base $100/mo + $500 setup) and Hibu sells managed listings/reviews to parts stores, so the price is anchored; the owner can fulfil with AI drafting at ~$20 per store, well inside $1,000; card cash settles within the 30 days. What no record shows is whether independent store owners buy this from a cold call at $500 - only a live test measures that."
+    },
+    "alternatives": [
+     {
+      "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+      "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+     },
+     {
+      "title": "Monthly managed local marketing retainer ($300/month)",
+      "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Build a list of 150 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public store locators and Google Maps, noting each store's Google Business Profile gaps; phone/email the first 60 on days 1-5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_10k",
+       "card_volume"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $500 local-search package: Google Business Profile optimisation, parts/services posts, review-request QR/SMS link, one-page store site; card payment via Stripe payment link on order",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "ownerHours": 2,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation: count paid $500 orders from the first 60 stores contacted by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining ~90 listed stores and close to 13 paid orders by day 24",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 25,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each package within 3 days of payment: optimise the store's Google Business Profile (manager access), publish one-page site (domain + hosting $20 per store), set up review-request link",
+      "performer": "OWNER",
+      "costCents": 26000,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "card_fulfil"
+      ],
+      "ownerHours": 39,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect by Stripe card payment at order; Stripe fee 2.9% + 30c per $500 charge; payouts T+2, a new account's first payout 7-14 days after first payment",
+      "performer": "OWNER",
+      "costCents": 19240,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #1",
+      "stepId": "collect"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #1 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #2",
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #2 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #3",
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #3 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #4",
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #4 paid by card",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #5",
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #5 paid by card",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #6",
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #6 paid by card",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #7",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #7 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 15,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #8",
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #8 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #9",
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #9 paid by card",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #10",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #10",
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #10 paid by card",
+      "settlesDay": 21,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #11",
+      "stepId": "deliver"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #11",
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #11 paid by card",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #12",
+      "stepId": "deliver"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #12",
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #12 paid by card",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #13",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #13",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #13 paid by card",
+      "settlesDay": 24,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "Independently-owned NAPA stores in North America",
+      "status": "EVIDENCED",
+      "value": 4317,
+      "unit": "stores",
+      "sources": [
+       "src_10k",
+       "card_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per package",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "needs": "Paid orders at $500 in the test"
+     },
+     {
+      "name": "q_close: paid orders per store contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Validation test on first 60 stores"
+     },
+     {
+      "name": "Direct cost per store",
+      "status": "ESTIMATE",
+      "value": 20,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Actual domain/hosting cost at first delivery"
+     },
+     {
+      "name": "Stripe fee per $500 charge",
+      "status": "EVIDENCED",
+      "value": 14.8,
+      "unit": "USD",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_volume",
+      "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+      "population": "Independent NAPA auto-parts stores, US and Canada",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_10k",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_genpt",
+      "url": "https://www.genpt.com/our-companies",
+      "dated": "2026-11-28",
+      "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+      "population": "NAPA stores in the US",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_aam",
+      "url": "https://aftermarketwebsites.com/pricing/",
+      "dated": "2026-11-28",
+      "claim": "Aftermarket Websites Base: $100/mo + $500 setup fee for shops wanting more foot traffic; PRO $300/mo + $1,500 setup (verified research)",
+      "population": "Brick-and-mortar automotive aftermarket shops/resellers (overlaps independent parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_hibu",
+      "url": "https://hibu.com/industries/auto/auto-parts",
+      "dated": "2026-11-28",
+      "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+      "population": "Auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "US accounts T+2 settlement; initial payout typically 7-14 days after first successful payment",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_ebay",
+      "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+      "dated": "2026-11-28",
+      "claim": "eBay runs a Motors Parts Sales Hub with fitment listing tools for parts sellers",
+      "population": "Parts & accessories sellers on eBay",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_revparts",
+      "url": "https://www.revolutionparts.com/plans",
+      "dated": "2026-11-28",
+      "claim": "RevolutionParts sells parts-department plans including listing inventory on eBay",
+      "population": "Dealership parts departments",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_stacc",
+      "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+      "dated": "2026-08-01",
+      "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+      "population": "Auto repair shops (not parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     },
+     {
+      "id": "src_genpt_r",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $500 orders (card charged) from the first 60 independent stores contacted, by day 10",
+     "stop": [
+      "Fewer than 2 paid orders from 60 stores contacted by day 10",
+      "More than half of contacted owners who engage reject the $500 price",
+      "First delivery takes more than 6 owner hours or costs more than $60"
+     ],
+     "continue": [
+      "2 or more paid of 60 by day 10: contact the remaining ~90 listed stores and close to 13 orders by day 24",
+      "Exactly 2 paid: also pitch the eBay listing build to stores that decline"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 60,
+      "reach": 60
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "deals": 13,
+      "price": 500,
+      "directCost": 20,
+      "capital": 100,
+      "settlesDay": 24,
+      "ownerHours": 84,
+      "dealsMax": 4317
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4465ef180576_51c5f6",
+    "digest": "4465ef180576c202e842c431",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:15.136Z"
+   },
+   {
+    "goalId": "wst_a2da0a4fdbe645cfa456",
+    "contractDigest": "0b8dab40176c23ac53500e66",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+     "opportunityIds": [
+      "cop_63dc741f4f204c699a8e"
+     ],
+     "why": "4,317 independently-owned NAPA stores (GPC FY2025 10-K) plus Auto Value/Parts Plus independents give far more buyers than the 13 needed; aftermarket-shop website/local-search vendors publish $500 setup fees (AAM Base $100/mo + $500 setup) and Hibu sells managed listings/reviews to parts stores, so the price is anchored; the owner can fulfil with AI drafting at ~$20 per store, well inside $1,000; card cash settles within the 30 days. What no record shows is whether independent store owners buy this from a cold call at $500 - only a live test measures that."
+    },
+    "alternatives": [
+     {
+      "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+      "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+     },
+     {
+      "title": "Monthly managed local marketing retainer ($300/month)",
+      "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Build a list of 400 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public store locators and Google Maps, noting each store's Google Business Profile gaps; phone/email the first 60 on days 1-5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_10k",
+       "card_volume"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $500 local-search package: Google Business Profile optimisation, parts/services posts, review-request QR/SMS link, one-page store site; card payment via Stripe payment link on order",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "ownerHours": 2,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation: count paid $500 orders from the first 60 stores contacted by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 340 listed stores (about 25 per working day) and close to 13 paid orders by day 24",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 60,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each package within 3 days of payment: optimise the store's Google Business Profile (manager access), publish one-page site (domain + hosting $20 per store), set up review-request link",
+      "performer": "OWNER",
+      "costCents": 26000,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "card_fulfil"
+      ],
+      "ownerHours": 39,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect by Stripe card payment at order; Stripe fee 2.9% + 30c per $500 charge; payouts T+2, a new account's first payout 7-14 days after first payment",
+      "performer": "OWNER",
+      "costCents": 19240,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #1",
+      "stepId": "collect"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #1 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #2",
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #2 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #3",
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #3 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #4",
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #4 paid by card",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #5",
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #5 paid by card",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #6",
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #6 paid by card",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #7",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #7 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 15,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #8",
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #8 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #9",
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #9 paid by card",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #10",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #10",
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #10 paid by card",
+      "settlesDay": 21,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #11",
+      "stepId": "deliver"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #11",
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #11 paid by card",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #12",
+      "stepId": "deliver"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #12",
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #12 paid by card",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #13",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #13",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #13 paid by card",
+      "settlesDay": 24,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "Independently-owned NAPA stores in North America",
+      "status": "EVIDENCED",
+      "value": 4317,
+      "unit": "stores",
+      "sources": [
+       "src_10k",
+       "card_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per package",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "needs": "Paid orders at $500 in the test"
+     },
+     {
+      "name": "q_close: paid orders per store contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Validation test on first 60 stores"
+     },
+     {
+      "name": "Direct cost per store",
+      "status": "ESTIMATE",
+      "value": 20,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Actual domain/hosting cost at first delivery"
+     },
+     {
+      "name": "Stripe fee per $500 charge",
+      "status": "EVIDENCED",
+      "value": 14.8,
+      "unit": "USD",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_volume",
+      "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+      "population": "Independent NAPA auto-parts stores, US and Canada",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_10k",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_genpt",
+      "url": "https://www.genpt.com/our-companies",
+      "dated": "2026-11-28",
+      "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+      "population": "NAPA stores in the US",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_aam",
+      "url": "https://aftermarketwebsites.com/pricing/",
+      "dated": "2026-11-28",
+      "claim": "Aftermarket Websites Base: $100/mo + $500 setup fee for shops wanting more foot traffic; PRO $300/mo + $1,500 setup (verified research)",
+      "population": "Brick-and-mortar automotive aftermarket shops/resellers (overlaps independent parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_hibu",
+      "url": "https://hibu.com/industries/auto/auto-parts",
+      "dated": "2026-11-28",
+      "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+      "population": "Auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "US accounts T+2 settlement; initial payout typically 7-14 days after first successful payment",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_ebay",
+      "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+      "dated": "2026-11-28",
+      "claim": "eBay runs a Motors Parts Sales Hub with fitment listing tools for parts sellers",
+      "population": "Parts & accessories sellers on eBay",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_revparts",
+      "url": "https://www.revolutionparts.com/plans",
+      "dated": "2026-11-28",
+      "claim": "RevolutionParts sells parts-department plans including listing inventory on eBay",
+      "population": "Dealership parts departments",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_stacc",
+      "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+      "dated": "2026-08-01",
+      "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+      "population": "Auto repair shops (not parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     },
+     {
+      "id": "src_genpt_r",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $500 orders (card charged) from the first 60 independent stores contacted, by day 10",
+     "stop": [
+      "Fewer than 2 paid orders from 60 stores contacted by day 10",
+      "More than half of contacted owners who engage reject the $500 price",
+      "First delivery takes more than 6 owner hours or costs more than $60"
+     ],
+     "continue": [
+      "2 or more paid of 60 by day 10: contact the remaining 340 listed stores (about 25 per working day) and close to 13 orders by day 24",
+      "Exactly 2 paid: also pitch the eBay listing build to stores that decline"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 60,
+      "reach": 400
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "deals": 13,
+      "price": 500,
+      "directCost": 20,
+      "capital": 100,
+      "settlesDay": 24,
+      "ownerHours": 119,
+      "dealsMax": 4317
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_d8628d240424_f9dd19",
+    "digest": "d8628d2404248c5ff5e01847",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:29.028Z"
+   },
+   {
+    "goalId": "wst_a2da0a4fdbe645cfa456",
+    "contractDigest": "0b8dab40176c23ac53500e66",
+    "parentRevisionId": "rev_d8628d240424_f9dd19",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+     "opportunityIds": [
+      "cop_63dc741f4f204c699a8e"
+     ],
+     "why": "4,317 independently-owned NAPA stores (GPC FY2025 10-K) plus Auto Value/Parts Plus independents give far more buyers than the 13 needed; aftermarket-shop website/local-search vendors publish $500 setup fees (AAM Base $100/mo + $500 setup) and Hibu sells managed listings/reviews to parts stores, so the price is anchored; the owner can fulfil with AI drafting at ~$20 per store, well inside $1,000; card cash settles within the 30 days. What no record shows is whether independent store owners buy this from a cold call at $500 - only a live test measures that."
+    },
+    "alternatives": [
+     {
+      "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+      "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+     },
+     {
+      "title": "Monthly managed local marketing retainer ($300/month)",
+      "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Build a list of 400 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public store locators and Google Maps, noting each store's Google Business Profile gaps; phone/email the first 60 on days 1-5",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_10k",
+       "card_volume"
+      ],
+      "ownerHours": 15,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $500 local-search package: Google Business Profile optimisation, parts/services posts, review-request QR/SMS link, one-page store site; card payment via Stripe payment link on order",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "reach",
+      "evidence": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "ownerHours": 2,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Validation: count paid $500 orders from the first 60 stores contacted by day 10",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 10,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 2,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 340 listed stores (about 25 per working day) and close to 13 paid orders by day 24",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 11,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 60,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each package within 3 days of payment: optimise the store's Google Business Profile (manager access), publish one-page site (domain + hosting $20 per store), set up review-request link",
+      "performer": "OWNER",
+      "costCents": 26000,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "card_fulfil"
+      ],
+      "ownerHours": 39,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect by Stripe card payment at order; Stripe fee 2.9% + 30c per $500 charge; payouts T+2, a new account's first payout 7-14 days after first payment",
+      "performer": "OWNER",
+      "costCents": 19240,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #1",
+      "stepId": "collect"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #1 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #2",
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #2 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #3",
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #3 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #4",
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #4 paid by card",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #5",
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #5 paid by card",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #6",
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #6 paid by card",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #7",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #7 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 15,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #8",
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #8 paid by card",
+      "settlesDay": 19,
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #9",
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #9 paid by card",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #10",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #10",
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #10 paid by card",
+      "settlesDay": 21,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #11",
+      "stepId": "deliver"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #11",
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #11 paid by card",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #12",
+      "stepId": "deliver"
+     },
+     {
+      "day": 19,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #12",
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #12 paid by card",
+      "settlesDay": 23,
+      "stepId": "collect"
+     },
+     {
+      "day": 21,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #13",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #13",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #13 paid by card",
+      "settlesDay": 24,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 10,
+    "quantities": [
+     {
+      "name": "Independently-owned NAPA stores in North America",
+      "status": "EVIDENCED",
+      "value": 4317,
+      "unit": "stores",
+      "sources": [
+       "src_10k",
+       "card_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per package",
+      "status": "ESTIMATE",
+      "value": 500,
+      "unit": "USD",
+      "sources": [
+       "src_aam",
+       "src_hibu"
+      ],
+      "needs": "Paid orders at $500 in the test"
+     },
+     {
+      "name": "q_close: paid orders per store contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Validation test on first 60 stores"
+     },
+     {
+      "name": "Direct cost per store",
+      "status": "ESTIMATE",
+      "value": 20,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Actual domain/hosting cost at first delivery"
+     },
+     {
+      "name": "Stripe fee per $500 charge",
+      "status": "EVIDENCED",
+      "value": 14.8,
+      "unit": "USD",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_volume",
+      "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+      "population": "Independent NAPA auto-parts stores, US and Canada",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_10k",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_genpt",
+      "url": "https://www.genpt.com/our-companies",
+      "dated": "2026-11-28",
+      "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+      "population": "NAPA stores in the US",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_aam",
+      "url": "https://aftermarketwebsites.com/pricing/",
+      "dated": "2026-11-28",
+      "claim": "Aftermarket Websites Base: $100/mo + $500 setup fee for shops wanting more foot traffic; PRO $300/mo + $1,500 setup (verified research)",
+      "population": "Brick-and-mortar automotive aftermarket shops/resellers (overlaps independent parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_hibu",
+      "url": "https://hibu.com/industries/auto/auto-parts",
+      "dated": "2026-11-28",
+      "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+      "population": "Auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "US settlement timing 2 business days; after the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_ebay",
+      "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+      "dated": "2026-11-28",
+      "claim": "eBay Motors Parts Sales Hub offers parts sellers fitment listing (Fitment Plus Auto), bulk listing tools and third-party providers",
+      "population": "Parts & accessories sellers on eBay",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_stacc",
+      "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+      "dated": "2026-08-01",
+      "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+      "population": "Auto repair shops (not parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     },
+     {
+      "id": "src_genpt_r",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     }
+    ],
+    "validation": {
+     "proof": "At least 2 paid $500 orders (card charged) from the first 60 independent stores contacted, by day 10",
+     "stop": [
+      "Fewer than 2 paid orders from 60 stores contacted by day 10",
+      "More than half of contacted owners who engage reject the $500 price",
+      "First delivery takes more than 6 owner hours or costs more than $60"
+     ],
+     "continue": [
+      "2 or more paid of 60 by day 10: contact the remaining 340 listed stores (about 25 per working day) and close to 13 orders by day 24",
+      "Exactly 2 paid: also pitch the eBay listing build to stores that decline"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 60,
+      "reach": 400
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "deals": 13,
+      "price": 500,
+      "directCost": 20,
+      "capital": 100,
+      "settlesDay": 24,
+      "ownerHours": 119,
+      "dealsMax": 4317
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c2b6f174ffa3_44b9a7",
+    "digest": "c2b6f174ffa341fc8606a55b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:15:28.595Z"
+   },
+   {
+    "goalId": "wst_a2da0a4fdbe645cfa456",
+    "contractDigest": "0b8dab40176c23ac53500e66",
+    "parentRevisionId": "rev_c2b6f174ffa3_44b9a7",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+     "opportunityIds": [
+      "cop_63dc741f4f204c699a8e"
+     ],
+     "why": "The buyer population is the one established fact: 4,317 independently-owned NAPA stores (GPC FY2025 10-K), far more than the 13 needed. Everything else is measured by the plan itself: a free pilot proves the owner can deliver the package and records its hours and cost before anyone is charged; a 60-store test measures whether independent store owners pay $500 and at what close rate - the price is an assumption (vendors such as Aftermarket Websites and Hibu sell website/listing services to aftermarket shops, but no record shows a parts store paying $500 for this package). Spend is about $480, inside the $1,000 cap, and card cash settles inside 30 days if the last orders close by day 22."
+    },
+    "alternatives": [
+     {
+      "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+      "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+     },
+     {
+      "title": "Monthly managed local marketing retainer ($300/month)",
+      "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+     }
+    ],
+    "steps": [
+     {
+      "id": "pilot",
+      "kind": "TEST",
+      "label": "Fulfilment proof before any paid order: owner delivers one complete package free to one independent store (profile optimisation with manager access, posts, review link, one-page site); records hours, cost and the store's acceptance",
+      "performer": "OWNER",
+      "costCents": 2000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Build a list of 400 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public locators and Google Maps; call/email 60 on days 3-7 and the other 340 on days 9-20 (about 30 per working day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_10k",
+       "card_volume"
+      ],
+      "ownerHours": 45,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the one-time $500 local-search package, showing the pilot store's before/after; card payment via Stripe payment link at order",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "pilot",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 2,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Day 8 read-out: paid $500 orders from the first 60 stores contacted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 340 stores on days 9-20 and close to 13 paid orders by day 22",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 10,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each paid package within 3 days (owner, hours per the pilot; domain + hosting $20 per store)",
+      "performer": "OWNER",
+      "costCents": 26000,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 52,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect by Stripe card at order; fee 2.9% + 30c per $500; US settlement 2 business days, a new account's first payout 7-14 days after the first payment",
+      "performer": "OWNER",
+      "costCents": 19240,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for pilot store site",
+      "stepId": "pilot"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #1",
+      "stepId": "collect"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #1 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #2",
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #2 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 7,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #3",
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #3 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #4",
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #4 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #5",
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #5 paid by card",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #6",
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #6 paid by card",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #7",
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #7 paid by card",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #8",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #8 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #9",
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #9 paid by card",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #10",
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #10 paid by card",
+      "settlesDay": 21,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #10",
+      "stepId": "deliver"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #11",
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #11 paid by card",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #11",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #12",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #12 paid by card",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #12",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #13",
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #13 paid by card",
+      "settlesDay": 26,
+      "stepId": "collect"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #13",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "Independently-owned NAPA stores in North America",
+      "status": "EVIDENCED",
+      "value": 4317,
+      "unit": "stores",
+      "sources": [
+       "src_10k",
+       "card_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_price: price per package",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $500 in the test"
+     },
+     {
+      "name": "q_hours: owner hours per package",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Free pilot, days 1-2"
+     },
+     {
+      "name": "q_close: paid orders per store contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Validation test on first 60 stores"
+     },
+     {
+      "name": "Direct cost per store",
+      "status": "ESTIMATE",
+      "value": 20,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Actual domain/hosting cost at first delivery"
+     },
+     {
+      "name": "Stripe fee per $500 charge",
+      "status": "EVIDENCED",
+      "value": 14.8,
+      "unit": "USD",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_volume",
+      "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+      "population": "Independent NAPA auto-parts stores, US and Canada",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_10k",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_genpt",
+      "url": "https://www.genpt.com/our-companies",
+      "dated": "2026-11-28",
+      "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+      "population": "NAPA stores in the US, company-owned and independent mixed",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_aam",
+      "url": "https://aftermarketwebsites.com/pricing/",
+      "dated": "2026-11-28",
+      "claim": "Aftermarket Websites sells website subscriptions to aftermarket shops (Base $100/mo + $500 setup) - shows comparable services are sold; rejected at verification as price evidence for this package",
+      "population": "Brick-and-mortar automotive aftermarket shops/installers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_hibu",
+      "url": "https://hibu.com/industries/auto/auto-parts",
+      "dated": "2026-11-28",
+      "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+      "population": "Auto-parts stores (no price; not price evidence)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "US settlement timing 2 business days; after the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_ebay",
+      "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+      "dated": "2026-11-28",
+      "claim": "eBay Motors Parts Sales Hub offers parts sellers fitment listing (Fitment Plus Auto), bulk listing tools and third-party providers",
+      "population": "Parts & accessories sellers on eBay",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_stacc",
+      "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+      "dated": "2026-08-01",
+      "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+      "population": "Auto repair shops (not parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     },
+     {
+      "id": "src_genpt_r",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     }
+    ],
+    "validation": {
+     "proof": "Pilot package delivered in at most 6 owner hours and $40 and accepted by the store by day 2, and at least 4 paid $500 orders from the first 60 independent stores contacted by day 8",
+     "stop": [
+      "Pilot takes more than 6 owner hours or $40, or the store does not accept it",
+      "Fewer than 4 paid orders from 60 stores contacted by day 8"
+     ],
+     "continue": [
+      "4 or more paid of 60 by day 8: contact the remaining 340 stores on days 9-20 (implies ~22 more orders at the threshold rate) and stop selling at 13 paid orders"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 60,
+      "reach": 400
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Raise the proof threshold or contact rate",
+      "resolution": "Accepted: proof is 4 of 60 (6.7%); the remaining 340 are contacted days 9-20, so at threshold ~22 more orders arrive and the 13th lands by about day 14-16; selling stops at 13 orders by day 22."
+     },
+     {
+      "finding": "Rebuild the cash ledger from the steps",
+      "resolution": "Accepted: 4 receipts in the test window (days 4-8), 9 afterwards (days 10-22); deliveries 2 days after each order; first-payout delay of a new Stripe account (7-14 days) applied to the first four."
+     },
+     {
+      "finding": "Prove fulfilment before charging",
+      "resolution": "Accepted: a free pilot package for one store on days 1-2 records hours, cost and acceptance before any offer."
+     },
+     {
+      "finding": "src_genpt matchesBuyer and price called anchored",
+      "resolution": "Accepted: src_genpt, src_aam and src_hibu are matchesBuyer false; price is ASSUMED, measured only by the test."
+     },
+     {
+      "finding": "Owner hours total",
+      "resolution": "Stated: about 116 owner hours over 30 days (~27 h/week); the goal sets no ceiling."
+     },
+     {
+      "finding": "Stripe first payout",
+      "resolution": "Agreed; first four orders settle day 18 (worst case 14 days after the first payment)."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "deals": 13,
+      "price": 500,
+      "directCost": 20,
+      "capital": 100,
+      "settlesDay": 26,
+      "ownerHours": 116,
+      "dealsMax": 4317
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c10c072d8920_27dc83",
+    "digest": "c10c072d892067b0052c235f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:19:50.527Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_a2da0a4fdbe645cfa456",
+   "contractDigest": "0b8dab40176c23ac53500e66",
+   "parentRevisionId": "rev_c2b6f174ffa3_44b9a7",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+    "opportunityIds": [
+     "cop_63dc741f4f204c699a8e"
+    ],
+    "why": "The buyer population is the one established fact: 4,317 independently-owned NAPA stores (GPC FY2025 10-K), far more than the 13 needed. Everything else is measured by the plan itself: a free pilot proves the owner can deliver the package and records its hours and cost before anyone is charged; a 60-store test measures whether independent store owners pay $500 and at what close rate - the price is an assumption (vendors such as Aftermarket Websites and Hibu sell website/listing services to aftermarket shops, but no record shows a parts store paying $500 for this package). Spend is about $480, inside the $1,000 cap, and card cash settles inside 30 days if the last orders close by day 22."
+   },
+   "alternatives": [
+    {
+     "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+     "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+    },
+    {
+     "title": "Monthly managed local marketing retainer ($300/month)",
+     "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+    }
+   ],
+   "steps": [
+    {
+     "id": "pilot",
+     "kind": "TEST",
+     "label": "Fulfilment proof before any paid order: owner delivers one complete package free to one independent store (profile optimisation with manager access, posts, review link, one-page site); records hours, cost and the store's acceptance",
+     "performer": "OWNER",
+     "costCents": 2000,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_hours"
+     ],
+     "ownerHours": 5,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Build a list of 400 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public locators and Google Maps; call/email 60 on days 3-7 and the other 340 on days 9-20 (about 30 per working day)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "pilot",
+     "evidence": [
+      "src_10k",
+      "card_volume"
+     ],
+     "ownerHours": 45,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer the one-time $500 local-search package, showing the pilot store's before/after; card payment via Stripe payment link at order",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "pilot",
+     "evidence": [
+      "q_price"
+     ],
+     "ownerHours": 2,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Day 8 read-out: paid $500 orders from the first 60 stores contacted",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "offer",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "If proof met, contact the remaining 340 stores on days 9-20 and close to 13 paid orders by day 22",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 9,
+     "dependsOn": "test",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 10,
+     "priceCents": 50000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Deliver each paid package within 3 days (owner, hours per the pilot; domain + hosting $20 per store)",
+     "performer": "OWNER",
+     "costCents": 26000,
+     "day": 5,
+     "dependsOn": "offer",
+     "evidence": [
+      "q_hours"
+     ],
+     "ownerHours": 52,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect by Stripe card at order; fee 2.9% + 30c per $500; US settlement 2 business days, a new account's first payout 7-14 days after the first payment",
+     "performer": "OWNER",
+     "costCents": 19240,
+     "day": 5,
+     "dependsOn": "offer",
+     "evidence": [
+      "src_stripe"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for pilot store site",
+     "stepId": "pilot"
+    },
+    {
+     "day": 4,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #1",
+     "stepId": "collect"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #1 paid by card",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 6,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #1",
+     "stepId": "deliver"
+    },
+    {
+     "day": 6,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #2",
+     "stepId": "collect"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #2 paid by card",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 8,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #2",
+     "stepId": "deliver"
+    },
+    {
+     "day": 7,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #3",
+     "stepId": "collect"
+    },
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #3 paid by card",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 9,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #3",
+     "stepId": "deliver"
+    },
+    {
+     "day": 8,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #4",
+     "stepId": "collect"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #4 paid by card",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #4",
+     "stepId": "deliver"
+    },
+    {
+     "day": 10,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #5",
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #5 paid by card",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #5",
+     "stepId": "deliver"
+    },
+    {
+     "day": 12,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #6",
+     "stepId": "collect"
+    },
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #6 paid by card",
+     "settlesDay": 16,
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #6",
+     "stepId": "deliver"
+    },
+    {
+     "day": 13,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #7",
+     "stepId": "collect"
+    },
+    {
+     "day": 13,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #7 paid by card",
+     "settlesDay": 17,
+     "stepId": "collect"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #7",
+     "stepId": "deliver"
+    },
+    {
+     "day": 14,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #8",
+     "stepId": "collect"
+    },
+    {
+     "day": 14,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #8 paid by card",
+     "settlesDay": 18,
+     "stepId": "collect"
+    },
+    {
+     "day": 16,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #8",
+     "stepId": "deliver"
+    },
+    {
+     "day": 16,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #9",
+     "stepId": "collect"
+    },
+    {
+     "day": 16,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #9 paid by card",
+     "settlesDay": 20,
+     "stepId": "collect"
+    },
+    {
+     "day": 18,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #9",
+     "stepId": "deliver"
+    },
+    {
+     "day": 17,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #10",
+     "stepId": "collect"
+    },
+    {
+     "day": 17,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #10 paid by card",
+     "settlesDay": 21,
+     "stepId": "collect"
+    },
+    {
+     "day": 19,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #10",
+     "stepId": "deliver"
+    },
+    {
+     "day": 18,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #11",
+     "stepId": "collect"
+    },
+    {
+     "day": 18,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #11 paid by card",
+     "settlesDay": 22,
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #11",
+     "stepId": "deliver"
+    },
+    {
+     "day": 20,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #12",
+     "stepId": "collect"
+    },
+    {
+     "day": 20,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #12 paid by card",
+     "settlesDay": 24,
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #12",
+     "stepId": "deliver"
+    },
+    {
+     "day": 22,
+     "kind": "FEE",
+     "amountCents": 1480,
+     "label": "Stripe processing fee on order #13",
+     "stepId": "collect"
+    },
+    {
+     "day": 22,
+     "kind": "RECEIPT",
+     "amountCents": 50000,
+     "label": "Store order #13 paid by card",
+     "settlesDay": 26,
+     "stepId": "collect"
+    },
+    {
+     "day": 24,
+     "kind": "SPEND",
+     "amountCents": 2000,
+     "label": "Domain + hosting for store site #13",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "Independently-owned NAPA stores in North America",
+     "status": "EVIDENCED",
+     "value": 4317,
+     "unit": "stores",
+     "sources": [
+      "src_10k",
+      "card_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "q_price: price per package",
+     "status": "ASSUMED",
+     "value": 500,
+     "unit": "USD",
+     "sources": [],
+     "needs": "Paid orders at $500 in the test"
+    },
+    {
+     "name": "q_hours: owner hours per package",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours",
+     "sources": [],
+     "needs": "Free pilot, days 1-2"
+    },
+    {
+     "name": "q_close: paid orders per store contacted",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "ratio",
+     "sources": [],
+     "needs": "Validation test on first 60 stores"
+    },
+    {
+     "name": "Direct cost per store",
+     "status": "ESTIMATE",
+     "value": 20,
+     "unit": "USD",
+     "sources": [],
+     "needs": "Actual domain/hosting cost at first delivery"
+    },
+    {
+     "name": "Stripe fee per $500 charge",
+     "status": "EVIDENCED",
+     "value": 14.8,
+     "unit": "USD",
+     "sources": [
+      "src_stripe"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "card_volume",
+     "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+     "dated": "2026-02-20",
+     "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+     "population": "Independent NAPA auto-parts stores, US and Canada",
+     "matchesBuyer": true,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_10k",
+     "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+     "dated": "2026-02-20",
+     "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+     "population": "Independent NAPA auto-parts stores",
+     "matchesBuyer": true,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_genpt",
+     "url": "https://www.genpt.com/our-companies",
+     "dated": "2026-11-28",
+     "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+     "population": "NAPA stores in the US, company-owned and independent mixed",
+     "matchesBuyer": false,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_aam",
+     "url": "https://aftermarketwebsites.com/pricing/",
+     "dated": "2026-11-28",
+     "claim": "Aftermarket Websites sells website subscriptions to aftermarket shops (Base $100/mo + $500 setup) - shows comparable services are sold; rejected at verification as price evidence for this package",
+     "population": "Brick-and-mortar automotive aftermarket shops/installers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_hibu",
+     "url": "https://hibu.com/industries/auto/auto-parts",
+     "dated": "2026-11-28",
+     "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+     "population": "Auto-parts stores (no price; not price evidence)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_stripe",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "US settlement timing 2 business days; after the first live payment Stripe typically schedules the initial payout within 7-14 days",
+     "population": "Stripe US accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_63dc741f4f204c699a8e"
+    },
+    {
+     "id": "src_ebay",
+     "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+     "dated": "2026-11-28",
+     "claim": "eBay Motors Parts Sales Hub offers parts sellers fitment listing (Fitment Plus Auto), bulk listing tools and third-party providers",
+     "population": "Parts & accessories sellers on eBay",
+     "matchesBuyer": false,
+     "opportunityId": "cop_476b870001684b5e832e"
+    },
+    {
+     "id": "src_stacc",
+     "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+     "dated": "2026-08-01",
+     "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+     "population": "Auto repair shops (not parts stores)",
+     "matchesBuyer": false,
+     "opportunityId": "cop_07cac45fe8324452ac72"
+    },
+    {
+     "id": "src_genpt_r",
+     "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+     "dated": "2026-02-20",
+     "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+     "population": "Independent NAPA auto-parts stores",
+     "matchesBuyer": true,
+     "opportunityId": "cop_07cac45fe8324452ac72"
+    }
+   ],
+   "validation": {
+    "proof": "Pilot package delivered in at most 6 owner hours and $40 and accepted by the store by day 2, and at least 4 paid $500 orders from the first 60 independent stores contacted by day 8",
+    "stop": [
+     "Pilot takes more than 6 owner hours or $40, or the store does not accept it",
+     "Fewer than 4 paid orders from 60 stores contacted by day 8"
+    ],
+    "continue": [
+     "4 or more paid of 60 by day 8: contact the remaining 340 stores on days 9-20 (implies ~22 more orders at the threshold rate) and stop selling at 13 paid orders"
+    ],
+    "decides": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "threshold": {
+     "paid": 4,
+     "of": 60,
+     "reach": 400
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Raise the proof threshold or contact rate",
+     "resolution": "Accepted: proof is 4 of 60 (6.7%); the remaining 340 are contacted days 9-20, so at threshold ~22 more orders arrive and the 13th lands by about day 14-16; selling stops at 13 orders by day 22."
+    },
+    {
+     "finding": "Rebuild the cash ledger from the steps",
+     "resolution": "Accepted: 4 receipts in the test window (days 4-8), 9 afterwards (days 10-22); deliveries 2 days after each order; first-payout delay of a new Stripe account (7-14 days) applied to the first four."
+    },
+    {
+     "finding": "Prove fulfilment before charging",
+     "resolution": "Accepted: a free pilot package for one store on days 1-2 records hours, cost and acceptance before any offer."
+    },
+    {
+     "finding": "src_genpt matchesBuyer and price called anchored",
+     "resolution": "Accepted: src_genpt, src_aam and src_hibu are matchesBuyer false; price is ASSUMED, measured only by the test."
+    },
+    {
+     "finding": "Owner hours total",
+     "resolution": "Stated: about 116 owner hours over 30 days (~27 h/week); the goal sets no ceiling."
+    },
+    {
+     "finding": "Stripe first payout",
+     "resolution": "Agreed; first four orders settle day 18 (worst case 14 days after the first payment)."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "revenueRange",
+      "price",
+      "brain:OFFER_AND_PRICE"
+     ]
+    },
+    {
+     "condition": 2,
+     "decision": "ACCEPTED",
+     "records": [
+      "timeToFirstCash",
+      "brain:SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_63dc741f4f204c699a8e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_476b870001684b5e832e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_07cac45fe8324452ac72",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_476b870001684b5e832e",
+     "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+    },
+    {
+     "opportunityId": "cop_07cac45fe8324452ac72",
+     "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_63dc741f4f204c699a8e",
+     "deals": 13,
+     "price": 500,
+     "directCost": 20,
+     "capital": 100,
+     "settlesDay": 26,
+     "ownerHours": 116,
+     "dealsMax": 4317
+    }
+   ],
+   "resolves": [
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "ECONOMICS",
+    "FULFILMENT",
+    "OFFER_AND_PRICE",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_c10c072d8920_27dc83",
+   "digest": "c10c072d892067b0052c235f",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f49963389ccf42fca9f7/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:19:50.527Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_c10c072d8920_27dc83",
+   "digest": "c10c072d892067b0052c235f",
+   "contractDigest": "0b8dab40176c23ac53500e66",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 47240,
+    "committedOpenCents": 0,
+    "preProofCents": 11920,
+    "maxExposureCents": 22360,
+    "minCashCents": 77640,
+    "minCashDay": 13,
+    "collectedCents": 650000,
+    "collectedInWindowCents": 650000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 602760
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Google Business Profile + review-request setup for independe\", and what it is missing first is an offer and a price. Research first: the deep dive on \"Google Business Profile + review-request setup for independe\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 3 unmeasured assumption(s) hold (Sell \"Google Business Profile + review-request setup for independent auto-parts stores\" through a partner who already…; Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 84.7% (p50 $19,386): a hypothesis to test by running each one's kill criterion, not evidence.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_476b870001684b5e832e",
+     "cop_63dc741f4f204c699a8e",
+     "cop_07cac45fe8324452ac72"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Research first: the deep dive on \"Google Business Profile + review-request setup for independe\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+    "openings": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "title": "Google Business Profile + review-request setup for independent auto-parts stores",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores)",
+       "reachableChannel": "Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators",
+       "offerScope": "One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site",
+       "priceCents": 50000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 10000,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "Automotive aftermarket retail",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts P"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "48 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "12 deal(s) needed, 2471 available in the window (2471 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 20, tied up 100"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "Genuine Parts Company reports 4,317 independently-owned NAPA stores in North America (U.S. and Canada) as of December 31, 2025, alongside 2,471 company-owned stores; each independent is a separately owned auto-parts store reachable through the public NAPA store locator. A one-time local-search setup is bought once per store.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site to Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores), reached through Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators, at $500; The owner, personally, drafting with general AI writing tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner, personally, drafting with general AI writing tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "3 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$500",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://simplepart.com/simplepart-packages.html; https://www.tributemedia.com/auto-shop-marketing; https://hibu.com/industries/auto/auto-parts; https://www.genpt.com/our-companies",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "title": "eBay Motors listing build of slow-moving inventory for independent parts stores",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Independent auto-parts store owners with slow-moving or obsolete stock",
+       "reachableChannel": "Owner phone and email outreach to independent stores",
+       "offerScope": "Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account",
+       "priceCents": 75000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 4,
+       "requiredCapabilities": [],
+       "industry": "Automotive aftermarket retail",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner phone and email outreach to independent stores"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "32 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner phone and email outreach to independent stores",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "4,700 Independent auto-parts store owners with slow-moving or obsolete stock (eBay runs a Motors Parts Sales Hub and fitment tools for P&A sellers; dealer-side tools (RevolutionParts, MarketplaceDirect) show parts sellers pay to list on eBay; independent-store demand unmeasured)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account to Independent auto-parts store owners with slow-moving or obsolete stock, reached through Owner phone and email outreach to independent stores, at $750; The owner, personally, drafting with general AI writing tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner, personally, drafting with general AI writing tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "4 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Independent auto-parts store owners with slow-moving or obsolete stock",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$750",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.revolutionparts.com/plans; https://www.ebay.com/sellercenter/listings/parts-sales-hub; https://www.genpt.com/our-companies",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "title": "Monthly managed local marketing retainer for independent auto-parts stores",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Independent auto-parts store owners",
+       "reachableChannel": "Owner phone and email outreach",
+       "offerScope": "Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront",
+       "priceCents": 30000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 10000,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "Automotive aftermarket retail",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner phone and email outreach"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "80 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "20 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 10, tied up 100"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner phone and email outreach",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "buyerVolume",
+        "value": "4,700 Independent auto-parts store owners (Comparable vendors: SimplePart retailer $225/month, theStacc from $749/mo for repair shops; 20 first-month payments needed)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront to Independent auto-parts store owners, reached through Owner phone and email outreach, at $300; The owner, personally, drafting with general AI writing tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$10",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$100",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner, personally, drafting with general AI writing tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Independent auto-parts store owners",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://simplepart.com/simplepart-packages.html; https://thestacc.com/best/auto-repair-marketing-agencies/; https://hibu.com/industries/auto/auto-parts; https://www.genpt.com/our-companies",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:19:36.050Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_d8628d240424_f9dd19",
+    "revisionDigest": "d8628d2404248c5ff5e01847",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d32d5f49ccea4eba8aad/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right kind of stance (demand, price and close rate are unknowns only a live test measures), and the arithmetic of the target is sound: 13 x $500 = $6,500; Stripe 13 x $14.80 = $192.40 and domain/hosting 13 x $20 = $260, total $452 inside the $1,000 cap; net about $6,048, just over $6,000. But passing the test at its threshold does not carry the target inside the window: 2 paid of 60 is 3.3%; the plan then contacts the remaining 340 stores at about 25 per working day, which takes ~13.6 working days (about 19 calendar days) from day 11, i.e. to about day 30, not day 24; at 3.3% that gives ~11 more orders only as the window closes, before 3-day delivery and T+2 settlement. At threshold the 400 stores yield 13.3 orders, so there is zero slack even if the time fitted. The cash ledger does not match the steps: it books 13 receipts between day 4 and day 20 (about one per day, 3 by day 8), whereas the steps produce ~2 by day 10 and the rest through day 24+. The test also takes buyers' card payments at order before fulfilment is shown possible (the card's fulfillment is only a RECOMMENDATION that the owner drafts with AI; the stop rule on first-delivery hours fires only after orders are charged). Price support is overstated: src_aam is labelled 'verified research' and src_genpt matchesBuyer true, but both were rejected at verification (AAM: a website-subscription setup fee, definitions mismatch; genpt: mixes company-owned stores); Hibu publishes no price. Only the 4,317 count is accepted evidence.",
+    "findings": [
+     "Raise the proof threshold (e.g. >= 4 paid of 60, ~6.7%, implying ~27 from 400) or the contact rate so that passing at threshold reaches 13 paid orders by about day 22, leaving delivery and settlement inside 30 days.",
+     "Rebuild the cash ledger from the steps' own contact rate and threshold; it currently front-loads receipts the steps do not produce.",
+     "Prove fulfilment before charging: deliver one package (e.g. a no-charge pilot for one store) and record owner hours and cost, then open paid orders.",
+     "Remove 'verified research' from src_aam and set src_genpt matchesBuyer false; the price is an ESTIMATE until the test measures paid orders.",
+     "Owner hours total 119 (about 28 h/week); the contract states no ceiling, but the owner should be told this figure as it is the plan's largest input.",
+     "New Stripe account: first payout 7-14 days after first payment; ledger shows settle day 19 for order #1 (day 4) which is consistent with the 14-day worst case plus a day, acceptable."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:17:15.877Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION that the owner drafts with AI; no delivered package, hours or cost recorded before buyers are charged."
+     },
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "The submitted price research (AAM, Hibu) was rejected at verification; no buyer is shown paying $500 for this package."
+     },
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "SETTLES_IN_TIME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "timeToFirstCash",
+      "why": "At the test threshold and stated contact rate, the 13th order arrives about day 30, so cash does not settle in the window; timeToFirstCash is only a RECOMMENDATION."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_c2b6f174ffa3_44b9a7",
+    "revisionDigest": "c2b6f174ffa341fc8606a55b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d32d5f49ccea4eba8aad/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Unchanged in substance from rev_d8628d240424 (REVISE): same steps, threshold, ledger and sources. CONDITIONAL is the right kind of stance (demand, price and close rate are unknowns only a live test measures), and the arithmetic of the target is sound: 13 x $500 = $6,500; Stripe 13 x $14.80 = $192.40 and domain/hosting 13 x $20 = $260, total $452 inside the $1,000 cap; net about $6,048, just over $6,000. But passing the test at its threshold does not carry the target inside the window: 2 paid of 60 is 3.3%; the plan then contacts the remaining 340 stores at about 25 per working day, which takes ~13.6 working days (about 19 calendar days) from day 11, i.e. to about day 30, not day 24; at 3.3% that gives ~11 more orders only as the window closes, before 3-day delivery and T+2 settlement. At threshold the 400 stores yield 13.3 orders, so there is zero slack even if the time fitted. The cash ledger does not match the steps: it books 13 receipts between day 4 and day 20 (about one per day, 3 by day 8), whereas the steps produce ~2 by day 10 and the rest through day 24+. The test also takes buyers' card payments at order before fulfilment is shown possible (the card's fulfillment is only a RECOMMENDATION that the owner drafts with AI; the stop rule on first-delivery hours fires only after orders are charged). Price support is overstated: src_genpt (and src_genpt_r) carry matchesBuyer true and src_aam/src_hibu still anchor the price, but both were rejected at verification (AAM: a website-subscription setup fee, definitions mismatch; genpt: mixes company-owned stores); Hibu publishes no price. Only the 4,317 count is accepted evidence.",
+    "findings": [
+     "Raise the proof threshold (e.g. >= 4 paid of 60, ~6.7%, implying ~27 from 400) or the contact rate so that passing at threshold reaches 13 paid orders by about day 22, leaving delivery and settlement inside 30 days.",
+     "Rebuild the cash ledger from the steps' own contact rate and threshold; it currently front-loads receipts the steps do not produce.",
+     "Prove fulfilment before charging: deliver one package (e.g. a no-charge pilot for one store) and record owner hours and cost, then open paid orders.",
+     "Set src_genpt matchesBuyer false (rejected at verification: mixes company-owned stores) and stop calling the price 'anchored' by AAM/Hibu; it is an ESTIMATE until the test measures paid orders.",
+     "Owner hours total 119 (about 28 h/week); the contract states no ceiling, but the owner should be told this figure as it is the plan's largest input.",
+     "New Stripe account: first payout 7-14 days after first payment; ledger shows settle day 19 for order #1 (day 4) which is consistent with the 14-day worst case plus a day, acceptable."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:17:34.788Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION that the owner drafts with AI; no delivered package, hours or cost recorded before buyers are charged."
+     },
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "The submitted price research (AAM, Hibu) was rejected at verification; no buyer is shown paying $500 for this package."
+     },
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "link": "SETTLES_IN_TIME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "timeToFirstCash",
+      "why": "At the test threshold and stated contact rate, the 13th order arrives about day 30, so cash does not settle in the window; timeToFirstCash is only a RECOMMENDATION."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_c10c072d8920_27dc83",
+    "revisionDigest": "c10c072d892067b0052c235f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d32d5f49ccea4eba8aad/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The earlier findings are answered. A free pilot package on days 1-2 (stop if over 6 owner hours or $40, or not accepted) proves fulfilment before the first paid offer on day 3, so no store is charged before delivery is shown possible. Price is now ASSUMED, and AAM, Hibu and genpt are matchesBuyer false; only the 4,317 count (accepted) is EVIDENCED. The threshold is 4 paid of 60 (6.7%); over 400 stores that implies about 27 paid, roughly twice the 13 needed, so passing at threshold carries the target with margin. Recomputed: 13 x $500 = $6,500 gross. Stripe fees 13 x $14.80 = $192.40 and domain/hosting 14 x $20 = $280 make $472.40 total spend, inside the $1,000 cap; settled cash after fees is $6,307.60, which clears $6,000 even before netting the domains. The ledger now follows the steps: 4 receipts in the test window (days 4-8), then 9 from the remaining 340 contacts (days 9-20) through day 22, with the first four settling day 18 (new-account worst case of 14 days) and the last on day 26, inside 30. Brain's trace agrees: collected $6,500, spent $472.40, peak exposure $223.60. The buyer restriction (independent auto-parts stores only) is respected. CONDITIONAL with decides [CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, FULFILMENT] is the right stance.",
+    "findings": [
+     "Owner hours are about 116 over 30 days (~27 h/week), stated in the plan. The contract sets no ceiling, but this is heavy, and the owner should accept it before day 1.",
+     "Card payment at order with delivery within 3 days: the plan should hold a refund path for a store whose delivery fails, since refunds would come out of a new Stripe balance that pays out only after 7-14 days."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:21:09.251Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_c10c072d8920_27dc83",
+   "digest": "c10c072d892067b0052c235f",
+   "contractDigest": "0b8dab40176c23ac53500e66",
+   "plan": {
+    "goalId": "wst_a2da0a4fdbe645cfa456",
+    "contractDigest": "0b8dab40176c23ac53500e66",
+    "parentRevisionId": "rev_c2b6f174ffa3_44b9a7",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell a one-time $500 local-search package to independent auto-parts stores by phone and email, gated by a 60-store test",
+     "opportunityIds": [
+      "cop_63dc741f4f204c699a8e"
+     ],
+     "why": "The buyer population is the one established fact: 4,317 independently-owned NAPA stores (GPC FY2025 10-K), far more than the 13 needed. Everything else is measured by the plan itself: a free pilot proves the owner can deliver the package and records its hours and cost before anyone is charged; a 60-store test measures whether independent store owners pay $500 and at what close rate - the price is an assumption (vendors such as Aftermarket Websites and Hibu sell website/listing services to aftermarket shops, but no record shows a parts store paying $500 for this package). Spend is about $480, inside the $1,000 cap, and card cash settles inside 30 days if the last orders close by day 22."
+    },
+    "alternatives": [
+     {
+      "title": "eBay Motors listing build of slow-moving inventory ($750 flat)",
+      "why": "No published price that parts stores pay for a listing build, and buyer count of stores with eBay-ready dead stock is unknown; delivery (fitment accuracy, store must photograph/ship) is heavier. Kept as a second offer to pitch to stores that decline the local-search package."
+     },
+     {
+      "title": "Monthly managed local marketing retainer ($300/month)",
+      "why": "Only the first month settles in the window, so it needs 20 stores instead of 13; comparable retainers (SimplePart retailer tier, repair-shop agencies) are not measured purchases by independent parts stores."
+     }
+    ],
+    "steps": [
+     {
+      "id": "pilot",
+      "kind": "TEST",
+      "label": "Fulfilment proof before any paid order: owner delivers one complete package free to one independent store (profile optimisation with manager access, posts, review link, one-page site); records hours, cost and the store's acceptance",
+      "performer": "OWNER",
+      "costCents": 2000,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 5,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Build a list of 400 independent parts stores (independently owned NAPA, Auto Value, Parts Plus, unaffiliated) from public locators and Google Maps; call/email 60 on days 3-7 and the other 340 on days 9-20 (about 30 per working day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_10k",
+       "card_volume"
+      ],
+      "ownerHours": 45,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer the one-time $500 local-search package, showing the pilot store's before/after; card payment via Stripe payment link at order",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "pilot",
+      "evidence": [
+       "q_price"
+      ],
+      "ownerHours": 2,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Day 8 read-out: paid $500 orders from the first 60 stores contacted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 340 stores on days 9-20 and close to 13 paid orders by day 22",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 9,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 10,
+      "priceCents": 50000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each paid package within 3 days (owner, hours per the pilot; domain + hosting $20 per store)",
+      "performer": "OWNER",
+      "costCents": 26000,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 52,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect by Stripe card at order; fee 2.9% + 30c per $500; US settlement 2 business days, a new account's first payout 7-14 days after the first payment",
+      "performer": "OWNER",
+      "costCents": 19240,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "src_stripe"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for pilot store site",
+      "stepId": "pilot"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #1",
+      "stepId": "collect"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #1 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #1",
+      "stepId": "deliver"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #2",
+      "stepId": "collect"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #2 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #2",
+      "stepId": "deliver"
+     },
+     {
+      "day": 7,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #3",
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #3 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #3",
+      "stepId": "deliver"
+     },
+     {
+      "day": 8,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #4",
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #4 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #4",
+      "stepId": "deliver"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #5",
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #5 paid by card",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #5",
+      "stepId": "deliver"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #6",
+      "stepId": "collect"
+     },
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #6 paid by card",
+      "settlesDay": 16,
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #6",
+      "stepId": "deliver"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #7",
+      "stepId": "collect"
+     },
+     {
+      "day": 13,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #7 paid by card",
+      "settlesDay": 17,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #7",
+      "stepId": "deliver"
+     },
+     {
+      "day": 14,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #8",
+      "stepId": "collect"
+     },
+     {
+      "day": 14,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #8 paid by card",
+      "settlesDay": 18,
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #8",
+      "stepId": "deliver"
+     },
+     {
+      "day": 16,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #9",
+      "stepId": "collect"
+     },
+     {
+      "day": 16,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #9 paid by card",
+      "settlesDay": 20,
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #9",
+      "stepId": "deliver"
+     },
+     {
+      "day": 17,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #10",
+      "stepId": "collect"
+     },
+     {
+      "day": 17,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #10 paid by card",
+      "settlesDay": 21,
+      "stepId": "collect"
+     },
+     {
+      "day": 19,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #10",
+      "stepId": "deliver"
+     },
+     {
+      "day": 18,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #11",
+      "stepId": "collect"
+     },
+     {
+      "day": 18,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #11 paid by card",
+      "settlesDay": 22,
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #11",
+      "stepId": "deliver"
+     },
+     {
+      "day": 20,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #12",
+      "stepId": "collect"
+     },
+     {
+      "day": 20,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #12 paid by card",
+      "settlesDay": 24,
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #12",
+      "stepId": "deliver"
+     },
+     {
+      "day": 22,
+      "kind": "FEE",
+      "amountCents": 1480,
+      "label": "Stripe processing fee on order #13",
+      "stepId": "collect"
+     },
+     {
+      "day": 22,
+      "kind": "RECEIPT",
+      "amountCents": 50000,
+      "label": "Store order #13 paid by card",
+      "settlesDay": 26,
+      "stepId": "collect"
+     },
+     {
+      "day": 24,
+      "kind": "SPEND",
+      "amountCents": 2000,
+      "label": "Domain + hosting for store site #13",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "Independently-owned NAPA stores in North America",
+      "status": "EVIDENCED",
+      "value": 4317,
+      "unit": "stores",
+      "sources": [
+       "src_10k",
+       "card_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "q_price: price per package",
+      "status": "ASSUMED",
+      "value": 500,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $500 in the test"
+     },
+     {
+      "name": "q_hours: owner hours per package",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Free pilot, days 1-2"
+     },
+     {
+      "name": "q_close: paid orders per store contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Validation test on first 60 stores"
+     },
+     {
+      "name": "Direct cost per store",
+      "status": "ESTIMATE",
+      "value": 20,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Actual domain/hosting cost at first delivery"
+     },
+     {
+      "name": "Stripe fee per $500 charge",
+      "status": "EVIDENCED",
+      "value": 14.8,
+      "unit": "USD",
+      "sources": [
+       "src_stripe"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_volume",
+      "url": "https://brain.local/card/cop_63dc741f4f204c699a8e#buyerVolume",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores (verified research on the card)",
+      "population": "Independent NAPA auto-parts stores, US and Canada",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_10k",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "GPC FY2025 10-K store table: Company-owned stores 2,471; Independently-owned stores 4,317; Total 6,864",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_genpt",
+      "url": "https://www.genpt.com/our-companies",
+      "dated": "2026-11-28",
+      "claim": "More than 5,950 company-owned and independently owned NAPA Auto Parts stores in the US",
+      "population": "NAPA stores in the US, company-owned and independent mixed",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_aam",
+      "url": "https://aftermarketwebsites.com/pricing/",
+      "dated": "2026-11-28",
+      "claim": "Aftermarket Websites sells website subscriptions to aftermarket shops (Base $100/mo + $500 setup) - shows comparable services are sold; rejected at verification as price evidence for this package",
+      "population": "Brick-and-mortar automotive aftermarket shops/installers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_hibu",
+      "url": "https://hibu.com/industries/auto/auto-parts",
+      "dated": "2026-11-28",
+      "claim": "Hibu sells auto-parts stores a managed website, ads, reviews and listings plan on a 6-month contract (no price published)",
+      "population": "Auto-parts stores (no price; not price evidence)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "US settlement timing 2 business days; after the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_63dc741f4f204c699a8e"
+     },
+     {
+      "id": "src_ebay",
+      "url": "https://www.ebay.com/sellercenter/listings/parts-sales-hub",
+      "dated": "2026-11-28",
+      "claim": "eBay Motors Parts Sales Hub offers parts sellers fitment listing (Fitment Plus Auto), bulk listing tools and third-party providers",
+      "population": "Parts & accessories sellers on eBay",
+      "matchesBuyer": false,
+      "opportunityId": "cop_476b870001684b5e832e"
+     },
+     {
+      "id": "src_stacc",
+      "url": "https://thestacc.com/best/auto-repair-marketing-agencies/",
+      "dated": "2026-08-01",
+      "claim": "Published monthly marketing retainers for auto repair shops, e.g. Steer Booking Tool $189/month, Element DMA EGL Start $690/month",
+      "population": "Auto repair shops (not parts stores)",
+      "matchesBuyer": false,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     },
+     {
+      "id": "src_genpt_r",
+      "url": "https://www.sec.gov/Archives/edgar/data/40987/000004098726000003/gpc-20251231.htm",
+      "dated": "2026-02-20",
+      "claim": "4,317 independently-owned NAPA stores - the same buyer population for the retainer and eBay offers",
+      "population": "Independent NAPA auto-parts stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_07cac45fe8324452ac72"
+     }
+    ],
+    "validation": {
+     "proof": "Pilot package delivered in at most 6 owner hours and $40 and accepted by the store by day 2, and at least 4 paid $500 orders from the first 60 independent stores contacted by day 8",
+     "stop": [
+      "Pilot takes more than 6 owner hours or $40, or the store does not accept it",
+      "Fewer than 4 paid orders from 60 stores contacted by day 8"
+     ],
+     "continue": [
+      "4 or more paid of 60 by day 8: contact the remaining 340 stores on days 9-20 (implies ~22 more orders at the threshold rate) and stop selling at 13 paid orders"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 60,
+      "reach": 400
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Raise the proof threshold or contact rate",
+      "resolution": "Accepted: proof is 4 of 60 (6.7%); the remaining 340 are contacted days 9-20, so at threshold ~22 more orders arrive and the 13th lands by about day 14-16; selling stops at 13 orders by day 22."
+     },
+     {
+      "finding": "Rebuild the cash ledger from the steps",
+      "resolution": "Accepted: 4 receipts in the test window (days 4-8), 9 afterwards (days 10-22); deliveries 2 days after each order; first-payout delay of a new Stripe account (7-14 days) applied to the first four."
+     },
+     {
+      "finding": "Prove fulfilment before charging",
+      "resolution": "Accepted: a free pilot package for one store on days 1-2 records hours, cost and acceptance before any offer."
+     },
+     {
+      "finding": "src_genpt matchesBuyer and price called anchored",
+      "resolution": "Accepted: src_genpt, src_aam and src_hibu are matchesBuyer false; price is ASSUMED, measured only by the test."
+     },
+     {
+      "finding": "Owner hours total",
+      "resolution": "Stated: about 116 owner hours over 30 days (~27 h/week); the goal sets no ceiling."
+     },
+     {
+      "finding": "Stripe first payout",
+      "resolution": "Agreed; first four orders settle day 18 (worst case 14 days after the first payment)."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price",
+       "brain:OFFER_AND_PRICE"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "timeToFirstCash",
+       "brain:SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_476b870001684b5e832e",
+      "why": "Alternative: no price parts stores pay for a listing build and no count of stores with eBay-ready stock; heavier delivery"
+     },
+     {
+      "opportunityId": "cop_07cac45fe8324452ac72",
+      "why": "Alternative: only the first month settles in 30 days so 20 stores are needed; retainer prices are repair-shop, not parts-store, evidence"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_63dc741f4f204c699a8e",
+      "deals": 13,
+      "price": 500,
+      "directCost": 20,
+      "capital": 100,
+      "settlesDay": 26,
+      "ownerHours": 116,
+      "dealsMax": 4317
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_c10c072d8920_27dc83",
+    "digest": "c10c072d892067b0052c235f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:19:50.527Z"
+   },
+   "review": {
+    "revisionId": "rev_c10c072d8920_27dc83",
+    "revisionDigest": "c10c072d892067b0052c235f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f49963389ccf42fca9f7/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d32d5f49ccea4eba8aad/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The earlier findings are answered. A free pilot package on days 1-2 (stop if over 6 owner hours or $40, or not accepted) proves fulfilment before the first paid offer on day 3, so no store is charged before delivery is shown possible. Price is now ASSUMED, and AAM, Hibu and genpt are matchesBuyer false; only the 4,317 count (accepted) is EVIDENCED. The threshold is 4 paid of 60 (6.7%); over 400 stores that implies about 27 paid, roughly twice the 13 needed, so passing at threshold carries the target with margin. Recomputed: 13 x $500 = $6,500 gross. Stripe fees 13 x $14.80 = $192.40 and domain/hosting 14 x $20 = $280 make $472.40 total spend, inside the $1,000 cap; settled cash after fees is $6,307.60, which clears $6,000 even before netting the domains. The ledger now follows the steps: 4 receipts in the test window (days 4-8), then 9 from the remaining 340 contacts (days 9-20) through day 22, with the first four settling day 18 (new-account worst case of 14 days) and the last on day 26, inside 30. Brain's trace agrees: collected $6,500, spent $472.40, peak exposure $223.60. The buyer restriction (independent auto-parts stores only) is respected. CONDITIONAL with decides [CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION, FULFILMENT] is the right stance.",
+    "findings": [
+     "Owner hours are about 116 over 30 days (~27 h/week), stated in the plan. The contract sets no ceiling, but this is heavy, and the owner should accept it before day 1.",
+     "Card payment at order with delivery within 3 days: the plan should hold a refund path for a store whose delivery fails, since refunds would come out of a new Stripe balance that pays out only after 7-14 days."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:21:09.251Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "I want $6,000 of settled cash within 30 days, and it has to come from independent auto-parts stores — selling to them or doing work for them. I can put in up to $1,000.",
+    "terms": "773b98a018fa38b3",
+    "openings": {
+     "cop_07cac45fe8324452ac72": "dd43edca119652f0",
+     "cop_476b870001684b5e832e": "e585ac474b1357a4",
+     "cop_63dc741f4f204c699a8e": "25f168e657fa3150"
+    }
+   },
+   "at": "2026-11-28T07:22:07.219Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

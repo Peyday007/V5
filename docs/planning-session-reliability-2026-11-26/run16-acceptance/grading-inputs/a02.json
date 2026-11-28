@@ -1,0 +1,215 @@
+{
+ "caseId": "ax-02-bail-bond-price-said",
+ "keys": {
+  "cop_a76e749b3d6942069735": "bailTracker"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 19320× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Court-date and forfeiture-deadline tracker for bail bond age\" needs [figure withheld] and keeps [figure withheld], 345× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Bail bond agency owners\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_a76e749b3d6942069735"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+    "owner": "PERSON",
+    "cost": 5
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Bail bond agency owners",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Bail bond agency owners",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 9.97939167364267
+   },
+   {
+    "label": "Collect payment for \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Run the next group",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_a76e749b3d6942069735",
+    "title": "Court-date and forfeiture-deadline tracker for bail bond agencies",
+    "missing": [
+     "OFFER_AND_PRICE"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "Bail bond agency owners",
+     "reachableChannel": "Phone and email from the state insurance department's licensed bail agent list",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T06:59:49.513Z",
+     "offerScope": "A tracker of every open bond's court dates and forfeiture deadlines, built by Brain from the agency's bond register; paid by card on delivery.",
+     "priceCents": 35000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "bail bond agencies",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Phone and email from the state insurance department's licensed bail agent list"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 18 accepted of 300 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "9 deal(s) needed, 410 available in the window (410 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 5, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state insurance department lists 410 licensed bail bond agencies with addresses, phones and emails; each tracks forfeiture deadlines on every open bond.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A tracker of every open bond's court dates and forfeiture deadlines, built by Brain from the agency's bond register; paid by card on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "18 paid orders from 300 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$5",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Bail bond agency owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The owner says bail agents will pay $350 for it; no invoice or published price shows what any agency paid.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:10.321Z"
+ }
+}

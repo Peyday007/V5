@@ -1,0 +1,265 @@
+{
+ "caseId": "ax-01-rv-park-rate-workbook",
+ "keys": {
+  "cop_f9bb5c813b47412fb37b": "rvRates",
+  "cop_c06718c73430457ba0d7": "hostCoaching"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Seasonal-site rate and occupancy benchmarking workbook for R\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Seasonal-site rate and occupancy benchmarking workbook for R\" (assumption-only coverage: it reaches the target in 99.2% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14484× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Seasonal-site rate and occupancy benchmarking workbook for RV park man\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f9bb5c813b47412fb37b"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+    "owner": "PERSON",
+    "cost": 6
+   },
+   {
+    "label": "Collect payment for \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_f9bb5c813b47412fb37b",
+    "title": "Seasonal-site rate and occupancy benchmarking workbook for RV park managers",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "RV park and campground managers",
+     "reachableChannel": "Email to the manager addresses published in the state campground association member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T06:59:43.218Z",
+     "offerScope": "A workbook benchmarking seasonal-site rates and occupancy against comparable parks, delivered by Brain within 1 day of order; paid by card at checkout.",
+     "priceCents": 29000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.2,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "RV parks and campgrounds",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the manager addresses published in the state campground association mem"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 290 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 22 accepted of 400 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "12 deal(s) needed, 640 available in the window (640 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 6, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state campground association directory lists 640 member RV parks and campgrounds, each with a published manager email; each park sets next season's seasonal-site rates every winter.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A workbook benchmarking seasonal-site rates and occupancy against comparable parks, delivered by Brain within 1 day of order; paid by card at checkout. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "22 paid orders from 400 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$6",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "RV park and campground managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "This offer was sold at $290 in the pilot send; 22 managers paid $290 by card (pilot invoices, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_c06718c73430457ba0d7",
+    "title": "On-site campground host coaching delivered by the owner",
+    "reason": "needs the owner's physical work: the service (\"On-site\") would be performed by The owner, personally; the owner does no physical work",
+    "card": {
+     "payer": "Campground owners",
+     "reachableChannel": "The five signed owners",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T06:59:43.218Z",
+     "offerScope": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 8,
+     "requiredCapabilities": [],
+     "industry": "RV parks and campgrounds",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 60000,
+      "currency": "USD",
+      "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Campground owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$600",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": 9,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 2
+  },
+  "at": "2026-11-28T07:04:10.469Z"
+ }
+}

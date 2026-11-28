@@ -1,0 +1,1132 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_2af0dd3c2d024651a96f",
+   "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$4,000 of cash settled into the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f0f95bd0d984eaad5d7ea763"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_2af0dd3c2d024651a96f",
+    "contractDigest": "f0f95bd0d984eaad5d7ea763",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the ferry compliance pack's price is contradicted",
+     "opportunityIds": [],
+     "why": "The card's offer price is $1,500 but its sourced price fact is $150. At $150 the measured 10% conversion (12 paid of 120) over the 120 registry operators yields about 12 sales, ~$1,800 — short of $4,000 (28 sales needed); at $1,500 three sales would do. Which price buyers pay decides whether this opening can carry the target, and the record does not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,500",
+      "why": "Rejected: $1,500 is contradicted by the $150 evidence fact; adopting the favourable figure would be reading an unknown as a favourable assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 12 measured paid orders actually paid (their invoices) and any published price for comparable drill-log/manifest packs; record it on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per pack",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "invoice-backed price: card offer $1,500 vs evidence fact $150"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "operators",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#price",
+      "dated": "2026-11-25",
+      "claim": "Price $150 (EVIDENCE) while the card's offer price is $1,500",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 120 contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "120 small passenger-vessel operators with published contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$20 direct cost",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The price is contradicted — $1,500 on the card's offer against a $150 sourced price fact — and at $150 the 120-operator registry at the measured 10% conversion yields ~12 sales (~$1,800), so market volume cannot carry $4,000; at $1,500 it could. No price buyers pay is established.",
+     "resolution": "Read the invoices of the 12 measured paid orders (or a published price) to establish the price; at $1,500 sell 3 packs by email to the registry (Brain-built, card on delivery, 4 days to cash); at $150 this opening caps near $1,800 and other openings must be added for the rest.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_55ff8b2564c6_58efc6",
+    "digest": "55ff8b2564c60a7fefaf09b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:08.908Z"
+   },
+   {
+    "goalId": "wst_2af0dd3c2d024651a96f",
+    "contractDigest": "f0f95bd0d984eaad5d7ea763",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the ferry compliance pack's price is contradicted",
+     "opportunityIds": [],
+     "why": "The card's offer price is $1,500 but its sourced price fact is $150. At $150 the measured 10% conversion (12 paid of 120) over the 120 registry operators yields about 12 sales, ~$1,800 — short of $4,000 (28 sales needed); at $1,500 three sales would do. Which price buyers pay decides whether this opening can carry the target, and the record does not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,500",
+      "why": "Rejected: $1,500 is contradicted by the $150 evidence fact; adopting the favourable figure would be reading an unknown as a favourable assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 12 measured paid orders actually paid (their invoices) and any published price for comparable drill-log/manifest packs; record it on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per pack",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "invoice-backed price: card offer $1,500 vs evidence fact $150"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "operators",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#price",
+      "dated": "2026-11-25",
+      "claim": "Price $150 (EVIDENCE) while the card's offer price is $1,500",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 120 contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "120 small passenger-vessel operators with published contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$20 direct cost",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The price is contradicted — $1,500 on the card's offer against a $150 sourced price fact — and at $150 the 120-operator registry at the measured 10% conversion yields ~12 sales (~$1,800), so market volume cannot carry $4,000; at $1,500 it could. No price buyers pay is established.",
+     "resolution": "Read the invoices of the 12 measured paid orders (or a published price) to establish the price; at $1,500 sell 3 packs by email to the registry (Brain-built, card on delivery, 4 days to cash); at $150 this opening caps near $1,800 and other openings must be added for the rest.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": null,
+      "dealsMax": 120
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_9520adc7ffb3_b5440d",
+    "digest": "9520adc7ffb342a00efecdd3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:24.514Z"
+   },
+   {
+    "goalId": "wst_2af0dd3c2d024651a96f",
+    "contractDigest": "f0f95bd0d984eaad5d7ea763",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the ferry compliance pack's price is contradicted",
+     "opportunityIds": [],
+     "why": "The card's offer price is $1,500 but its sourced price fact is $150. At $150 the measured 10% conversion (12 paid of 120) over the 120 registry operators yields about 12 sales, ~$1,800 — short of $4,000 (28 sales needed); at $1,500 three sales would do. Which price buyers pay decides whether this opening can carry the target, and the record does not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,500",
+      "why": "Rejected: $1,500 is contradicted by the $150 evidence fact; adopting the favourable figure would be reading an unknown as a favourable assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 12 measured paid orders actually paid (their invoices) and any published price for comparable drill-log/manifest packs; record it on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per pack",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "invoice-backed price: card offer $1,500 vs evidence fact $150"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "operators",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#price",
+      "dated": "2026-11-25",
+      "claim": "Price $150 (EVIDENCE) while the card's offer price is $1,500",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 120 contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "120 small passenger-vessel operators with published contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$20 direct cost",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The price is contradicted — $1,500 on the card's offer against a $150 sourced price fact — and at $150 the 120-operator registry at the measured 10% conversion yields ~12 sales (~$1,800), so market volume cannot carry $4,000; at $1,500 it could. No price buyers pay is established.",
+     "resolution": "Read the invoices of the 12 measured paid orders (or a published price) to establish the price; at $1,500 sell 3 packs by email to the registry (Brain-built, card on delivery, 4 days to cash); at $150 this opening caps near $1,800 and other openings must be added for the rest.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 4,
+      "ownerHours": null,
+      "dealsMax": 120
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1848c31926ae_83f2f3",
+    "digest": "1848c31926aef9b023729b8b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:31.324Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_2af0dd3c2d024651a96f",
+   "contractDigest": "f0f95bd0d984eaad5d7ea763",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No executable plan: the ferry compliance pack's price is contradicted",
+    "opportunityIds": [],
+    "why": "The card's offer price is $1,500 but its sourced price fact is $150. At $150 the measured 10% conversion (12 paid of 120) over the 120 registry operators yields about 12 sales, ~$1,800 — short of $4,000 (28 sales needed); at $1,500 three sales would do. Which price buyers pay decides whether this opening can carry the target, and the record does not settle it."
+   },
+   "alternatives": [
+    {
+     "title": "Plan at $1,500",
+     "why": "Rejected: $1,500 is contradicted by the $150 evidence fact; adopting the favourable figure would be reading an unknown as a favourable assumption."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Establish the price the 12 measured paid orders actually paid (their invoices) and any published price for comparable drill-log/manifest packs; record it on the card",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_price",
+      "src_conv"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per pack",
+     "sources": [
+      "src_price"
+     ],
+     "needs": "invoice-backed price: card offer $1,500 vs evidence fact $150"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.1,
+     "unit": "paid orders per contact",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 120,
+     "unit": "operators",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_0c856ba892a44c779f38#price",
+     "dated": "2026-11-25",
+     "claim": "Price $150 (EVIDENCE) while the card's offer price is $1,500",
+     "population": "Small passenger-vessel operators in the regional vessel registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c856ba892a44c779f38"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_0c856ba892a44c779f38#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "12 paid orders from 120 contacts",
+     "population": "Small passenger-vessel operators in the regional vessel registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c856ba892a44c779f38"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_0c856ba892a44c779f38#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "120 small passenger-vessel operators with published contacts",
+     "population": "Small passenger-vessel operators in the regional vessel registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c856ba892a44c779f38"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_0c856ba892a44c779f38#directCosts",
+     "dated": "2026-11-25",
+     "claim": "$20 direct cost",
+     "population": "Small passenger-vessel operators in the regional vessel registry",
+     "matchesBuyer": true,
+     "opportunityId": "cop_0c856ba892a44c779f38"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "The price is contradicted — $1,500 on the card's offer against a $150 sourced price fact — and at $150 the 120-operator registry at the measured 10% conversion yields ~12 sales (~$1,800), so market volume cannot carry $4,000; at $1,500 it could. No price buyers pay is established.",
+    "resolution": "Read the invoices of the 12 measured paid orders (or a published price) to establish the price; at $1,500 sell 3 packs by email to the registry (Brain-built, card on delivery, 4 days to cash); at $150 this opening caps near $1,800 and other openings must be added for the rest.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_0c856ba892a44c779f38",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_0c856ba892a44c779f38",
+     "deals": null,
+     "price": null,
+     "directCost": 20,
+     "capital": 0,
+     "settlesDay": 4,
+     "ownerHours": null,
+     "dealsMax": 120
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1848c31926ae_83f2f3",
+   "digest": "1848c31926aef9b023729b8b",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_978bb929f75c4cf68396/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:07:31.324Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_1848c31926ae_83f2f3",
+   "digest": "1848c31926aef9b023729b8b",
+   "contractDigest": "f0f95bd0d984eaad5d7ea763",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 52325× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Safety-drill log and passenger-manifest compliance packs for\" needs [figure withheld] and keeps [figure withheld], 805× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Ferry operations managers\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_0c856ba892a44c779f38"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+      "owner": "PERSON",
+      "cost": 20
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Ferry operations managers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Ferry operations managers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 39.92275523888992
+     },
+     {
+      "label": "Collect payment for \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "title": "Safety-drill log and passenger-manifest compliance packs for small passenger-ferry operators",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Ferry operations managers",
+       "reachableChannel": "Email to the operator contacts published in the regional vessel registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:02.607Z",
+       "offerScope": "A season's drill-log templates and manifest reconciliation pack, built by Brain; paid by card on delivery.",
+       "priceCents": 150000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "passenger ferry operators",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the operator contacts published in the regional vessel registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 12 accepted of 120 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "28 deal(s) needed at the measured rate means asking 423 prospects, but the market holds only 120 (120 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 7.9"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 20, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "4 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The regional vessel registry lists 120 small passenger-vessel operators with published contacts; each must keep drill logs and manifests every season.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A season's drill-log templates and manifest reconciliation pack, built by Brain; paid by card on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "12 paid orders from 120 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Ferry operations managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$150",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "4 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:10.417Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_1848c31926ae_83f2f3",
+    "revisionDigest": "1848c31926aef9b023729b8b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a9f045c1ddd642e6b4c7/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct. The only sourced price is the EVIDENCE fact of $150. The card's $1,500 offer price has no fact behind it and is contradicted by that evidence, so planning at $1,500 would read an unknown as a favourable assumption, and the plan rightly rejects that. Recomputed at the evidenced $150: 120 registry operators x 10% measured conversion (12/120) = 12 sales x $150 = $1,800, against a $4,000 target (27 sales needed, about 267 contacts at 10%; only 120 exist). If the 12 measured buyers are among the 120 and buy once a season, the remaining pool is smaller still. So at the price the evidence supports, MARKET_VOLUME cannot carry the target, and the decisive links (OFFER_AND_PRICE contradicted, MARKET_VOLUME short) are named correctly. The resolution (read the 12 paid orders' invoices to settle the price; at $150 add other openings for the remaining ~$2,200) is evidence-directed and zero-cost.",
+    "findings": [
+     "Arithmetic at $150: maximum at the measured rate is about $1,800; even all 120 operators buying would be $18,000. The shortfall is a volume-at-measured-conversion gap, not a hard constraint, which the plan states correctly as missing evidence.",
+     "The $150 EVIDENCE fact is the sourced figure and $1,500 is the unsourced, contradicted card field. The research step should treat $150 as the default reading unless the 12 invoices show otherwise, rather than as an even split.",
+     "The 12/120 conversion may come from the same 120-operator registry. If so, those buyers have already bought this season and the reachable remainder is about 108.",
+     "At $1,500 (if the invoices showed it), 3 sales would carry $4,000 with 4-day settlement. The plan already describes that branch."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:41.968Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_1848c31926ae_83f2f3",
+   "digest": "1848c31926aef9b023729b8b",
+   "contractDigest": "f0f95bd0d984eaad5d7ea763",
+   "plan": {
+    "goalId": "wst_2af0dd3c2d024651a96f",
+    "contractDigest": "f0f95bd0d984eaad5d7ea763",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the ferry compliance pack's price is contradicted",
+     "opportunityIds": [],
+     "why": "The card's offer price is $1,500 but its sourced price fact is $150. At $150 the measured 10% conversion (12 paid of 120) over the 120 registry operators yields about 12 sales, ~$1,800 — short of $4,000 (28 sales needed); at $1,500 three sales would do. Which price buyers pay decides whether this opening can carry the target, and the record does not settle it."
+    },
+    "alternatives": [
+     {
+      "title": "Plan at $1,500",
+      "why": "Rejected: $1,500 is contradicted by the $150 evidence fact; adopting the favourable figure would be reading an unknown as a favourable assumption."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Establish the price the 12 measured paid orders actually paid (their invoices) and any published price for comparable drill-log/manifest packs; record it on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per pack",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "invoice-backed price: card offer $1,500 vs evidence fact $150"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.1,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 120,
+      "unit": "operators",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#price",
+      "dated": "2026-11-25",
+      "claim": "Price $150 (EVIDENCE) while the card's offer price is $1,500",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "12 paid orders from 120 contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "120 small passenger-vessel operators with published contacts",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_0c856ba892a44c779f38#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$20 direct cost",
+      "population": "Small passenger-vessel operators in the regional vessel registry",
+      "matchesBuyer": true,
+      "opportunityId": "cop_0c856ba892a44c779f38"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The price is contradicted — $1,500 on the card's offer against a $150 sourced price fact — and at $150 the 120-operator registry at the measured 10% conversion yields ~12 sales (~$1,800), so market volume cannot carry $4,000; at $1,500 it could. No price buyers pay is established.",
+     "resolution": "Read the invoices of the 12 measured paid orders (or a published price) to establish the price; at $1,500 sell 3 packs by email to the registry (Brain-built, card on delivery, 4 days to cash); at $150 this opening caps near $1,800 and other openings must be added for the rest.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_0c856ba892a44c779f38",
+      "deals": null,
+      "price": null,
+      "directCost": 20,
+      "capital": 0,
+      "settlesDay": 4,
+      "ownerHours": null,
+      "dealsMax": 120
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1848c31926ae_83f2f3",
+    "digest": "1848c31926aef9b023729b8b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:31.324Z"
+   },
+   "review": {
+    "revisionId": "rev_1848c31926ae_83f2f3",
+    "revisionDigest": "1848c31926aef9b023729b8b",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_978bb929f75c4cf68396/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a9f045c1ddd642e6b4c7/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct. The only sourced price is the EVIDENCE fact of $150. The card's $1,500 offer price has no fact behind it and is contradicted by that evidence, so planning at $1,500 would read an unknown as a favourable assumption, and the plan rightly rejects that. Recomputed at the evidenced $150: 120 registry operators x 10% measured conversion (12/120) = 12 sales x $150 = $1,800, against a $4,000 target (27 sales needed, about 267 contacts at 10%; only 120 exist). If the 12 measured buyers are among the 120 and buy once a season, the remaining pool is smaller still. So at the price the evidence supports, MARKET_VOLUME cannot carry the target, and the decisive links (OFFER_AND_PRICE contradicted, MARKET_VOLUME short) are named correctly. The resolution (read the 12 paid orders' invoices to settle the price; at $150 add other openings for the remaining ~$2,200) is evidence-directed and zero-cost.",
+    "findings": [
+     "Arithmetic at $150: maximum at the measured rate is about $1,800; even all 120 operators buying would be $18,000. The shortfall is a volume-at-measured-conversion gap, not a hard constraint, which the plan states correctly as missing evidence.",
+     "The $150 EVIDENCE fact is the sourced figure and $1,500 is the unsourced, contradicted card field. The research step should treat $150 as the default reading unless the 12 invoices show otherwise, rather than as an even split.",
+     "The 12/120 conversion may come from the same 120-operator registry. If so, those buyers have already bought this season and the reachable remainder is about 108.",
+     "At $1,500 (if the invoices showed it), 3 sales would carry $4,000 with 4-day settlement. The plan already describes that branch."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:41.968Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "b06f1d839258b239",
+    "openings": {
+     "cop_0c856ba892a44c779f38": "bac6bf957eaa7d4b"
+    }
+   },
+   "at": "2026-11-28T07:12:27.158Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

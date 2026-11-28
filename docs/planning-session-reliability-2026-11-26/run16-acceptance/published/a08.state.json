@@ -1,0 +1,791 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_5324e83a6c0e4424b41a",
+   "words": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$6000 of cash settled in the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "3eacab2c5761d751e87089c7"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_5324e83a6c0e4424b41a",
+    "contractDigest": "3eacab2c5761d751e87089c7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: each signed thrift-store backlog clearance costs more than it pays",
+     "opportunityIds": [],
+     "why": "Four store managers signed at $1,800 per backlog clearance ($7,200), but the only fulfiller, TagRight Retail Services, quoted $1,950 per clearance. Every deal loses $150 (4 deals: -$600), so delivering the signed orders cannot net any cash, let alone $6,000, and with no up-front capital the owner cannot fund the shortfall."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the four signed clearances through TagRight anyway",
+      "why": "Gross $7,200 in, $7,800 out to TagRight: a $600 loss the owner would have to fund, which the no-capital limit forbids."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find a backlog-clearance crew that quotes under $1,800 per store (able to start before the stores' deadline), or renegotiate the four stores' price above TagRight's $1,950",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Price per clearance (signed)",
+      "status": "EVIDENCED",
+      "value": 1800,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Fulfiller cost per clearance",
+      "status": "EVIDENCED",
+      "value": 1950,
+      "unit": "USD",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Signed stores",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "agreements",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Cost of a cheaper qualified fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [],
+      "needs": "A quote below $1,800 per clearance from a crew that can deliver in time"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#price",
+      "dated": "2026-11-25",
+      "claim": "$1,800 per backlog clearance",
+      "population": "The four signed store managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#directCosts",
+      "dated": "2026-11-25",
+      "claim": "TagRight Retail Services quoted $1,950 per backlog clearance",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances at $1,800",
+      "population": "Four thrift stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Unit economics: the only established fulfiller costs $1,950 per clearance against a signed price of $1,800, so each deal loses $150 and the four signed deals cannot produce positive cash without capital the owner is not putting up.",
+     "resolution": "Brain sources a sorting/tagging crew quoting under $1,800 per clearance (well under, to leave margin) that can start in time, or renegotiates the four signed stores to a price above $1,950 plus margin; replan once a profitable cost and price are both established.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_9e77bf9a75824319a4d0",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_9e77bf9a75824319a4d0",
+      "why": "Cost $1,950 ≥ price $1,800: each deal loses money."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1f511a064b7e_7072a2",
+    "digest": "1f511a064b7eb0fd5ff6ca47",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_140d23774eb44abc9b58/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:39.000Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_5324e83a6c0e4424b41a",
+   "contractDigest": "3eacab2c5761d751e87089c7",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: each signed thrift-store backlog clearance costs more than it pays",
+    "opportunityIds": [],
+    "why": "Four store managers signed at $1,800 per backlog clearance ($7,200), but the only fulfiller, TagRight Retail Services, quoted $1,950 per clearance. Every deal loses $150 (4 deals: -$600), so delivering the signed orders cannot net any cash, let alone $6,000, and with no up-front capital the owner cannot fund the shortfall."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the four signed clearances through TagRight anyway",
+     "why": "Gross $7,200 in, $7,800 out to TagRight: a $600 loss the owner would have to fund, which the no-capital limit forbids."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Find a backlog-clearance crew that quotes under $1,800 per store (able to start before the stores' deadline), or renegotiate the four stores' price above TagRight's $1,950",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Price per clearance (signed)",
+     "status": "EVIDENCED",
+     "value": 1800,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Fulfiller cost per clearance",
+     "status": "EVIDENCED",
+     "value": 1950,
+     "unit": "USD",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Signed stores",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "agreements",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Cost of a cheaper qualified fulfiller",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [],
+     "needs": "A quote below $1,800 per clearance from a crew that can deliver in time"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#price",
+     "dated": "2026-11-25",
+     "claim": "$1,800 per backlog clearance",
+     "population": "The four signed store managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9e77bf9a75824319a4d0"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#directCosts",
+     "dated": "2026-11-25",
+     "claim": "TagRight Retail Services quoted $1,950 per backlog clearance",
+     "population": "Fulfiller",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9e77bf9a75824319a4d0"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#agreements",
+     "dated": "2026-11-25",
+     "claim": "Four written acceptances at $1,800",
+     "population": "Four thrift stores",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9e77bf9a75824319a4d0"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Unit economics: the only established fulfiller costs $1,950 per clearance against a signed price of $1,800, so each deal loses $150 and the four signed deals cannot produce positive cash without capital the owner is not putting up.",
+    "resolution": "Brain sources a sorting/tagging crew quoting under $1,800 per clearance (well under, to leave margin) that can start in time, or renegotiates the four signed stores to a price above $1,950 plus margin; replan once a profitable cost and price are both established.",
+    "decisiveLinks": [
+     "ECONOMICS"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_9e77bf9a75824319a4d0",
+     "missing": [
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_9e77bf9a75824319a4d0",
+     "why": "Cost $1,950 ≥ price $1,800: each deal loses money."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "ECONOMICS"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1f511a064b7e_7072a2",
+   "digest": "1f511a064b7eb0fd5ff6ca47",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_140d23774eb44abc9b58/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:06:39.000Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_1f511a064b7e_7072a2",
+   "digest": "1f511a064b7eb0fd5ff6ca47",
+   "contractDigest": "3eacab2c5761d751e87089c7",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: \"Subcontracted donation-intake sorting and price tagging for \" costs at least what it pays. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2202× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Thrift store managers — A crew sorts prices and\" needs [figure withheld] and keeps [figure withheld], 850× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Thrift store managers\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_9e77bf9a75824319a4d0"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Thrift store managers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Thrift store managers",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 1899.9764171826005
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Renew",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 7200 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_9e77bf9a75824319a4d0",
+      "title": "Subcontracted donation-intake sorting and price tagging for thrift stores",
+      "missing": [
+       "ECONOMICS"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Thrift store managers",
+       "reachableChannel": "The four signed store managers",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:28.765Z",
+       "offerScope": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+       "priceCents": 180000,
+       "currency": "USD",
+       "fulfillmentOwner": "TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "thrift stores",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 180000,
+        "currency": "USD",
+        "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four signed store managers"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 7200 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 7200 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "each deal loses money: a cost of 1950 against a price of 1800"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A crew sorts, prices and tags a store's donation backlog in two days; paid on completion. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$1950",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Thrift store managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$1800",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:15.506Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_1f511a064b7e_7072a2",
+    "revisionDigest": "1f511a064b7eb0fd5ff6ca47",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_140d23774eb44abc9b58/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e6880c9d63b04d4483ff/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and the decisive gap is the one the evidence decides. Four WRITTEN_ACCEPTANCE agreements at $1,800 ($7,200) establish price and demand, and the recorded fulfiller TagRight Retail Services quoted $1,950 per clearance (EVIDENCE: directCosts $1,950). Recomputed: per deal $1,800 - $1,950 = -$150; 4 deals give $7,200 in and $7,800 out, a $600 loss. Gross collections of $7,200 would exceed $6,000 only by counting cash that must immediately go to the supplier, and the shortfall would have to be funded by the owner, which the exposure cap of $0 forbids. Brain's ECONOMICS link independently reads 'each deal loses money'. decisiveLinks = ECONOMICS, and the resolution (a cheaper qualified crew under $1,800 with margin, or a renegotiated price above $1,950) names exactly what would change it.",
+    "findings": [
+     "Arithmetic: -$150 per deal; -$600 across the four signed deals; no positive cash at any volume on the recorded cost.",
+     "Correctly not treated as executable on gross collections: $7,200 collected minus $7,800 paid to TagRight needs $600 of owner capital against a $0 limit.",
+     "For a re-plan, a cheaper crew must also start early enough: clearance takes 2 days and cash arrives 7 days after completion, so work must finish by about day 23. TagRight's Dec 2 start shows the timing constraint is real."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:55.154Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_1f511a064b7e_7072a2",
+   "digest": "1f511a064b7eb0fd5ff6ca47",
+   "contractDigest": "3eacab2c5761d751e87089c7",
+   "plan": {
+    "goalId": "wst_5324e83a6c0e4424b41a",
+    "contractDigest": "3eacab2c5761d751e87089c7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: each signed thrift-store backlog clearance costs more than it pays",
+     "opportunityIds": [],
+     "why": "Four store managers signed at $1,800 per backlog clearance ($7,200), but the only fulfiller, TagRight Retail Services, quoted $1,950 per clearance. Every deal loses $150 (4 deals: -$600), so delivering the signed orders cannot net any cash, let alone $6,000, and with no up-front capital the owner cannot fund the shortfall."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the four signed clearances through TagRight anyway",
+      "why": "Gross $7,200 in, $7,800 out to TagRight: a $600 loss the owner would have to fund, which the no-capital limit forbids."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Find a backlog-clearance crew that quotes under $1,800 per store (able to start before the stores' deadline), or renegotiate the four stores' price above TagRight's $1,950",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Price per clearance (signed)",
+      "status": "EVIDENCED",
+      "value": 1800,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Fulfiller cost per clearance",
+      "status": "EVIDENCED",
+      "value": 1950,
+      "unit": "USD",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Signed stores",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "agreements",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Cost of a cheaper qualified fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [],
+      "needs": "A quote below $1,800 per clearance from a crew that can deliver in time"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#price",
+      "dated": "2026-11-25",
+      "claim": "$1,800 per backlog clearance",
+      "population": "The four signed store managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#directCosts",
+      "dated": "2026-11-25",
+      "claim": "TagRight Retail Services quoted $1,950 per backlog clearance",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_9e77bf9a75824319a4d0#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances at $1,800",
+      "population": "Four thrift stores",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9e77bf9a75824319a4d0"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Unit economics: the only established fulfiller costs $1,950 per clearance against a signed price of $1,800, so each deal loses $150 and the four signed deals cannot produce positive cash without capital the owner is not putting up.",
+     "resolution": "Brain sources a sorting/tagging crew quoting under $1,800 per clearance (well under, to leave margin) that can start in time, or renegotiates the four signed stores to a price above $1,950 plus margin; replan once a profitable cost and price are both established.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_9e77bf9a75824319a4d0",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_9e77bf9a75824319a4d0",
+      "why": "Cost $1,950 ≥ price $1,800: each deal loses money."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1f511a064b7e_7072a2",
+    "digest": "1f511a064b7eb0fd5ff6ca47",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_140d23774eb44abc9b58/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:39.000Z"
+   },
+   "review": {
+    "revisionId": "rev_1f511a064b7e_7072a2",
+    "revisionDigest": "1f511a064b7eb0fd5ff6ca47",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_140d23774eb44abc9b58/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_e6880c9d63b04d4483ff/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and the decisive gap is the one the evidence decides. Four WRITTEN_ACCEPTANCE agreements at $1,800 ($7,200) establish price and demand, and the recorded fulfiller TagRight Retail Services quoted $1,950 per clearance (EVIDENCE: directCosts $1,950). Recomputed: per deal $1,800 - $1,950 = -$150; 4 deals give $7,200 in and $7,800 out, a $600 loss. Gross collections of $7,200 would exceed $6,000 only by counting cash that must immediately go to the supplier, and the shortfall would have to be funded by the owner, which the exposure cap of $0 forbids. Brain's ECONOMICS link independently reads 'each deal loses money'. decisiveLinks = ECONOMICS, and the resolution (a cheaper qualified crew under $1,800 with margin, or a renegotiated price above $1,950) names exactly what would change it.",
+    "findings": [
+     "Arithmetic: -$150 per deal; -$600 across the four signed deals; no positive cash at any volume on the recorded cost.",
+     "Correctly not treated as executable on gross collections: $7,200 collected minus $7,800 paid to TagRight needs $600 of owner capital against a $0 limit.",
+     "For a re-plan, a cheaper crew must also start early enough: clearance takes 2 days and cash arrives 7 days after completion, so work must finish by about day 23. TagRight's Dec 2 start shows the timing constraint is real."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:55.154Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "a1d602d61e0a382a",
+    "openings": {
+     "cop_9e77bf9a75824319a4d0": "f4a2bac581230dee"
+    }
+   },
+   "at": "2026-11-28T07:11:26.041Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

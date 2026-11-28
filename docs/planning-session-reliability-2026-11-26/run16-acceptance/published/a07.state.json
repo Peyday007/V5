@@ -1,0 +1,1310 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_032ff70f0988420a81b6",
+   "words": "Collect $4,000 of settled cash within 75 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$4000 of cash settled in the owner's account within 21 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "d1a5231d27e3f480b18b7277"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_032ff70f0988420a81b6",
+    "contractDigest": "82ab7912219fe33b7141a973",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the five signed OASIS documentation reviews through ClearChart and collect $6,000 net-45",
+     "opportunityIds": [
+      "cop_7c99eba41afb4656ae25"
+     ],
+     "why": "Five home health agencies have each given written acceptance at $1,200 for a pre-billing OASIS documentation review ($6,000 total, 4 of 5 suffice for $4,000). ClearChart Coding Services quoted $600 a review and can complete all five within 10 days of the order. Delivered by day 11, invoiced on delivery, paid net-45: cash settles by day 56 of 75. ClearChart is paid from the receipts, so no capital is tied up (card exposure $0); each deal keeps $600."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver only four reviews",
+      "why": "4 × $1,200 = $4,800 also meets the target, but all five are signed and profitable, so delivering five adds margin against a slipped payment."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the five signed orders with each agency administrator and schedule document access",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "a1",
+       "p1"
+      ],
+      "priceCents": 120000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "ORDER",
+      "label": "Order the five reviews from ClearChart Coding Services at its quoted $600 a review",
+      "performer": "ClearChart Coding Services",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "f1"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "ClearChart Coding Services",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "ClearChart completes and delivers the five OASIS pre-billing reviews; Brain invoices each agency on delivery",
+      "performer": "ClearChart Coding Services",
+      "costCents": 300000,
+      "day": 11,
+      "dependsOn": "s2",
+      "evidence": [
+       "f1",
+       "c1"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "ClearChart Coding Services",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Collect the five $1,200 invoices at net-45",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 56,
+      "dependsOn": "s3",
+      "evidence": [
+       "t1"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 56,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Agency 1 pays $1,200 (net-45)",
+      "settlesDay": 56,
+      "stepId": "s4"
+     },
+     {
+      "day": 56,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Agency 2 pays $1,200 (net-45)",
+      "settlesDay": 56,
+      "stepId": "s4"
+     },
+     {
+      "day": 56,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Agency 3 pays $1,200 (net-45)",
+      "settlesDay": 56,
+      "stepId": "s4"
+     },
+     {
+      "day": 56,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Agency 4 pays $1,200 (net-45)",
+      "settlesDay": 56,
+      "stepId": "s4"
+     },
+     {
+      "day": 56,
+      "kind": "RECEIPT",
+      "amountCents": 120000,
+      "label": "Agency 5 pays $1,200 (net-45)",
+      "settlesDay": 56,
+      "stepId": "s4"
+     },
+     {
+      "day": 56,
+      "kind": "SPEND",
+      "amountCents": 300000,
+      "label": "Pay ClearChart 5 × $600 from the receipts",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 56,
+    "quantities": [
+     {
+      "name": "Agencies with written acceptance",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "agreements",
+      "sources": [
+       "a1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Price per review",
+      "status": "EVIDENCED",
+      "value": 1200,
+      "unit": "USD",
+      "sources": [
+       "p1",
+       "a1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Subcontractor cost per review",
+      "status": "EVIDENCED",
+      "value": 600,
+      "unit": "USD",
+      "sources": [
+       "f1",
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Days to usable cash",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "t1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "a1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#agreements",
+      "dated": "2026-11-25",
+      "claim": "Five written acceptances, each AGREED at $1,200 for the OASIS pre-billing review",
+      "population": "Five named home health agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "p1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#price",
+      "dated": "2026-11-25",
+      "claim": "$1,200 per review",
+      "population": "The five signed agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "f1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "ClearChart Coding Services quoted $600 a review and can complete all five within 10 days of the order",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $600 per deal; exposure $0",
+      "population": "This opening",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "t1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to usable cash (paid net-45 after delivery)",
+      "population": "The five agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "deals": 5,
+      "price": 1200,
+      "directCost": 600,
+      "capital": 0,
+      "settlesDay": 56,
+      "ownerHours": 0,
+      "dealsMax": 5
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5d07cbf9ec6a_df461c",
+    "digest": "5d07cbf9ec6a464089cb7988",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:21.823Z"
+   },
+   {
+    "goalId": "wst_032ff70f0988420a81b6",
+    "contractDigest": "d1a5231d27e3f480b18b7277",
+    "parentRevisionId": "rev_5d07cbf9ec6a_df461c",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the five signed reviews settle net-45, after the new 21-day deadline",
+     "opportunityIds": [],
+     "why": "The goal's window is now 21 days. The five signed OASIS reviews ($6,000 at $1,200, ClearChart fulfils at $600 within 10 days) are invoiced on delivery and paid net-45, so the earliest cash arrives about day 45-56, after day 21. Inside the window this opening settles $0 of the $4,000."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the five signed reviews anyway",
+      "why": "Still worth $6,000 gross (net $3,000) but it settles around day 56, outside a 21-day window."
+     },
+     {
+      "title": "Ask the agencies to pay on delivery",
+      "why": "Nothing on the record shows any agency accepting shorter terms; the signed terms are net-45."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the five signed agencies will pay on delivery or early, or find openings that settle inside 21 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "t1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days to usable cash after delivery",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "t1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Delivery time",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "f1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Window",
+      "status": "EVIDENCED",
+      "value": 21,
+      "unit": "days",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "t1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to usable cash (paid net-45 after delivery)",
+      "population": "The five signed agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "f1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "ClearChart can complete all five reviews within 10 days of the order",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "a1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#agreements",
+      "dated": "2026-11-25",
+      "claim": "Five written acceptances at $1,200",
+      "population": "Five agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: the only opening's signed terms are net-45 after delivery (EVIDENCE timeToFirstCash 45 days), so none of its $6,000 settles inside the 21-day window.",
+     "resolution": "Restore a window of at least 56 days (up to 10 days' delivery + 45 days' payment terms), under which the five signed reviews carry $6,000 of settled cash; or Brain asks the agencies for pay-on-delivery terms and searches for openings that settle within 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic: $6,000 settled by day 56 of 75; supplier $3,000; net $3,000 after paying ClearChart.",
+      "resolution": "Superseded by the shortened window: at 21 days none of the $6,000 settles in time (net-45 after delivery), so the plan is withdrawn."
+     },
+     {
+      "finding": "Target reading: the plan meets $4,000 on settled cash collected ($6,000), which is the contract's SETTLED_CASH metric. Net of the supplier it keeps $3,000. With 4 deals it nets $2,400. The owner should know that the money kept is below $4,000 even though collections exceed it.",
+      "resolution": "No longer applicable: no cash settles inside the 21-day window under either reading."
+     },
+     {
+      "finding": "Zero-capital rests on paying ClearChart from receipts at day 56. The card's exposure $0 is EVIDENCE and nothing on the record contradicts it, but ClearChart's payment terms are not stated in its quote. Confirm pay-when-paid (or net-45+) terms in writing before step s2. If ClearChart requires payment on delivery (day 11), $3,000 is tied up for 45 days and breaks the no-up-front-capital limit.",
+      "resolution": "No longer applicable: no supplier is ordered, so no capital question arises; carried as a condition if the window is restored."
+     },
+     {
+      "finding": "PAY_A_SUPPLIER shows NOT_DECLARED, and SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. They must be set up before day 1.",
+      "resolution": "No longer applicable: no execution step is planned."
+     },
+     {
+      "finding": "Owner hours are stated as 0 but the card records humanHours 1. The goal sets no hours limit, so this does not bind.",
+      "resolution": "No longer applicable: goal sets no hours limit and no execution is planned."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "why": "Paid net-45 after delivery: settles after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 56 days (10 days' delivery + net-45), when all five signed reviews ($6,000) have settled.",
+      "basis": [
+       {
+        "opportunityId": "cop_7c99eba41afb4656ae25",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_9e3612b44f5c_121d9f",
+    "digest": "9e3612b44f5c07332b1fda69",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:14:30.769Z"
+   },
+   {
+    "goalId": "wst_032ff70f0988420a81b6",
+    "contractDigest": "d1a5231d27e3f480b18b7277",
+    "parentRevisionId": "rev_5d07cbf9ec6a_df461c",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the five signed reviews settle net-45, after the new 21-day deadline",
+     "opportunityIds": [],
+     "why": "The goal's window is now 21 days. The five signed OASIS reviews ($6,000 at $1,200, ClearChart fulfils at $600 within 10 days) are invoiced on delivery and paid net-45, so the earliest cash arrives about day 45-56, after day 21. Inside the window this opening settles $0 of the $4,000."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the five signed reviews anyway",
+      "why": "Still worth $6,000 gross (net $3,000) but it settles around day 56, outside a 21-day window."
+     },
+     {
+      "title": "Ask the agencies to pay on delivery",
+      "why": "Nothing on the record shows any agency accepting shorter terms; the signed terms are net-45."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the five signed agencies will pay on delivery or early, or find openings that settle inside 21 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "t1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days to usable cash after delivery",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "t1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Delivery time",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "f1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "t1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to usable cash (paid net-45 after delivery)",
+      "population": "The five signed agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "f1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "ClearChart can complete all five reviews within 10 days of the order",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "a1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#agreements",
+      "dated": "2026-11-25",
+      "claim": "Five written acceptances at $1,200",
+      "population": "Five agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: the only opening's signed terms are net-45 after delivery (EVIDENCE timeToFirstCash 45 days), so none of its $6,000 settles inside the 21-day window.",
+     "resolution": "Restore a window of at least 56 days (up to 10 days' delivery + 45 days' payment terms), under which the five signed reviews carry $6,000 of settled cash; or Brain asks the agencies for pay-on-delivery terms and searches for openings that settle within 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic: $6,000 settled by day 56 of 75; supplier $3,000; net $3,000 after paying ClearChart.",
+      "resolution": "Superseded by the shortened window: at 21 days none of the $6,000 settles in time (net-45 after delivery), so the plan is withdrawn."
+     },
+     {
+      "finding": "Target reading: the plan meets $4,000 on settled cash collected ($6,000), which is the contract's SETTLED_CASH metric. Net of the supplier it keeps $3,000. With 4 deals it nets $2,400. The owner should know that the money kept is below $4,000 even though collections exceed it.",
+      "resolution": "No longer applicable: no cash settles inside the 21-day window under either reading."
+     },
+     {
+      "finding": "Zero-capital rests on paying ClearChart from receipts at day 56. The card's exposure $0 is EVIDENCE and nothing on the record contradicts it, but ClearChart's payment terms are not stated in its quote. Confirm pay-when-paid (or net-45+) terms in writing before step s2. If ClearChart requires payment on delivery (day 11), $3,000 is tied up for 45 days and breaks the no-up-front-capital limit.",
+      "resolution": "No longer applicable: no supplier is ordered, so no capital question arises; carried as a condition if the window is restored."
+     },
+     {
+      "finding": "PAY_A_SUPPLIER shows NOT_DECLARED, and SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. They must be set up before day 1.",
+      "resolution": "No longer applicable: no execution step is planned."
+     },
+     {
+      "finding": "Owner hours are stated as 0 but the card records humanHours 1. The goal sets no hours limit, so this does not bind.",
+      "resolution": "No longer applicable: goal sets no hours limit and no execution is planned."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "why": "Paid net-45 after delivery: settles after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 56 days (10 days' delivery + net-45), when all five signed reviews ($6,000) have settled.",
+      "basis": [
+       {
+        "opportunityId": "cop_7c99eba41afb4656ae25",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_e0fc13314614_616e46",
+    "digest": "e0fc1331461438c807d4f75c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:14:35.441Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_032ff70f0988420a81b6",
+   "contractDigest": "d1a5231d27e3f480b18b7277",
+   "parentRevisionId": "rev_5d07cbf9ec6a_df461c",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the five signed reviews settle net-45, after the new 21-day deadline",
+    "opportunityIds": [],
+    "why": "The goal's window is now 21 days. The five signed OASIS reviews ($6,000 at $1,200, ClearChart fulfils at $600 within 10 days) are invoiced on delivery and paid net-45, so the earliest cash arrives about day 45-56, after day 21. Inside the window this opening settles $0 of the $4,000."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the five signed reviews anyway",
+     "why": "Still worth $6,000 gross (net $3,000) but it settles around day 56, outside a 21-day window."
+    },
+    {
+     "title": "Ask the agencies to pay on delivery",
+     "why": "Nothing on the record shows any agency accepting shorter terms; the signed terms are net-45."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Ask whether the five signed agencies will pay on delivery or early, or find openings that settle inside 21 days",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "t1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Days to usable cash after delivery",
+     "status": "EVIDENCED",
+     "value": 45,
+     "unit": "days",
+     "sources": [
+      "t1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Delivery time",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "days",
+     "sources": [
+      "f1"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "t1",
+     "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "45 days to usable cash (paid net-45 after delivery)",
+     "population": "The five signed agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7c99eba41afb4656ae25"
+    },
+    {
+     "id": "f1",
+     "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#fulfillment",
+     "dated": "2026-11-25",
+     "claim": "ClearChart can complete all five reviews within 10 days of the order",
+     "population": "Fulfiller",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7c99eba41afb4656ae25"
+    },
+    {
+     "id": "a1",
+     "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#agreements",
+     "dated": "2026-11-25",
+     "claim": "Five written acceptances at $1,200",
+     "population": "Five agencies",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7c99eba41afb4656ae25"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement: the only opening's signed terms are net-45 after delivery (EVIDENCE timeToFirstCash 45 days), so none of its $6,000 settles inside the 21-day window.",
+    "resolution": "Restore a window of at least 56 days (up to 10 days' delivery + 45 days' payment terms), under which the five signed reviews carry $6,000 of settled cash; or Brain asks the agencies for pay-on-delivery terms and searches for openings that settle within 21 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Arithmetic: $6,000 settled by day 56 of 75; supplier $3,000; net $3,000 after paying ClearChart.",
+     "resolution": "Superseded by the shortened window: at 21 days none of the $6,000 settles in time (net-45 after delivery), so the plan is withdrawn."
+    },
+    {
+     "finding": "Target reading: the plan meets $4,000 on settled cash collected ($6,000), which is the contract's SETTLED_CASH metric. Net of the supplier it keeps $3,000. With 4 deals it nets $2,400. The owner should know that the money kept is below $4,000 even though collections exceed it.",
+     "resolution": "No longer applicable: no cash settles inside the 21-day window under either reading."
+    },
+    {
+     "finding": "Zero-capital rests on paying ClearChart from receipts at day 56. The card's exposure $0 is EVIDENCE and nothing on the record contradicts it, but ClearChart's payment terms are not stated in its quote. Confirm pay-when-paid (or net-45+) terms in writing before step s2. If ClearChart requires payment on delivery (day 11), $3,000 is tied up for 45 days and breaks the no-up-front-capital limit.",
+     "resolution": "No longer applicable: no supplier is ordered, so no capital question arises; carried as a condition if the window is restored."
+    },
+    {
+     "finding": "PAY_A_SUPPLIER shows NOT_DECLARED, and SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. They must be set up before day 1.",
+     "resolution": "No longer applicable: no execution step is planned."
+    },
+    {
+     "finding": "Owner hours are stated as 0 but the card records humanHours 1. The goal sets no hours limit, so this does not bind.",
+     "resolution": "No longer applicable: goal sets no hours limit and no execution is planned."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_7c99eba41afb4656ae25",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_7c99eba41afb4656ae25",
+     "why": "Paid net-45 after delivery: settles after the 21-day deadline."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 56 days (10 days' delivery + net-45), when all five signed reviews ($6,000) have settled.",
+     "basis": [
+      {
+       "opportunityId": "cop_7c99eba41afb4656ae25",
+       "field": "timeToFirstCash"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_e0fc13314614_616e46",
+   "digest": "e0fc1331461438c807d4f75c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_d6bf9b9373044de49329/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:14:35.441Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_e0fc13314614_616e46",
+   "digest": "e0fc1331461438c807d4f75c",
+   "contractDigest": "d1a5231d27e3f480b18b7277",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $4,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_7c99eba41afb4656ae25"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "title": "Subcontracted OASIS documentation review for home health agencies",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Home health agency administrators",
+       "reachableChannel": "The five signed agencies' administrators",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:21.984Z",
+       "offerScope": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+       "priceCents": 120000,
+       "currency": "USD",
+       "fulfillmentOwner": "ClearChart Coding Services (quoted $600 a review; can complete all five reviews within 10 days of the order)",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "home health agencies",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 120000,
+        "currency": "USD",
+        "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The five signed agencies' administrators"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 6000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 6000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by ClearChart Coding Services (quoted $600 a review; can complete all five reviews  (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 600, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "45 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$600",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "ClearChart Coding Services (quoted $600 a review; can complete all five reviews within 10 days of the order) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Home health agency administrators",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$1200",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "45 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_511c01f271294961b443"
+    ],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:13:59.868Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_5d07cbf9ec6a_df461c",
+    "revisionDigest": "5d07cbf9ec6a464089cb7988",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7c59c863c4494fd5ba4c/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE holds on the record. Five WRITTEN_ACCEPTANCE agreements at $1,200 each are AGREED by the five named agencies, so the price is a real purchase price these buyers committed to. Fulfilment is by the recorded fulfiller, ClearChart Coding Services, which quoted $600 a review and all five within 10 days (EVIDENCE). Direct cost of $600 is below the price, and exposure is $0 (EVIDENCE). Net-45 after delivery is the evidenced settlement. Recomputed: 5 x $1,200 = $6,000 collected; delivery by day 11 + 45 = day 56, inside 75; supplier cost 5 x $600 = $3,000, paid from receipts on day 56; checker max exposure $0. Four acceptances alone give $4,800 gross, so one slipped agency still leaves the target met on collections.",
+    "findings": [
+     "Arithmetic: $6,000 settled by day 56 of 75; supplier $3,000; net $3,000 after paying ClearChart.",
+     "Target reading: the plan meets $4,000 on settled cash collected ($6,000), which is the contract's SETTLED_CASH metric. Net of the supplier it keeps $3,000. With 4 deals it nets $2,400. The owner should know that the money kept is below $4,000 even though collections exceed it.",
+     "Zero-capital rests on paying ClearChart from receipts at day 56. The card's exposure $0 is EVIDENCE and nothing on the record contradicts it, but ClearChart's payment terms are not stated in its quote. Confirm pay-when-paid (or net-45+) terms in writing before step s2. If ClearChart requires payment on delivery (day 11), $3,000 is tied up for 45 days and breaks the no-up-front-capital limit.",
+     "PAY_A_SUPPLIER shows NOT_DECLARED, and SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. They must be set up before day 1.",
+     "Owner hours are stated as 0 but the card records humanHours 1. The goal sets no hours limit, so this does not bind."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:09:42.169Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_e0fc13314614_616e46",
+    "revisionDigest": "e0fc1331461438c807d4f75c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7c59c863c4494fd5ba4c/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct under the changed contract, which shortened the window from 75 to 21 days. The only opening's five signed agreements ($1,200 each, $6,000) are invoiced on delivery and paid net-45 (EVIDENCE timeToFirstCash 45 days; the agreements' deliverable text says net-45). ClearChart needs up to 10 days to deliver. Recomputed: the earliest settlement is about day 45 (delivery on day 0) and realistically day 55-56, both after day 21, so $0 of the $4,000 settles inside the window. This is a genuine constraint: even with every piece of evidence in hand and every buyer agreeing, the signed terms put the cash outside the limit. The plan names it as a DEADLINE constraint with decisive link SETTLES_IN_TIME, and Brain's planner independently reads it as infeasible as stated. Not assuming pay-on-delivery terms, which nothing on the record supports, is correct.",
+    "findings": [
+     "Arithmetic: 10 days' delivery + 45 days' terms = day 55-56 settlement against a 21-day window; inside the window, $0 of the $4,000.",
+     "Constraint suggestion (window of at least 56 days) is consistent with the evidence. Brain's own 45-day figure assumes delivery on day 0, which the 10-day fulfilment quote does not support, so 56 is the safer number to give the owner.",
+     "Delivering anyway still nets $3,000 ($6,000 - 5 x $600) around day 56, but only if ClearChart accepts payment from receipts. Its payment terms remain unstated, and paying it on delivery would break the $0 exposure limit.",
+     "Asking the agencies for pay-on-delivery terms is a legitimate next step. Any accepted change should be recorded as a new written agreement before it is planned on."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:15:07.663Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_e0fc13314614_616e46",
+   "digest": "e0fc1331461438c807d4f75c",
+   "contractDigest": "d1a5231d27e3f480b18b7277",
+   "plan": {
+    "goalId": "wst_032ff70f0988420a81b6",
+    "contractDigest": "d1a5231d27e3f480b18b7277",
+    "parentRevisionId": "rev_5d07cbf9ec6a_df461c",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the five signed reviews settle net-45, after the new 21-day deadline",
+     "opportunityIds": [],
+     "why": "The goal's window is now 21 days. The five signed OASIS reviews ($6,000 at $1,200, ClearChart fulfils at $600 within 10 days) are invoiced on delivery and paid net-45, so the earliest cash arrives about day 45-56, after day 21. Inside the window this opening settles $0 of the $4,000."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the five signed reviews anyway",
+      "why": "Still worth $6,000 gross (net $3,000) but it settles around day 56, outside a 21-day window."
+     },
+     {
+      "title": "Ask the agencies to pay on delivery",
+      "why": "Nothing on the record shows any agency accepting shorter terms; the signed terms are net-45."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask whether the five signed agencies will pay on delivery or early, or find openings that settle inside 21 days",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "t1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Days to usable cash after delivery",
+      "status": "EVIDENCED",
+      "value": 45,
+      "unit": "days",
+      "sources": [
+       "t1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Delivery time",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "f1"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "t1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "45 days to usable cash (paid net-45 after delivery)",
+      "population": "The five signed agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "f1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "ClearChart can complete all five reviews within 10 days of the order",
+      "population": "Fulfiller",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     },
+     {
+      "id": "a1",
+      "url": "https://brain.local/card/cop_7c99eba41afb4656ae25#agreements",
+      "dated": "2026-11-25",
+      "claim": "Five written acceptances at $1,200",
+      "population": "Five agencies",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7c99eba41afb4656ae25"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement: the only opening's signed terms are net-45 after delivery (EVIDENCE timeToFirstCash 45 days), so none of its $6,000 settles inside the 21-day window.",
+     "resolution": "Restore a window of at least 56 days (up to 10 days' delivery + 45 days' payment terms), under which the five signed reviews carry $6,000 of settled cash; or Brain asks the agencies for pay-on-delivery terms and searches for openings that settle within 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Arithmetic: $6,000 settled by day 56 of 75; supplier $3,000; net $3,000 after paying ClearChart.",
+      "resolution": "Superseded by the shortened window: at 21 days none of the $6,000 settles in time (net-45 after delivery), so the plan is withdrawn."
+     },
+     {
+      "finding": "Target reading: the plan meets $4,000 on settled cash collected ($6,000), which is the contract's SETTLED_CASH metric. Net of the supplier it keeps $3,000. With 4 deals it nets $2,400. The owner should know that the money kept is below $4,000 even though collections exceed it.",
+      "resolution": "No longer applicable: no cash settles inside the 21-day window under either reading."
+     },
+     {
+      "finding": "Zero-capital rests on paying ClearChart from receipts at day 56. The card's exposure $0 is EVIDENCE and nothing on the record contradicts it, but ClearChart's payment terms are not stated in its quote. Confirm pay-when-paid (or net-45+) terms in writing before step s2. If ClearChart requires payment on delivery (day 11), $3,000 is tied up for 45 days and breaks the no-up-front-capital limit.",
+      "resolution": "No longer applicable: no supplier is ordered, so no capital question arises; carried as a condition if the window is restored."
+     },
+     {
+      "finding": "PAY_A_SUPPLIER shows NOT_DECLARED, and SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. They must be set up before day 1.",
+      "resolution": "No longer applicable: no execution step is planned."
+     },
+     {
+      "finding": "Owner hours are stated as 0 but the card records humanHours 1. The goal sets no hours limit, so this does not bind.",
+      "resolution": "No longer applicable: goal sets no hours limit and no execution is planned."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7c99eba41afb4656ae25",
+      "why": "Paid net-45 after delivery: settles after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 56 days (10 days' delivery + net-45), when all five signed reviews ($6,000) have settled.",
+      "basis": [
+       {
+        "opportunityId": "cop_7c99eba41afb4656ae25",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_e0fc13314614_616e46",
+    "digest": "e0fc1331461438c807d4f75c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:14:35.441Z"
+   },
+   "review": {
+    "revisionId": "rev_e0fc13314614_616e46",
+    "revisionDigest": "e0fc1331461438c807d4f75c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_d6bf9b9373044de49329/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7c59c863c4494fd5ba4c/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct under the changed contract, which shortened the window from 75 to 21 days. The only opening's five signed agreements ($1,200 each, $6,000) are invoiced on delivery and paid net-45 (EVIDENCE timeToFirstCash 45 days; the agreements' deliverable text says net-45). ClearChart needs up to 10 days to deliver. Recomputed: the earliest settlement is about day 45 (delivery on day 0) and realistically day 55-56, both after day 21, so $0 of the $4,000 settles inside the window. This is a genuine constraint: even with every piece of evidence in hand and every buyer agreeing, the signed terms put the cash outside the limit. The plan names it as a DEADLINE constraint with decisive link SETTLES_IN_TIME, and Brain's planner independently reads it as infeasible as stated. Not assuming pay-on-delivery terms, which nothing on the record supports, is correct.",
+    "findings": [
+     "Arithmetic: 10 days' delivery + 45 days' terms = day 55-56 settlement against a 21-day window; inside the window, $0 of the $4,000.",
+     "Constraint suggestion (window of at least 56 days) is consistent with the evidence. Brain's own 45-day figure assumes delivery on day 0, which the 10-day fulfilment quote does not support, so 56 is the safer number to give the owner.",
+     "Delivering anyway still nets $3,000 ($6,000 - 5 x $600) around day 56, but only if ClearChart accepts payment from receipts. Its payment terms remain unstated, and paying it on delivery would break the $0 exposure limit.",
+     "Asking the agencies for pay-on-delivery terms is a legitimate next step. Any accepted change should be recorded as a new written agreement before it is planned on."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:15:07.663Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 75 days using no up-front capital.",
+    "terms": "c872a92c0fe241e8",
+    "openings": {
+     "cop_7c99eba41afb4656ae25": "395c30432ed877c7"
+    }
+   },
+   "at": "2026-11-28T07:16:35.529Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

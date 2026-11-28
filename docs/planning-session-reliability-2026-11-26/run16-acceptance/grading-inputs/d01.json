@@ -1,0 +1,455 @@
+{
+ "caseId": "ay-01-fast-small-no-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 1500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Upwork fixed-price AI-assisted writing and product-listing j\" needs [figure withheld] and keeps [figure withheld], 270× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_3b79d9f29b2f4a5b8b0d",
+   "cop_c4fe99d5862643bfb700",
+   "cop_9c58f84beb7f40fc8bb7"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+    "title": "Upwork fixed-price AI-assisted writing and product-listing jobs",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 300,
+    "card": {
+     "payer": "Upwork clients posting fixed-price writing and listing jobs",
+     "reachableChannel": "Upwork proposals (Freelancer Basic: 10 free Connects per month)",
+     "offerScope": "AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone",
+     "priceCents": 30000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "Freelance content / ecommerce listings",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Upwork proposals (Freelancer Basic: 10 free Connects per month)"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Upwork proposals (Freelancer Basic: 10 free Connects per month)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone to Upwork clients posting fixed-price writing and listing jobs, reached through Upwork proposals (Freelancer Basic: 10 free Connects per month), at $300; The owner, personally, drafting with general AI writing tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner, personally, drafting with general AI writing tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "3 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Upwork clients posting fixed-price writing and listing jobs",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.upwork.com/freelance-jobs/apply/Ecwid-Etsy-SEO-Specialist-Product-Optimization-Listings_~022115590572257251636/; https://www.upwork.com/freelance-jobs/apply/English-User-Manual-Writer-Illustrator-for-DIY-Product_~022116012618354697616/; https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026; https://www.upwork.com/resources/how-to-get-free-connects; https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_c4fe99d5862643bfb700",
+    "title": "Done-for-you Google Business Profile optimisation for local small businesses, paid by Zelle",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 250,
+    "card": {
+     "payer": "Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles",
+     "reachableChannel": "Owner's own email/phone outreach to businesses found on Google Maps with weak profiles",
+     "offerScope": "One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI",
+     "priceCents": 25000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "Local services marketing",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner's own email/phone outreach to businesses found on Google Maps with weak pr"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "5 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner's own email/phone outreach to businesses found on Google Maps with weak profiles",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI to Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles, reached through Owner's own email/phone outreach to businesses found on Google Maps with weak profiles, at $250; The owner, personally, drafting with general AI writing tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner, personally, drafting with general AI writing tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$250",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.fiverr.com/super_citations/create-top-local-seo-citation; https://fiverr.com/shartor/do-30-days-gmb-management-posts; Fiverr google business profile optimization gigs; https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848; https://docs.stripe.com/payouts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+    "title": "Paid academic study participation on Prolific",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 12,
+    "card": {
+     "payer": "Researchers paying participants through Prolific",
+     "reachableChannel": "Prolific participant dashboard",
+     "offerScope": "Owner completes online studies",
+     "priceCents": 1200,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Research participation",
+     "mechanism": "OTHER",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Prolific participant dashboard"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 12 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "3 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Prolific participant dashboard",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Owner completes online studies to Researchers paying participants through Prolific, reached through Prolific participant dashboard, at $12; Owner delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Owner.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Owner completes online studies",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Researchers paying participants through Prolific",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$12",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$12",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://researcher-help.prolific.com/en/article/2273bd; https://www.prolific.com/participants-how-it-works; https://participant-help.prolific.com/en/article/9b3cab",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:18:48.923Z"
+ }
+}

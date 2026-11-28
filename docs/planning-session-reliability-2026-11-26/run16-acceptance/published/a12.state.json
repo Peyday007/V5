@@ -1,0 +1,1395 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_daa097f7b7334eceb0da",
+   "words": "Keep $3,000 of net cash after direct costs within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Target net cash after direct costs kept within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "3ce1dee1102bed517dd85ec6"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_daa097f7b7334eceb0da",
+    "contractDigest": "4c3823dd5101439498cf00c4",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan reaches $90,000: the counted market tops out at $72,000",
+     "opportunityIds": [],
+     "why": "The only opening sells a $480 per-term attendance audit to accredited private English-language schools. The accreditation body lists 150 schools, each audits once per term, so even if every school bought inside the window the most it can bring is 150 x $480 = $72,000, below the $90,000 target. At the measured conversion (18 paid of 150 contacted) it brings about $8,640."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the audit to all 150 schools",
+      "why": "Caps at $72,000 gross even at 100% conversion; the measured 12% rate gives about $8,640."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the owner to lower the target to at most $72,000 (realistically about $8,640 at measured conversion), or find further independent openings to cover the remaining $18,000+",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "buyerVolume",
+       "price",
+       "conversionRates"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable schools",
+      "status": "EVIDENCED",
+      "value": 150,
+      "unit": "buyers (one purchase per term)",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 480,
+      "unit": "USD",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid per contact (18 of 150)",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "maximum gross in window",
+      "status": "EVIDENCED",
+      "value": 72000,
+      "unit": "USD",
+      "sources": [
+       "c1",
+       "c2"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "150 accredited schools, each audits attendance once per term",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#price",
+      "dated": "2026-11-25",
+      "claim": "Pilot schools paid $480 by card (pilot invoices, 2026-11)",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 paid orders from 150 contacts",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The counted buyer population (150 schools, one audit per term) at the established $480 price caps the opening at $72,000, short of the $90,000 target, and no other opening exists.",
+     "resolution": "Lower the target to at most $72,000 (about $8,640 at the measured 12% conversion), or research additional independent openings that cover the remaining amount within 30 days at no up-front capital.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "why": "150 buyers x $480 = $72,000 maximum, below the $90,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "Lower the target to at most $72,000 (150 counted schools x $480); at the measured conversion of 18/150 a realistic target is about $8,640.",
+      "basis": [
+       {
+        "opportunityId": "cop_e571873f32fa42d39199",
+        "field": "buyerVolume"
+       },
+       {
+        "opportunityId": "cop_e571873f32fa42d39199",
+        "field": "price"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_08adf703652b_640b3a",
+    "digest": "08adf703652b9c0094309aea",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:56.764Z"
+   },
+   {
+    "goalId": "wst_daa097f7b7334eceb0da",
+    "contractDigest": "3ce1dee1102bed517dd85ec6",
+    "parentRevisionId": "rev_08adf703652b_640b3a",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $480 student-visa attendance audit to accredited English-language schools",
+     "opportunityIds": [
+      "cop_e571873f32fa42d39199"
+     ],
+     "why": "The objective is now $3,000 net after direct costs in 30 days with no up-front capital. Each audit sells at $480 (paid pilot invoices) with $30 direct cost, $450 net, paid by card at checkout, $0 exposure, Brain builds it. 8 sales give $3,600 net. The directory holds 150 schools, each needing one audit per term, and this offer's own measured conversion is 18 paid of 150 contacted (12%), so emailing the 150 directors yields about 18 paid against the 8 needed; cash is usable 4 days after each sale."
+    },
+    "alternatives": [
+     {
+      "title": "Stop at 7 sales",
+      "why": "7 x $450 = $3,150 just clears $3,000; 8 is planned for margin."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published director addresses of the 150 accredited schools",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "buyerVolume",
+       "reachableChannel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Offer the term's attendance audit at $480, paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "conversionRates"
+      ],
+      "priceCents": 48000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Build 8 attendance-audit workbooks from the schools' register exports",
+      "performer": "BRAIN",
+      "costCents": 24000,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "delivery",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments at checkout settle",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 384000,
+      "label": "8 audits x $480 paid by card at checkout",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 24000,
+      "label": "Direct costs 8 x $30, paid from receipts",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 9,
+    "quantities": [
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 480,
+      "unit": "USD",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per audit",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "USD",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable schools",
+      "status": "EVIDENCED",
+      "value": 150,
+      "unit": "buyers, one audit per term",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid per contact (18 of 150)",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sales needed",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "deals",
+      "sources": [
+       "c2",
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "150 accredited schools with published director emails, each audits once per term",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#price",
+      "dated": "2026-11-25",
+      "claim": "Pilot schools paid $480 by card (pilot invoices, 2026-11)",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 paid orders from 150 contacts",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $30",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "4 days to first cash",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c6",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "The published NO_PLAN went stale: the owner's objective changed from $90,000 of settled cash to $3,000 of net cash after direct costs.",
+      "resolution": "Re-planned to the new contract: 8 sales at $450 net reach $3,600 inside the 150-school market at the measured 12% conversion."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "deals": 8,
+      "price": 480,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 9,
+      "ownerHours": null,
+      "dealsMax": 150
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_48ae547980be_f9aa8b",
+    "digest": "48ae547980be8d7fb42bccd3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:50.596Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_daa097f7b7334eceb0da",
+   "contractDigest": "3ce1dee1102bed517dd85ec6",
+   "parentRevisionId": "rev_08adf703652b_640b3a",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell the $480 student-visa attendance audit to accredited English-language schools",
+    "opportunityIds": [
+     "cop_e571873f32fa42d39199"
+    ],
+    "why": "The objective is now $3,000 net after direct costs in 30 days with no up-front capital. Each audit sells at $480 (paid pilot invoices) with $30 direct cost, $450 net, paid by card at checkout, $0 exposure, Brain builds it. 8 sales give $3,600 net. The directory holds 150 schools, each needing one audit per term, and this offer's own measured conversion is 18 paid of 150 contacted (12%), so emailing the 150 directors yields about 18 paid against the 8 needed; cash is usable 4 days after each sale."
+   },
+   "alternatives": [
+    {
+     "title": "Stop at 7 sales",
+     "why": "7 x $450 = $3,150 just clears $3,000; 8 is planned for margin."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the published director addresses of the 150 accredited schools",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "buyerVolume",
+      "reachableChannel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Offer the term's attendance audit at $480, paid by card at checkout",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "price",
+      "conversionRates"
+     ],
+     "priceCents": 48000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Build 8 attendance-audit workbooks from the schools' register exports",
+     "performer": "BRAIN",
+     "costCents": 24000,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "delivery",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Card payments at checkout settle",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "s2",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 384000,
+     "label": "8 audits x $480 paid by card at checkout",
+     "settlesDay": 9,
+     "stepId": "s4"
+    },
+    {
+     "day": 9,
+     "kind": "SPEND",
+     "amountCents": 24000,
+     "label": "Direct costs 8 x $30, paid from receipts",
+     "stepId": "s3"
+    }
+   ],
+   "proofDay": 9,
+   "quantities": [
+    {
+     "name": "price per audit",
+     "status": "EVIDENCED",
+     "value": 480,
+     "unit": "USD",
+     "sources": [
+      "c2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per audit",
+     "status": "EVIDENCED",
+     "value": 30,
+     "unit": "USD",
+     "sources": [
+      "c4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable schools",
+     "status": "EVIDENCED",
+     "value": 150,
+     "unit": "buyers, one audit per term",
+     "sources": [
+      "c1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "paid per contact (18 of 150)",
+     "sources": [
+      "c3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "sales needed",
+     "status": "EVIDENCED",
+     "value": 8,
+     "unit": "deals",
+     "sources": [
+      "c2",
+      "c4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "days",
+     "sources": [
+      "c5"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "c1",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "150 accredited schools with published director emails, each audits once per term",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    },
+    {
+     "id": "c2",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#price",
+     "dated": "2026-11-25",
+     "claim": "Pilot schools paid $480 by card (pilot invoices, 2026-11)",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    },
+    {
+     "id": "c3",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "18 paid orders from 150 contacts",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    },
+    {
+     "id": "c4",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $30",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    },
+    {
+     "id": "c5",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "4 days to first cash",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    },
+    {
+     "id": "c6",
+     "url": "https://brain.local/card/cop_e571873f32fa42d39199#exposure",
+     "dated": "2026-11-25",
+     "claim": "Exposure $0",
+     "population": "Accredited private English-language schools listed by the national accreditation body",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e571873f32fa42d39199"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "The published NO_PLAN went stale: the owner's objective changed from $90,000 of settled cash to $3,000 of net cash after direct costs.",
+     "resolution": "Re-planned to the new contract: 8 sales at $450 net reach $3,600 inside the 150-school market at the measured 12% conversion."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_e571873f32fa42d39199",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_e571873f32fa42d39199",
+     "deals": 8,
+     "price": 480,
+     "directCost": 30,
+     "capital": 0,
+     "settlesDay": 9,
+     "ownerHours": null,
+     "dealsMax": 150
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_48ae547980be_f9aa8b",
+   "digest": "48ae547980be8d7fb42bccd3",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_af70bc10007746fbbe8a/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:13:50.596Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_48ae547980be_f9aa8b",
+   "digest": "48ae547980be8d7fb42bccd3",
+   "contractDigest": "3ce1dee1102bed517dd85ec6",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 24000,
+    "committedOpenCents": 0,
+    "preProofCents": 24000,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 5,
+    "collectedCents": 384000,
+    "collectedInWindowCents": 384000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 360000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Student-visa attendance audit workbook for private English-l\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Student-visa attendance audit workbook for private English-l\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 49050× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Student-visa attendance audit workbook for private English-language sc\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_e571873f32fa42d39199"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Student-visa attendance audit workbook for private English-language schools\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Student-visa attendance audit workbook for private English-language schools\"",
+      "owner": "PERSON",
+      "cost": 30
+     },
+     {
+      "label": "Collect payment for \"Student-visa attendance audit workbook for private English-language schools\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "title": "Student-visa attendance audit workbook for private English-language schools",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Directors of studies at accredited private English-language schools",
+       "reachableChannel": "Email to the director addresses published in the accreditation body's school directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:55.726Z",
+       "offerScope": "A term's attendance audit against student-visa reporting rules, built by Brain from the school's register export; paid by card at checkout.",
+       "priceCents": 48000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.3,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "private English-language schools",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the director addresses published in the accreditation body's school dir"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 480 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "8 deal(s) needed, 150 available in the window (150 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "4 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The national accreditation body lists 150 accredited private English-language schools, each with a published director email; each must audit attendance once per term for student-visa reporting.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A term's attendance audit against student-visa reporting rules, built by Brain from the school's register export; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "18 paid orders from 150 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Directors of studies at accredited private English-language schools",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Schools in the pilot paid $480 by card for this workbook (pilot invoices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "4 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:12:55.586Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_08adf703652b_640b3a",
+    "revisionDigest": "08adf703652b9c0094309aea",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_c0065d9fba924740b33b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: buyerVolume (EVIDENCE) counts the whole market at 150 accredited schools, each auditing once per term, so at most one $480 sale per school inside 30 days: 150 x $480 = $72,000 gross (less $30 x 150 = $4,500 direct cost) < $90,000. 151+ deals would be needed (90,000/480 = 187.5, i.e. 188 deals), more than the counted population. This is a genuine constraint, not missing evidence: price, conversion (18/150 measured), fulfilment and settlement are all evidenced and the target still cannot be reached. At measured 12% conversion it brings about $8,640. No other opening is held. NO_PLAN with decisiveLinks [MARKET_VOLUME] and a TARGET constraint grounded in buyerVolume and price is correct; Brain's verdict (NOT_VIABLE, cap $72,000) agrees.",
+    "findings": [
+     "The cap is if anything lower than $72,000: the 18 pilot schools that already paid $480 (pilot invoices 2026-11) have likely bought this term's audit, leaving about 132 schools, i.e. at most about $63,360 in the window.",
+     "Minor: the noPlan text says 151 deals are needed (echoing Brain's link basis); at $480 the target needs 188 deals. The conclusion is unchanged."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:59.382Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_48ae547980be_f9aa8b",
+    "revisionDigest": "48ae547980be8d7fb42bccd3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_c0065d9fba924740b33b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The stored contract is now $3,000 CONTRIBUTION (net after direct costs) in 30 days with $0 exposure, so the $90,000 NO_PLAN is correctly superseded. Recomputed: $480 - $30 = $450 net per audit; 7 x $450 = $3,150 is the minimum, 8 planned = $3,600 net ($3,840 collected - $240 cost). Price is buyers' own paid pilot invoices (EVIDENCE), a real purchase price. Volume: 150 counted schools, one audit each per term, against 8 needed; measured conversion 18/150 gives about 18 expected, more than double the need. Card payment at checkout, usable in 4 days (day 9), inside 30; $0 exposure and costs paid from receipts. Fulfilment is Brain-produced spreadsheet (PRODUCE_SPREADSHEET present), matching the card's delivery fact. Brain's links are all established from this offer's own record and I have no contradicting record. Brain's trace agrees (collected $3,840, net $3,600). EXECUTABLE is right.",
+    "findings": [
+     "Possible double count: the 18 pilot buyers (invoices 2026-11) appear to come from the same 150-school directory and have likely already bought this term's audit, so the fresh pool is about 132, and if the 150 contacts behind the 12% were the whole directory, the remaining schools have already been approached once. Even so, 8 sales from ~132 needs only ~6% conversion; the plan should send to schools not in the pilot first and treat fewer than 8 paid by about day 20 as a stop signal.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES is UNREAD; outreach and card checkout must be connected before day 0/1.",
+     "Card humanHours 0.3 per sale (about 2.4 hours for 8) while members[].ownerHours is null; no hours ceiling applies."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:15:10.158Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_48ae547980be_f9aa8b",
+   "digest": "48ae547980be8d7fb42bccd3",
+   "contractDigest": "3ce1dee1102bed517dd85ec6",
+   "plan": {
+    "goalId": "wst_daa097f7b7334eceb0da",
+    "contractDigest": "3ce1dee1102bed517dd85ec6",
+    "parentRevisionId": "rev_08adf703652b_640b3a",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $480 student-visa attendance audit to accredited English-language schools",
+     "opportunityIds": [
+      "cop_e571873f32fa42d39199"
+     ],
+     "why": "The objective is now $3,000 net after direct costs in 30 days with no up-front capital. Each audit sells at $480 (paid pilot invoices) with $30 direct cost, $450 net, paid by card at checkout, $0 exposure, Brain builds it. 8 sales give $3,600 net. The directory holds 150 schools, each needing one audit per term, and this offer's own measured conversion is 18 paid of 150 contacted (12%), so emailing the 150 directors yields about 18 paid against the 8 needed; cash is usable 4 days after each sale."
+    },
+    "alternatives": [
+     {
+      "title": "Stop at 7 sales",
+      "why": "7 x $450 = $3,150 just clears $3,000; 8 is planned for margin."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the published director addresses of the 150 accredited schools",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "buyerVolume",
+       "reachableChannel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Offer the term's attendance audit at $480, paid by card at checkout",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "price",
+       "conversionRates"
+      ],
+      "priceCents": 48000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Build 8 attendance-audit workbooks from the schools' register exports",
+      "performer": "BRAIN",
+      "costCents": 24000,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "delivery",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments at checkout settle",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 384000,
+      "label": "8 audits x $480 paid by card at checkout",
+      "settlesDay": 9,
+      "stepId": "s4"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 24000,
+      "label": "Direct costs 8 x $30, paid from receipts",
+      "stepId": "s3"
+     }
+    ],
+    "proofDay": 9,
+    "quantities": [
+     {
+      "name": "price per audit",
+      "status": "EVIDENCED",
+      "value": 480,
+      "unit": "USD",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per audit",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "USD",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable schools",
+      "status": "EVIDENCED",
+      "value": 150,
+      "unit": "buyers, one audit per term",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid per contact (18 of 150)",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sales needed",
+      "status": "EVIDENCED",
+      "value": 8,
+      "unit": "deals",
+      "sources": [
+       "c2",
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "150 accredited schools with published director emails, each audits once per term",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#price",
+      "dated": "2026-11-25",
+      "claim": "Pilot schools paid $480 by card (pilot invoices, 2026-11)",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 paid orders from 150 contacts",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $30",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "4 days to first cash",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     },
+     {
+      "id": "c6",
+      "url": "https://brain.local/card/cop_e571873f32fa42d39199#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Accredited private English-language schools listed by the national accreditation body",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e571873f32fa42d39199"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "The published NO_PLAN went stale: the owner's objective changed from $90,000 of settled cash to $3,000 of net cash after direct costs.",
+      "resolution": "Re-planned to the new contract: 8 sales at $450 net reach $3,600 inside the 150-school market at the measured 12% conversion."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_e571873f32fa42d39199",
+      "deals": 8,
+      "price": 480,
+      "directCost": 30,
+      "capital": 0,
+      "settlesDay": 9,
+      "ownerHours": null,
+      "dealsMax": 150
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_48ae547980be_f9aa8b",
+    "digest": "48ae547980be8d7fb42bccd3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:50.596Z"
+   },
+   "review": {
+    "revisionId": "rev_48ae547980be_f9aa8b",
+    "revisionDigest": "48ae547980be8d7fb42bccd3",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_af70bc10007746fbbe8a/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_c0065d9fba924740b33b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The stored contract is now $3,000 CONTRIBUTION (net after direct costs) in 30 days with $0 exposure, so the $90,000 NO_PLAN is correctly superseded. Recomputed: $480 - $30 = $450 net per audit; 7 x $450 = $3,150 is the minimum, 8 planned = $3,600 net ($3,840 collected - $240 cost). Price is buyers' own paid pilot invoices (EVIDENCE), a real purchase price. Volume: 150 counted schools, one audit each per term, against 8 needed; measured conversion 18/150 gives about 18 expected, more than double the need. Card payment at checkout, usable in 4 days (day 9), inside 30; $0 exposure and costs paid from receipts. Fulfilment is Brain-produced spreadsheet (PRODUCE_SPREADSHEET present), matching the card's delivery fact. Brain's links are all established from this offer's own record and I have no contradicting record. Brain's trace agrees (collected $3,840, net $3,600). EXECUTABLE is right.",
+    "findings": [
+     "Possible double count: the 18 pilot buyers (invoices 2026-11) appear to come from the same 150-school directory and have likely already bought this term's audit, so the fresh pool is about 132, and if the 150 contacts behind the 12% were the whole directory, the remaining schools have already been approached once. Even so, 8 sales from ~132 needs only ~6% conversion; the plan should send to schools not in the pilot first and treat fewer than 8 paid by about day 20 as a stop signal.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES is UNREAD; outreach and card checkout must be connected before day 0/1.",
+     "Card humanHours 0.3 per sale (about 2.4 hours for 8) while members[].ownerHours is null; no hours ceiling applies."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:15:10.158Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Keep $3,000 of net cash after direct costs within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_e571873f32fa42d39199": "f1b6d5449300a87c"
+    }
+   },
+   "at": "2026-11-28T07:16:03.386Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

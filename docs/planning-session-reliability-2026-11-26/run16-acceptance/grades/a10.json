@@ -1,0 +1,36 @@
+{
+  "id": "ax-10-loader-resale-capital-raised",
+  "step": 1,
+  "heldOut": true,
+  "expect": "EXECUTABLE_PLAN",
+  "published": true,
+  "revisions": 3,
+  "reviews": 2,
+  "reviewVerdicts": [
+    "PASS",
+    "PASS"
+  ],
+  "revisionId": "rev_5d35e78cb554_a5a425",
+  "stance": "EXECUTABLE",
+  "reviewer": {
+    "kind": "MODEL",
+    "id": "wkr_33bb34020f94443cb6b2/fleet-2",
+    "model": "claude-opus-5-5"
+  },
+  "observed": "EXECUTABLE",
+  "pass": true,
+  "outcome": "EXECUTABLE_PLAN_CORRECT",
+  "failures": [],
+  "critical": [],
+  "detail": "executable on [loaderResale] (EXECUTABLE/null)",
+  "e2e": {
+    "pass": true,
+    "failures": [],
+    "gaps": [],
+    "detail": "complete"
+  },
+  "usable": {
+    "pass": true,
+    "detail": "usable: the planner calls it executable"
+  }
+}

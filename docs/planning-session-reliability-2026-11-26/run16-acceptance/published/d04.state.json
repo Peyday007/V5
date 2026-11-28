@@ -1,0 +1,165 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_63b0cc80418140a4affd",
+   "words": "I need to keep $3,500 after all direct costs within 21 days. I can spend at most $300 up front.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 350000,
+    "currency": "USD",
+    "metric": "CONTRIBUTION",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 30000,
+    "proofCondition": "First paid order settled with positive contribution after direct costs",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "68d2d8bb22f572a41ce61064"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_63b0cc80418140a4affd",
+    "contractDigest": "68d2d8bb22f572a41ce61064",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "probe",
+     "opportunityIds": [],
+     "why": "probe"
+    },
+    "alternatives": [],
+    "steps": [],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [],
+    "sources": [],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "probe",
+     "resolution": "probe",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [],
+    "excluded": [],
+    "members": [],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_eb24f120c0ff_e933e9",
+    "digest": "eb24f120c0ffe44993dc295e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_0f4640a0f6be4dc4a6da/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:24.889Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_63b0cc80418140a4affd",
+   "contractDigest": "68d2d8bb22f572a41ce61064",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "probe",
+    "opportunityIds": [],
+    "why": "probe"
+   },
+   "alternatives": [],
+   "steps": [],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [],
+   "sources": [],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "probe",
+    "resolution": "probe",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [],
+   "excluded": [],
+   "members": [],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_eb24f120c0ff_e933e9",
+   "digest": "eb24f120c0ffe44993dc295e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_0f4640a0f6be4dc4a6da/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:13:24.889Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_eb24f120c0ff_e933e9",
+   "digest": "eb24f120c0ffe44993dc295e",
+   "contractDigest": "68d2d8bb22f572a41ce61064",
+   "problems": [
+    {
+     "code": "BRAIN_CHECK_FAILED",
+     "detail": "Brain's planner did not complete (the planner returned no reading); the revision cannot be certified on a missing calculation",
+     "at": null
+    },
+    {
+     "code": "RESOLUTION_UNNAMED",
+     "detail": "a no-plan result must name its decisive gap as chain links (noPlan.decisiveLinks), not only in prose",
+     "at": null
+    },
+    {
+     "code": "NO_PLAN_UNJUSTIFIED",
+     "detail": "a no-plan result must show the alternatives it compared",
+     "at": null
+    }
+   ],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 30000,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": false,
+    "error": "the planner returned no reading",
+    "verdict": null,
+    "summary": null,
+    "acceptance": null,
+    "considered": [],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [],
+    "excluded": [],
+    "questions": [],
+    "scope": null,
+    "at": "2026-11-28T07:05:29.344Z"
+   }
+  },
+  "reviews": [],
+  "final": null,
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

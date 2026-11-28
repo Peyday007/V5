@@ -1,0 +1,3750 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_87aa6e3fa20c452da787",
+   "words": "Get me $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing up front.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 150000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "First paid sale settled in cash before any further commitment",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "6d8e7043498b453bc479f652"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan yet: run a zero-cost 5-day paid-offer test of one-time Google Business Profile optimisation for local small businesses",
+     "opportunityIds": [],
+     "why": "None of the three zero-capital routes has a buyer shown paying the offered price or a measured close rate. The best-supported one is a one-time Google Business Profile optimisation sold directly to local businesses at $250 (below WebFX's published $500-$5,000 range for one-time local SEO projects), paid by Zelle so cash is usable the same day; but 6 cold closes in 14 days by an owner with no track record is unmeasured. Upwork needs paid Connects beyond the 10 free per month and new freelancers report 50-100 proposals before a first hire, and fixed-price funds clear only after client review plus a 5-day hold; Prolific pays about $8-12 per hour, so $1,500 would need ~125 study-hours of a study supply that is not published. A new PayPal seller can see funds held up to 21 days and a new Stripe account's first payout is 7-14 days after the first payment, so card/PayPal collection is not a safe settlement path inside 14 days."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Zero capital buys only the 10 free Connects a month (1-3 proposals) while about 11 proposals per hire are needed market-wide and new profiles report far more; settlement is client review (up to 14 days) plus a 5-day security hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 hours of studies in 14 days and per-participant study availability is not published."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Owner lists 50 local businesses on Google Maps with incomplete profiles (no hours, few photos, no services) and emails/calls each with a one-time $250 optimisation offer, paid by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "RESEARCH",
+      "label": "Day 5 read-out: count paid Zelle orders and replies; decide stop/continue",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "t1",
+      "evidence": [],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "One-time local SEO / Google Business Profile project price range",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD (low end of $500-$5,000)",
+      "sources": [
+       "src_webfx",
+       "card_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $250 in the test"
+     },
+     {
+      "name": "Close rate from cold outreach",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "5-day test on 50 businesses"
+     },
+     {
+      "name": "US small businesses",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "firms",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-09-28",
+      "claim": "Verified research: WebFX publishes one-time local SEO projects incl. optimising a new Google Business Profile at $500-$5,000",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "One-time local SEO projects can range from $500 to $5,000 ... optimizing a new Google Business Profile",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "New PayPal sellers' payments can be held up to 21 days; for services released 7 days after marking Completed",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial Stripe payout typically 7-14 days after first successful payment",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_upwork_job",
+      "url": "https://www.upwork.com/freelance-jobs/apply/English-User-Manual-Writer-Illustrator-for-DIY-Product_~022116012618354697616/",
+      "dated": "2026-10-22",
+      "claim": "Public Upwork job: US English user manual writer, $500 fixed-price, client member since Oct 22, 2026",
+      "population": "Upwork clients posting fixed-price writing jobs",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire market-wide; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+      "dated": "2026-11-28",
+      "claim": "Freelancer Basic plan includes 10 Connects per month; extra Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Researchers must pay at least $8/hour; recommended $12/hour",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     },
+     {
+      "id": "src_prolific_p",
+      "url": "https://www.prolific.com/participants-how-it-works",
+      "dated": "2026-11-28",
+      "claim": "Prolific participant programme: participants are paid for completing researchers' studies",
+      "population": "Prolific participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No zero-capital opening has a buyer shown paying its offered price or any measured close rate: the GBP route's only price evidence is an agency's published $500-$5,000 range, with no record of a local business buying from a cold contact by this owner; Upwork's demand cannot be reached with free Connects; Prolific's study supply per participant is unpublished. Whether 6 local businesses will pay $250 within 14 days is the gap.",
+     "resolution": "Cost $0, 13 owner hours, days 1-5: contact 50 local businesses with visibly incomplete Google Business Profiles offering a one-time $250 optimisation, paid by Zelle on delivery (Zelle avoids the new-account PayPal/Stripe holds). Proof: at least 2 paid Zelle orders by day 5 - then continue to 150 contacts to reach 6 orders ($1,500) by day 12. Stop: 0 paid and fewer than 5 interested replies by day 5 - the $1,500/14-day goal is then not reachable from a zero-capital start and should be relaxed in time or allowed a small spend.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Free Connects allow 1-3 proposals while ~11+ are needed per hire; review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_99f2bcca0e1f_46626c",
+    "digest": "99f2bcca0e1fe52c212851c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:14:02.955Z"
+   },
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan yet: run a zero-cost 5-day paid-offer test of one-time Google Business Profile optimisation for local small businesses",
+     "opportunityIds": [],
+     "why": "None of the three zero-capital routes has a buyer shown paying the offered price or a measured close rate. The best-supported one is a one-time Google Business Profile optimisation sold directly to local businesses at $250 (below WebFX's published $500-$5,000 range for one-time local SEO projects), paid by Zelle so cash is usable the same day; but 6 cold closes in 14 days by an owner with no track record is unmeasured. Upwork needs paid Connects beyond the 10 free per month and new freelancers report 50-100 proposals before a first hire, and fixed-price funds clear only after client review plus a 5-day hold; Prolific pays about $8-12 per hour, so $1,500 would need ~125 study-hours of a study supply that is not published. A new PayPal seller can see funds held up to 21 days and a new Stripe account's first payout is 7-14 days after the first payment, so card/PayPal collection is not a safe settlement path inside 14 days."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Zero capital buys only the 10 free Connects a month (1-3 proposals) while about 11 proposals per hire are needed market-wide and new profiles report far more; settlement is client review (up to 14 days) plus a 5-day security hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 hours of studies in 14 days and per-participant study availability is not published."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Owner lists 50 local businesses on Google Maps with incomplete profiles (no hours, few photos, no services) and emails/calls each with a one-time $250 optimisation offer, paid by Zelle on delivery; the owner delivers the first order personally (AI-drafted profile content, with manager access granted by the business) and logs the hours it takes",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "RESEARCH",
+      "label": "Day 5 read-out: count paid Zelle orders and replies; decide stop/continue",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "t1",
+      "evidence": [],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "One-time local SEO / Google Business Profile project price range",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD (low end of $500-$5,000)",
+      "sources": [
+       "src_webfx",
+       "card_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $250 in the test"
+     },
+     {
+      "name": "Close rate from cold outreach",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "5-day test on 50 businesses"
+     },
+     {
+      "name": "US small businesses",
+      "status": "EVIDENCED",
+      "value": 36207130,
+      "unit": "firms",
+      "sources": [
+       "src_sba"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-09-28",
+      "claim": "Verified research: WebFX publishes one-time local SEO projects incl. optimising a new Google Business Profile at $500-$5,000",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "One-time local SEO projects can range from $500 to $5,000 ... optimizing a new Google Business Profile",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_sba",
+      "url": "https://advocacy.sba.gov/2026/02/03/advocacy-releases-frequently-asked-questions-about-small-businesses-2026/",
+      "dated": "2026-02-03",
+      "claim": "36,207,130 small businesses in the United States",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "New PayPal sellers' payments can be held up to 21 days; for services released 7 days after marking Completed",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial Stripe payout typically 7-14 days after first successful payment",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_upwork_job",
+      "url": "https://www.upwork.com/freelance-jobs/apply/English-User-Manual-Writer-Illustrator-for-DIY-Product_~022116012618354697616/",
+      "dated": "2026-10-22",
+      "claim": "Public Upwork job: US English user manual writer, $500 fixed-price, client member since Oct 22, 2026",
+      "population": "Upwork clients posting fixed-price writing jobs",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire market-wide; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://www.upwork.com/resources/how-to-get-free-connects",
+      "dated": "2026-11-28",
+      "claim": "Freelancer Basic plan includes 10 Connects per month; extra Connects $0.15 each",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Researchers must pay at least $8/hour; recommended $12/hour",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     },
+     {
+      "id": "src_prolific_p",
+      "url": "https://www.prolific.com/participants-how-it-works",
+      "dated": "2026-11-28",
+      "claim": "Prolific participant programme: participants are paid for completing researchers' studies",
+      "population": "Prolific participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No zero-capital opening has a buyer shown paying its offered price or any measured close rate: the GBP route's only price evidence is an agency's published $500-$5,000 range, with no record of a local business buying from a cold contact by this owner; Upwork's demand cannot be reached with free Connects; Prolific's study supply per participant is unpublished. Whether 6 local businesses will pay $250 within 14 days is the gap.",
+     "resolution": "Cost $0, 13 owner hours, days 1-5: contact 50 local businesses with visibly incomplete Google Business Profiles offering a one-time $250 optimisation, paid by Zelle on delivery (Zelle avoids the new-account PayPal/Stripe holds). The owner fulfils the first order and records the hours it took (fulfilment proof: delivered within 3 owner hours and accepted by the business). Proof: at least 2 paid Zelle orders by day 5 - then continue to 150 contacts to reach 6 orders ($1,500) by day 12. Stop: 0 paid and fewer than 5 interested replies by day 5 - the $1,500/14-day goal is then not reachable from a zero-capital start and should be relaxed in time or allowed a small spend.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Free Connects allow 1-3 proposals while ~11+ are needed per hire; review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5da3c4591c7e_336cc6",
+    "digest": "5da3c4591c7e81b100723961",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:14:11.967Z"
+   },
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": "rev_5da3c4591c7e_336cc6",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan yet: run a zero-cost 5-day paid-offer test of one-time Google Business Profile optimisation for local small businesses",
+     "opportunityIds": [],
+     "why": "None of the three zero-capital routes has a buyer shown paying the offered price or a measured close rate. The best-supported one is a one-time Google Business Profile optimisation sold directly to local businesses at $250 (below WebFX's published $500-$5,000 range for one-time local SEO projects), paid by Zelle so cash is usable the same day; but 6 cold closes in 14 days by an owner with no track record is unmeasured. Upwork's own help says some new freelancers must make a qualifying Connects purchase (at $0.15 each) or join Freelancer Plus before submitting any proposal - a spend the owner ruled out - and about 11 proposals are needed per hire market-wide, and fixed-price funds clear only after client review plus a 5-day hold; Prolific pays about $8-12 per hour, so $1,500 would need ~125 study-hours of a study supply that is not published. A new PayPal seller can see funds held up to 21 days and a new Stripe account's first payout is 7-14 days after the first payment, so card/PayPal collection is not a safe settlement path inside 14 days."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; settlement is client review (up to 14 days) plus a 5-day security hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 hours of studies in 14 days and per-participant study availability is not published."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Owner lists 50 local businesses on Google Maps with incomplete profiles (no hours, few photos, no services) and emails/calls each with a one-time $250 optimisation offer, paid by Zelle on delivery; the owner delivers the first order personally (AI-drafted profile content, with manager access granted by the business) and logs the hours it takes",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "RESEARCH",
+      "label": "Day 5 read-out: count paid Zelle orders and replies; decide stop/continue",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "t1",
+      "evidence": [],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "One-time local SEO / Google Business Profile project price range",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD (low end of $500-$5,000)",
+      "sources": [
+       "src_webfx",
+       "card_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $250 in the test"
+     },
+     {
+      "name": "Close rate from cold outreach",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "5-day test on 50 businesses"
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-09-28",
+      "claim": "Verified research: WebFX publishes one-time local SEO projects incl. optimising a new Google Business Profile at $500-$5,000",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "One-time local SEO projects can range from $500 to $5,000 ... optimizing a new Google Business Profile",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "New PayPal sellers' payments can be held up to 21 days; for services released 7 days after marking Completed",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "Initial Stripe payout typically 7-14 days after first successful payment",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire market-wide; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before they can submit any marketplace proposal",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Researchers must pay at least $8/hour; recommended $12/hour",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     },
+     {
+      "id": "src_prolific_p",
+      "url": "https://www.prolific.com/participants-how-it-works",
+      "dated": "2026-11-28",
+      "claim": "Prolific participant programme: participants are paid for completing researchers' studies",
+      "population": "Prolific participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No zero-capital opening has a buyer shown paying its offered price or any measured close rate: the GBP route's only price evidence is an agency's published $500-$5,000 range, with no record of a local business buying from a cold contact by this owner; Upwork's demand cannot be reached with free Connects; Prolific's study supply per participant is unpublished. Whether 6 local businesses will pay $250 within 14 days is the gap.",
+     "resolution": "Cost $0, 13 owner hours, days 1-5: contact 50 local businesses with visibly incomplete Google Business Profiles offering a one-time $250 optimisation, paid by Zelle on delivery (Zelle avoids the new-account PayPal/Stripe holds). The owner fulfils the first order and records the hours it took (fulfilment proof: delivered within 3 owner hours and accepted by the business). Proof: at least 2 paid Zelle orders by day 5 - then continue to 150 contacts to reach 6 orders ($1,500) by day 12. Stop: 0 paid and fewer than 5 interested replies by day 5 - the $1,500/14-day goal is then not reachable from a zero-capital start and should be relaxed in time or allowed a small spend.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Free Connects allow 1-3 proposals while ~11+ are needed per hire; review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_2acea18cf502_f47d4d",
+    "digest": "2acea18cf502efd2c970a60f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:15:03.996Z"
+   },
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": "rev_2acea18cf502_f47d4d",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan yet: run a zero-cost 5-day paid-offer test of one-time Google Business Profile optimisation for local small businesses",
+     "opportunityIds": [],
+     "why": "None of the three zero-capital routes has a buyer shown paying the offered price or a measured close rate. The best-supported one is a one-time Google Business Profile optimisation sold directly to local businesses at $250 (below WebFX's published $500-$5,000 range for one-time local SEO projects), paid by Zelle so cash is usable the same day; but 6 cold closes in 14 days by an owner with no track record is unmeasured. Upwork's own help says some new freelancers must make a qualifying Connects purchase (at $0.15 each) or join Freelancer Plus before submitting any proposal - a spend the owner ruled out - and about 11 proposals are needed per hire market-wide, and fixed-price funds clear only after client review plus a 5-day hold; Prolific pays about $8-12 per hour, so $1,500 would need ~125 study-hours of a study supply that is not published. A new PayPal seller can see funds held up to 21 days and a new Stripe account's first payout is 7-14 days after the first payment, so card/PayPal collection is not a safe settlement path inside 14 days."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; settlement is client review (up to 14 days) plus a 5-day security hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 hours of studies in 14 days and per-participant study availability is not published."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Owner lists 50 local businesses on Google Maps with incomplete profiles (no hours, few photos, no services) and emails/calls each with a one-time $250 optimisation offer, paid by Zelle on delivery; the owner delivers the first order personally (AI-drafted profile content, with manager access granted by the business) and logs the hours it takes",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 12,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "t2",
+      "kind": "RESEARCH",
+      "label": "Day 5 read-out: count paid Zelle orders and replies; decide stop/continue",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "t1",
+      "evidence": [],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "One-time local SEO / Google Business Profile project price range",
+      "status": "EVIDENCED",
+      "value": 500,
+      "unit": "USD (low end of $500-$5,000)",
+      "sources": [
+       "src_webfx",
+       "card_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid orders at $250 in the test"
+     },
+     {
+      "name": "Close rate from cold outreach",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "5-day test on 50 businesses"
+     }
+    ],
+    "sources": [
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-09-28",
+      "claim": "Verified research: WebFX publishes one-time local SEO projects incl. optimising a new Google Business Profile at $500-$5,000",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "One-time local SEO projects can range from $500 to $5,000 ... optimizing a new Google Business Profile",
+      "population": "US small businesses buying local SEO",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "PayPal holds the initial payments a new seller receives for up to 21 days",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "After the first live payment Stripe typically schedules the initial payout to complete within 7-14 days; US settlement 2 business days",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire market-wide; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before they can submit any marketplace proposal",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Researchers must pay at least $8/hour; recommended $12/hour",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No zero-capital opening has a buyer shown paying its offered price or any measured close rate: the GBP route's only price evidence is an agency's published $500-$5,000 range, with no record of a local business buying from a cold contact by this owner; Upwork's demand cannot be reached with free Connects; Prolific's study supply per participant is unpublished. Whether 6 local businesses will pay $250 within 14 days is the gap.",
+     "resolution": "Cost $0, 13 owner hours, days 1-5: contact 50 local businesses with visibly incomplete Google Business Profiles offering a one-time $250 optimisation, paid by Zelle on delivery (Zelle avoids the new-account PayPal/Stripe holds). The owner fulfils the first order and records the hours it took (fulfilment proof: delivered within 3 owner hours and accepted by the business). Proof: at least 2 paid Zelle orders by day 5 - then continue to 150 contacts to reach 6 orders ($1,500) by day 12. Stop: 0 paid and fewer than 5 interested replies by day 5 - the $1,500/14-day goal is then not reachable from a zero-capital start and should be relaxed in time or allowed a small spend.",
+     "decisiveLinks": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Free Connects allow 1-3 proposals while ~11+ are needed per hire; review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": 18,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_4c189a9a0502_fdefcd",
+    "digest": "4c189a9a050273ba57c10922",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:15:28.149Z"
+   },
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": "rev_4c189a9a0502_fdefcd",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time $250 Google Business Profile optimisations to local businesses, paid by Zelle, after a free fulfilment pilot and gated by a 60-contact test",
+     "opportunityIds": [
+      "cop_c4fe99d5862643bfb700"
+     ],
+     "why": "It is the only zero-capital route that is startable and can settle inside 14 days: no spend is needed, the owner fulfils it, and Zelle between enrolled accounts is typically available in minutes (up to 3 business days for select payments), avoiding the new-account PayPal (up to 21-day) and Stripe (first payout 7-14 days) holds. Whether local businesses pay $250 to this owner, and at what close rate, is unknown - only the live test measures it; the price is an assumption, not evidence. Upwork may require a Connects purchase before any proposal (forbidden: no spend) and Prolific needs ~125 study-hours."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; client review up to 14 days plus a 5-day hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 study-hours in 14 days and per-participant study supply is unpublished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "pilot",
+      "kind": "DELIVER",
+      "label": "Fulfilment proof before any paid order: owner optimises one local business's Google Business Profile free of charge (manager access granted), drafting with AI tools; records hours and the business's acceptance",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "List 240 local businesses on Google Maps with visibly incomplete profiles (missing hours, services, photos); email/call 60 on days 2-5 and the other 180 on days 7-10 (about 45 a day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 30,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $250 Google Business Profile optimisation, showing the pilot before/after; delivered within 2 days, paid by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Day 6 read-out: paid Zelle orders from the first 60 contacted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 180 and take orders through day 11",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each paid order within 2 days (owner, AI-drafted content, about 3 hours each per the pilot)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 18,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $250 by Zelle on delivery into the owner's enrolled bank account (no fee, typically minutes; select payments up to 3 business days)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver",
+      "evidence": [
+       "src_zelle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #1",
+      "settlesDay": 9,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #2",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #3",
+      "settlesDay": 11,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #4",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #5",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #6",
+      "settlesDay": 14,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid Zelle orders at $250 in the test"
+     },
+     {
+      "name": "q_close: paid orders per business contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Day-6 read-out of first 60 contacts"
+     },
+     {
+      "name": "q_hours: owner hours per optimisation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Free pilot on day 1"
+     },
+     {
+      "name": "Zelle availability between enrolled accounts",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "days (typically minutes; up to 3 business days for select payments)",
+      "sources": [
+       "src_zelle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "An agency lists one-time local SEO projects including optimising a new Google Business Profile as a sold service ($500-$5,000 agency range) - shows the offer exists; not a buyer-paid price for this owner's $250 offer",
+      "population": "Agency clients buying local SEO",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-11-28",
+      "claim": "Card revenueRange is a RECOMMENDATION ($250); the WebFX research was rejected at verification",
+      "population": "Local small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_zelle",
+      "url": "https://www.chase.com/personal/banking/education/basics/how-long-does-zelle-payment-take",
+      "dated": "2026-11-28",
+      "claim": "Money is typically made available in minutes when the recipient is enrolled; select transactions could take up to three business days",
+      "population": "Zelle users",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "PayPal holds the initial payments a new seller receives for up to 21 days",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "After the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before submitting any marketplace proposal",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Minimum hourly rate $8; recommended $12",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": {
+     "proof": "Pilot delivered in at most 4 owner hours and accepted on day 1, and at least 3 paid Zelle orders at $250 from the first 60 businesses contacted by day 6",
+     "stop": [
+      "Pilot takes more than 4 owner hours or the business does not accept it",
+      "Fewer than 3 paid orders from 60 contacted by day 6",
+      "Zelle payments arriving later than 3 business days"
+     ],
+     "continue": [
+      "3 or more paid of 60 by day 6: contact the remaining 180 by day 10 and take orders through day 11 to reach 6 paid ($1,500)"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 60,
+      "reach": 240
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "card_price labelled verified/matchesBuyer true and quantity EVIDENCED",
+      "resolution": "Accepted: the WebFX research was rejected; card_price now says RECOMMENDATION, matchesBuyer false; price quantity is ASSUMED."
+     },
+     {
+      "finding": "Restate as CONDITIONAL with validation.decides",
+      "resolution": "Accepted: stance CONDITIONAL; validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT."
+     },
+     {
+      "finding": "Prove fulfilment before soliciting paid orders",
+      "resolution": "Accepted: a free pilot on day 1 records hours and acceptance before any offer is made."
+     },
+     {
+      "finding": "Raise threshold or pool for margin",
+      "resolution": "Accepted: proof is 3 of 60 (5%) over 240 contacts, implying ~12 orders against the 6 needed."
+     },
+     {
+      "finding": "Remove WebFX range as price support",
+      "resolution": "Accepted: WebFX is cited only as showing the offer is sold (matchesBuyer false), not as price support."
+     },
+     {
+      "finding": "settlesDay null; Zelle settlement and owner hours",
+      "resolution": "Accepted: Zelle timing cited (minutes, up to 3 business days); receipts settle by day 14 using the 3-business-day worst case; settlesDay 14; owner hours ~59 total, stated in steps and members."
+     },
+     {
+      "finding": "Upwork and Prolific exclusions reasonable",
+      "resolution": "Agreed; kept as alternatives/exclusions."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "brain:CONVERSION"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Connects purchase may be required before any proposal (no spend allowed); review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": 59,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_17ff031037c5_a0d59b",
+    "digest": "17ff031037c537250fbd5253",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:18:56.065Z"
+   },
+   {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": "rev_4c189a9a0502_fdefcd",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time $250 Google Business Profile optimisations to local businesses, paid by Zelle, after a free fulfilment pilot and gated by a 60-contact test",
+     "opportunityIds": [
+      "cop_c4fe99d5862643bfb700"
+     ],
+     "why": "It is the only zero-capital route that is startable and can settle inside 14 days: no spend is needed, the owner fulfils it, and Zelle between enrolled accounts is typically available in minutes (up to 3 business days for select payments), avoiding the new-account PayPal (up to 21-day) and Stripe (first payout 7-14 days) holds. Whether local businesses pay $250 to this owner, and at what close rate, is unknown - only the live test measures it; the price is an assumption, not evidence. Upwork may require a Connects purchase before any proposal (forbidden: no spend) and Prolific needs ~125 study-hours."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; client review up to 14 days plus a 5-day hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 study-hours in 14 days and per-participant study supply is unpublished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "pilot",
+      "kind": "TEST",
+      "label": "Fulfilment proof before any paid order: owner optimises one local business's Google Business Profile free of charge (manager access granted), drafting with AI tools; records hours and the business's acceptance",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "List 240 local businesses on Google Maps with visibly incomplete profiles (missing hours, services, photos); email/call 60 on days 2-5 and the other 180 on days 7-10 (about 45 a day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 30,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $250 Google Business Profile optimisation, showing the pilot before/after; delivered within 2 days, paid by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Day 6 read-out: paid Zelle orders from the first 60 contacted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 180 and take orders through day 11",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each paid order within 2 days (owner, AI-drafted content, about 3 hours each per the pilot)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 18,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $250 by Zelle on delivery into the owner's enrolled bank account (no fee, typically minutes; select payments up to 3 business days)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver",
+      "evidence": [
+       "src_zelle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #1",
+      "settlesDay": 9,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #2",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #3",
+      "settlesDay": 11,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #4",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #5",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #6",
+      "settlesDay": 14,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid Zelle orders at $250 in the test"
+     },
+     {
+      "name": "q_close: paid orders per business contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Day-6 read-out of first 60 contacts"
+     },
+     {
+      "name": "q_hours: owner hours per optimisation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Free pilot on day 1"
+     },
+     {
+      "name": "Zelle availability between enrolled accounts",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "days (typically minutes; up to 3 business days for select payments)",
+      "sources": [
+       "src_zelle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "An agency lists one-time local SEO projects including optimising a new Google Business Profile as a sold service ($500-$5,000 agency range) - shows the offer exists; not a buyer-paid price for this owner's $250 offer",
+      "population": "Agency clients buying local SEO",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-11-28",
+      "claim": "Card revenueRange is a RECOMMENDATION ($250); the WebFX research was rejected at verification",
+      "population": "Local small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_zelle",
+      "url": "https://www.chase.com/personal/banking/education/basics/how-long-does-zelle-payment-take",
+      "dated": "2026-11-28",
+      "claim": "Money is typically made available in minutes when the recipient is enrolled; select transactions could take up to three business days",
+      "population": "Zelle users",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "PayPal holds the initial payments a new seller receives for up to 21 days",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "After the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before submitting any marketplace proposal",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Minimum hourly rate $8; recommended $12",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": {
+     "proof": "Pilot delivered in at most 4 owner hours and accepted on day 1, and at least 3 paid Zelle orders at $250 from the first 60 businesses contacted by day 6",
+     "stop": [
+      "Pilot takes more than 4 owner hours or the business does not accept it",
+      "Fewer than 3 paid orders from 60 contacted by day 6",
+      "Zelle payments arriving later than 3 business days"
+     ],
+     "continue": [
+      "3 or more paid of 60 by day 6: contact the remaining 180 by day 10 and take orders through day 11 to reach 6 paid ($1,500)"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 60,
+      "reach": 240
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "card_price labelled verified/matchesBuyer true and quantity EVIDENCED",
+      "resolution": "Accepted: the WebFX research was rejected; card_price now says RECOMMENDATION, matchesBuyer false; price quantity is ASSUMED."
+     },
+     {
+      "finding": "Restate as CONDITIONAL with validation.decides",
+      "resolution": "Accepted: stance CONDITIONAL; validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT."
+     },
+     {
+      "finding": "Prove fulfilment before soliciting paid orders",
+      "resolution": "Accepted: a free pilot on day 1 records hours and acceptance before any offer is made."
+     },
+     {
+      "finding": "Raise threshold or pool for margin",
+      "resolution": "Accepted: proof is 3 of 60 (5%) over 240 contacts, implying ~12 orders against the 6 needed."
+     },
+     {
+      "finding": "Remove WebFX range as price support",
+      "resolution": "Accepted: WebFX is cited only as showing the offer is sold (matchesBuyer false), not as price support."
+     },
+     {
+      "finding": "settlesDay null; Zelle settlement and owner hours",
+      "resolution": "Accepted: Zelle timing cited (minutes, up to 3 business days); receipts settle by day 14 using the 3-business-day worst case; settlesDay 14; owner hours ~59 total, stated in steps and members."
+     },
+     {
+      "finding": "Upwork and Prolific exclusions reasonable",
+      "resolution": "Agreed; kept as alternatives/exclusions."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "brain:CONVERSION"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Connects purchase may be required before any proposal (no spend allowed); review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": 59,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_686e346805dd_f9854e",
+    "digest": "686e346805dd8ca02840e5df",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:19:01.303Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_87aa6e3fa20c452da787",
+   "contractDigest": "6d8e7043498b453bc479f652",
+   "parentRevisionId": "rev_4c189a9a0502_fdefcd",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Sell one-time $250 Google Business Profile optimisations to local businesses, paid by Zelle, after a free fulfilment pilot and gated by a 60-contact test",
+    "opportunityIds": [
+     "cop_c4fe99d5862643bfb700"
+    ],
+    "why": "It is the only zero-capital route that is startable and can settle inside 14 days: no spend is needed, the owner fulfils it, and Zelle between enrolled accounts is typically available in minutes (up to 3 business days for select payments), avoiding the new-account PayPal (up to 21-day) and Stripe (first payout 7-14 days) holds. Whether local businesses pay $250 to this owner, and at what close rate, is unknown - only the live test measures it; the price is an assumption, not evidence. Upwork may require a Connects purchase before any proposal (forbidden: no spend) and Prolific needs ~125 study-hours."
+   },
+   "alternatives": [
+    {
+     "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+     "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; client review up to 14 days plus a 5-day hold."
+    },
+    {
+     "title": "Prolific paid study participation",
+     "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 study-hours in 14 days and per-participant study supply is unpublished."
+    }
+   ],
+   "steps": [
+    {
+     "id": "pilot",
+     "kind": "TEST",
+     "label": "Fulfilment proof before any paid order: owner optimises one local business's Google Business Profile free of charge (manager access granted), drafting with AI tools; records hours and the business's acceptance",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "q_hours"
+     ],
+     "ownerHours": 3,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "List 240 local businesses on Google Maps with visibly incomplete profiles (missing hours, services, photos); email/call 60 on days 2-5 and the other 180 on days 7-10 (about 45 a day)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "pilot",
+     "evidence": [
+      "src_webfx"
+     ],
+     "ownerHours": 30,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer a one-time $250 Google Business Profile optimisation, showing the pilot before/after; delivered within 2 days, paid by Zelle on delivery",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "pilot",
+     "evidence": [
+      "src_webfx"
+     ],
+     "ownerHours": 1,
+     "priceCents": 25000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "test",
+     "kind": "TEST",
+     "label": "Day 6 read-out: paid Zelle orders from the first 60 contacted",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "offer",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "If proof met, contact the remaining 180 and take orders through day 11",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 7,
+     "dependsOn": "test",
+     "evidence": [
+      "q_close"
+     ],
+     "ownerHours": 4,
+     "priceCents": 25000,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Deliver each paid order within 2 days (owner, AI-drafted content, about 3 hours each per the pilot)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 5,
+     "dependsOn": "offer",
+     "evidence": [
+      "q_hours"
+     ],
+     "ownerHours": 18,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect $250 by Zelle on delivery into the owner's enrolled bank account (no fee, typically minutes; select payments up to 3 business days)",
+     "performer": "OWNER",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "deliver",
+     "evidence": [
+      "src_zelle"
+     ],
+     "ownerHours": 1,
+     "executor": {
+      "operation": "OWNER_TASK",
+      "performedBy": "OWNER",
+      "provider": null,
+      "capabilities": [],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #1",
+     "settlesDay": 9,
+     "stepId": "collect"
+    },
+    {
+     "day": 7,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #2",
+     "settlesDay": 10,
+     "stepId": "collect"
+    },
+    {
+     "day": 8,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #3",
+     "settlesDay": 11,
+     "stepId": "collect"
+    },
+    {
+     "day": 10,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #4",
+     "settlesDay": 13,
+     "stepId": "collect"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #5",
+     "settlesDay": 14,
+     "stepId": "collect"
+    },
+    {
+     "day": 11,
+     "kind": "RECEIPT",
+     "amountCents": 25000,
+     "label": "Zelle payment on delivery, order #6",
+     "settlesDay": 14,
+     "stepId": "collect"
+    }
+   ],
+   "proofDay": 6,
+   "quantities": [
+    {
+     "name": "Offered price",
+     "status": "ASSUMED",
+     "value": 250,
+     "unit": "USD",
+     "sources": [],
+     "needs": "Paid Zelle orders at $250 in the test"
+    },
+    {
+     "name": "q_close: paid orders per business contacted",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "ratio",
+     "sources": [],
+     "needs": "Day-6 read-out of first 60 contacts"
+    },
+    {
+     "name": "q_hours: owner hours per optimisation",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "hours",
+     "sources": [],
+     "needs": "Free pilot on day 1"
+    },
+    {
+     "name": "Zelle availability between enrolled accounts",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "days (typically minutes; up to 3 business days for select payments)",
+     "sources": [
+      "src_zelle"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_webfx",
+     "url": "https://www.webfx.com/local-seo-pricing.html",
+     "dated": "2026-09-28",
+     "claim": "An agency lists one-time local SEO projects including optimising a new Google Business Profile as a sold service ($500-$5,000 agency range) - shows the offer exists; not a buyer-paid price for this owner's $250 offer",
+     "population": "Agency clients buying local SEO",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c4fe99d5862643bfb700"
+    },
+    {
+     "id": "card_price",
+     "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+     "dated": "2026-11-28",
+     "claim": "Card revenueRange is a RECOMMENDATION ($250); the WebFX research was rejected at verification",
+     "population": "Local small businesses",
+     "matchesBuyer": false,
+     "opportunityId": "cop_c4fe99d5862643bfb700"
+    },
+    {
+     "id": "src_zelle",
+     "url": "https://www.chase.com/personal/banking/education/basics/how-long-does-zelle-payment-take",
+     "dated": "2026-11-28",
+     "claim": "Money is typically made available in minutes when the recipient is enrolled; select transactions could take up to three business days",
+     "population": "Zelle users",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c4fe99d5862643bfb700"
+    },
+    {
+     "id": "src_paypal",
+     "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+     "dated": "2026-11-28",
+     "claim": "PayPal holds the initial payments a new seller receives for up to 21 days",
+     "population": "New PayPal sellers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c4fe99d5862643bfb700"
+    },
+    {
+     "id": "src_stripe",
+     "url": "https://docs.stripe.com/payouts",
+     "dated": "2026-11-28",
+     "claim": "After the first live payment Stripe typically schedules the initial payout within 7-14 days",
+     "population": "New Stripe US accounts",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c4fe99d5862643bfb700"
+    },
+    {
+     "id": "src_upwork_pay",
+     "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+     "dated": "2026-10-19",
+     "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+    },
+    {
+     "id": "src_uphunt",
+     "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+     "dated": "2026-09-14",
+     "claim": "About 11 proposals per hire; 60% of 44,863 closed postings ended without a hire",
+     "population": "Upwork job postings",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+    },
+    {
+     "id": "src_connects",
+     "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+     "dated": "2026-11-06",
+     "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before submitting any marketplace proposal",
+     "population": "Upwork freelancers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+    },
+    {
+     "id": "src_prolific",
+     "url": "https://researcher-help.prolific.com/en/article/2273bd",
+     "dated": "2026-11-28",
+     "claim": "Minimum hourly rate $8; recommended $12",
+     "population": "Prolific study participants",
+     "matchesBuyer": true,
+     "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+    }
+   ],
+   "validation": {
+    "proof": "Pilot delivered in at most 4 owner hours and accepted on day 1, and at least 3 paid Zelle orders at $250 from the first 60 businesses contacted by day 6",
+    "stop": [
+     "Pilot takes more than 4 owner hours or the business does not accept it",
+     "Fewer than 3 paid orders from 60 contacted by day 6",
+     "Zelle payments arriving later than 3 business days"
+    ],
+    "continue": [
+     "3 or more paid of 60 by day 6: contact the remaining 180 by day 10 and take orders through day 11 to reach 6 paid ($1,500)"
+    ],
+    "decides": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT"
+    ],
+    "threshold": {
+     "paid": 3,
+     "of": 60,
+     "reach": 240
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "card_price labelled verified/matchesBuyer true and quantity EVIDENCED",
+     "resolution": "Accepted: the WebFX research was rejected; card_price now says RECOMMENDATION, matchesBuyer false; price quantity is ASSUMED."
+    },
+    {
+     "finding": "Restate as CONDITIONAL with validation.decides",
+     "resolution": "Accepted: stance CONDITIONAL; validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT."
+    },
+    {
+     "finding": "Prove fulfilment before soliciting paid orders",
+     "resolution": "Accepted: a free pilot on day 1 records hours and acceptance before any offer is made."
+    },
+    {
+     "finding": "Raise threshold or pool for margin",
+     "resolution": "Accepted: proof is 3 of 60 (5%) over 240 contacts, implying ~12 orders against the 6 needed."
+    },
+    {
+     "finding": "Remove WebFX range as price support",
+     "resolution": "Accepted: WebFX is cited only as showing the offer is sold (matchesBuyer false), not as price support."
+    },
+    {
+     "finding": "settlesDay null; Zelle settlement and owner hours",
+     "resolution": "Accepted: Zelle timing cited (minutes, up to 3 business days); receipts settle by day 14 using the 3-business-day worst case; settlesDay 14; owner hours ~59 total, stated in steps and members."
+    },
+    {
+     "finding": "Upwork and Prolific exclusions reasonable",
+     "resolution": "Agreed; kept as alternatives/exclusions."
+    },
+    {
+     "condition": 0,
+     "decision": "ACCEPTED",
+     "records": [
+      "revenueRange",
+      "price"
+     ]
+    },
+    {
+     "condition": 1,
+     "decision": "ACCEPTED",
+     "records": [
+      "brain:CONVERSION"
+     ]
+    },
+    {
+     "condition": 2,
+     "decision": "ACCEPTED",
+     "records": [
+      "fulfillment",
+      "brain:FULFILMENT"
+     ]
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_c4fe99d5862643bfb700",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+     "why": "Connects purchase may be required before any proposal (no spend allowed); review + 5-day hold"
+    },
+    {
+     "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+     "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_c4fe99d5862643bfb700",
+     "deals": 6,
+     "price": 250,
+     "directCost": 0,
+     "capital": 0,
+     "settlesDay": 14,
+     "ownerHours": 59,
+     "dealsMax": null
+    }
+   ],
+   "resolves": [
+    "CONVERSION",
+    "CURRENT_DEMAND",
+    "ECONOMICS",
+    "FULFILMENT",
+    "OFFER_AND_PRICE",
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_686e346805dd_f9854e",
+   "digest": "686e346805dd8ca02840e5df",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_986586ec0da34748ab59/author-E",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:19:01.303Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_686e346805dd_f9854e",
+   "digest": "686e346805dd8ca02840e5df",
+   "contractDigest": "6d8e7043498b453bc479f652",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 6,
+    "collectedCents": 150000,
+    "collectedInWindowCents": 150000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 150000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 1500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Upwork fixed-price AI-assisted writing and product-listing j\" needs [figure withheld] and keeps [figure withheld], 270× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_3b79d9f29b2f4a5b8b0d",
+     "cop_c4fe99d5862643bfb700",
+     "cop_9c58f84beb7f40fc8bb7"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 1500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "title": "Upwork fixed-price AI-assisted writing and product-listing jobs",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 300,
+      "card": {
+       "payer": "Upwork clients posting fixed-price writing and listing jobs",
+       "reachableChannel": "Upwork proposals (Freelancer Basic: 10 free Connects per month)",
+       "offerScope": "AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone",
+       "priceCents": 30000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "Freelance content / ecommerce listings",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Upwork proposals (Freelancer Basic: 10 free Connects per month)"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "12 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Upwork proposals (Freelancer Basic: 10 free Connects per month)",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone to Upwork clients posting fixed-price writing and listing jobs, reached through Upwork proposals (Freelancer Basic: 10 free Connects per month), at $300; The owner, personally, drafting with general AI writing tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner, personally, drafting with general AI writing tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "3 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "AI-assisted product descriptions, manuals and listing optimisation delivered as a fixed-price milestone",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Upwork clients posting fixed-price writing and listing jobs",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.upwork.com/freelance-jobs/apply/Ecwid-Etsy-SEO-Specialist-Product-Optimization-Listings_~022115590572257251636/; https://www.upwork.com/freelance-jobs/apply/English-User-Manual-Writer-Illustrator-for-DIY-Product_~022116012618354697616/; https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026; https://www.upwork.com/resources/how-to-get-free-connects; https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "title": "Done-for-you Google Business Profile optimisation for local small businesses, paid by Zelle",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 250,
+      "card": {
+       "payer": "Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles",
+       "reachableChannel": "Owner's own email/phone outreach to businesses found on Google Maps with weak profiles",
+       "offerScope": "One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI",
+       "priceCents": 25000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [],
+       "industry": "Local services marketing",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Owner's own email/phone outreach to businesses found on Google Maps with weak pr"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 250 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "5 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Owner's own email/phone outreach to businesses found on Google Maps with weak profiles",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI to Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles, reached through Owner's own email/phone outreach to businesses found on Google Maps with weak profiles, at $250; The owner, personally, drafting with general AI writing tools delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner, personally, drafting with general AI writing tools.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "2 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "One-time Google Business Profile audit and optimisation (categories, services, photos plan, description, posts, review-request link) drafted by AI",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Local small-business owners (trades, salons, restaurants) with incomplete Google Business Profiles",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$250",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.fiverr.com/super_citations/create-top-local-seo-citation; https://fiverr.com/shartor/do-30-days-gmb-management-posts; Fiverr google business profile optimization gigs; https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848; https://docs.stripe.com/payouts",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "title": "Paid academic study participation on Prolific",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 12,
+      "card": {
+       "payer": "Researchers paying participants through Prolific",
+       "reachableChannel": "Prolific participant dashboard",
+       "offerScope": "Owner completes online studies",
+       "priceCents": 1200,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [],
+       "industry": "Research participation",
+       "mechanism": "OTHER",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Prolific participant dashboard"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 12 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "3 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Prolific participant dashboard",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Owner completes online studies to Researchers paying participants through Prolific, reached through Prolific participant dashboard, at $12; Owner delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Owner.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "1 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Owner completes online studies",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Researchers paying participants through Prolific",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$12",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$12",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://researcher-help.prolific.com/en/article/2273bd; https://www.prolific.com/participants-how-it-works; https://participant-help.prolific.com/en/article/9b3cab",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 150000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:18:48.923Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_5da3c4591c7e_336cc6",
+    "revisionDigest": "5da3c4591c7e81b100723961",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b8d552935d714f1db11a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Wrong stance for its own content. The revision calls itself NO_PLAN yet names a startable $0 test (contact 50 businesses, proof >= 2 paid by day 5, continue to 150, stop at 0 paid and < 5 replies) and a member (6 x $250). Its decisive gap (will local businesses pay $250 to this owner; close rate) is exactly an unknown only a live test measures, which is a CONDITIONAL plan with validation.decides [CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION], not a NO_PLAN; a no-plan must name a gap that even all the evidence cannot close, and none is shown. Arithmetic: 6 x $250 = $1,500 exactly, zero margin; at the proof threshold (2/50 = 4%) 150 contacts give 6 orders, so passing at threshold carries the target only with no slack and only if the remaining 100 contacts, 6 deliveries (2-3 owner hours each) and Zelle receipts all land by day 12-14. The $250 price is a RECOMMENDATION; the only price evidence offered (WebFX $500-$5,000) was rejected at verification as an agency estimate, not a buyer-paid price, so it cannot be cited as support ('below WebFX's range'). The test takes buyers' orders before fulfilment is shown possible: FULFILMENT is unestablished (the card records only that the owner would draft with AI tools) and the first paid order doubles as the fulfilment proof.",
+    "findings": [
+     "Restate as CONDITIONAL with validation.decides naming OFFER_AND_PRICE and CONVERSION (and CURRENT_DEMAND), keeping the proof/stop/continue thresholds.",
+     "Prove fulfilment before soliciting paid orders: the owner completes one GBP optimisation (e.g. a free sample for one business with manager access) and records hours and acceptance, then the paid test starts.",
+     "Raise the proof threshold or contact pool so passing at threshold leaves margin (e.g. >= 3 paid of 50 implies ~9 from 150), since 6 of 6 needed is zero slack in 14 days.",
+     "Remove the WebFX range as price support; it was rejected as scope mismatch (agency one-time projects, not this buyer/offer).",
+     "members[].settlesDay is null though the plan says Zelle is same-day; Zelle settlement and any new-user limits should be stated, and owner hours (12 + 1 + ~18) should be checked against what the owner can give (unstated, so unknown, not zero)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:15:49.894Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "Price $250 is a RECOMMENDATION; the submitted revenueRange research was rejected, so no buyer is shown paying it."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "CONVERSION",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "conversionRates",
+      "why": "No measured close rate for cold outreach by this owner; the card holds no conversionRates fact."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION that the owner would draft with AI tools; no delivered example or recorded hours."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_2acea18cf502_f47d4d",
+    "revisionDigest": "2acea18cf502efd2c970a60f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b8d552935d714f1db11a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Wrong stance for its own content. This revision (like its predecessor rev_5da3c4591c7e) calls itself NO_PLAN yet names a startable $0 test (contact 50 businesses, proof >= 2 paid by day 5, continue to 150, stop at 0 paid and < 5 replies) and a member (6 x $250). Its decisive gap (will local businesses pay $250 to this owner; close rate) is exactly an unknown only a live test measures, which is a CONDITIONAL plan with validation.decides [CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION], not a NO_PLAN; a no-plan must name a gap that even all the evidence cannot close, and none is shown. Arithmetic: 6 x $250 = $1,500 exactly, zero margin; at the proof threshold (2/50 = 4%) 150 contacts give 6 orders, so passing at threshold carries the target only with no slack and only if the remaining 100 contacts, 6 deliveries (2-3 owner hours each) and Zelle receipts all land by day 12-14. The $250 price is a RECOMMENDATION; the only price evidence offered (WebFX $500-$5,000) was rejected at verification as an agency estimate, not a buyer-paid price, so it cannot be cited as support ('below WebFX's range'). The test takes buyers' orders before fulfilment is shown possible: FULFILMENT is unestablished (the card records only that the owner would draft with AI tools) and the first paid order doubles as the fulfilment proof.",
+    "findings": [
+     "Source card_price is labelled 'Verified research' with matchesBuyer true and the quantity 'One-time local SEO / GBP project price range' is marked EVIDENCED at 00. That is false: the WebFX research was verified and rejected at the gate (population and definitions mismatch; an agency's estimate, not a buyer-paid price) and the card's revenueRange is still a RECOMMENDATION. Mark it UNKNOWN and matchesBuyer false.",
+     "Restate as CONDITIONAL with validation.decides naming OFFER_AND_PRICE and CONVERSION (and CURRENT_DEMAND), keeping the proof/stop/continue thresholds.",
+     "Prove fulfilment before soliciting paid orders: the owner completes one GBP optimisation (e.g. a free sample for one business with manager access) and records hours and acceptance, then the paid test starts.",
+     "Raise the proof threshold or contact pool so passing at threshold leaves margin (e.g. >= 3 paid of 50 implies ~9 from 150), since 6 of 6 needed is zero slack in 14 days.",
+     "Remove the WebFX range as price support; it was rejected as scope mismatch (agency one-time projects, not this buyer/offer).",
+     "members[].settlesDay is null though the plan says Zelle is same-day; Zelle settlement and any new-user limits should be stated, and owner hours (12 + 1 + ~18) should be checked against what the owner can give (unstated, so unknown, not zero).",
+     "The Upwork exclusion is reasonable on the Connects-purchase rule (the owner allows no spend) and the review + 5-day hold; Prolific's exclusion on ~125 hours at -12/h is arithmetically right (,500/2 = 125)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:16:12.561Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "Price $250 is a RECOMMENDATION; the submitted revenueRange research was rejected, so no buyer is shown paying it."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "CONVERSION",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "conversionRates",
+      "why": "No measured close rate for cold outreach by this owner; the card holds no conversionRates fact."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION that the owner would draft with AI tools; no delivered example or recorded hours."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_4c189a9a0502_fdefcd",
+    "revisionDigest": "4c189a9a050273ba57c10922",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b8d552935d714f1db11a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Wrong stance for its own content. This revision (unchanged in substance from rev_5da3c4591c7e and rev_2acea18cf502, both REVISE) calls itself NO_PLAN yet names a startable $0 test (contact 50 businesses, proof >= 2 paid by day 5, continue to 150, stop at 0 paid and < 5 replies) and a member (6 x $250). Its decisive gap (will local businesses pay $250 to this owner; close rate) is exactly an unknown only a live test measures, which is a CONDITIONAL plan with validation.decides [CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION], not a NO_PLAN; a no-plan must name a gap that even all the evidence cannot close, and none is shown. Arithmetic: 6 x $250 = $1,500 exactly, zero margin; at the proof threshold (2/50 = 4%) 150 contacts give 6 orders, so passing at threshold carries the target only with no slack and only if the remaining 100 contacts, 6 deliveries (2-3 owner hours each) and Zelle receipts all land by day 12-14. The $250 price is a RECOMMENDATION; the only price evidence offered (WebFX $500-$5,000) was rejected at verification as an agency estimate, not a buyer-paid price, so it cannot be cited as support ('below WebFX's range'). The test takes buyers' orders before fulfilment is shown possible: FULFILMENT is unestablished (the card records only that the owner would draft with AI tools) and the first paid order doubles as the fulfilment proof.",
+    "findings": [
+     "Source card_price is labelled 'Verified research' with matchesBuyer true and the quantity 'One-time local SEO / GBP project price range' is marked EVIDENCED at 00. That is false: the WebFX research was verified and rejected at the gate (population and definitions mismatch; an agency's estimate, not a buyer-paid price) and the card's revenueRange is still a RECOMMENDATION. Mark it UNKNOWN and matchesBuyer false.",
+     "Restate as CONDITIONAL with validation.decides naming OFFER_AND_PRICE and CONVERSION (and CURRENT_DEMAND), keeping the proof/stop/continue thresholds.",
+     "Prove fulfilment before soliciting paid orders: the owner completes one GBP optimisation (e.g. a free sample for one business with manager access) and records hours and acceptance, then the paid test starts.",
+     "Raise the proof threshold or contact pool so passing at threshold leaves margin (e.g. >= 3 paid of 50 implies ~9 from 150), since 6 of 6 needed is zero slack in 14 days.",
+     "Remove the WebFX range as price support; it was rejected as scope mismatch (agency one-time projects, not this buyer/offer).",
+     "members[].settlesDay is null though the plan says Zelle is same-day; Zelle settlement and any new-user limits should be stated, and owner hours (12 + 1 + ~18) should be checked against what the owner can give (unstated, so unknown, not zero).",
+     "The Upwork exclusion is reasonable on the Connects-purchase rule (the owner allows no spend) and the review + 5-day hold; Prolific's exclusion on ~125 hours at -12/h is arithmetically right (,500/2 = 125)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:16:28.678Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "OFFER_AND_PRICE",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "revenueRange",
+      "why": "Price $250 is a RECOMMENDATION; the submitted revenueRange research was rejected, so no buyer is shown paying it."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "CONVERSION",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "conversionRates",
+      "why": "No measured close rate for cold outreach by this owner; the card holds no conversionRates fact."
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "link": "FULFILMENT",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "fulfillment",
+      "why": "Only a RECOMMENDATION that the owner would draft with AI tools; no delivered example or recorded hours."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_686e346805dd_f9854e",
+    "revisionDigest": "686e346805dd8ca02840e5df",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b8d552935d714f1db11a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Every earlier finding is answered. Stance is now CONDITIONAL, with validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT, and these are exactly the unknowns a live test measures. Fulfilment is proved first: a free pilot on day 1 (stop if over 4 owner hours or not accepted) comes before any paid offer on day 2, so no buyer's order is taken before delivery is shown possible. Price $250 is honestly ASSUMED, WebFX is no longer cited as price support, and card_price matchesBuyer is false. Recomputed: $0 spend and $0 exposure, inside the $0 cap. 6 x $250 = $1,500. The threshold is 3 paid of 60 (5%); over 240 contacts that implies about 12 paid, twice the 6 needed, so passing at threshold carries the target with margin. Zelle on delivery is typically available in minutes, up to 3 business days, and the ledger's receipts on days 6-11 settle by day 14. Brain's trace agrees: collected $1,500 in window, $0 spent. Excluding Upwork (a Connects purchase may be required; review plus 5-day hold) and Prolific (~125 h at $12/h) is correct.",
+    "findings": [
+     "Settlement is tight at the end: orders 5-6 are received on day 11, and with Zelle's 'up to 3 business days' and a weekend that can fall past day 14. Close the last orders by about day 9-10, or count only the minute-settled Zelle payments toward the day-14 proof.",
+     "Owner hours total 59 in 14 days (about 30 h/week). The contract states no ceiling, so this is not a breach, but it is the plan's heaviest demand and the owner should see it before starting.",
+     "Zelle used to take payment from businesses: some banks restrict personal Zelle for commercial receipts. The owner should confirm that their bank allows it, or use a small-business Zelle profile.",
+     "The card's links stay unestablished until the test: this is a startable test, not an executable plan, which the CONDITIONAL stance correctly says."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:20:29.122Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_686e346805dd_f9854e",
+   "digest": "686e346805dd8ca02840e5df",
+   "contractDigest": "6d8e7043498b453bc479f652",
+   "plan": {
+    "goalId": "wst_87aa6e3fa20c452da787",
+    "contractDigest": "6d8e7043498b453bc479f652",
+    "parentRevisionId": "rev_4c189a9a0502_fdefcd",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Sell one-time $250 Google Business Profile optimisations to local businesses, paid by Zelle, after a free fulfilment pilot and gated by a 60-contact test",
+     "opportunityIds": [
+      "cop_c4fe99d5862643bfb700"
+     ],
+     "why": "It is the only zero-capital route that is startable and can settle inside 14 days: no spend is needed, the owner fulfils it, and Zelle between enrolled accounts is typically available in minutes (up to 3 business days for select payments), avoiding the new-account PayPal (up to 21-day) and Stripe (first payout 7-14 days) holds. Whether local businesses pay $250 to this owner, and at what close rate, is unknown - only the live test measures it; the price is an assumption, not evidence. Upwork may require a Connects purchase before any proposal (forbidden: no spend) and Prolific needs ~125 study-hours."
+    },
+    "alternatives": [
+     {
+      "title": "Upwork fixed-price AI-assisted writing and listing jobs",
+      "why": "Upwork help: some new freelancers must buy Connects or join Freelancer Plus before any proposal, which the no-spend rule forbids; about 11 proposals per hire market-wide; client review up to 14 days plus a 5-day hold."
+     },
+     {
+      "title": "Prolific paid study participation",
+      "why": "Minimum $8/hour, recommended $12/hour; $1,500 needs ~125 study-hours in 14 days and per-participant study supply is unpublished."
+     }
+    ],
+    "steps": [
+     {
+      "id": "pilot",
+      "kind": "TEST",
+      "label": "Fulfilment proof before any paid order: owner optimises one local business's Google Business Profile free of charge (manager access granted), drafting with AI tools; records hours and the business's acceptance",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 3,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "List 240 local businesses on Google Maps with visibly incomplete profiles (missing hours, services, photos); email/call 60 on days 2-5 and the other 180 on days 7-10 (about 45 a day)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 30,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer a one-time $250 Google Business Profile optimisation, showing the pilot before/after; delivered within 2 days, paid by Zelle on delivery",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "pilot",
+      "evidence": [
+       "src_webfx"
+      ],
+      "ownerHours": 1,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "test",
+      "kind": "TEST",
+      "label": "Day 6 read-out: paid Zelle orders from the first 60 contacted",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "If proof met, contact the remaining 180 and take orders through day 11",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 7,
+      "dependsOn": "test",
+      "evidence": [
+       "q_close"
+      ],
+      "ownerHours": 4,
+      "priceCents": 25000,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Deliver each paid order within 2 days (owner, AI-drafted content, about 3 hours each per the pilot)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 5,
+      "dependsOn": "offer",
+      "evidence": [
+       "q_hours"
+      ],
+      "ownerHours": 18,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect $250 by Zelle on delivery into the owner's enrolled bank account (no fee, typically minutes; select payments up to 3 business days)",
+      "performer": "OWNER",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "deliver",
+      "evidence": [
+       "src_zelle"
+      ],
+      "ownerHours": 1,
+      "executor": {
+       "operation": "OWNER_TASK",
+       "performedBy": "OWNER",
+       "provider": null,
+       "capabilities": [],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #1",
+      "settlesDay": 9,
+      "stepId": "collect"
+     },
+     {
+      "day": 7,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #2",
+      "settlesDay": 10,
+      "stepId": "collect"
+     },
+     {
+      "day": 8,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #3",
+      "settlesDay": 11,
+      "stepId": "collect"
+     },
+     {
+      "day": 10,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #4",
+      "settlesDay": 13,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #5",
+      "settlesDay": 14,
+      "stepId": "collect"
+     },
+     {
+      "day": 11,
+      "kind": "RECEIPT",
+      "amountCents": 25000,
+      "label": "Zelle payment on delivery, order #6",
+      "settlesDay": 14,
+      "stepId": "collect"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "Offered price",
+      "status": "ASSUMED",
+      "value": 250,
+      "unit": "USD",
+      "sources": [],
+      "needs": "Paid Zelle orders at $250 in the test"
+     },
+     {
+      "name": "q_close: paid orders per business contacted",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "ratio",
+      "sources": [],
+      "needs": "Day-6 read-out of first 60 contacts"
+     },
+     {
+      "name": "q_hours: owner hours per optimisation",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Free pilot on day 1"
+     },
+     {
+      "name": "Zelle availability between enrolled accounts",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "days (typically minutes; up to 3 business days for select payments)",
+      "sources": [
+       "src_zelle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_webfx",
+      "url": "https://www.webfx.com/local-seo-pricing.html",
+      "dated": "2026-09-28",
+      "claim": "An agency lists one-time local SEO projects including optimising a new Google Business Profile as a sold service ($500-$5,000 agency range) - shows the offer exists; not a buyer-paid price for this owner's $250 offer",
+      "population": "Agency clients buying local SEO",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "card_price",
+      "url": "https://brain.local/card/cop_c4fe99d5862643bfb700#revenueRange",
+      "dated": "2026-11-28",
+      "claim": "Card revenueRange is a RECOMMENDATION ($250); the WebFX research was rejected at verification",
+      "population": "Local small businesses",
+      "matchesBuyer": false,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_zelle",
+      "url": "https://www.chase.com/personal/banking/education/basics/how-long-does-zelle-payment-take",
+      "dated": "2026-11-28",
+      "claim": "Money is typically made available in minutes when the recipient is enrolled; select transactions could take up to three business days",
+      "population": "Zelle users",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_paypal",
+      "url": "https://www.paypal.com/us/cshelp/article/new-paypal-account-%E2%80%93-payments-on-hold-and-accessing-your-money-quicker-help848",
+      "dated": "2026-11-28",
+      "claim": "PayPal holds the initial payments a new seller receives for up to 21 days",
+      "population": "New PayPal sellers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_stripe",
+      "url": "https://docs.stripe.com/payouts",
+      "dated": "2026-11-28",
+      "claim": "After the first live payment Stripe typically schedules the initial payout within 7-14 days",
+      "population": "New Stripe US accounts",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c4fe99d5862643bfb700"
+     },
+     {
+      "id": "src_upwork_pay",
+      "url": "https://support.upwork.com/hc/en-us/articles/211063718-How-payments-for-milestones-and-fixed-price-contracts-work",
+      "dated": "2026-10-19",
+      "claim": "Client has up to 14 days to review; then a five-day security hold before funds are available",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_uphunt",
+      "url": "https://uphunt.io/blog/how-many-proposals-upwork-jobs-get-2026",
+      "dated": "2026-09-14",
+      "claim": "About 11 proposals per hire; 60% of 44,863 closed postings ended without a hire",
+      "population": "Upwork job postings",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_connects",
+      "url": "https://support.upwork.com/hc/en-us/articles/211062898-About-Connects-costs-uses-balances-and-expiration",
+      "dated": "2026-11-06",
+      "claim": "Connects cost $0.15 each; some new freelancers must first make a qualifying Connects purchase or join Freelancer Plus before submitting any marketplace proposal",
+      "population": "Upwork freelancers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d"
+     },
+     {
+      "id": "src_prolific",
+      "url": "https://researcher-help.prolific.com/en/article/2273bd",
+      "dated": "2026-11-28",
+      "claim": "Minimum hourly rate $8; recommended $12",
+      "population": "Prolific study participants",
+      "matchesBuyer": true,
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7"
+     }
+    ],
+    "validation": {
+     "proof": "Pilot delivered in at most 4 owner hours and accepted on day 1, and at least 3 paid Zelle orders at $250 from the first 60 businesses contacted by day 6",
+     "stop": [
+      "Pilot takes more than 4 owner hours or the business does not accept it",
+      "Fewer than 3 paid orders from 60 contacted by day 6",
+      "Zelle payments arriving later than 3 business days"
+     ],
+     "continue": [
+      "3 or more paid of 60 by day 6: contact the remaining 180 by day 10 and take orders through day 11 to reach 6 paid ($1,500)"
+     ],
+     "decides": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT"
+     ],
+     "threshold": {
+      "paid": 3,
+      "of": 60,
+      "reach": 240
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "card_price labelled verified/matchesBuyer true and quantity EVIDENCED",
+      "resolution": "Accepted: the WebFX research was rejected; card_price now says RECOMMENDATION, matchesBuyer false; price quantity is ASSUMED."
+     },
+     {
+      "finding": "Restate as CONDITIONAL with validation.decides",
+      "resolution": "Accepted: stance CONDITIONAL; validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT."
+     },
+     {
+      "finding": "Prove fulfilment before soliciting paid orders",
+      "resolution": "Accepted: a free pilot on day 1 records hours and acceptance before any offer is made."
+     },
+     {
+      "finding": "Raise threshold or pool for margin",
+      "resolution": "Accepted: proof is 3 of 60 (5%) over 240 contacts, implying ~12 orders against the 6 needed."
+     },
+     {
+      "finding": "Remove WebFX range as price support",
+      "resolution": "Accepted: WebFX is cited only as showing the offer is sold (matchesBuyer false), not as price support."
+     },
+     {
+      "finding": "settlesDay null; Zelle settlement and owner hours",
+      "resolution": "Accepted: Zelle timing cited (minutes, up to 3 business days); receipts settle by day 14 using the 3-business-day worst case; settlesDay 14; owner hours ~59 total, stated in steps and members."
+     },
+     {
+      "finding": "Upwork and Prolific exclusions reasonable",
+      "resolution": "Agreed; kept as alternatives/exclusions."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "revenueRange",
+       "price"
+      ]
+     },
+     {
+      "condition": 1,
+      "decision": "ACCEPTED",
+      "records": [
+       "brain:CONVERSION"
+      ]
+     },
+     {
+      "condition": 2,
+      "decision": "ACCEPTED",
+      "records": [
+       "fulfillment",
+       "brain:FULFILMENT"
+      ]
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_3b79d9f29b2f4a5b8b0d",
+      "why": "Connects purchase may be required before any proposal (no spend allowed); review + 5-day hold"
+     },
+     {
+      "opportunityId": "cop_9c58f84beb7f40fc8bb7",
+      "why": "~125 study-hours needed at $8-12/hour; study supply unpublished"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_c4fe99d5862643bfb700",
+      "deals": 6,
+      "price": 250,
+      "directCost": 0,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": 59,
+      "dealsMax": null
+     }
+    ],
+    "resolves": [
+     "CONVERSION",
+     "CURRENT_DEMAND",
+     "ECONOMICS",
+     "FULFILMENT",
+     "OFFER_AND_PRICE",
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_686e346805dd_f9854e",
+    "digest": "686e346805dd8ca02840e5df",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:19:01.303Z"
+   },
+   "review": {
+    "revisionId": "rev_686e346805dd_f9854e",
+    "revisionDigest": "686e346805dd8ca02840e5df",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_986586ec0da34748ab59/author-E",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_b8d552935d714f1db11a/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Every earlier finding is answered. Stance is now CONDITIONAL, with validation.decides CURRENT_DEMAND, OFFER_AND_PRICE, CONVERSION and FULFILMENT, and these are exactly the unknowns a live test measures. Fulfilment is proved first: a free pilot on day 1 (stop if over 4 owner hours or not accepted) comes before any paid offer on day 2, so no buyer's order is taken before delivery is shown possible. Price $250 is honestly ASSUMED, WebFX is no longer cited as price support, and card_price matchesBuyer is false. Recomputed: $0 spend and $0 exposure, inside the $0 cap. 6 x $250 = $1,500. The threshold is 3 paid of 60 (5%); over 240 contacts that implies about 12 paid, twice the 6 needed, so passing at threshold carries the target with margin. Zelle on delivery is typically available in minutes, up to 3 business days, and the ledger's receipts on days 6-11 settle by day 14. Brain's trace agrees: collected $1,500 in window, $0 spent. Excluding Upwork (a Connects purchase may be required; review plus 5-day hold) and Prolific (~125 h at $12/h) is correct.",
+    "findings": [
+     "Settlement is tight at the end: orders 5-6 are received on day 11, and with Zelle's 'up to 3 business days' and a weekend that can fall past day 14. Close the last orders by about day 9-10, or count only the minute-settled Zelle payments toward the day-14 proof.",
+     "Owner hours total 59 in 14 days (about 30 h/week). The contract states no ceiling, so this is not a breach, but it is the plan's heaviest demand and the owner should see it before starting.",
+     "Zelle used to take payment from businesses: some banks restrict personal Zelle for commercial receipts. The owner should confirm that their bank allows it, or use a small-business Zelle profile.",
+     "The card's links stay unestablished until the test: this is a startable test, not an executable plan, which the CONDITIONAL stance correctly says."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:20:29.122Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Get me $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing up front.",
+    "terms": "16c9db08eeefbf8e",
+    "openings": {
+     "cop_3b79d9f29b2f4a5b8b0d": "94def0cb1365063a",
+     "cop_9c58f84beb7f40fc8bb7": "b6ffaabf95364906",
+     "cop_c4fe99d5862643bfb700": "2618ecf9e9d44162"
+    }
+   },
+   "at": "2026-11-28T07:22:06.776Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

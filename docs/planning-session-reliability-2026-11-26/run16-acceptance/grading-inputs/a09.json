@@ -1,0 +1,426 @@
+{
+ "caseId": "ax-09-billboard-permit-calendars",
+ "keys": {
+  "cop_72f013d530a643c799f6": "permitCalendar",
+  "cop_0536a735577f4112b55f": "permitClerkRate",
+  "cop_6e62f034b42749468095": "leaseLeads"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Permit-renewal and structure-inspection calendar for billboa\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Permit-renewal and structure-inspection calendar for billboa\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 13157× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Permit-renewal and structure-inspection calendar for billboard operato\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_72f013d530a643c799f6",
+   "cop_6e62f034b42749468095",
+   "cop_0536a735577f4112b55f"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+    "owner": "PERSON",
+    "cost": 15
+   },
+   {
+    "label": "Collect payment for \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_72f013d530a643c799f6",
+    "title": "Permit-renewal and structure-inspection calendar for billboard operators",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 4500,
+    "potentialReach": 4500,
+    "card": {
+     "payer": "Billboard operators' real-estate and permitting managers",
+     "reachableChannel": "The four signed operators",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:35.830Z",
+     "offerScope": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+     "priceCents": 125000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "outdoor advertising (billboard operators)",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 125000,
+      "currency": "USD",
+      "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 125000,
+      "currency": "USD",
+      "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 125000,
+      "currency": "USD",
+      "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 125000,
+      "currency": "USD",
+      "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four signed operators"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 5000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 15, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "5 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$15",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Billboard operators' real-estate and permitting managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$1250",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "5 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_6e62f034b42749468095",
+    "title": "Weekly landowner lease-expiry lead lists for billboard operators",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 249,
+    "potentialReach": 4500,
+    "card": {
+     "payer": "Billboard site-leasing managers",
+     "reachableChannel": "Email to operators listed with the state DOT outdoor advertising program",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:35.830Z",
+     "offerScope": "Weekly landowner lease-expiry lead lists for billboard operators",
+     "priceCents": 24900,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.2,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "outdoor advertising (billboard operators)",
+     "mechanism": "INFORMATION_ASYMMETRY",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four signed operators | reach: Email to operators listed with the state DOT outdoor advertising program | reach: Email to operators listed with the state DOT outdoor advertising program"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "a buyer agreed to 5000 USD | price 249 USD (EVIDENCE) | no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5000 USD | measured on this offer's own sales: 5 accepted of 80 contacts | measured on this offer's own sales: 4 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "no new deals needed | 7 deal(s) needed and nobody has established how many buyers exist or how often they buy | 4 deal(s) needed at the measured rate means asking 116 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 2.9"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 15, tied up 0 | cost 0, tied up 0 | cost 40, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "5 days to usable cash against 21 left | 3 days to usable cash against 21 left | 30 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "Operators in the region probably buy lease-expiry lead lists every week.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Weekly landowner lease-expiry lead lists for billboard operators to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "5 paid orders from 80 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Billboard site-leasing managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$249",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_0536a735577f4112b55f",
+    "title": "Outsourced billboard-permit compliance clerk service",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Billboard operators",
+     "reachableChannel": "Email to operators listed with the state DOT outdoor advertising program",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:35.830Z",
+     "offerScope": "Outsourced billboard-permit compliance clerk service",
+     "priceCents": 224000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "outdoor advertising (billboard operators)",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four signed operators | reach: Email to operators listed with the state DOT outdoor advertising program | reach: Email to operators listed with the state DOT outdoor advertising program"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "a buyer agreed to 5000 USD | price 249 USD (EVIDENCE) | no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 5000 USD | measured on this offer's own sales: 5 accepted of 80 contacts | measured on this offer's own sales: 4 accepted of 60 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "no new deals needed | 7 deal(s) needed and nobody has established how many buyers exist or how often they buy | 4 deal(s) needed at the measured rate means asking 116 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 2.9"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 15, tied up 0 | cost 0, tied up 0 | cost 40, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "5 days to usable cash against 21 left | 3 days to usable cash against 21 left | 30 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state DOT outdoor advertising program lists 85 permitted billboard operators with contacts.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Outsourced billboard-permit compliance clerk service to each buyer, billed monthly.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "4 paid orders from 60 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$40",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Billboard operators",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The state DOT advertises an outdoor-advertising permit clerk position at $28 an hour, $2,240 for an 80-hour month (job posting, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "30 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 450000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:17.672Z"
+ }
+}

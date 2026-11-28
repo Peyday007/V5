@@ -1,0 +1,472 @@
+{
+ "caseId": "ay-02-named-industry-auto-parts",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Google Business Profile + review-request setup for independe\", and what it is missing first is an offer and a price. Research first: the deep dive on \"Google Business Profile + review-request setup for independe\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: every change the reconstruction makes rests on an unmeasured assumption, so it is not the plan: if its 3 unmeasured assumption(s) hold (Sell \"Google Business Profile + review-request setup for independent auto-parts stores\" through a partner who already…; Sell a bundle of 10 unit(s) at 10% off (×9.0 the unit price, ×10.0 its direct cost); Ask for a deposit of 30–50% at signing (assumed accepted)) it would reach 84.7% (p50 $19,386): a hypothesis to test by running each one's kill criterion, not evidence.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_476b870001684b5e832e",
+   "cop_63dc741f4f204c699a8e",
+   "cop_07cac45fe8324452ac72"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dive on \"Google Business Profile + review-request setup for independe\" establishes or refutes the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_63dc741f4f204c699a8e",
+    "title": "Google Business Profile + review-request setup for independent auto-parts stores",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores)",
+     "reachableChannel": "Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators",
+     "offerScope": "One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site",
+     "priceCents": 50000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 10000,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "Automotive aftermarket retail",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts P"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "48 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "12 deal(s) needed, 2471 available in the window (2471 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 20, tied up 100"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "Genuine Parts Company reports 4,317 independently-owned NAPA stores in North America (U.S. and Canada) as of December 31, 2025, alongside 2,471 company-owned stores; each independent is a separately owned auto-parts store reachable through the public NAPA store locator. A one-time local-search setup is bought once per store.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site to Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores), reached through Owner phone and email outreach to independents listed on NAPA/Auto Value/Parts Plus store locators, at $500; The owner, personally, drafting with general AI writing tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$20",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner, personally, drafting with general AI writing tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "3 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "One-time local-search package: Google Business Profile optimisation, inventory/services posts, review-request QR/SMS link and a one-page store site",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent auto-parts stores (independently owned NAPA, Auto Value, Parts Plus, Carquest and unaffiliated stores)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://simplepart.com/simplepart-packages.html; https://www.tributemedia.com/auto-shop-marketing; https://hibu.com/industries/auto/auto-parts; https://www.genpt.com/our-companies",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_476b870001684b5e832e",
+    "title": "eBay Motors listing build of slow-moving inventory for independent parts stores",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Independent auto-parts store owners with slow-moving or obsolete stock",
+     "reachableChannel": "Owner phone and email outreach to independent stores",
+     "offerScope": "Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account",
+     "priceCents": 75000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 4,
+     "requiredCapabilities": [],
+     "industry": "Automotive aftermarket retail",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner phone and email outreach to independent stores"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 750 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "32 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "8 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 0, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner phone and email outreach to independent stores",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "4,700 Independent auto-parts store owners with slow-moving or obsolete stock (eBay runs a Motors Parts Sales Hub and fitment tools for P&A sellers; dealer-side tools (RevolutionParts, MarketplaceDirect) show parts sellers pay to list on eBay; independent-store demand unmeasured)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account to Independent auto-parts store owners with slow-moving or obsolete stock, reached through Owner phone and email outreach to independent stores, at $750; The owner, personally, drafting with general AI writing tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner, personally, drafting with general AI writing tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "4 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Flat-fee build of up to 200 eBay Motors listings with fitment (compatibility) data in the store's own eBay account",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Independent auto-parts store owners with slow-moving or obsolete stock",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$750",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.revolutionparts.com/plans; https://www.ebay.com/sellercenter/listings/parts-sales-hub; https://www.genpt.com/our-companies",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_07cac45fe8324452ac72",
+    "title": "Monthly managed local marketing retainer for independent auto-parts stores",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Independent auto-parts store owners",
+     "reachableChannel": "Owner phone and email outreach",
+     "offerScope": "Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront",
+     "priceCents": 30000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 10000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "Automotive aftermarket retail",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Owner phone and email outreach"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "80 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "20 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 10, tied up 100"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Owner phone and email outreach",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "4,700 Independent auto-parts store owners (Comparable vendors: SimplePart retailer $225/month, theStacc from $749/mo for repair shops; 20 first-month payments needed)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront to Independent auto-parts store owners, reached through Owner phone and email outreach, at $300; The owner, personally, drafting with general AI writing tools delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$10",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$100",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner, personally, drafting with general AI writing tools.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Monthly Google profile posts, review responses and a mechanic-shop email newsletter, first month billed upfront",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Independent auto-parts store owners",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$300",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://simplepart.com/simplepart-packages.html; https://thestacc.com/best/auto-repair-marketing-agencies/; https://hibu.com/industries/auto/auto-parts; https://www.genpt.com/our-companies",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:19:36.050Z"
+ }
+}

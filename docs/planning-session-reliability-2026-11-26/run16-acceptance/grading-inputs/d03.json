@@ -1,0 +1,455 @@
+{
+ "caseId": "ay-03-larger-target-owner-hours",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_459c5b67107145dc84ec",
+   "cop_e9f28dd2f05b4880b2e0",
+   "cop_c5635771fa8341c7a2a1"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_459c5b67107145dc84ec",
+    "title": "Website rebuild for local home-service businesses, subcontracted build",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "Owner of a local home-service business with an outdated or missing website",
+     "reachableChannel": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+     "offerScope": "Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median)",
+     "peakFundingCents": 20000,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "Local home services (plumbing, HVAC, roofing)",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email through an Instantly workspace (Growth plan $47/mo) to businesses lis"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 560, tied up 200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch to Owner of a local home-service business with an outdated or missing website, reached through Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call, at $1,500; Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$560",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance WordPress developer hired on Upwork (~20 h at $15-28/h global median).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-scope 5-page mobile website rebuild, delivered in 10 days, 50% deposit / 50% on launch",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a local home-service business with an outdated or missing website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://blog.hubspot.com/website/website-design-cost; small business website cost 2025; https://blog.hubspot.com/website/wordpress-developer-salary; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_e9f28dd2f05b4880b2e0",
+    "title": "Catch-up bookkeeping before tax season, subcontracted to a freelance bookkeeper",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1200,
+    "card": {
+     "payer": "Small business owner months behind on books ahead of the 2026 tax filing season",
+     "reachableChannel": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+     "offerScope": "Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero",
+     "priceCents": 120000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance bookkeeper (Upwork) ~15 h",
+     "peakFundingCents": 20000,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "Small-business bookkeeping",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email through an Instantly workspace (Growth plan $47/mo) to businesses lis"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1200 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 525, tied up 200"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero to Small business owner months behind on books ahead of the 2026 tax filing season, reached through Cold email through an Instantly workspace (Growth plan $47/mo) to businesses listed on Google Maps, owner closes on a short call, at $1,200; Freelance bookkeeper (Upwork) ~15 h delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$525",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance bookkeeper (Upwork) ~15 h.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Fixed-price catch-up of up to 6 months of books in QuickBooks/Xero",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Small business owner months behind on books ahead of the 2026 tax filing season",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://xendoo.com/catch-up-bookkeeping-cost; catch-up bookkeeping pricing 2025; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_c5635771fa8341c7a2a1",
+    "title": "Monthly podcast editing package for B2B podcasts, subcontracted editor",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 600,
+    "card": {
+     "payer": "Host or marketing lead of a weekly B2B podcast",
+     "reachableChannel": "Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts",
+     "offerScope": "Edit, mix and master 4 episodes a month with show notes",
+     "priceCents": 60000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance podcast editor (Upwork/Contra) at ~$50 per episode",
+     "peakFundingCents": 15000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Podcast production",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email through an Instantly workspace to hosts of active B2B podcasts listed"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 600 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 200, tied up 150"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Edit, mix and master 4 episodes a month with show notes to Host or marketing lead of a weekly B2B podcast, reached through Cold email through an Instantly workspace to hosts of active B2B podcasts listed in Apple Podcasts, at $600; Freelance podcast editor (Upwork/Contra) at ~$50 per episode delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$200",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$150",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance podcast editor (Upwork/Contra) at ~$50 per episode.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Edit, mix and master 4 episodes a month with show notes",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Host or marketing lead of a weekly B2B podcast",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.twine.net/blog/podcast-editing-costs-explained-what-you-need-to-know; podcast editing service pricing; https://instantly.ai/pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 45,
+   "hoursCeiling": 19,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 3
+  },
+  "at": "2026-11-28T07:12:33.080Z"
+ }
+}

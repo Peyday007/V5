@@ -1,0 +1,216 @@
+{
+ "caseId": "ax-04-ferry-drill-log-price-contradicted",
+ "keys": {
+  "cop_0c856ba892a44c779f38": "ferryPack"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 4000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 52325× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Safety-drill log and passenger-manifest compliance packs for\" needs [figure withheld] and keeps [figure withheld], 805× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Ferry operations managers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_0c856ba892a44c779f38"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+    "owner": "PERSON",
+    "cost": 20
+   },
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Ferry operations managers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Ferry operations managers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 39.92275523888992
+   },
+   {
+    "label": "Collect payment for \"Safety-drill log and passenger-manifest compliance packs for small passenger-fer\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 4000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_0c856ba892a44c779f38",
+    "title": "Safety-drill log and passenger-manifest compliance packs for small passenger-ferry operators",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Ferry operations managers",
+     "reachableChannel": "Email to the operator contacts published in the regional vessel registry",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:02.607Z",
+     "offerScope": "A season's drill-log templates and manifest reconciliation pack, built by Brain; paid by card on delivery.",
+     "priceCents": 150000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "passenger ferry operators",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the operator contacts published in the regional vessel registry"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 12 accepted of 120 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "28 deal(s) needed at the measured rate means asking 423 prospects, but the market holds only 120 (120 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 7.9"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 20, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "4 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The regional vessel registry lists 120 small passenger-vessel operators with published contacts; each must keep drill logs and manifests every season.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A season's drill-log templates and manifest reconciliation pack, built by Brain; paid by card on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "12 paid orders from 120 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$20",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Ferry operations managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$150",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:10.417Z"
+ }
+}

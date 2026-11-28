@@ -1,0 +1,12 @@
+a01 None step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=None usable=None
+a02 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a03 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a04 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a05 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a06 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a07 None step=1 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a08 None step=0 pass=True outcome=NO_PLAN_JUSTIFIED_CORRECT critical=[] e2e=None usable=None
+a09 None step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=None usable=None
+a10 None step=1 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=None usable=None
+a11 None step=0 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=None usable=None
+a12 None step=1 pass=True outcome=EXECUTABLE_PLAN_CORRECT critical=[] e2e=None usable=None

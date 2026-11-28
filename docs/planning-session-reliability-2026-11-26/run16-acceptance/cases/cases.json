@@ -1,0 +1,714 @@
+[
+  {
+    "id": "ax-01-rv-park-rate-workbook",
+    "heldOut": true,
+    "description": "Two openings, one sound. (A) Brain produces a $290 seasonal-site rate workbook for RV park and campground managers: the state campground association lists 640 member parks with published manager emails (counted reachable buyers for this seller), and a pilot send of this offer to 400 of them returned 22 paid orders (5.5%). 640 × 5.5% ≈ 35 orders × $290 ≈ $10,150, so the 11 orders $3,000 needs ($3,190) sit well inside it; $6 cost, card payment at checkout, 3 days to cash. Calendar: sends days 1–10, orders settle by day 13 at the latest, inside 30 days. Brain performs, so owner time is ~0. (B) The owner's on-site host coaching: five signed at $600 = $3,000 exactly, but 8 owner hours a deal = 40 hours against 2 h/week × 30/7 ≈ 8.6 hours allowed. A correct plan uses A and never B.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "RV parks and campgrounds",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital and no more than 2 hours a week of my time.",
+    "openings": [
+      {
+        "key": "rvRates",
+        "title": "Seasonal-site rate and occupancy benchmarking workbook for RV park managers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "RV parks and campgrounds",
+        "payer": "RV park and campground managers",
+        "channel": "Email to the manager addresses published in the state campground association member directory",
+        "offer": "A workbook benchmarking seasonal-site rates and occupancy against comparable parks, delivered by Brain within 1 day of order; paid by card at checkout.",
+        "price": 290,
+        "priceEvidence": "This offer was sold at $290 in the pilot send; 22 managers paid $290 by card (pilot invoices, 2026-11).",
+        "cost": 6,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.2,
+        "performer": "BRAIN",
+        "volume": "The state campground association directory lists 640 member RV parks and campgrounds, each with a published manager email; each park sets next season's seasonal-site rates every winter.",
+        "conversion": {
+          "paid": 22,
+          "of": 400,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "hostCoaching",
+        "title": "On-site campground host coaching delivered by the owner",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "RV parks and campgrounds",
+        "payer": "Campground owners",
+        "channel": "The five signed owners",
+        "offer": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "price": 600,
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 8,
+        "performer": "OWNER",
+        "agreements": [
+          600,
+          600,
+          600,
+          600,
+          600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 8,
+      "mustNotUse": [
+        "hostCoaching"
+      ]
+    }
+  },
+  {
+    "id": "ax-02-bail-bond-price-said",
+    "heldOut": true,
+    "description": "A forfeiture-deadline tracker for bail bond agencies. Buyers are counted (410 licensed agencies on the state insurance department list, with phones and emails), a pilot measured 18 paid orders from 300 contacts, Brain produces it at $5 and cash settles in 3 days. At $350, 8 orders ($2,800) would cover $2,500 and 410 × 6% ≈ 24 orders exist. But the $350 is only the owner's word: the pilot invoices were not filed and no source states what any agency paid. Every other link is evidenced; the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "bail bond agencies",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "bailTracker",
+        "title": "Court-date and forfeiture-deadline tracker for bail bond agencies",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "bail bond agencies",
+        "payer": "Bail bond agency owners",
+        "channel": "Phone and email from the state insurance department's licensed bail agent list",
+        "offer": "A tracker of every open bond's court dates and forfeiture deadlines, built by Brain from the agency's bond register; paid by card on delivery.",
+        "price": 350,
+        "priceBasis": "PERSON",
+        "priceEvidence": "The owner says bail agents will pay $350 for it; no invoice or published price shows what any agency paid.",
+        "cost": 5,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The state insurance department lists 410 licensed bail bond agencies with addresses, phones and emails; each tracks forfeiture deadlines on every open bond.",
+        "conversion": {
+          "paid": 18,
+          "of": 300,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "bailTracker"
+      }
+    }
+  },
+  {
+    "id": "ax-03-cemetery-mapping-no-surveyor",
+    "heldOut": true,
+    "description": "Three cemetery associations signed at $2,400 for GPS plot mapping and a digitised burial register ($7,200 against $6,000 in 45 days; paid on completion within 14 days). The work needs a person with a survey-grade GPS walking every section on site; Brain can digitise the register but cannot survey, and no surveyor or crew is quoted or engaged. Nobody is established to fulfil: the decisive gap is fulfilment.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "FULFILMENT",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "cemetery associations",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $6,000 of settled cash within 45 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "cemetery",
+        "title": "GPS plot mapping and digitised burial register for cemetery associations",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "cemetery associations",
+        "payer": "Cemetery association trustees",
+        "channel": "The three signed associations' board secretaries",
+        "offer": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+        "price": 2400,
+        "cost": 900,
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 30,
+        "performer": "NOBODY",
+        "agreements": [
+          2400,
+          2400,
+          2400
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "FULFILMENT"
+        ],
+        "opening": "cemetery"
+      }
+    }
+  },
+  {
+    "id": "ax-04-ferry-drill-log-price-contradicted",
+    "heldOut": true,
+    "description": "Drill-log and manifest compliance packs for small passenger-ferry operators: 120 operators counted in the regional vessel registry, a measured 12 paid orders from 120 contacts (10%), Brain produces it at $20. The card says $1,500 (12 × $1,500 = $18,000), but another source states $150, where the whole counted market at 10% is 12 × $150 = $1,800 — under the $4,000 target. The price decides the plan and it is contested: no executable plan until it is settled.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "passenger ferry operators",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "ferryPack",
+        "title": "Safety-drill log and passenger-manifest compliance packs for small passenger-ferry operators",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "passenger ferry operators",
+        "payer": "Ferry operations managers",
+        "channel": "Email to the operator contacts published in the regional vessel registry",
+        "offer": "A season's drill-log templates and manifest reconciliation pack, built by Brain; paid by card on delivery.",
+        "price": 1500,
+        "priceContradiction": 150,
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "volume": "The regional vessel registry lists 120 small passenger-vessel operators with published contacts; each must keep drill logs and manifests every season.",
+        "conversion": {
+          "paid": 12,
+          "of": 120,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "ferryPack"
+      }
+    }
+  },
+  {
+    "id": "ax-05-manufactured-housing-one-rfq",
+    "heldOut": true,
+    "description": "One manufactured-housing community's manager issued one request for quotes, budgeted at $3,800, for a one-time reconciliation of its water sub-meter billing. The price is real and Brain can do it, but it is one payer making one purchase: the most this opening is shown to bring is $3,800 against $12,000. Modelling it as many repeat buyers invents the other $8,200. No plan; how many deals the market holds is the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "manufactured housing communities",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "sunbeltPines",
+        "title": "Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Community",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "manufactured housing communities",
+        "payer": "Community manager, Sunbelt Pines Manufactured Housing Community",
+        "channel": "Reply to the community manager's RFQ email",
+        "offer": "A reconciliation of 2025 water sub-meter readings against resident bills; paid net-20 after delivery.",
+        "price": 3800,
+        "priceEvidence": "Sunbelt Pines Manufactured Housing Community issued a request for quotes budgeted at $3,800 for a one-time water sub-meter billing reconciliation (RFQ, 2026-11-18).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 20,
+        "hours": 1,
+        "performer": "BRAIN"
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "sunbeltPines"
+      },
+      "payerDealsMax": {
+        "sunbeltPines": 1
+      }
+    }
+  },
+  {
+    "id": "ax-06-dairy-grant-as-price",
+    "heldOut": true,
+    "description": "An on-farm energy-audit workbook for dairy farmers. Buyers are counted (900 licensed dairies on the state milk-producer registry), a pilot measured 15 orders from 200 contacts, Brain produces it at $20 and cash would settle in 7 days. But the only \"price\" is the $4,000 the state dairy innovation grant awards to each selected farm — money paid to farmers by the state, not what a farmer pays for a workbook. No source says what a dairy pays for this deliverable, so no plan; the decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "dairy farms",
+      "mechanism": "DIAGNOSTIC_OPPORTUNITY"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "dairyAudit",
+        "title": "On-farm energy audit workbook for dairy farmers",
+        "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+        "industry": "dairy farms",
+        "payer": "Dairy farm owners",
+        "channel": "Mail and phone to the farms on the state milk-producer registry",
+        "offer": "A workbook that audits milking-parlour and cooling energy use from twelve months of utility bills; built by Brain.",
+        "price": 4000,
+        "priceEvidence": "The state dairy innovation grant awards $4,000 to each dairy farm selected for its on-farm energy round (award announcement, 2026-10).",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state milk-producer registry lists 900 licensed dairy farms with mailing addresses and phones; the grant round received 210 applications.",
+        "conversion": {
+          "paid": 15,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "dairyAudit"
+      },
+      "notAPurchasePrice": [
+        "dairyAudit"
+      ]
+    }
+  },
+  {
+    "id": "ax-07-home-health-net45-deadline-moved",
+    "heldOut": true,
+    "description": "Five home health agencies signed at $1,200 for a subcontracted OASIS documentation review ($6,000 gross, $600 margin each); ClearChart Coding Services quoted $600 a review and can complete all five within 10 days of the order. Agencies pay net-45 from delivery. First reading, 75 days: order day 1, delivered by day 11, paid by day 56 — executable. Then the owner moves the deadline to 21 days from the change: the earliest cash is day 11 + 45 = 56 > 21, so nothing can settle in time. Infeasible on the deadline.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "home health agencies",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $4,000 of settled cash within 75 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "DEADLINE",
+          "days": 21
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "openings": [
+      {
+        "key": "oasisReview",
+        "title": "Subcontracted OASIS documentation review for home health agencies",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "home health agencies",
+        "payer": "Home health agency administrators",
+        "channel": "The five signed agencies' administrators",
+        "offer": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+        "price": 1200,
+        "cost": 600,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "ClearChart Coding Services (quoted $600 a review; can complete all five reviews within 10 days of the order)",
+        "agreements": [
+          1200,
+          1200,
+          1200,
+          1200,
+          1200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ax-08-thrift-tagging-loses-money",
+    "heldOut": true,
+    "description": "Four thrift stores signed at $1,800 to clear their donation-intake tagging backlog ($7,200 gross against $6,000), but the only established crew, TagRight Retail Services, quoted $1,950 per clearance: every deal loses $150, and collecting $7,200 loses $600. No sound plan on this opening; the economics are the blocker.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "ECONOMICS",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "thrift stores",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "thriftTagging",
+        "title": "Subcontracted donation-intake sorting and price tagging for thrift stores",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "thrift stores",
+        "payer": "Thrift store managers",
+        "channel": "The four signed store managers",
+        "offer": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+        "price": 1800,
+        "cost": 1950,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2)",
+        "agreements": [
+          1800,
+          1800,
+          1800,
+          1800
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "ECONOMICS"
+        ],
+        "opening": "thriftTagging"
+      }
+    }
+  },
+  {
+    "id": "ax-09-billboard-permit-calendars",
+    "heldOut": true,
+    "description": "Three openings, one sound. (A) Four billboard operators signed at $1,250 for a permit-renewal and structure-inspection calendar Brain builds in 2 days, paid by card on delivery (5 days to cash): $5,000 against $4,500; order day 1, delivered day 3, cash by day 8, inside 21 days. (B) prices a compliance service at a state DOT clerk's wage ($28 an hour, $2,240 a month): a wage, not what an operator pays for a deliverable. (C) sells lead lists whose buyer volume is only Brain's estimate. A correct plan uses A only.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "outdoor advertising (billboard operators)",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,500 of settled cash within 21 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "permitCalendar",
+        "title": "Permit-renewal and structure-inspection calendar for billboard operators",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "outdoor advertising (billboard operators)",
+        "payer": "Billboard operators' real-estate and permitting managers",
+        "channel": "The four signed operators",
+        "offer": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+        "price": 1250,
+        "cost": 15,
+        "capital": 0,
+        "daysToCash": 5,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          1250,
+          1250,
+          1250,
+          1250
+        ]
+      },
+      {
+        "key": "permitClerkRate",
+        "title": "Outsourced billboard-permit compliance clerk service",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "outdoor advertising (billboard operators)",
+        "payer": "Billboard operators",
+        "channel": "Email to operators listed with the state DOT outdoor advertising program",
+        "price": 2240,
+        "monthly": true,
+        "priceEvidence": "The state DOT advertises an outdoor-advertising permit clerk position at $28 an hour, $2,240 for an 80-hour month (job posting, 2026-11).",
+        "cost": 40,
+        "capital": 0,
+        "daysToCash": 30,
+        "hours": 1,
+        "performer": "BRAIN",
+        "volume": "The state DOT outdoor advertising program lists 85 permitted billboard operators with contacts.",
+        "conversion": {
+          "paid": 4,
+          "of": 60,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "leaseLeads",
+        "title": "Weekly landowner lease-expiry lead lists for billboard operators",
+        "mechanism": "INFORMATION_ASYMMETRY",
+        "industry": "outdoor advertising (billboard operators)",
+        "payer": "Billboard site-leasing managers",
+        "channel": "Email to operators listed with the state DOT outdoor advertising program",
+        "price": 249,
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.2,
+        "performer": "BRAIN",
+        "volume": "Operators in the region probably buy lease-expiry lead lists every week.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 5,
+          "of": 80,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "permitClerkRate",
+        "leaseLeads"
+      ],
+      "notAPurchasePrice": [
+        "permitClerkRate"
+      ]
+    }
+  },
+  {
+    "id": "ax-10-loader-resale-capital-raised",
+    "heldOut": true,
+    "description": "A small excavation contractor signed a purchase agreement at $38,500 for an off-rent compact track loader that a rental fleet sells for $31,000 plus $900 haulage ($31,900 cost, $6,600 kept). The unit must be bought before the buyer pays, so $31,900 is tied up. First reading: the owner allows $5,000 of capital — the only opening needs $31,900, so infeasible on capital. Then the owner raises starting capital to $35,000: buy day 1, haul by day 5, buyer wires on delivery, cash by day 12 inside 30 days; $38,500 ≥ $5,000 with $31,900 ≤ $35,000 tied up. Executable.",
+    "dimensions": {
+      "capital": "large",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "construction equipment rental",
+      "mechanism": "SUPPLY_DEMAND_MISMATCH"
+    },
+    "objective": "Collect $5,000 of settled cash within 30 days with at most $5,000 of capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "CAPITAL",
+          "capital": 35000
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "CAPITAL"
+        ],
+        "links": [
+          "ECONOMICS"
+        ]
+      },
+      "capitalMax": 5000
+    },
+    "openings": [
+      {
+        "key": "loaderResale",
+        "title": "Resale of an off-rent compact track loader from a rental fleet to an excavation contractor",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "construction equipment rental",
+        "payer": "Owner of a small excavation contracting firm",
+        "channel": "The signed buyer",
+        "offer": "A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery.",
+        "price": 38500,
+        "cost": 31900,
+        "capital": 31900,
+        "daysToCash": 12,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 days of payment) and Hartley Heavy Haul (quoted $900, can haul within 2 days)",
+        "agreements": [
+          38500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 35000
+    }
+  },
+  {
+    "id": "ax-11-jeweler-appraisals-owner-hours",
+    "heldOut": true,
+    "description": "Four independent jewelers signed for a batch of 15 insurance-appraisal documents each at $150 an appraisal ($2,250 a batch, $9,000 against $7,000 in 28 days). Hollis Appraisal Group, a credentialed appraiser, quoted $70 an appraisal ($1,050 a batch, $1,200 kept) and can do 40 appraisals a week from Dec 1. Calendar: 60 appraisals at 40/week — batches 1–2 done by day 7, batches 3–4 by day 14; each paid by card on delivery, 3 days to cash, so all cash is in by day 17. The owner coordinates 1 hour a batch = 4 hours against 2 h/week × 4 weeks = 8 allowed. Executable inside the hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent jewelers",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $7,000 of settled cash within 28 days using no up-front capital; I can give it at most 2 hours a week.",
+    "openings": [
+      {
+        "key": "appraisals",
+        "title": "Subcontracted insurance-appraisal documentation for independent jewelers",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "independent jewelers",
+        "payer": "Independent jewelry store owners",
+        "channel": "The four signed jewelers",
+        "offer": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+        "price": 2250,
+        "cost": 1050,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1)",
+        "agreements": [
+          2250,
+          2250,
+          2250,
+          2250
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "ownerHoursMax": 8
+    }
+  },
+  {
+    "id": "ax-12-language-school-target-then-net",
+    "heldOut": true,
+    "description": "A visa-attendance audit workbook for private English-language schools: 150 accredited schools counted in the accreditation body's directory (one purchase each per term), a measured 18 paid orders from 150 contacts (12%), Brain produces it at $30, $480 price, 4 days to cash. First reading, $90,000 in 30 days: every counted school buying at $480 is $72,000 < $90,000 — infeasible on the target, at any conversion. Then the owner restates the goal as $3,000 kept after direct costs: $450 kept a sale needs 7 sales ($3,150 net); 150 × 12% = 18 sales ($8,100 net) are measured, sends days 1–10, cash by day 14. Executable on the net target.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "private English-language schools",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $90,000 of settled cash within 30 days using no up-front capital.",
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Keep $3,000 of net cash after direct costs within 30 days using no up-front capital."
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      }
+    },
+    "openings": [
+      {
+        "key": "visaAudit",
+        "title": "Student-visa attendance audit workbook for private English-language schools",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "private English-language schools",
+        "payer": "Directors of studies at accredited private English-language schools",
+        "channel": "Email to the director addresses published in the accreditation body's school directory",
+        "offer": "A term's attendance audit against student-visa reporting rules, built by Brain from the school's register export; paid by card at checkout.",
+        "price": 480,
+        "priceEvidence": "Schools in the pilot paid $480 by card for this workbook (pilot invoices, 2026-11).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 4,
+        "hours": 0.3,
+        "performer": "BRAIN",
+        "volume": "The national accreditation body lists 150 accredited private English-language schools, each with a published director email; each must audit attendance once per term for student-visa reporting.",
+        "conversion": {
+          "paid": 18,
+          "of": 150,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "targetAfterChange": 3000
+    }
+  }
+]

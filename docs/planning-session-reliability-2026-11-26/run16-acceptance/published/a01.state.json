@@ -1,0 +1,1651 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_df49313300cf41b6bb6c",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital and no more than 2 hours a week of my time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,000 of cash settled into the owner's account within 30 days",
+    "ownerHoursPerWeek": 2.1,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "6c6f81e1b9a59e60d14b17eb"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_df49313300cf41b6bb6c",
+    "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $290 seasonal-site benchmarking workbook to directory-listed RV park managers",
+     "opportunityIds": [
+      "cop_f9bb5c813b47412fb37b"
+     ],
+     "why": "Every link is on the card as evidence: 22 of 400 pilot contacts paid $290 by card (5.5%), 640 reachable parks, Brain produces the spreadsheet, $6 direct cost, $0 exposure, cash usable in 3 days. 12 sales ($3,480) need ~218 contacts of the 640; owner time is zero because Brain reaches, delivers and collects."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site campground host coaching ($600/visit, five written acceptances)",
+      "why": "Each visit is 8 owner hours of on-site physical work; the goal allows 2 h/week (~9 h in the window), so at most one visit ($600) fits — it cannot carry $3,000 and breaks the hours limit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the 640 manager addresses in the state campground association directory with the workbook offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_channel",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Sell the workbook at $290, paid by card at checkout (12 sales needed; ~218 contacts at the measured 5.5%)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver each benchmarking workbook within 1 day of order",
+      "performer": "BRAIN",
+      "costCents": 7200,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments settle to usable cash (3 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "SPEND",
+      "amountCents": 7200,
+      "label": "Direct cost $6 x 12 workbooks",
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 348000,
+      "label": "12 card payments at $290",
+      "settlesDay": 6,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 290,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.055,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 640,
+      "unit": "parks",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "time to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [
+       "src_conv",
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#price",
+      "dated": "2026-11",
+      "claim": "22 managers paid $290 by card in the pilot send (pilot invoices)",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#conversionRates",
+      "dated": "2026-11",
+      "claim": "22 paid orders from 400 contacts",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "640 member parks with published manager emails",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_channel",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Offer sold to each buyer by email to directory addresses",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $6",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_c06718c73430457ba0d7",
+      "why": "8 owner hours of on-site physical work per visit; the goal allows ~9 owner hours in the whole window, so at most one $600 visit fits and it cannot reach $3,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "deals": 12,
+      "price": 290,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 6,
+      "ownerHours": 0,
+      "dealsMax": 640
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_d4493ad6f8cb_042cd7",
+    "digest": "d4493ad6f8cbeb4c223f764f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:40.302Z"
+   },
+   {
+    "goalId": "wst_df49313300cf41b6bb6c",
+    "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $290 seasonal-site benchmarking workbook to directory-listed RV park managers",
+     "opportunityIds": [
+      "cop_f9bb5c813b47412fb37b"
+     ],
+     "why": "Every link is on the card as evidence: 22 of 400 pilot contacts paid $290 by card (5.5%), 640 reachable parks, Brain produces the spreadsheet, $6 direct cost, $0 exposure, cash usable in 3 days. 12 sales ($3,480) need ~218 contacts of the 640; owner time is zero because Brain reaches, delivers and collects."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site campground host coaching ($600/visit, five written acceptances)",
+      "why": "Each visit is 8 owner hours of on-site physical work; the goal allows 2 h/week (~9 h in the window), so at most one visit ($600) fits — it cannot carry $3,000 and breaks the hours limit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the 640 manager addresses in the state campground association directory with the workbook offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_channel",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Sell the workbook at $290, paid by card at checkout (12 sales needed; ~218 contacts at the measured 5.5%)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver each benchmarking workbook within 1 day of order",
+      "performer": "BRAIN",
+      "costCents": 7200,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments settle to usable cash (3 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 7200,
+      "label": "Direct cost $6 x 12 workbooks, paid from settled receipts (card records $0 exposure)",
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 348000,
+      "label": "12 card payments at $290",
+      "settlesDay": 6,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 290,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.055,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 640,
+      "unit": "parks",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "time to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [
+       "src_conv",
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#price",
+      "dated": "2026-11",
+      "claim": "22 managers paid $290 by card in the pilot send (pilot invoices)",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#conversionRates",
+      "dated": "2026-11",
+      "claim": "22 paid orders from 400 contacts",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "640 member parks with published manager emails",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_channel",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Offer sold to each buyer by email to directory addresses",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $6",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_c06718c73430457ba0d7",
+      "why": "8 owner hours of on-site physical work per visit; the goal allows ~9 owner hours in the whole window, so at most one $600 visit fits and it cannot reach $3,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "deals": 12,
+      "price": 290,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 6,
+      "ownerHours": 0,
+      "dealsMax": 640
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_88bc6a58453e_10be7d",
+    "digest": "88bc6a58453e3038927015b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:59.597Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_df49313300cf41b6bb6c",
+   "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Sell the $290 seasonal-site benchmarking workbook to directory-listed RV park managers",
+    "opportunityIds": [
+     "cop_f9bb5c813b47412fb37b"
+    ],
+    "why": "Every link is on the card as evidence: 22 of 400 pilot contacts paid $290 by card (5.5%), 640 reachable parks, Brain produces the spreadsheet, $6 direct cost, $0 exposure, cash usable in 3 days. 12 sales ($3,480) need ~218 contacts of the 640; owner time is zero because Brain reaches, delivers and collects."
+   },
+   "alternatives": [
+    {
+     "title": "Owner's on-site campground host coaching ($600/visit, five written acceptances)",
+     "why": "Each visit is 8 owner hours of on-site physical work; the goal allows 2 h/week (~9 h in the window), so at most one visit ($600) fits — it cannot carry $3,000 and breaks the hours limit."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "REACH",
+     "label": "Email the 640 manager addresses in the state campground association directory with the workbook offer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_channel",
+      "src_volume"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "Sell the workbook at $290, paid by card at checkout (12 sales needed; ~218 contacts at the measured 5.5%)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_price",
+      "src_conv"
+     ],
+     "priceCents": 29000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Produce and deliver each benchmarking workbook within 1 day of order",
+     "performer": "BRAIN",
+     "costCents": 7200,
+     "day": 3,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Card payments settle to usable cash (3 days)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "s3",
+     "evidence": [
+      "src_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 6,
+     "kind": "SPEND",
+     "amountCents": 7200,
+     "label": "Direct cost $6 x 12 workbooks, paid from settled receipts (card records $0 exposure)",
+     "stepId": "s3"
+    },
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 348000,
+     "label": "12 card payments at $290",
+     "settlesDay": 6,
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 6,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 290,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.055,
+     "unit": "paid orders per contact",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 640,
+     "unit": "parks",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 6,
+     "unit": "USD per workbook",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttc"
+     ],
+     "needs": null
+    },
+    {
+     "name": "deals",
+     "status": "ESTIMATE",
+     "value": 12,
+     "unit": "sales",
+     "sources": [
+      "src_conv",
+      "src_volume"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#price",
+     "dated": "2026-11",
+     "claim": "22 managers paid $290 by card in the pilot send (pilot invoices)",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#conversionRates",
+     "dated": "2026-11",
+     "claim": "22 paid orders from 400 contacts",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "640 member parks with published manager emails",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#captureMechanism",
+     "dated": "2026-11-25",
+     "claim": "Offer sold to each buyer by email to directory addresses",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#delivery",
+     "dated": "2026-11-25",
+     "claim": "A spreadsheet Brain produces",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct cost $6",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    },
+    {
+     "id": "src_ttc",
+     "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "3 days to first cash",
+     "population": "RV park and campground managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f9bb5c813b47412fb37b"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_f9bb5c813b47412fb37b",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_c06718c73430457ba0d7",
+     "why": "8 owner hours of on-site physical work per visit; the goal allows ~9 owner hours in the whole window, so at most one $600 visit fits and it cannot reach $3,000."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f9bb5c813b47412fb37b",
+     "deals": 12,
+     "price": 290,
+     "directCost": 6,
+     "capital": 0,
+     "settlesDay": 6,
+     "ownerHours": 0,
+     "dealsMax": 640
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_88bc6a58453e_10be7d",
+   "digest": "88bc6a58453e3038927015b0",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:05:59.597Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_88bc6a58453e_10be7d",
+   "digest": "88bc6a58453e3038927015b0",
+   "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 7200,
+    "committedOpenCents": 0,
+    "preProofCents": 7200,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 3,
+    "collectedCents": 348000,
+    "collectedInWindowCents": 348000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 340800
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Seasonal-site rate and occupancy benchmarking workbook for R\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Seasonal-site rate and occupancy benchmarking workbook for R\" (assumption-only coverage: it reaches the target in 99.2% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 14484× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Seasonal-site rate and occupancy benchmarking workbook for RV park man\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_f9bb5c813b47412fb37b"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+      "owner": "PERSON",
+      "cost": 6
+     },
+     {
+      "label": "Collect payment for \"Seasonal-site rate and occupancy benchmarking workbook for RV park managers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "title": "Seasonal-site rate and occupancy benchmarking workbook for RV park managers",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 3000,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "RV park and campground managers",
+       "reachableChannel": "Email to the manager addresses published in the state campground association member directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T06:59:43.218Z",
+       "offerScope": "A workbook benchmarking seasonal-site rates and occupancy against comparable parks, delivered by Brain within 1 day of order; paid by card at checkout.",
+       "priceCents": 29000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "RV parks and campgrounds",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to the manager addresses published in the state campground association mem"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 290 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 22 accepted of 400 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "12 deal(s) needed, 640 available in the window (640 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 6, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state campground association directory lists 640 member RV parks and campgrounds, each with a published manager email; each park sets next season's seasonal-site rates every winter.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook benchmarking seasonal-site rates and occupancy against comparable parks, delivered by Brain within 1 day of order; paid by card at checkout. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "22 paid orders from 400 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$6",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "RV park and campground managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "This offer was sold at $290 in the pilot send; 22 managers paid $290 by card (pilot invoices, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_c06718c73430457ba0d7",
+      "title": "On-site campground host coaching delivered by the owner",
+      "reason": "needs the owner's physical work: the service (\"On-site\") would be performed by The owner, personally; the owner does no physical work",
+      "card": {
+       "payer": "Campground owners",
+       "reachableChannel": "The five signed owners",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T06:59:43.218Z",
+       "offerScope": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+       "priceCents": 60000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 8,
+       "requiredCapabilities": [],
+       "industry": "RV parks and campgrounds",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 60000,
+        "currency": "USD",
+        "deliverable": "A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A one-day on-site coaching visit by the owner; 8 owner hours per visit including travel; paid on completion. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Campground owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$600",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": 9,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 2
+    },
+    "at": "2026-11-28T07:04:10.469Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_88bc6a58453e_10be7d",
+    "revisionDigest": "88bc6a58453e3038927015b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49f0898dfcc446f190a5/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Every chain link of the single member is established by EVIDENCE facts on the card: price $290 is a real purchase price paid by this buyer population (22 managers paid by card, pilot invoices 2026-11), conversion 22/400 = 5.5% measured on this offer, 640 reachable parks with published emails, Brain-produced spreadsheet (PRODUCE_SPREADSHEET proved), $6 direct cost below price, $0 exposure, 3 days to usable cash. Recomputed: 12 x $290 = $3,480 >= $3,000; 12 / 0.055 = 218 contacts of 640; cost 12 x $6 = $72, net $3,408; cash settles day 6 of 30; checker trace max exposure $0. Excluded on-site coaching correctly: 8 owner hours of physical work per $600 visit, at most one visit fits ~9 window hours, cannot carry $3,000.",
+    "findings": [
+     "Arithmetic verified: 12 deals x $290 = $3,480 vs $3,000 target; 218 contacts needed at 5.5% of 640 available; settles day 6 of 30.",
+     "Owner hours stated as 0 but the card records humanHours 0.2; even at 0.2 h per deal, 12 deals = 2.4 h over the 30-day window, inside the ~9 h (2.1 h/week) limit. The plan should state the card's figure rather than zero.",
+     "Unstated: whether the 400 pilot contacts were drawn from the same 640-address directory. If so, only 240 uncontacted parks remain; 240 x 5.5% = 13.2 expected sales, still above the 12 needed but with thin margin. Recommend contacting non-pilot addresses first and tracking conversion from day 2.",
+     "Ledger shows $72 direct cost on day 3 against receipts settling day 6; the cost is incurred per order after the buyer's card payment, and the checker records max exposure $0, so it does not breach the no-up-front-capital limit.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED; they must be connected before day 1 for the reach and collect steps to run as scheduled."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:07:56.934Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_88bc6a58453e_10be7d",
+   "digest": "88bc6a58453e3038927015b0",
+   "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+   "plan": {
+    "goalId": "wst_df49313300cf41b6bb6c",
+    "contractDigest": "6c6f81e1b9a59e60d14b17eb",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Sell the $290 seasonal-site benchmarking workbook to directory-listed RV park managers",
+     "opportunityIds": [
+      "cop_f9bb5c813b47412fb37b"
+     ],
+     "why": "Every link is on the card as evidence: 22 of 400 pilot contacts paid $290 by card (5.5%), 640 reachable parks, Brain produces the spreadsheet, $6 direct cost, $0 exposure, cash usable in 3 days. 12 sales ($3,480) need ~218 contacts of the 640; owner time is zero because Brain reaches, delivers and collects."
+    },
+    "alternatives": [
+     {
+      "title": "Owner's on-site campground host coaching ($600/visit, five written acceptances)",
+      "why": "Each visit is 8 owner hours of on-site physical work; the goal allows 2 h/week (~9 h in the window), so at most one visit ($600) fits — it cannot carry $3,000 and breaks the hours limit."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "REACH",
+      "label": "Email the 640 manager addresses in the state campground association directory with the workbook offer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_channel",
+       "src_volume"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "Sell the workbook at $290, paid by card at checkout (12 sales needed; ~218 contacts at the measured 5.5%)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_price",
+       "src_conv"
+      ],
+      "priceCents": 29000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Produce and deliver each benchmarking workbook within 1 day of order",
+      "performer": "BRAIN",
+      "costCents": 7200,
+      "day": 3,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments settle to usable cash (3 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 6,
+      "kind": "SPEND",
+      "amountCents": 7200,
+      "label": "Direct cost $6 x 12 workbooks, paid from settled receipts (card records $0 exposure)",
+      "stepId": "s3"
+     },
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 348000,
+      "label": "12 card payments at $290",
+      "settlesDay": 6,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 290,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.055,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 640,
+      "unit": "parks",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 6,
+      "unit": "USD per workbook",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "time to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     },
+     {
+      "name": "deals",
+      "status": "ESTIMATE",
+      "value": 12,
+      "unit": "sales",
+      "sources": [
+       "src_conv",
+       "src_volume"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#price",
+      "dated": "2026-11",
+      "claim": "22 managers paid $290 by card in the pilot send (pilot invoices)",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#conversionRates",
+      "dated": "2026-11",
+      "claim": "22 paid orders from 400 contacts",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "640 member parks with published manager emails",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_channel",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Offer sold to each buyer by email to directory addresses",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $6",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_f9bb5c813b47412fb37b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "RV park and campground managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f9bb5c813b47412fb37b"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_c06718c73430457ba0d7",
+      "why": "8 owner hours of on-site physical work per visit; the goal allows ~9 owner hours in the whole window, so at most one $600 visit fits and it cannot reach $3,000."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_f9bb5c813b47412fb37b",
+      "deals": 12,
+      "price": 290,
+      "directCost": 6,
+      "capital": 0,
+      "settlesDay": 6,
+      "ownerHours": 0,
+      "dealsMax": 640
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_88bc6a58453e_10be7d",
+    "digest": "88bc6a58453e3038927015b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:59.597Z"
+   },
+   "review": {
+    "revisionId": "rev_88bc6a58453e_10be7d",
+    "revisionDigest": "88bc6a58453e3038927015b0",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_dfd1b6bf62174c9f9e20/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_49f0898dfcc446f190a5/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Every chain link of the single member is established by EVIDENCE facts on the card: price $290 is a real purchase price paid by this buyer population (22 managers paid by card, pilot invoices 2026-11), conversion 22/400 = 5.5% measured on this offer, 640 reachable parks with published emails, Brain-produced spreadsheet (PRODUCE_SPREADSHEET proved), $6 direct cost below price, $0 exposure, 3 days to usable cash. Recomputed: 12 x $290 = $3,480 >= $3,000; 12 / 0.055 = 218 contacts of 640; cost 12 x $6 = $72, net $3,408; cash settles day 6 of 30; checker trace max exposure $0. Excluded on-site coaching correctly: 8 owner hours of physical work per $600 visit, at most one visit fits ~9 window hours, cannot carry $3,000.",
+    "findings": [
+     "Arithmetic verified: 12 deals x $290 = $3,480 vs $3,000 target; 218 contacts needed at 5.5% of 640 available; settles day 6 of 30.",
+     "Owner hours stated as 0 but the card records humanHours 0.2; even at 0.2 h per deal, 12 deals = 2.4 h over the 30-day window, inside the ~9 h (2.1 h/week) limit. The plan should state the card's figure rather than zero.",
+     "Unstated: whether the 400 pilot contacts were drawn from the same 640-address directory. If so, only 240 uncontacted parks remain; 240 x 5.5% = 13.2 expected sales, still above the 12 needed but with thin margin. Recommend contacting non-pilot addresses first and tracking conversion from day 2.",
+     "Ledger shows $72 direct cost on day 3 against receipts settling day 6; the cost is incurred per order after the buyer's card payment, and the checker records max exposure $0, so it does not breach the no-up-front-capital limit.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED; they must be connected before day 1 for the reach and collect steps to run as scheduled."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:07:56.934Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital and no more than 2 hours a week of my time.",
+    "terms": "0b137d1d4b05bbb9",
+    "openings": {
+     "cop_c06718c73430457ba0d7": "d11f413827e5ce3e",
+     "cop_f9bb5c813b47412fb37b": "6627953c963fa560"
+    }
+   },
+   "at": "2026-11-28T07:10:28.185Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

@@ -1,0 +1,181 @@
+{
+ "caseId": "ax-07-home-health-net45-deadline-moved",
+ "keys": {
+  "cop_7c99eba41afb4656ae25": "oasisReview"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $4,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 45 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_7c99eba41afb4656ae25"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_7c99eba41afb4656ae25",
+    "title": "Subcontracted OASIS documentation review for home health agencies",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Home health agency administrators",
+     "reachableChannel": "The five signed agencies' administrators",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:21.984Z",
+     "offerScope": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+     "priceCents": 120000,
+     "currency": "USD",
+     "fulfillmentOwner": "ClearChart Coding Services (quoted $600 a review; can complete all five reviews within 10 days of the order)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "home health agencies",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The five signed agencies' administrators"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 6000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 6000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by ClearChart Coding Services (quoted $600 a review; can complete all five reviews  (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 600, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "45 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A pre-billing review of each agency's OASIS assessment documentation; invoiced on delivery, paid net-45. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "ClearChart Coding Services (quoted $600 a review; can complete all five reviews within 10 days of the order) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Home health agency administrators",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$1200",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "45 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_511c01f271294961b443"
+  ],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:13:59.868Z"
+ }
+}

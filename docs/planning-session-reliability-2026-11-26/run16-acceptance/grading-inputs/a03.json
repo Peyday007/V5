@@ -1,0 +1,175 @@
+{
+ "caseId": "ax-03-cemetery-mapping-no-surveyor",
+ "keys": {
+  "cop_c587c5f08b944440994b": "cemetery"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: GPS plot mapping and digitised burial register for cemetery \", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5991× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Cemetery association trustees — An on-site GPS \" needs [figure withheld] and keeps [figure withheld], 817× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"GPS plot mapping and digitised burial register for cemetery associatio\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_c587c5f08b944440994b"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"GPS plot mapping and digitised burial register for cemetery associations\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"GPS plot mapping and digitised burial register for cemetery associations\"",
+    "owner": "PERSON",
+    "cost": 900
+   },
+   {
+    "label": "Collect payment for \"GPS plot mapping and digitised burial register for cemetery associations\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish who would do the work for \"GPS plot mapping and digitised burial register for cemetery associations\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+  "openings": [
+   {
+    "opportunityId": "cop_c587c5f08b944440994b",
+    "title": "GPS plot mapping and digitised burial register for cemetery associations",
+    "missing": [
+     "FULFILMENT"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Cemetery association trustees",
+     "reachableChannel": "The three signed associations' board secretaries",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T06:59:56.136Z",
+     "offerScope": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+     "priceCents": 240000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 30,
+     "requiredCapabilities": [],
+     "industry": "cemetery associations",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 240000,
+      "currency": "USD",
+      "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The three signed associations' board secretaries"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 7200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 7200 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 900, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$900",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Cemetery association trustees",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$2400",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_d6243fbc853648c6990a"
+  ],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:10.428Z"
+ }
+}
