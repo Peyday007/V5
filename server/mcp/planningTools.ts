@@ -208,6 +208,19 @@ const verifyResearchTool: McpTool = {
 export function verdictsArg(args: Record<string, unknown>): unknown[] {
   const v = args['verdicts'];
   if (!Array.isArray(v) || v.length === 0) throw invalidInput('`verdicts` is required: one verdict per submitted claim (see brain_planning_context)');
+  // Each verdict in the shape the gate reads (run 15, fleet-2: a verdict sent its reasoning as `basis`, not `note`, and
+  // the gate threw on every attempt, so the research could never be judged).
+  v.forEach((x, i) => {
+    const o = (x ?? {}) as Record<string, unknown>;
+    const scope = o['scopeMatch'] as Record<string, unknown> | undefined;
+    const missing = [
+      typeof o['claimId'] !== 'string' ? 'claimId' : null,
+      typeof o['supportsClaim'] !== 'boolean' ? 'supportsClaim (true or false)' : null,
+      typeof o['note'] !== 'string' ? 'note (what the source says, in your words)' : null,
+      !scope || typeof scope !== 'object' || ['geography', 'timeframe', 'population', 'definitions'].some((k) => typeof scope[k] !== 'string') ? 'scopeMatch {geography, timeframe, population, definitions}' : null,
+    ].filter(Boolean);
+    if (missing.length) throw invalidInput(`verdicts[${i}] needs ${missing.join(', ')}`);
+  });
   return v;
 }
 export function sufficiencyArg(args: Record<string, unknown>): 'SUFFICIENT' | 'INSUFFICIENT' {
