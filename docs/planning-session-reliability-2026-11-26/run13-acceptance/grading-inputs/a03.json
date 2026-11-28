@@ -1,0 +1,195 @@
+{
+ "caseId": "ar-03-coworking-acoustic-net",
+ "keys": {
+  "cop_259a0fcfd0434f9b80da": "acoustic"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Acoustic phone-booth zone installs for coworking spaces, by \" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Acoustic phone-booth zone installs for coworking spaces, by \" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 6000× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Acoustic phone-booth zone installs for coworking spaces, by a subcontr\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_259a0fcfd0434f9b80da"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Acoustic phone-booth zone installs for coworking spaces, by a subcontracted crew\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Acoustic phone-booth zone installs for coworking spaces, by a subcontracted crew\"",
+    "owner": "PERSON",
+    "cost": 1400
+   },
+   {
+    "label": "Collect payment for \"Acoustic phone-booth zone installs for coworking spaces, by a subcontracted crew\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_259a0fcfd0434f9b80da",
+    "title": "Acoustic phone-booth zone installs for coworking spaces, by a subcontracted crew",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 5000,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Coworking space operators and community managers",
+     "reachableChannel": "Signed fixed quotes",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:37.021Z",
+     "offerScope": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+     "priceCents": 260000,
+     "currency": "USD",
+     "fulfillmentOwner": "QuietWall Installers LLC (written quote $1,400 per zone incl. materials; two zones a week from Dec 1; invoices net 3 after the client pays)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "coworking spaces",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 260000,
+      "currency": "USD",
+      "deliverable": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 260000,
+      "currency": "USD",
+      "deliverable": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 260000,
+      "currency": "USD",
+      "deliverable": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 260000,
+      "currency": "USD",
+      "deliverable": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 260000,
+      "currency": "USD",
+      "deliverable": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Signed fixed quotes"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 13000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 13000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by QuietWall Installers LLC (written quote $1,400 per zone incl. materials; two zon (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1400, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "22 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1400",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "QuietWall Installers LLC (written quote $1,400 per zone incl. materials; two zones a week from Dec 1; invoices net 3 after the client pays) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Coworking space operators and community managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Five coworking operators signed fixed quotes at $2,600 per phone-booth zone install (signed Nov 20–27, 2026), payable within 5 days of completion.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "22 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_e0599bdfb2074d8283fa"
+  ],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:51.989Z"
+ }
+}

@@ -1,0 +1,684 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_17102c0968d74e64b276",
+   "words": "Collect $8,000 of settled cash within 21 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 800000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "settled cash received reaches the target within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "52ec75782392f936958ec6d4"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_17102c0968d74e64b276",
+    "contractDigest": "52ec75782392f936958ec6d4",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan settles $8,000 within 21 days",
+     "opportunityIds": [],
+     "why": "The only opening is three signed $3,200 engagements ($9,600), but each co-op pays net 45 after its board approves on Dec 16, so the earliest payment is Jan 30, 2027 - 63 days out, against a 21-day window. No cash from it settles inside the deadline, and no other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the three workbooks anyway and collect on Jan 30",
+      "why": "Worth doing, but it collects $9,600 only on day 63; it does not meet this 21-day objective."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Find openings with a measured settlement time under 21 days, and ask the three co-ops whether any can pay before Jan 30 (e.g. a deposit or early payment term)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 63,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": "<= 21"
+     },
+     {
+      "name": "signed value",
+      "status": "EVIDENCED",
+      "value": 9600,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": ">= 8000"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "63 days to first cash: boards meet Dec 16, invoices net 45 after approval, earliest payment Jan 30, 2027",
+      "population": "three rural electric cooperatives that signed engagement letters",
+      "matchesBuyer": true,
+      "opportunityId": "cop_bbcd80aa91774b2a858b"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#price",
+      "dated": "2026-11",
+      "claim": "Three co-ops signed engagement letters at $3,200 per workbook",
+      "population": "three rural electric cooperatives that signed engagement letters",
+      "matchesBuyer": true,
+      "opportunityId": "cop_bbcd80aa91774b2a858b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: the only held opening's cash (three signed $3,200 engagements) settles no earlier than Jan 30, 2027 (63 days), after the 21-day deadline, so $0 settles inside the window.",
+     "resolution": "Either move the deadline to at least 63 days (then the signed $9,600 covers the $8,000), or have Brain ask the co-ops for payment before the deadline and search for openings whose measured settlement time is under 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_bbcd80aa91774b2a858b",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bbcd80aa91774b2a858b",
+      "why": "Earliest payment Jan 30, 2027 (63 days), after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 63 days from now (Jan 30, 2027): the three signed $3,200 engagements then settle $9,600 >= $8,000.",
+      "basis": [
+       {
+        "opportunityId": "cop_bbcd80aa91774b2a858b",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_40e20b48510f_78eed5",
+    "digest": "40e20b48510f969d01dc73f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_595b1fe5089045f49f19/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:35.340Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_17102c0968d74e64b276",
+   "contractDigest": "52ec75782392f936958ec6d4",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan settles $8,000 within 21 days",
+    "opportunityIds": [],
+    "why": "The only opening is three signed $3,200 engagements ($9,600), but each co-op pays net 45 after its board approves on Dec 16, so the earliest payment is Jan 30, 2027 - 63 days out, against a 21-day window. No cash from it settles inside the deadline, and no other opening is held."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver the three workbooks anyway and collect on Jan 30",
+     "why": "Worth doing, but it collects $9,600 only on day 63; it does not meet this 21-day objective."
+    }
+   ],
+   "steps": [
+    {
+     "id": "research",
+     "kind": "RESEARCH",
+     "label": "Find openings with a measured settlement time under 21 days, and ask the three co-ops whether any can pay before Jan 30 (e.g. a deposit or early payment term)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_time"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 63,
+     "unit": "days from today",
+     "sources": [
+      "s_time"
+     ],
+     "needs": "<= 21"
+    },
+    {
+     "name": "signed value",
+     "status": "EVIDENCED",
+     "value": 9600,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": ">= 8000"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_time",
+     "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#timeToFirstCash",
+     "dated": "2026-11",
+     "claim": "63 days to first cash: boards meet Dec 16, invoices net 45 after approval, earliest payment Jan 30, 2027",
+     "population": "three rural electric cooperatives that signed engagement letters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_bbcd80aa91774b2a858b"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#price",
+     "dated": "2026-11",
+     "claim": "Three co-ops signed engagement letters at $3,200 per workbook",
+     "population": "three rural electric cooperatives that signed engagement letters",
+     "matchesBuyer": true,
+     "opportunityId": "cop_bbcd80aa91774b2a858b"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Settlement timing: the only held opening's cash (three signed $3,200 engagements) settles no earlier than Jan 30, 2027 (63 days), after the 21-day deadline, so $0 settles inside the window.",
+    "resolution": "Either move the deadline to at least 63 days (then the signed $9,600 covers the $8,000), or have Brain ask the co-ops for payment before the deadline and search for openings whose measured settlement time is under 21 days.",
+    "decisiveLinks": [
+     "SETTLES_IN_TIME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_bbcd80aa91774b2a858b",
+     "missing": [
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_bbcd80aa91774b2a858b",
+     "why": "Earliest payment Jan 30, 2027 (63 days), after the 21-day deadline."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "SETTLES_IN_TIME"
+   ],
+   "constraints": [
+    {
+     "constraint": "DEADLINE",
+     "suggestion": "Move the deadline to at least 63 days from now (Jan 30, 2027): the three signed $3,200 engagements then settle $9,600 >= $8,000.",
+     "basis": [
+      {
+       "opportunityId": "cop_bbcd80aa91774b2a858b",
+       "field": "timeToFirstCash"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_40e20b48510f_78eed5",
+   "digest": "40e20b48510f969d01dc73f9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_595b1fe5089045f49f19/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:17:35.340Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_40e20b48510f_78eed5",
+   "digest": "40e20b48510f969d01dc73f9",
+   "contractDigest": "52ec75782392f936958ec6d4",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $8,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 63 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+    "acceptance": "NOT_SUPPORTED",
+    "considered": [
+     "cop_bbcd80aa91774b2a858b"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": null,
+    "openings": [
+     {
+      "opportunityId": "cop_bbcd80aa91774b2a858b",
+      "title": "Right-of-way easement records workbooks for rural electric cooperatives",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Right-of-way and engineering managers at rural electric cooperatives",
+       "reachableChannel": "Signed engagement letters",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:12:03.135Z",
+       "offerScope": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+       "priceCents": 320000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "rural electric cooperatives",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 320000,
+        "currency": "USD",
+        "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 320000,
+        "currency": "USD",
+        "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 320000,
+        "currency": "USD",
+        "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Signed engagement letters"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 9600 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 9600 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "63 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Right-of-way and engineering managers at rural electric cooperatives",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Three rural electric cooperatives signed engagement letters at $3,200 per easement records workbook (Nov 2026), invoices payable net 45 after board approval.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "63 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 800000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:15:31.086Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_40e20b48510f_78eed5",
+    "revisionDigest": "40e20b48510f969d01dc73f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_595b1fe5089045f49f19/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_22deba1c3cf24c868bb6/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive link. The only held opening (cop_bbcd80aa91774b2a858b) is otherwise fully established: three signed $3,200 engagements ($9,600 >= $8,000), Brain fulfils (PRODUCE_SPREADSHEET), $30 cost, $0 exposure. But its own EVIDENCE facts fix settlement: invoices are payable net 45 after board approval, the boards next meet Dec 16, so the earliest payment is Dec 16 + 45 = Jan 30, 2027 = 63 days from Nov 28, against a 21-day window. That is a constraint, not missing evidence: even with every fact known, $0 settles in the window. Recomputed: in-window settled cash $0 of $8,000. The decisive link (SETTLES_IN_TIME) and the DEADLINE constraint (>= 63 days makes $9,600 settle) are correctly stated and grounded on the timeToFirstCash field; the resolution (ask for early payment/deposit and search for sub-21-day openings) is the right next action, and the research step does no harm.",
+    "findings": [
+     "Recomputed: Dec 16 board + net 45 = Jan 30, 2027; Nov 28 -> Jan 30 = 63 days > 21; settled cash in window $0.",
+     "Constraint is real: the payment term is in the signed engagement, so no further evidence can make this opening settle in time without a renegotiated term.",
+     "With a 63-day deadline the signed $9,600 covers $8,000 (all three needed would not be required: three of three give $9,600; two give $6,400 < $8,000, so all three are needed).",
+     "No other opening is held; Brain's NOT_VIABLE reading agrees."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:21:04.365Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_40e20b48510f_78eed5",
+   "digest": "40e20b48510f969d01dc73f9",
+   "contractDigest": "52ec75782392f936958ec6d4",
+   "plan": {
+    "goalId": "wst_17102c0968d74e64b276",
+    "contractDigest": "52ec75782392f936958ec6d4",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan settles $8,000 within 21 days",
+     "opportunityIds": [],
+     "why": "The only opening is three signed $3,200 engagements ($9,600), but each co-op pays net 45 after its board approves on Dec 16, so the earliest payment is Jan 30, 2027 - 63 days out, against a 21-day window. No cash from it settles inside the deadline, and no other opening is held."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver the three workbooks anyway and collect on Jan 30",
+      "why": "Worth doing, but it collects $9,600 only on day 63; it does not meet this 21-day objective."
+     }
+    ],
+    "steps": [
+     {
+      "id": "research",
+      "kind": "RESEARCH",
+      "label": "Find openings with a measured settlement time under 21 days, and ask the three co-ops whether any can pay before Jan 30 (e.g. a deposit or early payment term)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 63,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": "<= 21"
+     },
+     {
+      "name": "signed value",
+      "status": "EVIDENCED",
+      "value": 9600,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": ">= 8000"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#timeToFirstCash",
+      "dated": "2026-11",
+      "claim": "63 days to first cash: boards meet Dec 16, invoices net 45 after approval, earliest payment Jan 30, 2027",
+      "population": "three rural electric cooperatives that signed engagement letters",
+      "matchesBuyer": true,
+      "opportunityId": "cop_bbcd80aa91774b2a858b"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_bbcd80aa91774b2a858b#price",
+      "dated": "2026-11",
+      "claim": "Three co-ops signed engagement letters at $3,200 per workbook",
+      "population": "three rural electric cooperatives that signed engagement letters",
+      "matchesBuyer": true,
+      "opportunityId": "cop_bbcd80aa91774b2a858b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Settlement timing: the only held opening's cash (three signed $3,200 engagements) settles no earlier than Jan 30, 2027 (63 days), after the 21-day deadline, so $0 settles inside the window.",
+     "resolution": "Either move the deadline to at least 63 days (then the signed $9,600 covers the $8,000), or have Brain ask the co-ops for payment before the deadline and search for openings whose measured settlement time is under 21 days.",
+     "decisiveLinks": [
+      "SETTLES_IN_TIME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_bbcd80aa91774b2a858b",
+      "missing": [
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bbcd80aa91774b2a858b",
+      "why": "Earliest payment Jan 30, 2027 (63 days), after the 21-day deadline."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "SETTLES_IN_TIME"
+    ],
+    "constraints": [
+     {
+      "constraint": "DEADLINE",
+      "suggestion": "Move the deadline to at least 63 days from now (Jan 30, 2027): the three signed $3,200 engagements then settle $9,600 >= $8,000.",
+      "basis": [
+       {
+        "opportunityId": "cop_bbcd80aa91774b2a858b",
+        "field": "timeToFirstCash"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_40e20b48510f_78eed5",
+    "digest": "40e20b48510f969d01dc73f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_595b1fe5089045f49f19/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:35.340Z"
+   },
+   "review": {
+    "revisionId": "rev_40e20b48510f_78eed5",
+    "revisionDigest": "40e20b48510f969d01dc73f9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_595b1fe5089045f49f19/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_22deba1c3cf24c868bb6/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is the right stance and names the decisive link. The only held opening (cop_bbcd80aa91774b2a858b) is otherwise fully established: three signed $3,200 engagements ($9,600 >= $8,000), Brain fulfils (PRODUCE_SPREADSHEET), $30 cost, $0 exposure. But its own EVIDENCE facts fix settlement: invoices are payable net 45 after board approval, the boards next meet Dec 16, so the earliest payment is Dec 16 + 45 = Jan 30, 2027 = 63 days from Nov 28, against a 21-day window. That is a constraint, not missing evidence: even with every fact known, $0 settles in the window. Recomputed: in-window settled cash $0 of $8,000. The decisive link (SETTLES_IN_TIME) and the DEADLINE constraint (>= 63 days makes $9,600 settle) are correctly stated and grounded on the timeToFirstCash field; the resolution (ask for early payment/deposit and search for sub-21-day openings) is the right next action, and the research step does no harm.",
+    "findings": [
+     "Recomputed: Dec 16 board + net 45 = Jan 30, 2027; Nov 28 -> Jan 30 = 63 days > 21; settled cash in window $0.",
+     "Constraint is real: the payment term is in the signed engagement, so no further evidence can make this opening settle in time without a renegotiated term.",
+     "With a 63-day deadline the signed $9,600 covers $8,000 (all three needed would not be required: three of three give $9,600; two give $6,400 < $8,000, so all three are needed).",
+     "No other opening is held; Brain's NOT_VIABLE reading agrees."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:21:04.365Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $8,000 of settled cash within 21 days using no up-front capital.",
+    "terms": "b0c0de0026d5ad60",
+    "openings": {
+     "cop_bbcd80aa91774b2a858b": "7567e7b90eebd699"
+    }
+   },
+   "at": "2026-11-28T03:22:03.925Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

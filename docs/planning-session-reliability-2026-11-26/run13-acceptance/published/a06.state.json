@@ -1,0 +1,1589 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_8cd5ca7a12184730a8c6",
+   "words": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 400000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "settled cash received reaches the target within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "31ef528ffa98c2f5667678b3"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_8cd5ca7a12184730a8c6",
+    "contractDigest": "31ef528ffa98c2f5667678b3",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Email the remaining 900 quilt shops the class-roster and fabric-reorder workbook at $149",
+     "opportunityIds": [
+      "cop_f8c95c4e3e9a42799c69"
+     ],
+     "why": "Conversion was measured on 200 shops from the same directory (16 paid, 8%). 28 orders needed from 900 uncontacted shops (3.1%) against a measured 8% (~72 expected); $4,172 gross, $84 direct cost paid out of settled receipts; all cash settles by Dec 13 (day 15) of a 30-day window; no capital tied up."
+    },
+    "alternatives": [
+     {
+      "title": "Win the Harbor Point fair-board RFQ ($3,500)",
+      "why": "Pays about Jan 12, after the deadline, and the award is uncertain."
+     },
+     {
+      "title": "Travel-nurse placement",
+      "why": "No placement price, no supplier quote, no close rate."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the workbook offer to the 900 uncontacted shops in the national quilt-shop directory (Nov 29-Dec 3)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $149 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 14900,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 28 paid orders at $149",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 14900,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 28 buyers (direct cost $3 each)",
+      "performer": "BRAIN",
+      "costCents": 8400,
+      "day": 15,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 28 x $149 = $4172, settled by day 15",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 417200,
+      "label": "28 payments of $149",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 8400,
+      "label": "Direct production cost $3 x 28",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.08,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 28 of 900 (3.1%); measured 8%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "28 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 149,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#buyerVolume",
+      "dated": "2026-11",
+      "claim": "Directory lists 1,100 independent quilt shops with owner emails; 200 contacted, 900 not yet contacted",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Email to owner addresses in the national quilt-shop directory",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#price",
+      "dated": "2026-11",
+      "claim": "16 quilt-shop owners paid $149 each after the first send (payment-processor report, Nov 10-24, 2026)",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#conversionRates",
+      "dated": "2026-11",
+      "claim": "16 paid orders from 200 contacts in the first send from the same directory",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per workbook",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Remaining 900 emailed Nov 29-Dec 3; first-send buyers paid within 7 days of the email; payouts 3 days after payment, all by Dec 13",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f8c95c4e3e9a42799c69",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_a055304c87cb4b1fbc71",
+      "missing": [
+       "CONVERSION",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a055304c87cb4b1fbc71",
+      "why": "The board pays net 30 from delivery, about Jan 12 (timeToFirstCash 45 days) - after the 30-day deadline; and a single RFQ award has no established win rate."
+     },
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "why": "The $2,400/week figure is a nurse pay survey, not a placement price any hospital pays; MedBridge gave no quote, so supply cost and margin are unknown; no close rate."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_f8c95c4e3e9a42799c69",
+      "deals": 28,
+      "price": 149,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 15
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "link": "FULFILMENT",
+      "reason": "The card's fulfillmentOwner says MedBridge 'would supply the nurse; no quote' - no quoted price or terms, so a fulfiller at a known cost is not established."
+     }
+    ],
+    "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+    "digest": "d0baaff2ad8f19ee703e62d5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7b29c276ae04490a132/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:20.613Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_8cd5ca7a12184730a8c6",
+   "contractDigest": "31ef528ffa98c2f5667678b3",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Email the remaining 900 quilt shops the class-roster and fabric-reorder workbook at $149",
+    "opportunityIds": [
+     "cop_f8c95c4e3e9a42799c69"
+    ],
+    "why": "Conversion was measured on 200 shops from the same directory (16 paid, 8%). 28 orders needed from 900 uncontacted shops (3.1%) against a measured 8% (~72 expected); $4,172 gross, $84 direct cost paid out of settled receipts; all cash settles by Dec 13 (day 15) of a 30-day window; no capital tied up."
+   },
+   "alternatives": [
+    {
+     "title": "Win the Harbor Point fair-board RFQ ($3,500)",
+     "why": "Pays about Jan 12, after the deadline, and the award is uncertain."
+    },
+    {
+     "title": "Travel-nurse placement",
+     "why": "No placement price, no supplier quote, no close rate."
+    }
+   ],
+   "steps": [
+    {
+     "id": "reach",
+     "kind": "REACH",
+     "label": "Email the workbook offer to the 900 uncontacted shops in the national quilt-shop directory (Nov 29-Dec 3)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_buyers",
+      "s_channel"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "offer",
+     "kind": "OFFER",
+     "label": "Offer at $149 per deal",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "reach",
+     "evidence": [
+      "s_price"
+     ],
+     "priceCents": 14900,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "sell",
+     "kind": "SELL",
+     "label": "Close 28 paid orders at $149",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "offer",
+     "evidence": [
+      "s_conv",
+      "s_price"
+     ],
+     "priceCents": 14900,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "deliver",
+     "kind": "DELIVER",
+     "label": "Brain produces and delivers the spreadsheet for each of 28 buyers (direct cost $3 each)",
+     "performer": "BRAIN",
+     "costCents": 8400,
+     "day": 15,
+     "dependsOn": "sell",
+     "evidence": [
+      "s_delivery",
+      "s_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "collect",
+     "kind": "COLLECT",
+     "label": "Collect 28 x $149 = $4172, settled by day 15",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 15,
+     "dependsOn": "deliver",
+     "evidence": [
+      "s_time"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 12,
+     "kind": "RECEIPT",
+     "amountCents": 417200,
+     "label": "28 payments of $149",
+     "settlesDay": 15,
+     "stepId": "collect"
+    },
+    {
+     "day": 15,
+     "kind": "SPEND",
+     "amountCents": 8400,
+     "label": "Direct production cost $3 x 28",
+     "stepId": "deliver"
+    }
+   ],
+   "proofDay": 15,
+   "quantities": [
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.08,
+     "unit": "paid orders per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": "needs >= 28 of 900 (3.1%); measured 8%"
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "buyers",
+     "sources": [
+      "s_buyers"
+     ],
+     "needs": "28 deals needed"
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 149,
+     "unit": "USD per deal",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "USD per deal",
+     "sources": [
+      "s_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to settled cash",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "days from today",
+     "sources": [
+      "s_time"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_buyers",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#buyerVolume",
+     "dated": "2026-11",
+     "claim": "Directory lists 1,100 independent quilt shops with owner emails; 200 contacted, 900 not yet contacted",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_channel",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#reachableChannel",
+     "dated": "2026-11",
+     "claim": "Email to owner addresses in the national quilt-shop directory",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#price",
+     "dated": "2026-11",
+     "claim": "16 quilt-shop owners paid $149 each after the first send (payment-processor report, Nov 10-24, 2026)",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#conversionRates",
+     "dated": "2026-11",
+     "claim": "16 paid orders from 200 contacts in the first send from the same directory",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_delivery",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#delivery",
+     "dated": "2026-11",
+     "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_cost",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#directCosts",
+     "dated": "2026-11",
+     "claim": "Direct cost $3 per workbook",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    },
+    {
+     "id": "s_time",
+     "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#captureMechanism",
+     "dated": "2026-11",
+     "claim": "Remaining 900 emailed Nov 29-Dec 3; first-send buyers paid within 7 days of the email; payouts 3 days after payment, all by Dec 13",
+     "population": "owners of independent quilt shops in the national quilt-shop directory",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f8c95c4e3e9a42799c69"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_f8c95c4e3e9a42799c69",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_a055304c87cb4b1fbc71",
+     "missing": [
+      "CONVERSION",
+      "SETTLES_IN_TIME"
+     ]
+    },
+    {
+     "opportunityId": "cop_790bbc6f7ad042e89177",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_a055304c87cb4b1fbc71",
+     "why": "The board pays net 30 from delivery, about Jan 12 (timeToFirstCash 45 days) - after the 30-day deadline; and a single RFQ award has no established win rate."
+    },
+    {
+     "opportunityId": "cop_790bbc6f7ad042e89177",
+     "why": "The $2,400/week figure is a nurse pay survey, not a placement price any hospital pays; MedBridge gave no quote, so supply cost and margin are unknown; no close rate."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_f8c95c4e3e9a42799c69",
+     "deals": 28,
+     "price": 149,
+     "directCost": 3,
+     "capital": 0,
+     "settlesDay": 15
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_790bbc6f7ad042e89177",
+     "link": "FULFILMENT",
+     "reason": "The card's fulfillmentOwner says MedBridge 'would supply the nurse; no quote' - no quoted price or terms, so a fulfiller at a known cost is not established."
+    }
+   ],
+   "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+   "digest": "d0baaff2ad8f19ee703e62d5",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f7b29c276ae04490a132/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:17:20.613Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+   "digest": "d0baaff2ad8f19ee703e62d5",
+   "contractDigest": "31ef528ffa98c2f5667678b3",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 8400,
+    "committedOpenCents": 0,
+    "preProofCents": 8400,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 12,
+    "collectedCents": 417200,
+    "collectedInWindowCents": 417200,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 408800
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Class-roster and fabric-reorder workbook for independent qui\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Class-roster and fabric-reorder workbook for independent qui\" (assumption-only coverage: it reaches the target in 84.7% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8030× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Class-roster and fabric-reorder workbook for independent quilt shops\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_f8c95c4e3e9a42799c69",
+     "cop_790bbc6f7ad042e89177",
+     "cop_a055304c87cb4b1fbc71"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+      "owner": "PERSON",
+      "cost": 3
+     },
+     {
+      "label": "Collect payment for \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_f8c95c4e3e9a42799c69",
+      "title": "Class-roster and fabric-reorder workbook for independent quilt shops",
+      "missing": [],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 4000,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Owners of independent quilt shops",
+       "reachableChannel": "Email to owner addresses in the national quilt-shop directory",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:52.930Z",
+       "offerScope": "Brain emails the remaining 900 shops over Nov 29–Dec 3; in the first send, buyers paid within 7 days of the email; card payouts land 3 days after payment (all by Dec 13).",
+       "priceCents": 14900,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "quilt and fabric shops",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to owner addresses in the national quilt-shop directory"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 149 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 16 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "28 deal(s) needed, 1100 available in the window (1100 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 3, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The national quilt-shop directory lists 1,100 independent quilt shops with published owner emails; 200 were contacted in the first send, leaving 900 not yet contacted.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain emails the remaining 900 shops over Nov 29–Dec 3; in the first send, buyers paid within 7 days of the email; card payouts land 3 days after payment (all by Dec 13). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "16 paid orders from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$3",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owners of independent quilt shops",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "16 quilt-shop owners paid $149 each for the workbook after the first send (payment-processor report, Nov 10–24, 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_a055304c87cb4b1fbc71",
+      "title": "Vendor-booth allocation workbook for the Harbor Point County Fair Board",
+      "missing": [
+       "CONVERSION",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Harbor Point County Fair Board",
+       "reachableChannel": "The board's RFQ portal",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:52.930Z",
+       "offerScope": "One RFQ closing Dec 5; award expected Dec 10; the board pays net 30 from delivery (about Jan 12).",
+       "priceCents": 350000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "county fairs",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The board's RFQ portal"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 3500 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 20, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "45 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell One RFQ closing Dec 5; award expected Dec 10; the board pays net 30 from delivery (about Jan 12). to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Harbor Point County Fair Board",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The Harbor Point County Fair Board's RFQ (closes Dec 5, 2026) budgets $3,500 for one vendor-booth allocation workbook.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "45 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "title": "Travel-nurse placement for critical-access hospitals",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "ECONOMICS"
+      ],
+      "stage": "B_EVIDENCED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Directors of nursing at critical-access hospitals",
+       "reachableChannel": "Hospital HR inboxes listed on their websites",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:11:52.930Z",
+       "offerScope": "Travel-nurse placement for critical-access hospitals",
+       "priceCents": 240000,
+       "currency": "USD",
+       "fulfillmentOwner": "MedBridge Staffing (would supply the nurse; no quote)",
+       "peakFundingCents": 0,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "rural hospital staffing",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Hospital HR inboxes listed on their websites"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "2 deal(s) needed, 48 available in the window (48 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by MedBridge Staffing (would supply the nurse; no quote) (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "costs or money tied up are not established"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "14 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "48 critical-access hospitals operate in the state.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Travel-nurse placement for critical-access hospitals to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "MedBridge Staffing (would supply the nurse; no quote) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Directors of nursing at critical-access hospitals",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Travel nurses in the region are paid a median of $2,400 a week (2026 travel-nurse pay survey).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 400000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:15:31.157Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+    "revisionDigest": "d0baaff2ad8f19ee703e62d5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7b29c276ae04490a132/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_51510b4d56484d42b5bd/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. The member (quilt-shop workbook, cop_f8c95c4e3e9a42799c69) has every link on EVIDENCE facts of its own record: 1,100 shops with published owner emails in the national directory, 200 contacted and 900 not; a real purchase price ($149 paid by 16 owners, processor report Nov 10-24); conversion measured on this offer's own first send from the same directory (16/200 = 8%); Brain fulfils (PRODUCE_SPREADSHEET proved); $3 cost; $0 exposure. Recomputed: 28 x $149 = $4,172 >= $4,000 (27 would give $4,023); 28/900 = 3.1% needed vs 8% measured (~72 expected; even the ~5% lower bound of a 200-contact sample gives ~45). Timing with Nov 28 = day 0: emails days 1-5, payment within 7 days (by day 12), payout 3 days later (by day 15) of 30. The $84 cost is paid from settled receipts, so no capital. Ledger matches the steps and trace. Exclusions are right: the Harbor Point RFQ pays net 30 from delivery (~Jan 12, timeToFirstCash 45 days) after the deadline and has no win rate; the travel-nurse $2,400/week is a nurse pay survey, not a price a hospital pays, and MedBridge gave no quote.",
+    "findings": [
+     "Recomputed: $4,172 gross, $84 direct cost, $4,088 net, settled by day 15 of 30.",
+     "Required 3.1% vs measured 8% on the same directory and same offer; population and channel match exactly.",
+     "Excluded travel-nurse opening: the price fact is a wage benchmark (what nurses are paid), not what a hospital pays for a placement (NOT_A_PURCHASE); fulfilment has no quote. Correctly excluded.",
+     "Excluded RFQ: settlement ~45 days, outside 30; one award with no close rate. Correctly excluded.",
+     "Operational note: SEND_A_MESSAGE is NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES UNREAD; the day-1 send to 900 needs the sending connector live (and volume at deliverable rates) or the 7-day payment clock starts later; ~15 days of slack absorb this."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:20:18.357Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+   "digest": "d0baaff2ad8f19ee703e62d5",
+   "contractDigest": "31ef528ffa98c2f5667678b3",
+   "plan": {
+    "goalId": "wst_8cd5ca7a12184730a8c6",
+    "contractDigest": "31ef528ffa98c2f5667678b3",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Email the remaining 900 quilt shops the class-roster and fabric-reorder workbook at $149",
+     "opportunityIds": [
+      "cop_f8c95c4e3e9a42799c69"
+     ],
+     "why": "Conversion was measured on 200 shops from the same directory (16 paid, 8%). 28 orders needed from 900 uncontacted shops (3.1%) against a measured 8% (~72 expected); $4,172 gross, $84 direct cost paid out of settled receipts; all cash settles by Dec 13 (day 15) of a 30-day window; no capital tied up."
+    },
+    "alternatives": [
+     {
+      "title": "Win the Harbor Point fair-board RFQ ($3,500)",
+      "why": "Pays about Jan 12, after the deadline, and the award is uncertain."
+     },
+     {
+      "title": "Travel-nurse placement",
+      "why": "No placement price, no supplier quote, no close rate."
+     }
+    ],
+    "steps": [
+     {
+      "id": "reach",
+      "kind": "REACH",
+      "label": "Email the workbook offer to the 900 uncontacted shops in the national quilt-shop directory (Nov 29-Dec 3)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_buyers",
+       "s_channel"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "offer",
+      "kind": "OFFER",
+      "label": "Offer at $149 per deal",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "reach",
+      "evidence": [
+       "s_price"
+      ],
+      "priceCents": 14900,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "sell",
+      "kind": "SELL",
+      "label": "Close 28 paid orders at $149",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "offer",
+      "evidence": [
+       "s_conv",
+       "s_price"
+      ],
+      "priceCents": 14900,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "deliver",
+      "kind": "DELIVER",
+      "label": "Brain produces and delivers the spreadsheet for each of 28 buyers (direct cost $3 each)",
+      "performer": "BRAIN",
+      "costCents": 8400,
+      "day": 15,
+      "dependsOn": "sell",
+      "evidence": [
+       "s_delivery",
+       "s_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "collect",
+      "kind": "COLLECT",
+      "label": "Collect 28 x $149 = $4172, settled by day 15",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 15,
+      "dependsOn": "deliver",
+      "evidence": [
+       "s_time"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "RECEIPT",
+      "amountCents": 417200,
+      "label": "28 payments of $149",
+      "settlesDay": 15,
+      "stepId": "collect"
+     },
+     {
+      "day": 15,
+      "kind": "SPEND",
+      "amountCents": 8400,
+      "label": "Direct production cost $3 x 28",
+      "stepId": "deliver"
+     }
+    ],
+    "proofDay": 15,
+    "quantities": [
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.08,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": "needs >= 28 of 900 (3.1%); measured 8%"
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "buyers",
+      "sources": [
+       "s_buyers"
+      ],
+      "needs": "28 deals needed"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 149,
+      "unit": "USD per deal",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "USD per deal",
+      "sources": [
+       "s_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to settled cash",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "days from today",
+      "sources": [
+       "s_time"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_buyers",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#buyerVolume",
+      "dated": "2026-11",
+      "claim": "Directory lists 1,100 independent quilt shops with owner emails; 200 contacted, 900 not yet contacted",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_channel",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#reachableChannel",
+      "dated": "2026-11",
+      "claim": "Email to owner addresses in the national quilt-shop directory",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#price",
+      "dated": "2026-11",
+      "claim": "16 quilt-shop owners paid $149 each after the first send (payment-processor report, Nov 10-24, 2026)",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#conversionRates",
+      "dated": "2026-11",
+      "claim": "16 paid orders from 200 contacts in the first send from the same directory",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_delivery",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#delivery",
+      "dated": "2026-11",
+      "claim": "A spreadsheet Brain produces (PRODUCE_SPREADSHEET proved)",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_cost",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#directCosts",
+      "dated": "2026-11",
+      "claim": "Direct cost $3 per workbook",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     },
+     {
+      "id": "s_time",
+      "url": "https://brain.local/card/cop_f8c95c4e3e9a42799c69#captureMechanism",
+      "dated": "2026-11",
+      "claim": "Remaining 900 emailed Nov 29-Dec 3; first-send buyers paid within 7 days of the email; payouts 3 days after payment, all by Dec 13",
+      "population": "owners of independent quilt shops in the national quilt-shop directory",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f8c95c4e3e9a42799c69"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f8c95c4e3e9a42799c69",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_a055304c87cb4b1fbc71",
+      "missing": [
+       "CONVERSION",
+       "SETTLES_IN_TIME"
+      ]
+     },
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a055304c87cb4b1fbc71",
+      "why": "The board pays net 30 from delivery, about Jan 12 (timeToFirstCash 45 days) - after the 30-day deadline; and a single RFQ award has no established win rate."
+     },
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "why": "The $2,400/week figure is a nurse pay survey, not a placement price any hospital pays; MedBridge gave no quote, so supply cost and margin are unknown; no close rate."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_f8c95c4e3e9a42799c69",
+      "deals": 28,
+      "price": 149,
+      "directCost": 3,
+      "capital": 0,
+      "settlesDay": 15
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_790bbc6f7ad042e89177",
+      "link": "FULFILMENT",
+      "reason": "The card's fulfillmentOwner says MedBridge 'would supply the nurse; no quote' - no quoted price or terms, so a fulfiller at a known cost is not established."
+     }
+    ],
+    "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+    "digest": "d0baaff2ad8f19ee703e62d5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7b29c276ae04490a132/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:20.613Z"
+   },
+   "review": {
+    "revisionId": "rev_d0baaff2ad8f_e5fd5e",
+    "revisionDigest": "d0baaff2ad8f19ee703e62d5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f7b29c276ae04490a132/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_51510b4d56484d42b5bd/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "EXECUTABLE is supported. The member (quilt-shop workbook, cop_f8c95c4e3e9a42799c69) has every link on EVIDENCE facts of its own record: 1,100 shops with published owner emails in the national directory, 200 contacted and 900 not; a real purchase price ($149 paid by 16 owners, processor report Nov 10-24); conversion measured on this offer's own first send from the same directory (16/200 = 8%); Brain fulfils (PRODUCE_SPREADSHEET proved); $3 cost; $0 exposure. Recomputed: 28 x $149 = $4,172 >= $4,000 (27 would give $4,023); 28/900 = 3.1% needed vs 8% measured (~72 expected; even the ~5% lower bound of a 200-contact sample gives ~45). Timing with Nov 28 = day 0: emails days 1-5, payment within 7 days (by day 12), payout 3 days later (by day 15) of 30. The $84 cost is paid from settled receipts, so no capital. Ledger matches the steps and trace. Exclusions are right: the Harbor Point RFQ pays net 30 from delivery (~Jan 12, timeToFirstCash 45 days) after the deadline and has no win rate; the travel-nurse $2,400/week is a nurse pay survey, not a price a hospital pays, and MedBridge gave no quote.",
+    "findings": [
+     "Recomputed: $4,172 gross, $84 direct cost, $4,088 net, settled by day 15 of 30.",
+     "Required 3.1% vs measured 8% on the same directory and same offer; population and channel match exactly.",
+     "Excluded travel-nurse opening: the price fact is a wage benchmark (what nurses are paid), not what a hospital pays for a placement (NOT_A_PURCHASE); fulfilment has no quote. Correctly excluded.",
+     "Excluded RFQ: settlement ~45 days, outside 30; one award with no close rate. Correctly excluded.",
+     "Operational note: SEND_A_MESSAGE is NOT_CONNECTED and DISCOVER_LOCAL_BUSINESSES UNREAD; the day-1 send to 900 needs the sending connector live (and volume at deliverable rates) or the 7-day payment clock starts later; ~15 days of slack absorb this."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:20:18.357Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "b06f1d839258b239",
+    "openings": {
+     "cop_790bbc6f7ad042e89177": "2606c000083f72fb",
+     "cop_a055304c87cb4b1fbc71": "7e5b9dec2385006e",
+     "cop_f8c95c4e3e9a42799c69": "3cbda01331009b82"
+    }
+   },
+   "at": "2026-11-28T03:22:03.131Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

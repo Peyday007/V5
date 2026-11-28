@@ -1,0 +1,463 @@
+{
+ "caseId": "as-01-cideries-named-industry",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Every modelled opening at full reach\", and what it is missing first is an offer and a price. Research first: the deep dives on \"Cidery website build / rebuild (WordPress or Shopify) with D\", \"Cider label design subcontracted to a freelance designer\", \"Monthly social media content management for cideries\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 3000× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Cidery website build / rebuild (WordPress or Shopify) with D\" needs [figure withheld] and keeps [figure withheld], 1000× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_674bca003be54c0daf4e",
+   "cop_329e81abe4e8458188a2",
+   "cop_1c3c6d263b984b2aae50"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Research first: the deep dives on \"Cidery website build / rebuild (WordPress or Shopify) with D\", \"Cider label design subcontracted to a freelance designer\", \"Monthly social media content management for cideries\" establish or refute the buyer, price and demand each route proposal assumed; the plan is judged on what they find.",
+  "openings": [
+   {
+    "opportunityId": "cop_674bca003be54c0daf4e",
+    "title": "Cidery website build / rebuild (WordPress or Shopify) with DTC and events pages",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "independent cidery owner",
+     "reachableChannel": "cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries",
+     "offerScope": "5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch",
+     "priceCents": 150000,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit",
+     "peakFundingCents": 0,
+     "humanHours": 1.5,
+     "requiredCapabilities": [],
+     "industry": "craft cider",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to cideries with dated or missing websites found via Wikipedia list a"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1500 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "2 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 500, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1,300 independent cidery owner (2 sales at ,500 = ,000 >= ,500)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell 5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch to independent cidery owner, reached through cold email to cideries with dated or missing websites found via Wikipedia list and ciderculture.com/cideries, at $1,500; freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance WordPress web designer hired per project (Upwork/Fiverr), paid from the client's 50% deposit.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "5-8 page cidery website (taproom hours, menu, events, club signup, shop link) built and launched in 10 days, 50% deposit, balance at launch",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "independent cidery owner",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,500",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://seahawkmedia.com/solutions/winery-website-design-and-development/; https://websitesetup.org/website-cost/; https://www.wpzoom.com/blog/business-website-cost/; https://dev.to/allenarduino/how-much-does-a-small-business-website-cost-in-2026-2i0k; https://kingstoncreative.net/cider-marketing-ultimate-guide/; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_329e81abe4e8458188a2",
+    "title": "Cider label design subcontracted to a freelance designer",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "independent cidery launching a new cider",
+     "reachableChannel": "cold email to cideries announcing new releases on social media",
+     "offerScope": "New can/bottle label design for one cider SKU",
+     "priceCents": 100000,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance label designer (Dribbble / 99designs)",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "craft cider",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email to cideries announcing new releases on social media"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "12 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "3 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "costs or money tied up are not established"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email to cideries announcing new releases on social media",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1,300 independent cidery launching a new cider (3 labels at ,000 = ,000)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell New can/bottle label design for one cider SKU to independent cidery launching a new cider, reached through cold email to cideries announcing new releases on social media, at $1,000; freelance label designer (Dribbble / 99designs) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance label designer (Dribbble / 99designs).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "New can/bottle label design for one cider SKU",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "independent cidery launching a new cider",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://dribbble.com/pinewatt/services; https://thebrewermagazine.com/?p=11353; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_1c3c6d263b984b2aae50",
+    "title": "Monthly social media content management for cideries",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 2500,
+    "card": {
+     "payer": "independent cidery",
+     "reachableChannel": "cold email / Instagram DM to cideries",
+     "offerScope": "Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos",
+     "priceCents": 39900,
+     "currency": "USD",
+     "fulfillmentOwner": "freelance social media manager hired per client",
+     "peakFundingCents": 0,
+     "humanHours": 0.5,
+     "requiredCapabilities": [],
+     "industry": "craft cider",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: cold email / Instagram DM to cideries"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 399 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "28 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "7 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "costs or money tied up are not established"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "12 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "cold email / Instagram DM to cideries",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "buyerVolume",
+      "value": "1,300 independent cidery (7 clients x 99 first month = ,793)",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos to independent cidery, reached through cold email / Instagram DM to cideries, at $399; freelance social media manager hired per client delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "freelance social media manager hired per client.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "0.5 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Monthly Instagram/Facebook content calendar, captions and scheduled posts from the cidery's own photos",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "independent cidery",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$399",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$399",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.thumbtack.com/az/phoenix/social-media-marketing/we-post-129/service/191102843442693312; https://ciderassociation.org/guest-blog-leveraging-digital-marketing-channels-to-educate-and-engage-your-audience/; https://en.wikipedia.org/wiki/List_of_cideries_in_the_United_States",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 250000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:33:34.446Z"
+ }
+}

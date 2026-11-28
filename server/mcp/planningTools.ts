@@ -241,7 +241,7 @@ export const REVISION_SCHEMA = {
     excluded: { type: 'array', items: { type: 'object', required: ['opportunityId', 'why'], properties: { opportunityId: { type: 'string' }, why: { type: 'string' } } } },
     members: {
       type: 'array',
-      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num } },
+      items: { type: 'object', required: ['opportunityId'], properties: { opportunityId: { type: 'string' }, deals: num, price: num, directCost: num, capital: num, settlesDay: num, ownerHours: { type: ['number', 'null'], description: 'Owner hours the deals take in all; required when the goal limits owner hours.' } } },
     },
     steps: {
       type: 'array',
@@ -287,7 +287,8 @@ const revisionTool: McpTool = {
     '`excluded` (with why, e.g. outside a changed objective). A no-plan or conditional result states `members` for every opening ' +
     'it weighs: deals needed at its price, direct cost, capital per cycle and `settlesDay`, null exactly where that link is ' +
     'unestablished; a test that measures CONVERSION by selling also measures FULFILMENT where it is unestablished, and states ' +
-    '`validation.threshold` {paid, of, reach} so passing it carries the target. Brain checks ' +
+    '`validation.threshold` {paid, of, reach} so passing it carries the target. Under an owner-hours limit each member states ' +
+    '`ownerHours`. A quantity is EVIDENCED only on a source Brain\'s evidence gate did not reject. Brain checks ' +
     'it against the contract and its planner and returns every concrete problem to revise.',
   inputSchema: { type: 'object', properties: { revision: REVISION_SCHEMA, ...SESSION }, required: ['revision', 'session_id'], additionalProperties: false },
   annotations: { title: 'Planning: submit revision', ...MUTATING, idempotentHint: false },

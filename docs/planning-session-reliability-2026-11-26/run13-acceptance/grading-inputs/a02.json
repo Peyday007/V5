@@ -1,0 +1,162 @@
+{
+ "caseId": "ar-02-aerial-applicator-short-window",
+ "keys": {
+  "cop_69205c1a8a524c18906b": "part137"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $2,400 of the $3,000 still needed, even with every buyer agreeing at the top price. To make it supportable, capital: allow the goal to commit at least $225, what the lots that reach the target need at once; or deadline: move the deadline to at least 20 days from now, when enough lots have settled; or target: lower the target to about $2,400, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_69205c1a8a524c18906b"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_69205c1a8a524c18906b",
+    "title": "FAA Part 137 application-record audit packs for agricultural aviation operators",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+     "reachableChannel": "Signed engagement letters; delivery by email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:31.855Z",
+     "offerScope": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+     "priceCents": 120000,
+     "currency": "USD",
+     "peakFundingCents": 7500,
+     "humanHours": 0.5,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "agricultural aviation",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 120000,
+      "currency": "USD",
+      "deliverable": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Signed engagement letters; delivery by email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 25, tied up 75"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 14 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$25",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$75",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24–26, 2026), payable net 7 from delivery.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 14,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:52.340Z"
+ }
+}

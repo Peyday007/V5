@@ -258,7 +258,7 @@ export interface PlanRevisionInput {
    * link it rests on is unestablished (price: OFFER_AND_PRICE, capital: ECONOMICS, settlesDay: SETTLES_IN_TIME): an
    * unknown stays unknown, and a known figure is never left out.
    */
-  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null; settlesDay?: number | null }[];
+  members?: { opportunityId: string; deals: number | null; price: number | null; directCost: number | null; capital: number | null; settlesDay?: number | null; /** Owner hours the deals take in all, when the goal limits them. */ ownerHours?: number | null }[];
   /** The chain links the plan's validation test or research measures (what would resolve the unknowns). */
   resolves?: string[];
   /** Where the session's chain judgement differs from Brain's planner (BrainFacts.links): the link and the evidence-based reason. */
@@ -388,6 +388,7 @@ export type CheckCode =
   | 'OPENING_UNACCOUNTED'
   | 'ARITHMETIC_UNSTATED'
   | 'PROOF_INSUFFICIENT'
+  | 'REJECTED_EVIDENCE_USED'
   | 'BRAIN_CHECK_FAILED';
 
 export interface CheckProblem {
@@ -420,6 +421,8 @@ export interface BrainFacts {
   excluded?: Record<string, string>;
   /** Openings this goal's own sessions proposed as routes (session discovery), whose provenance is the session's sources. */
   discovered?: string[];
+  /** Source URLs of claims Brain's evidence gate rejected on this goal (and accepted on none), each with its reason. */
+  rejectedSources?: Record<string, string>;
 }
 
 /** The cash sequence, day by day, with every limit's running figure. Exported so the author can read it back. */
@@ -641,6 +644,11 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
       if (m.capital === null && !missing('ECONOMICS')) gaps.push('capital is null but ECONOMICS is established');
       if (m.settlesDay === undefined) gaps.push('settlesDay is not stated (null if SETTLES_IN_TIME is unestablished)');
       else if (m.settlesDay === null && !missing('SETTLES_IN_TIME')) gaps.push('settlesDay is null but SETTLES_IN_TIME is established');
+      // Run 13, as-02: under an owner-hours limit, two of three openings gave no owner hours, so none could be compared with it.
+      if (brain?.hoursCeiling != null) {
+        if (m.ownerHours === undefined) gaps.push(`ownerHours is not stated: the goal allows ${brain.hoursCeiling} owner hours (null if FULFILMENT is unestablished)`);
+        else if (m.ownerHours === null && !missing('FULFILMENT')) gaps.push('ownerHours is null but FULFILMENT is established');
+      }
       if (gaps.length) add('ARITHMETIC_UNSTATED', `${c.opportunityId}'s arithmetic: ${gaps.join('; ')}`, c.opportunityId);
     }
   }
@@ -650,6 +658,23 @@ export function checkRevision(contract: GoalContract, r: PlanRevisionInput, brai
    * `excluded` with its reason — so an opening an objective change put out of scope is excluded, not silently dropped
    * or named only in prose (run 10, al-08: the bowling opening, out of scope after the change, appeared nowhere).
    */
+  /*
+   * Evidence Brain's gate rejected is not evidence (run 13, as-02: a count the gate rejected for its population was
+   * marked EVIDENCED and argued from). A quantity is EVIDENCED only on a source the gate did not reject; one resting on
+   * nothing but rejected sources is an ESTIMATE or UNKNOWN until accepted evidence replaces it.
+   */
+  if (brain?.rejectedSources && Object.keys(brain.rejectedSources).length) {
+    const url = new Map(r.sources.map((s) => [s.id, s.url]));
+    for (const q of r.quantities) {
+      if (q.status !== 'EVIDENCED' || q.sources.length === 0) continue;
+      const urls = q.sources.map((id) => url.get(id) ?? '').filter(Boolean);
+      const rejected = urls.filter((u) => brain.rejectedSources![u] !== undefined);
+      if (rejected.length && rejected.length === urls.length) {
+        add('REJECTED_EVIDENCE_USED', `${q.name} is marked EVIDENCED on ${rejected.join(', ')}, which Brain's evidence gate rejected (${rejected.map((u) => brain.rejectedSources![u]).join('; ')}): mark it ESTIMATE or UNKNOWN, or cite evidence the gate accepted`, q.name);
+      }
+    }
+  }
+
   if (brain) {
     const accounted = new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId), ...(r.excluded ?? []).map((x) => x.opportunityId)]);
     for (const id of brain.admittedOpportunityIds) if (!accounted.has(id)) add('OPENING_UNACCOUNTED', `opening ${id} is on this goal but the revision neither weighs it (\`chain\`) nor sets it aside (\`excluded\` with why, e.g. outside the objective's scope)`, id);

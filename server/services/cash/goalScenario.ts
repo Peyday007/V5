@@ -40,7 +40,7 @@ import { acquisitionOf } from '../goals/pathways.ts';
 import { frontierTiers } from './shared.ts';
 import type { CashMechanism, CashOpportunity, CashCardFact } from '../../domain/types.ts';
 import { claimsByIds } from '../../repos/research.ts';
-import { COMPARABLE_DEMAND_FIELD } from '../../domain/routeOrigin.ts';
+import { COMPARABLE_DEMAND_FIELD, routeGoalOf } from '../../domain/routeOrigin.ts';
 import { STRUCTURES } from './properties.ts';
 import { COMPETITIVE_AWARD } from './paymentTiming.ts';
 import { PROVIDER_PAYOUT_DAYS } from './money.ts';
@@ -3254,6 +3254,10 @@ export async function composeGoalModel(input: { goal: Workstream; target: Target
   candidates.sort(
     (a, b) =>
       (IN_FLIGHT.has(a.opportunity.state) || a.agreed ? 0 : 1) - (IN_FLIGHT.has(b.opportunity.state) || b.agreed ? 0 : 1) ||
+      // The goal's own routes are the owner-read search (`ownerFit`, plan.ts): they are weighed before the cut, never
+      // dropped behind the project's evidenced openings. Production, 2026-11-28, Cash Mode 1: the three routes the app
+      // session filed for wst_5e3a85b8ae854e2a9cc4 carry only hypotheses, so they ranked behind evidenced openings.
+      Number(routeGoalOf(b.opportunity) === goal.id) - Number(routeGoalOf(a.opportunity) === goal.id) ||
       Number(inBest.has(b.opportunity.id)) - Number(inBest.has(a.opportunity.id)) ||
       (demandP50.get(b.opportunity.id) ?? 0) - (demandP50.get(a.opportunity.id) ?? 0) ||
       Number(a.competitiveAward) - Number(b.competitiveAward) ||

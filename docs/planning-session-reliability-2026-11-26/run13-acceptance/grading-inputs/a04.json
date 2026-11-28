@@ -1,0 +1,253 @@
+{
+ "caseId": "ar-04-allergen-lab-requote",
+ "keys": {
+  "cop_22e9bd4a1d7442348270": "allergenPanels"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Brokered eight-allergen lab test panels for small-batch snac\", and what it is missing first is known costs and money tied up, inside the limits. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 392× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Food-safety and QA leads at small-batch snack m\" needs [figure withheld] and keeps [figure withheld], 151× the [figure withheld] behind the plan (bound ×20), on a price no buye), so none of its figures is shown or adopted. The plan's steps are for \"Brokered eight-allergen lab test panels for small-batch snack makers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_22e9bd4a1d7442348270"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+    "owner": "PERSON",
+    "cost": 340
+   },
+   {
+    "label": "Collect payment for \"Brokered eight-allergen lab test panels for small-batch snack makers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Establish the direct cost and money tied up for \"Brokered eight-allergen lab test panels for small-batch snack makers\" from published figures.",
+  "openings": [
+   {
+    "opportunityId": "cop_22e9bd4a1d7442348270",
+    "title": "Brokered eight-allergen lab test panels for small-batch snack makers",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Food-safety and QA leads at small-batch snack manufacturers",
+     "reachableChannel": "Signed orders",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:42.241Z",
+     "offerScope": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+     "priceCents": 32000,
+     "currency": "USD",
+     "fulfillmentOwner": "Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 business days from receipt; invoices net 15)",
+     "peakFundingCents": 0,
+     "humanHours": 0.3,
+     "requiredCapabilities": [],
+     "industry": "small-batch snack food manufacturing",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 32000,
+      "currency": "USD",
+      "deliverable": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Signed orders"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 3840 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 3840 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "each deal loses money: a cost of 340 against a price of 320"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$340",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 business days from receipt; invoices net 15) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Food-safety and QA leads at small-batch snack manufacturers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21–27, 2026), payable on receipt of results.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [
+   "cnd_9122955cb6e84f8596f3"
+  ],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:26:33.347Z"
+ }
+}

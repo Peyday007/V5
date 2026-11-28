@@ -1,0 +1,4295 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_27fe52fe822949a6b7be",
+   "words": "Make $1,000 within 14 days. I have no money to start with and I will not do any of the work myself.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 100000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 14,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "First paid sale settled to the owner account",
+    "ownerHoursPerWeek": 0,
+    "ownerPhysicalWork": "FORBIDDEN",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "ab3fbfb104e02deaa375532e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and emails about 300 of them from a free mailbox by day 5 and 300 more on days 6-7 (600 total)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, delivered within a week of payment clearing",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against emails sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 9,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 9,
+      "stepId": "st7"
+     },
+     {
+      "day": 2,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1",
+      "stepId": "st7"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 4,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 5,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 6,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     },
+     {
+      "name": "owner hours",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "hours",
+      "sources": [],
+      "needs": "Brain sells by email; AgencyPlatform builds"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 2 businesses have paid $400 each through the Stripe link out of about 300 emails",
+     "stop": [
+      "Fewer than 2 paid by day 6: stop; nothing was spent, so the loss is $0; refund nothing because no paid order goes unfulfilled",
+      "Any sale after day 7 cannot settle by day 14: stop selling for this goal on day 7"
+     ],
+     "continue": [
+      "2 or more paid by day 6: email 300 more on days 6-7 (600 total, implying 4 sales at the proven rate) and stop taking orders after day 7 and order builds from settled cash"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 2-6 settle days 9-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_8ed6d16c3d09_46d017",
+    "digest": "8ed6d16c3d0986f77d1f7d37",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:28:08.363Z"
+   },
+   {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and emails about 300 of them from a free mailbox by day 5 and 300 more on days 6-7 (600 total)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, delivered within a week of payment clearing",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against emails sent",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 9,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 9,
+      "stepId": "st7"
+     },
+     {
+      "day": 9,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 2 businesses have paid $400 each through the Stripe link out of about 300 emails",
+     "stop": [
+      "Fewer than 2 paid by day 6: stop; nothing was spent, so the loss is $0; refund nothing because no paid order goes unfulfilled",
+      "Any sale after day 7 cannot settle by day 14: stop selling for this goal on day 7"
+     ],
+     "continue": [
+      "2 or more paid by day 6: email 300 more on days 6-7 (600 total, implying 4 sales at the proven rate) and stop taking orders after day 7 and order builds from settled cash"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND"
+     ],
+     "threshold": {
+      "paid": 2,
+      "of": 300,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 2-6 settle days 9-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_3a790687d2c8_853055",
+    "digest": "3a790687d2c8ae0413f535bb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:28:15.791Z"
+   },
+   {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": "rev_3a790687d2c8_853055",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 (4 of 600 emails) settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and counts those with a published email (600 needed by day 2), and emails all 600 from two free mailboxes (~60/day each) on days 1-5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, site live within 12 days of payment (stated in the offer)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against the 600 emails sent; confirm Stripe shows a 7-day first-payout date",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 9,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 10,
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 9,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "reachable no-website businesses with email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "Counted by the reach step; 600 needed by day 2"
+     },
+     {
+      "name": "owner account setup time",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "minutes",
+      "sources": [],
+      "needs": "Stripe identity and bank verification is the owner's; the first stop rule asks it before anything is sent"
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 4 businesses have paid $400 each through the Stripe link out of the 600 emails sent, and Stripe shows the first payout dated within 7 days of the first payment",
+     "stop": [
+      "The owner declines to hold a Stripe account in his name (identity and bank verification): stop before any email is sent; loss $0",
+      "Fewer than 600 no-website local businesses with a published email counted by day 2: stop; loss $0",
+      "Fewer than 4 paid by day 6: stop selling; every paid order is still built from its own settled cash, so the loss is $0",
+      "Stripe shows a first-payout wait over 7 days (the up-to-14-day industry hold): no sale can settle by day 14; stop and say so, still fulfilling any paid order",
+      "A buyer asks for a refund before delivery: refund from settled cash and do not count that sale"
+     ],
+     "continue": [
+      "2 or more paid by day 6: email 300 more on days 6-7 (600 total, implying 4 sales at the proven rate) and stop taking orders after day 7 and order builds from settled cash"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 600,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "At the 2-of-300 threshold the plan reaches 2 sales by day 6 (net ~$608); 4 sales are needed (3 net ~$937), and the 300 follow-up emails on days 6-7 cannot close by the day-7 cutoff. Threshold does not carry the target.",
+      "resolution": "Accepted. All 600 emails go out on days 1-5 and the threshold is 4 paid of 600 by day 6, which is exactly what the target needs (net $1,266.40); there is no follow-up wave after day 6."
+     },
+     {
+      "finding": "Ledger assumes 4 paid of the first 300 (1.33%), double the threshold rate.",
+      "resolution": "Accepted. The ledger books 4 sales (days 3-6) from 600 emails, equal to the 4-of-600 threshold."
+     },
+     {
+      "finding": "MARKET_VOLUME unestablished: no count of no-website local businesses with a published email; buyerVolume research blocked.",
+      "resolution": "Accepted. MARKET_VOLUME is missing in the chain, in resolves and validation.decides; the reach step must count 600 by day 2 or the plan stops at $0."
+     },
+     {
+      "finding": "Stripe first payout is 7 days typically but up to 14 for certain industries (s6); at 14 days no sale settles inside the window - no stop rule covers this.",
+      "resolution": "Accepted. A stop rule now covers it: the day-6 gate checks the payout date Stripe shows; a wait over 7 days stops the plan."
+     },
+     {
+      "finding": "Owner work is forbidden, but opening a Stripe account (KYC, bank) is the owner's; unknown owner time is treated as zero. SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+      "resolution": "Accepted in part. The owner account setup time is now an UNKNOWN quantity and the first stop rule asks it before any email: if the owner will not hold the receiving account, the plan stops at $0. Sending and payment links are connected in the reach step before any send."
+     },
+     {
+      "finding": "Buyers who pay on day 2 receive nothing until the build is ordered on day 9 (+3 business days); refund/chargeback risk inside the window is unmodelled.",
+      "resolution": "Accepted. The offer now states the site is live within 12 days of payment, so ordering on payout (days 10-13) plus 3 business days meets the stated date; a refund request before delivery is refunded from settled cash and not counted (stop rule)."
+     },
+     {
+      "finding": "Price $400 sits inside the only accepted range (UENI basic site $300-$1,000) and is correctly left to the test.",
+      "resolution": "Agreed; OFFER_AND_PRICE stays missing and is decided by the test."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ],
+      "finding": "MARKET_VOLUME condition",
+      "resolution": "The card has no buyerVolume (research NO_SUPPORT) and Brain's basis applies to a single buyer; MARKET_VOLUME is treated as missing and measured."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain marks it ok because a one-off needs one buyer, but the plan sells once to each of 4 buyers and needs 600 reachable no-website businesses with a published email; the buyerVolume research was blocked (Clutch gives a 17% share, no count), so it is unestablished and counted by the reach step on day 2"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 3-6 settle days 10-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_1cff884bc913_6cd32b",
+    "digest": "1cff884bc913f6808e9015d5",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:34:00.210Z"
+   },
+   {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": "rev_3a790687d2c8_853055",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 (4 of 600 emails) settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and counts those with a published email (600 needed by day 2), and emails all 600 from two free mailboxes (~60/day each) on days 1-5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, site live within 12 days of payment (stated in the offer)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against the 600 emails sent; confirm Stripe shows a 7-day first-payout date",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 10,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 10,
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "reachable no-website businesses with email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "Counted by the reach step; 600 needed by day 2"
+     },
+     {
+      "name": "owner account setup time",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "minutes",
+      "sources": [],
+      "needs": "Stripe identity and bank verification is the owner's; the first stop rule asks it before anything is sent"
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 4 businesses have paid $400 each through the Stripe link out of the 600 emails sent, and Stripe shows the first payout dated within 7 days of the first payment",
+     "stop": [
+      "The owner declines to hold a Stripe account in his name (identity and bank verification): stop before any email is sent; loss $0",
+      "Fewer than 600 no-website local businesses with a published email counted by day 2: stop; loss $0",
+      "Fewer than 4 paid by day 6: stop selling; every paid order is still built from its own settled cash, so the loss is $0",
+      "Stripe shows a first-payout wait over 7 days (the up-to-14-day industry hold): no sale can settle by day 14; stop and say so, still fulfilling any paid order",
+      "A buyer asks for a refund before delivery: refund from settled cash and do not count that sale"
+     ],
+     "continue": [
+      "2 or more paid by day 6: email 300 more on days 6-7 (600 total, implying 4 sales at the proven rate) and stop taking orders after day 7 and order builds from settled cash"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 600,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "At the 2-of-300 threshold the plan reaches 2 sales by day 6 (net ~$608); 4 sales are needed (3 net ~$937), and the 300 follow-up emails on days 6-7 cannot close by the day-7 cutoff. Threshold does not carry the target.",
+      "resolution": "Accepted. All 600 emails go out on days 1-5 and the threshold is 4 paid of 600 by day 6, which is exactly what the target needs (net $1,266.40); there is no follow-up wave after day 6."
+     },
+     {
+      "finding": "Ledger assumes 4 paid of the first 300 (1.33%), double the threshold rate.",
+      "resolution": "Accepted. The ledger books 4 sales (days 3-6) from 600 emails, equal to the 4-of-600 threshold."
+     },
+     {
+      "finding": "MARKET_VOLUME unestablished: no count of no-website local businesses with a published email; buyerVolume research blocked.",
+      "resolution": "Accepted. MARKET_VOLUME is missing in the chain, in resolves and validation.decides; the reach step must count 600 by day 2 or the plan stops at $0."
+     },
+     {
+      "finding": "Stripe first payout is 7 days typically but up to 14 for certain industries (s6); at 14 days no sale settles inside the window - no stop rule covers this.",
+      "resolution": "Accepted. A stop rule now covers it: the day-6 gate checks the payout date Stripe shows; a wait over 7 days stops the plan."
+     },
+     {
+      "finding": "Owner work is forbidden, but opening a Stripe account (KYC, bank) is the owner's; unknown owner time is treated as zero. SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+      "resolution": "Accepted in part. The owner account setup time is now an UNKNOWN quantity and the first stop rule asks it before any email: if the owner will not hold the receiving account, the plan stops at $0. Sending and payment links are connected in the reach step before any send."
+     },
+     {
+      "finding": "Buyers who pay on day 2 receive nothing until the build is ordered on day 9 (+3 business days); refund/chargeback risk inside the window is unmodelled.",
+      "resolution": "Accepted. The offer now states the site is live within 12 days of payment, so ordering on payout (days 10-13) plus 3 business days meets the stated date; a refund request before delivery is refunded from settled cash and not counted (stop rule)."
+     },
+     {
+      "finding": "Price $400 sits inside the only accepted range (UENI basic site $300-$1,000) and is correctly left to the test.",
+      "resolution": "Agreed; OFFER_AND_PRICE stays missing and is decided by the test."
+     },
+     {
+      "condition": 0,
+      "decision": "ACCEPTED",
+      "records": [
+       "buyerVolume",
+       "brain:MARKET_VOLUME"
+      ],
+      "finding": "MARKET_VOLUME condition",
+      "resolution": "The card has no buyerVolume (research NO_SUPPORT) and Brain's basis applies to a single buyer; MARKET_VOLUME is treated as missing and measured."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain marks it ok because a one-off needs one buyer, but the plan sells once to each of 4 buyers and needs 600 reachable no-website businesses with a published email; the buyerVolume research was blocked (Clutch gives a 17% share, no count), so it is unestablished and counted by the reach step on day 2"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 3-6 settle days 10-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_863d381e59e6_78484b",
+    "digest": "863d381e59e665a8190620c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:34:05.525Z"
+   },
+   {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": "rev_863d381e59e6_78484b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 (4 of 600 emails) settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and counts those with a published email (600 needed by day 2), and emails all 600 from two free mailboxes (~60/day each) on days 1-5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, site live within 12 days of payment (stated in the offer)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against the 600 emails sent; confirm Stripe shows a 7-day first-payout date",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 10,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 10,
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "reachable no-website businesses with email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "Counted by the reach step; 600 needed by day 2"
+     },
+     {
+      "name": "owner account setup time",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "minutes",
+      "sources": [],
+      "needs": "Stripe identity and bank verification is the owner's; the first stop rule asks it before anything is sent"
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 4 businesses have paid $400 each through the Stripe link out of the 600 emails sent, and Stripe shows the first payout dated within 7 days of the first payment",
+     "stop": [
+      "The owner declines to hold a Stripe account in his name (identity and bank verification): stop before any email is sent; loss $0",
+      "Fewer than 600 no-website local businesses with a published email counted by day 2: stop; loss $0",
+      "Fewer than 4 paid by day 6: stop selling; every paid order is still built from its own settled cash, so the loss is $0",
+      "Stripe shows a first-payout wait over 7 days (the up-to-14-day industry hold): no sale can settle by day 14; stop and say so, still fulfilling any paid order",
+      "A buyer asks for a refund before delivery: refund from settled cash and do not count that sale"
+     ],
+     "continue": [
+      "4 or more paid of the 600 by day 6, with Stripe showing a 7-day first payout: order the 4 builds from settled cash as each payout lands (days 10-13) and stop taking orders for this goal after day 7; fewer than 4 paid: stop (see stop rules)"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 600,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "validation.continue is stale (2 paid, 300 more on days 6-7) and contradicts threshold {paid 4, of 600} and the stop rule 'Fewer than 4 paid by day 6'; fix the continue rule.",
+      "resolution": "Accepted. The continue rule now reads: 4 or more paid of 600 by day 6 with a 7-day first payout -> order builds from settled cash and stop taking orders after day 7; fewer than 4 -> stop."
+     },
+     {
+      "finding": "Arithmetic checks: $1,600 gross, $333.60 out, $1,266.40 net; settlement days 10-13 inside the 14-day window.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Owner work is limited to 0 hours; holding and verifying the Stripe account is unavoidable owner time, now an UNKNOWN asked before any send - acceptable as a stop question, but it is owner time, not zero.",
+      "resolution": "Agreed; it stays an UNKNOWN quantity and the first stop rule, asked before any send."
+     },
+     {
+      "finding": "Sending 600 cold emails from two new free Gmail mailboxes at ~60/day each in days 1-5 carries deliverability risk; the conversion test absorbs it, but a low rate may reflect the inbox rather than the offer.",
+      "resolution": "Agreed; a miss stops this goal at $0 either way, and the cause (inbox or offer) is recorded from bounce and open data rather than assumed."
+     },
+     {
+      "finding": "Price $400 within UENI basic range $300-$1,000; left to the test.",
+      "resolution": "Agreed; OFFER_AND_PRICE stays missing and is decided by the test."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain marks it ok because a one-off needs one buyer, but the plan sells once to each of 4 buyers and needs 600 reachable no-website businesses with a published email; the buyerVolume research was blocked (Clutch gives a 17% share, no count), so it is unestablished and counted by the reach step on day 2"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 3-6 settle days 10-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_4a57be6539fb_7b8a08",
+    "digest": "4a57be6539fbb5f99de5d56c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:36:40.475Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_27fe52fe822949a6b7be",
+   "contractDigest": "ab3fbfb104e02deaa375532e",
+   "parentRevisionId": "rev_863d381e59e6_78484b",
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+    "opportunityIds": [
+     "cop_d4859051c9dd435f850e"
+    ],
+    "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 (4 of 600 emails) settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+   },
+   "alternatives": [
+    {
+     "title": "White-label local SEO retainers resold at $300/month",
+     "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+    },
+    {
+     "title": "Marketplace gigs (Fiverr/Upwork)",
+     "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+    },
+    {
+     "title": "Referral commission from a web studio",
+     "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+    }
+   ],
+   "steps": [
+    {
+     "id": "st1",
+     "kind": "REACH",
+     "label": "Brain builds a list of Google Maps local service businesses with no website and counts those with a published email (600 needed by day 2), and emails all 600 from two free mailboxes (~60/day each) on days 1-5",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s3"
+     ],
+     "executor": {
+      "operation": "REACH_BUYERS",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "DISCOVER_LOCAL_BUSINESSES",
+        "state": "UNREAD"
+       },
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "st2",
+     "kind": "OFFER",
+     "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, site live within 12 days of payment (stated in the offer)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": "st1",
+     "evidence": [
+      "s4",
+      "s5"
+     ],
+     "priceCents": 40000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "st3",
+     "kind": "SELL",
+     "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "st2",
+     "evidence": [
+      "s4"
+     ],
+     "priceCents": 40000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "st4",
+     "kind": "TEST",
+     "label": "Day-6 gate: count paid orders against the 600 emails sent; confirm Stripe shows a 7-day first-payout date",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "st3",
+     "evidence": [
+      "conversion"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "st6",
+     "kind": "DELIVER",
+     "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+     "performer": "AgencyPlatform",
+     "costCents": 28600,
+     "day": 10,
+     "dependsOn": "st3",
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "AgencyPlatform",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "st7",
+     "kind": "COLLECT",
+     "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+     "performer": "BRAIN",
+     "costCents": 4760,
+     "day": 2,
+     "dependsOn": "st3",
+     "evidence": [
+      "s6"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 3,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Site sale 1",
+     "settlesDay": 10,
+     "stepId": "st7"
+    },
+    {
+     "day": 10,
+     "kind": "FEE",
+     "amountCents": 1190,
+     "label": "Stripe fee sale 1, netted from the payout",
+     "stepId": "st7"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 5900,
+     "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+     "stepId": "st6"
+    },
+    {
+     "day": 4,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Site sale 2",
+     "settlesDay": 11,
+     "stepId": "st7"
+    },
+    {
+     "day": 11,
+     "kind": "FEE",
+     "amountCents": 1190,
+     "label": "Stripe fee sale 2, netted from the payout",
+     "stepId": "st7"
+    },
+    {
+     "day": 11,
+     "kind": "SPEND",
+     "amountCents": 5900,
+     "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+     "stepId": "st6"
+    },
+    {
+     "day": 5,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Site sale 3",
+     "settlesDay": 12,
+     "stepId": "st7"
+    },
+    {
+     "day": 12,
+     "kind": "FEE",
+     "amountCents": 1190,
+     "label": "Stripe fee sale 3, netted from the payout",
+     "stepId": "st7"
+    },
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 5900,
+     "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+     "stepId": "st6"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 40000,
+     "label": "Site sale 4",
+     "settlesDay": 13,
+     "stepId": "st7"
+    },
+    {
+     "day": 13,
+     "kind": "FEE",
+     "amountCents": 1190,
+     "label": "Stripe fee sale 4, netted from the payout",
+     "stepId": "st7"
+    },
+    {
+     "day": 13,
+     "kind": "SPEND",
+     "amountCents": 5900,
+     "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+     "stepId": "st6"
+    },
+    {
+     "day": 10,
+     "kind": "SPEND",
+     "amountCents": 5000,
+     "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+     "stepId": "st6"
+    }
+   ],
+   "proofDay": 6,
+   "quantities": [
+    {
+     "name": "price",
+     "status": "ESTIMATE",
+     "value": 400,
+     "unit": "USD per site",
+     "sources": [
+      "s4",
+      "s5"
+     ],
+     "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+    },
+    {
+     "name": "conversion",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "paid orders per cold email",
+     "sources": [],
+     "needs": "Measured by the day-6 test"
+    },
+    {
+     "name": "wholesale cost",
+     "status": "EVIDENCED",
+     "value": 59,
+     "unit": "USD per site",
+     "sources": [
+      "s1"
+     ]
+    },
+    {
+     "name": "reachable no-website businesses with email",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "businesses",
+     "sources": [],
+     "needs": "Counted by the reach step; 600 needed by day 2"
+    },
+    {
+     "name": "owner account setup time",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "minutes",
+     "sources": [],
+     "needs": "Stripe identity and bank verification is the owner's; the first stop rule asks it before anything is sent"
+    },
+    {
+     "name": "first payout delay",
+     "status": "EVIDENCED",
+     "value": 7,
+     "unit": "days (up to 14 in certain industries)",
+     "sources": [
+      "s6"
+     ]
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+     "dated": "2026",
+     "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+     "population": "white-label web suppliers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s2",
+     "url": "https://www.agencyplatform.com/membership-pricing",
+     "dated": "2026",
+     "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+     "population": "agency resellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s3",
+     "url": "https://clutch.co/press-releases/smb-websites-2025",
+     "dated": "2025-08-21",
+     "claim": "83% of US small businesses have a website; 17% remain offline",
+     "population": "US small businesses",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s4",
+     "url": "https://ueni.com/blog/average-cost-for-website/",
+     "dated": "2026-09-22",
+     "claim": "a basic website typically falls within the $300 to $1,000 range",
+     "population": "small businesses buying a basic website",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s5",
+     "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+     "dated": "2025-11-10",
+     "claim": "around $2,000 average with a freelancer",
+     "population": "small businesses hiring a freelancer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s6",
+     "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+     "dated": "2026-11-28",
+     "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+     "population": "new Stripe accounts",
+     "matchesBuyer": false,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    },
+    {
+     "id": "s7",
+     "url": "https://agencyplatform.com/?p=42",
+     "dated": "2026",
+     "claim": "White-label local SEO packages from $119/month at the Gold rate",
+     "population": "agency resellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+    },
+    {
+     "id": "s8",
+     "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+     "dated": "2026",
+     "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+     "population": "new Fiverr sellers",
+     "matchesBuyer": false,
+     "opportunityId": "cop_d4859051c9dd435f850e"
+    }
+   ],
+   "validation": {
+    "proof": "By day 6, at least 4 businesses have paid $400 each through the Stripe link out of the 600 emails sent, and Stripe shows the first payout dated within 7 days of the first payment",
+    "stop": [
+     "The owner declines to hold a Stripe account in his name (identity and bank verification): stop before any email is sent; loss $0",
+     "Fewer than 600 no-website local businesses with a published email counted by day 2: stop; loss $0",
+     "Fewer than 4 paid by day 6: stop selling; every paid order is still built from its own settled cash, so the loss is $0",
+     "Stripe shows a first-payout wait over 7 days (the up-to-14-day industry hold): no sale can settle by day 14; stop and say so, still fulfilling any paid order",
+     "A buyer asks for a refund before delivery: refund from settled cash and do not count that sale"
+    ],
+    "continue": [
+     "4 or more paid of the 600 by day 6, with Stripe showing a 7-day first payout: order the 4 builds from settled cash as each payout lands (days 10-13) and stop taking orders for this goal after day 7; fewer than 4 paid: stop (see stop rules)"
+    ],
+    "decides": [
+     "CONVERSION",
+     "OFFER_AND_PRICE",
+     "CURRENT_DEMAND",
+     "MARKET_VOLUME"
+    ],
+    "threshold": {
+     "paid": 4,
+     "of": 600,
+     "reach": 600
+    }
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "validation.continue is stale (2 paid, 300 more on days 6-7) and contradicts threshold {paid 4, of 600} and the stop rule 'Fewer than 4 paid by day 6'; fix the continue rule.",
+     "resolution": "Accepted. The continue rule now reads: 4 or more paid of 600 by day 6 with a 7-day first payout -> order builds from settled cash and stop taking orders after day 7; fewer than 4 -> stop."
+    },
+    {
+     "finding": "Arithmetic checks: $1,600 gross, $333.60 out, $1,266.40 net; settlement days 10-13 inside the 14-day window.",
+     "resolution": "Agreed; unchanged."
+    },
+    {
+     "finding": "Owner work is limited to 0 hours; holding and verifying the Stripe account is unavoidable owner time, now an UNKNOWN asked before any send - acceptable as a stop question, but it is owner time, not zero.",
+     "resolution": "Agreed; it stays an UNKNOWN quantity and the first stop rule, asked before any send."
+    },
+    {
+     "finding": "Sending 600 cold emails from two new free Gmail mailboxes at ~60/day each in days 1-5 carries deliverability risk; the conversion test absorbs it, but a low rate may reflect the inbox rather than the offer.",
+     "resolution": "Agreed; a miss stops this goal at $0 either way, and the cause (inbox or offer) is recorded from bounce and open data rather than assumed."
+    },
+    {
+     "finding": "Price $400 within UENI basic range $300-$1,000; left to the test.",
+     "resolution": "Agreed; OFFER_AND_PRICE stays missing and is decided by the test."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    },
+    {
+     "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+     "missing": [
+      "CURRENT_DEMAND",
+      "OFFER_AND_PRICE",
+      "CONVERSION",
+      "FULFILMENT",
+      "ECONOMICS",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+     "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "deals": 4,
+     "price": 400,
+     "directCost": 59,
+     "capital": 0,
+     "settlesDay": 13
+    }
+   ],
+   "resolves": [
+    "CURRENT_DEMAND",
+    "OFFER_AND_PRICE",
+    "CONVERSION",
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "link": "MARKET_VOLUME",
+     "reason": "Brain marks it ok because a one-off needs one buyer, but the plan sells once to each of 4 buyers and needs 600 reachable no-website businesses with a published email; the buyerVolume research was blocked (Clutch gives a 17% share, no count), so it is unestablished and counted by the reach step on day 2"
+    },
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "link": "FULFILMENT",
+     "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+    },
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "link": "ECONOMICS",
+     "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+    },
+    {
+     "opportunityId": "cop_d4859051c9dd435f850e",
+     "link": "SETTLES_IN_TIME",
+     "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 3-6 settle days 10-13, inside 14; sales after day 7 are not counted"
+    }
+   ],
+   "revisionId": "rev_4a57be6539fb_7b8a08",
+   "digest": "4a57be6539fbb5f99de5d56c",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_ca50e0145e5847749265/author-F",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:36:40.475Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_4a57be6539fb_7b8a08",
+   "digest": "4a57be6539fbb5f99de5d56c",
+   "contractDigest": "ab3fbfb104e02deaa375532e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 33360,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 3,
+    "collectedCents": 160000,
+    "collectedInWindowCents": 160000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 126640
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 1000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (SCALE: one deal of \"Resell white-label local SEO retainers to local businesses, \" needs [figure withheld] and keeps [figure withheld], 181× the [figure withheld] behind the plan (bound ×20), on a price no buyer is shown paying; SCALE: one deal of \"Resell white-label websites to local businesses, sol), so none of its figures is shown or adopted.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_d4859051c9dd435f850e",
+     "cop_bc6f8a27cf2442ebadfc"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Establish an offer and a price",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 1000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "title": "Resell white-label websites to local businesses, sold by free email outreach",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 400,
+      "card": {
+       "payer": "Owner of a US local service business without a website",
+       "reachableChannel": "Free Gmail outreach to Google Maps listings with no website",
+       "offerScope": "Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles",
+       "priceCents": 40000,
+       "currency": "USD",
+       "fulfillmentOwner": "AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days)",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [],
+       "industry": "Local services / web design",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Free Gmail outreach to Google Maps listings with no website"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 109, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "11 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Free Gmail outreach to Google Maps listings with no website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles to Owner of a US local service business without a website, reached through Free Gmail outreach to Google Maps listings with no website, at $400; AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$109",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "AgencyPlatform white-label web team (AI Launch package, $59 wholesale, 3 business days).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Up-to-5-page mobile website, paid in full up front by Stripe payment link, ordered after the payment settles",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owner of a US local service business without a website",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$400",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$400",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://www.fiverr.com/resources/guides/graphic-design/website-design-costs; https://www.agencyplatform.com/seo-friendly-mobile-website.html; https://clutch.co/press-releases/smb-websites-2025; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe; https://www.agencyplatform.com/membership-pricing",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "11 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "title": "Resell white-label local SEO retainers to local businesses, sold by free email outreach",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 0,
+      "potentialReach": 300,
+      "card": {
+       "payer": "Owner of a US local service business",
+       "reachableChannel": "Free Gmail outreach to local service businesses",
+       "offerScope": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+       "priceCents": 30000,
+       "currency": "USD",
+       "fulfillmentOwner": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate)",
+       "peakFundingCents": 0,
+       "humanHours": 0,
+       "requiredCapabilities": [],
+       "industry": "Local SEO",
+       "mechanism": "SUBCONTRACTED_FULFILMENT",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Free Gmail outreach to local service businesses"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": false,
+        "basis": "no buying signal recorded"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 300 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": false,
+        "basis": "cost 119, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "11 days to usable cash against 14 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "access",
+        "value": "Free Gmail outreach to local service businesses",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Monthly local SEO / Google Business Profile management, billed monthly up front to Owner of a US local service business, reached through Free Gmail outreach to local service businesses, at $300; AgencyPlatform white-label local SEO team (from $119/mo at Gold rate) delivers it.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "directCosts",
+        "value": "$119",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "fulfillment",
+        "value": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate).",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "hours",
+        "value": "0 owner hours per sale",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "offer",
+        "value": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "payer",
+        "value": "Owner of a US local service business",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "price",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "revenueRange",
+        "value": "$300",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeSearches",
+        "value": "https://agencyplatform.com/?p=42; https://www.agencyplatform.com/membership-pricing; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "routeStage",
+        "value": "ROUTE",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "11 days",
+        "kind": "RECOMMENDATION"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 100000,
+     "daysLeft": 14,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:27:07.077Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_3a790687d2c8_853055",
+    "revisionDigest": "3a790687d2c8ae0413f535bb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ba09086603154c28a395/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "CONDITIONAL is the right shape and zero exposure is real (builds are bought from settled payouts; I verified AgencyPlatform AI Launch: 'Up to 5-page website', $59 wholesale, 'Delivered in 3 business days', at the Gold rate), but passing the test at its threshold does not carry the target inside 14 days. Recomputed: 4 sales x $400 = $1,600; Stripe 4 x $11.90 = $47.60; builds 4 x $59 = $236; membership $50; net $1,266.40, which clears $1,000. But 3 sales net only $937.30 and 2 net $608.20, so all 4 are needed. The ledger books all 4 sales on days 2, 4, 5 and 6, i.e. from the first ~300 emails at 4/300, while the threshold is 2 of 300; at the threshold only 2 sales exist by day 6 and the other 2 must come from 300 emails sent on days 6-7 and close by day 7 (sales after day 7 cannot settle by day 14 under the 7-day first-payout wait). Cold-email replies do not close within a day of sending, so the continue rule cannot deliver the target at the threshold rate; the threshold should be about 4 paid of the first 300 by day 6, or the plan restated. Market volume is not established: 4 deals need ~600 emailable local businesses without a website and this opening's buyerVolume research was blocked (Clutch shares only); Brain's 'one-off needs its one buyer' basis does not apply to a 4-deal per-buyer offer. The owner-work limit is 0 hours, yet a Stripe account needs the owner's identity and bank verification and the sending mailbox must exist; those owner minutes are unknown, not zero, and SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED.",
+    "findings": [
+     "At the 2-of-300 threshold the plan reaches 2 sales by day 6 (net ~$608); 4 sales are needed (3 net ~$937), and the 300 follow-up emails on days 6-7 cannot close by the day-7 cutoff. Threshold does not carry the target.",
+     "Ledger assumes 4 paid of the first 300 (1.33%), double the threshold rate.",
+     "MARKET_VOLUME unestablished: no count of no-website local businesses with a published email; buyerVolume research blocked.",
+     "Stripe first payout is 7 days typically but up to 14 for certain industries (s6); at 14 days no sale settles inside the window - no stop rule covers this.",
+     "Owner work is forbidden, but opening a Stripe account (KYC, bank) is the owner's; unknown owner time is treated as zero. SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED.",
+     "Buyers who pay on day 2 receive nothing until the build is ordered on day 9 (+3 business days); refund/chargeback risk inside the window is unmodelled.",
+     "Price $400 sits inside the only accepted range (UENI basic site $300-$1,000) and is correctly left to the test."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:30:35.344Z",
+    "conditions": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "MARKET_VOLUME",
+      "basis": "MISSING_PREREQUISITE",
+      "field": "buyerVolume",
+      "why": "The plan needs 4 deals from ~600 contacts; the card holds no count of reachable no-website local businesses with a published email (buyerVolume research blocked), and 'a one-off needs its one buyer' does not apply to a 4-deal per-buyer offer."
+     }
+    ]
+   },
+   {
+    "revisionId": "rev_863d381e59e6_78484b",
+    "revisionDigest": "863d381e59e665a8190620c4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ba09086603154c28a395/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "Nearly there: the threshold now carries the target and the ledger matches it, but the plan's own continue rule contradicts both. Recomputed: 4 x $400 = $1,600; Stripe 4 x $11.90 = $47.60; builds 4 x $59 = $236; membership $50; net $1,266.40 (3 sales net $937.30, so 4 are needed). Threshold 4 paid of 600 with all 600 emails sent days 1-5; ledger sales days 3-6 settle days 10-13 (7-day first payout), inside 14. Builds are bought from settled payouts (days 10-13) and delivered within the stated 12 days; exposure is $0. MARKET_VOLUME is now measured (600 emailable no-website businesses by day 2, else stop), the 14-day payout hold and pre-delivery refunds have stop rules, and the owner's Stripe verification is an explicit ask before any send. However validation.continue still reads '2 or more paid by day 6: email 300 more on days 6-7 (600 total, implying 4 sales at the proven rate)...' - the superseded rule. Under it 2 paid of 600 continues the plan, which nets ~$608 and misses $1,000, and it describes a follow-up wave the strategy says no longer exists. The rule an executor acts on must say: 4 or more paid of 600 by day 6 -> order builds from settled cash and stop taking orders after day 7; fewer -> stop.",
+    "findings": [
+     "validation.continue is stale (2 paid, 300 more on days 6-7) and contradicts threshold {paid 4, of 600} and the stop rule 'Fewer than 4 paid by day 6'; fix the continue rule.",
+     "Arithmetic checks: $1,600 gross, $333.60 out, $1,266.40 net; settlement days 10-13 inside the 14-day window.",
+     "Owner work is limited to 0 hours; holding and verifying the Stripe account is unavoidable owner time, now an UNKNOWN asked before any send - acceptable as a stop question, but it is owner time, not zero.",
+     "Sending 600 cold emails from two new free Gmail mailboxes at ~60/day each in days 1-5 carries deliverability risk; the conversion test absorbs it, but a low rate may reflect the inbox rather than the offer.",
+     "Price $400 within UENI's basic range $300-$1,000; left to the test."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:35:59.509Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_4a57be6539fb_7b8a08",
+    "revisionDigest": "4a57be6539fbb5f99de5d56c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ba09086603154c28a395/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The only change from the revision I last reviewed is the continue rule, which now matches the threshold: 4 or more paid of 600 by day 6 with a 7-day first payout -> order builds from settled cash and stop taking orders after day 7; fewer than 4 -> stop. Recomputed: 4 x $400 = $1,600; Stripe $47.60; builds 4 x $59 = $236; membership $50; net $1,266.40 >= $1,000 (3 sales net $937.30, so the 4-of-600 threshold is exactly what carries the target). All 600 emails go out days 1-5; sales days 3-6 settle days 10-13 inside 14 days; exposure is $0 because every build and the membership are bought from settled payouts; delivery within the stated 12 days of payment. MARKET_VOLUME (600 emailable no-website businesses by day 2), the up-to-14-day payout hold, pre-delivery refunds and the owner's willingness to hold the Stripe account each have a stop rule before money or orders are at risk. Fulfilment is a public supplier I verified (AgencyPlatform AI Launch, up to 5 pages, $59, 3 business days, Gold rate). Price, demand and conversion are left to the live test, the right unknowns for a CONDITIONAL plan.",
+    "findings": [
+     "Continue rule fixed; threshold, ledger and stop rules agree at 4 of 600.",
+     "Owner time for Stripe verification is an UNKNOWN asked first; the owner's 0-hour limit makes it the first gate.",
+     "Deliverability from two new free mailboxes is the main practical risk; a miss stops at $0."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:37:55.622Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_4a57be6539fb_7b8a08",
+   "digest": "4a57be6539fbb5f99de5d56c",
+   "contractDigest": "ab3fbfb104e02deaa375532e",
+   "plan": {
+    "goalId": "wst_27fe52fe822949a6b7be",
+    "contractDigest": "ab3fbfb104e02deaa375532e",
+    "parentRevisionId": "rev_863d381e59e6_78484b",
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Zero-capital resale of white-label websites to local businesses with no website: Brain sells by email, AgencyPlatform builds, supplier paid only from settled buyer cash",
+     "opportunityIds": [
+      "cop_d4859051c9dd435f850e"
+     ],
+     "why": "Nothing is spent before a buyer pays: buyers pay $400 up front, Stripe pays out 7 days after the first live payment, and the $59 build plus $50 membership are bought from that settled cash. 4 sales by day 6 (4 of 600 emails) settle $1,600 by day 13 (net ~$1,267 after fees and supplier). The owner does no work. The close rate in a 6-day window is unknown, so a $0 test decides."
+    },
+    "alternatives": [
+     {
+      "title": "White-label local SEO retainers resold at $300/month",
+      "why": "Same channel and settlement, but $300/month needs 4 retainers and a monthly service is a harder first sale in 6 days; resale price unestablished"
+     },
+     {
+      "title": "Marketplace gigs (Fiverr/Upwork)",
+      "why": "Fiverr clears revenue 14 days after completion and Upwork holds fixed-price funds 5 days after approval, so money lands after day 14; Upwork bidding also costs Connects"
+     },
+     {
+      "title": "Referral commission from a web studio",
+      "why": "Commission (6%) is paid after the referred project pays, beyond 14 days; refused by Brain on DEADLINE"
+     }
+    ],
+    "steps": [
+     {
+      "id": "st1",
+      "kind": "REACH",
+      "label": "Brain builds a list of Google Maps local service businesses with no website and counts those with a published email (600 needed by day 2), and emails all 600 from two free mailboxes (~60/day each) on days 1-5",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s3"
+      ],
+      "executor": {
+       "operation": "REACH_BUYERS",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "DISCOVER_LOCAL_BUSINESSES",
+         "state": "UNREAD"
+        },
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st2",
+      "kind": "OFFER",
+      "label": "Offer: up-to-5-page mobile website for $400, paid up front by Stripe payment link, site live within 12 days of payment (stated in the offer)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": "st1",
+      "evidence": [
+       "s4",
+       "s5"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st3",
+      "kind": "SELL",
+      "label": "Brain answers replies by email and sends the Stripe payment link; no owner calls",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "st2",
+      "evidence": [
+       "s4"
+      ],
+      "priceCents": 40000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st4",
+      "kind": "TEST",
+      "label": "Day-6 gate: count paid orders against the 600 emails sent; confirm Stripe shows a 7-day first-payout date",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "st3",
+      "evidence": [
+       "conversion"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st6",
+      "kind": "DELIVER",
+      "label": "AgencyPlatform builds each paid site (AI Launch, $59, 3 business days, with one month of Gold membership $50), paid only from settled Stripe payouts; Brain sends the brief and checks the result",
+      "performer": "AgencyPlatform",
+      "costCents": 28600,
+      "day": 10,
+      "dependsOn": "st3",
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "AgencyPlatform",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "st7",
+      "kind": "COLLECT",
+      "label": "Stripe collects $400 per sale; first payout 7 days after the first live payment",
+      "performer": "BRAIN",
+      "costCents": 4760,
+      "day": 2,
+      "dependsOn": "st3",
+      "evidence": [
+       "s6"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 3,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 1",
+      "settlesDay": 10,
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 1, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 1, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 4,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 2",
+      "settlesDay": 11,
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 2, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 11,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 2, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 5,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 3",
+      "settlesDay": 12,
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 3, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 3, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 40000,
+      "label": "Site sale 4",
+      "settlesDay": 13,
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "FEE",
+      "amountCents": 1190,
+      "label": "Stripe fee sale 4, netted from the payout",
+      "stepId": "st7"
+     },
+     {
+      "day": 13,
+      "kind": "SPEND",
+      "amountCents": 5900,
+      "label": "AgencyPlatform AI Launch build 4, paid from settled cash",
+      "stepId": "st6"
+     },
+     {
+      "day": 10,
+      "kind": "SPEND",
+      "amountCents": 5000,
+      "label": "AgencyPlatform Gold membership, paid from the first settled payout",
+      "stepId": "st6"
+     }
+    ],
+    "proofDay": 6,
+    "quantities": [
+     {
+      "name": "price",
+      "status": "ESTIMATE",
+      "value": 400,
+      "unit": "USD per site",
+      "sources": [
+       "s4",
+       "s5"
+      ],
+      "needs": "Within the published $300-$1,000 basic-site range, but no buyer of this offer has paid it"
+     },
+     {
+      "name": "conversion",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "paid orders per cold email",
+      "sources": [],
+      "needs": "Measured by the day-6 test"
+     },
+     {
+      "name": "wholesale cost",
+      "status": "EVIDENCED",
+      "value": 59,
+      "unit": "USD per site",
+      "sources": [
+       "s1"
+      ]
+     },
+     {
+      "name": "reachable no-website businesses with email",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "businesses",
+      "sources": [],
+      "needs": "Counted by the reach step; 600 needed by day 2"
+     },
+     {
+      "name": "owner account setup time",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "minutes",
+      "sources": [],
+      "needs": "Stripe identity and bank verification is the owner's; the first stop rule asks it before anything is sent"
+     },
+     {
+      "name": "first payout delay",
+      "status": "EVIDENCED",
+      "value": 7,
+      "unit": "days (up to 14 in certain industries)",
+      "sources": [
+       "s6"
+      ]
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://www.agencyplatform.com/seo-friendly-mobile-website.html",
+      "dated": "2026",
+      "claim": "AgencyPlatform AI Launch: up-to-5-page white-label website, $59 wholesale, delivered in 3 business days; pay per project, no setup fees",
+      "population": "white-label web suppliers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s2",
+      "url": "https://www.agencyplatform.com/membership-pricing",
+      "dated": "2026",
+      "claim": "Gold membership (needed for listed wholesale prices) is $50/month month-to-month",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s3",
+      "url": "https://clutch.co/press-releases/smb-websites-2025",
+      "dated": "2025-08-21",
+      "claim": "83% of US small businesses have a website; 17% remain offline",
+      "population": "US small businesses",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s4",
+      "url": "https://ueni.com/blog/average-cost-for-website/",
+      "dated": "2026-09-22",
+      "claim": "a basic website typically falls within the $300 to $1,000 range",
+      "population": "small businesses buying a basic website",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s5",
+      "url": "https://www.manypixels.co/blog/web-design/for-small-businesses",
+      "dated": "2025-11-10",
+      "claim": "around $2,000 average with a freelancer",
+      "population": "small businesses hiring a freelancer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s6",
+      "url": "https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "dated": "2026-11-28",
+      "claim": "There is a 7-14 day waiting period for the first payout; typically 7 days; up to 14 days for certain industries",
+      "population": "new Stripe accounts",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     },
+     {
+      "id": "s7",
+      "url": "https://agencyplatform.com/?p=42",
+      "dated": "2026",
+      "claim": "White-label local SEO packages from $119/month at the Gold rate",
+      "population": "agency resellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc"
+     },
+     {
+      "id": "s8",
+      "url": "https://help.fiverr.com/hc/en-us/articles/360010639617-Managing-your-orders-A-freelancer-s-guide-to-the-Fiverr-order-process",
+      "dated": "2026",
+      "claim": "Fiverr revenue clears 14 days after order completion for new sellers, so marketplace gigs cannot settle inside 14 days",
+      "population": "new Fiverr sellers",
+      "matchesBuyer": false,
+      "opportunityId": "cop_d4859051c9dd435f850e"
+     }
+    ],
+    "validation": {
+     "proof": "By day 6, at least 4 businesses have paid $400 each through the Stripe link out of the 600 emails sent, and Stripe shows the first payout dated within 7 days of the first payment",
+     "stop": [
+      "The owner declines to hold a Stripe account in his name (identity and bank verification): stop before any email is sent; loss $0",
+      "Fewer than 600 no-website local businesses with a published email counted by day 2: stop; loss $0",
+      "Fewer than 4 paid by day 6: stop selling; every paid order is still built from its own settled cash, so the loss is $0",
+      "Stripe shows a first-payout wait over 7 days (the up-to-14-day industry hold): no sale can settle by day 14; stop and say so, still fulfilling any paid order",
+      "A buyer asks for a refund before delivery: refund from settled cash and do not count that sale"
+     ],
+     "continue": [
+      "4 or more paid of the 600 by day 6, with Stripe showing a 7-day first payout: order the 4 builds from settled cash as each payout lands (days 10-13) and stop taking orders for this goal after day 7; fewer than 4 paid: stop (see stop rules)"
+     ],
+     "decides": [
+      "CONVERSION",
+      "OFFER_AND_PRICE",
+      "CURRENT_DEMAND",
+      "MARKET_VOLUME"
+     ],
+     "threshold": {
+      "paid": 4,
+      "of": 600,
+      "reach": 600
+     }
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "validation.continue is stale (2 paid, 300 more on days 6-7) and contradicts threshold {paid 4, of 600} and the stop rule 'Fewer than 4 paid by day 6'; fix the continue rule.",
+      "resolution": "Accepted. The continue rule now reads: 4 or more paid of 600 by day 6 with a 7-day first payout -> order builds from settled cash and stop taking orders after day 7; fewer than 4 -> stop."
+     },
+     {
+      "finding": "Arithmetic checks: $1,600 gross, $333.60 out, $1,266.40 net; settlement days 10-13 inside the 14-day window.",
+      "resolution": "Agreed; unchanged."
+     },
+     {
+      "finding": "Owner work is limited to 0 hours; holding and verifying the Stripe account is unavoidable owner time, now an UNKNOWN asked before any send - acceptable as a stop question, but it is owner time, not zero.",
+      "resolution": "Agreed; it stays an UNKNOWN quantity and the first stop rule, asked before any send."
+     },
+     {
+      "finding": "Sending 600 cold emails from two new free Gmail mailboxes at ~60/day each in days 1-5 carries deliverability risk; the conversion test absorbs it, but a low rate may reflect the inbox rather than the offer.",
+      "resolution": "Agreed; a miss stops this goal at $0 either way, and the cause (inbox or offer) is recorded from bounce and open data rather than assumed."
+     },
+     {
+      "finding": "Price $400 within UENI basic range $300-$1,000; left to the test.",
+      "resolution": "Agreed; OFFER_AND_PRICE stays missing and is decided by the test."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "missing": [
+       "CURRENT_DEMAND",
+       "OFFER_AND_PRICE",
+       "CONVERSION",
+       "FULFILMENT",
+       "ECONOMICS",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_bc6f8a27cf2442ebadfc",
+      "why": "Resale price unestablished; a $300 monthly retainer is a harder first sale inside 7 days and needs 4 clients; not sold in this plan"
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "deals": 4,
+      "price": 400,
+      "directCost": 59,
+      "capital": 0,
+      "settlesDay": 13
+     }
+    ],
+    "resolves": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "MARKET_VOLUME",
+      "reason": "Brain marks it ok because a one-off needs one buyer, but the plan sells once to each of 4 buyers and needs 600 reachable no-website businesses with a published email; the buyerVolume research was blocked (Clutch gives a 17% share, no count), so it is unestablished and counted by the reach step on day 2"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "FULFILMENT",
+      "reason": "AgencyPlatform publicly sells the deliverable: AI Launch up-to-5-page site, $59 wholesale, \"Delivered in 3 business days\", pay per project (s1)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "ECONOMICS",
+      "reason": "Per sale $400 vs $59 build + $11.90 Stripe fee + $12.50 share of the $50 membership = ~$83; nothing is paid before buyer cash settles, so exposure is $0 (s1, s2, s6)"
+     },
+     {
+      "opportunityId": "cop_d4859051c9dd435f850e",
+      "link": "SETTLES_IN_TIME",
+      "reason": "Stripe first payout typically 7 days after the first live payment (s6): sales on days 3-6 settle days 10-13, inside 14; sales after day 7 are not counted"
+     }
+    ],
+    "revisionId": "rev_4a57be6539fb_7b8a08",
+    "digest": "4a57be6539fbb5f99de5d56c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:36:40.475Z"
+   },
+   "review": {
+    "revisionId": "rev_4a57be6539fb_7b8a08",
+    "revisionDigest": "4a57be6539fbb5f99de5d56c",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_ca50e0145e5847749265/author-F",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_ba09086603154c28a395/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The only change from the revision I last reviewed is the continue rule, which now matches the threshold: 4 or more paid of 600 by day 6 with a 7-day first payout -> order builds from settled cash and stop taking orders after day 7; fewer than 4 -> stop. Recomputed: 4 x $400 = $1,600; Stripe $47.60; builds 4 x $59 = $236; membership $50; net $1,266.40 >= $1,000 (3 sales net $937.30, so the 4-of-600 threshold is exactly what carries the target). All 600 emails go out days 1-5; sales days 3-6 settle days 10-13 inside 14 days; exposure is $0 because every build and the membership are bought from settled payouts; delivery within the stated 12 days of payment. MARKET_VOLUME (600 emailable no-website businesses by day 2), the up-to-14-day payout hold, pre-delivery refunds and the owner's willingness to hold the Stripe account each have a stop rule before money or orders are at risk. Fulfilment is a public supplier I verified (AgencyPlatform AI Launch, up to 5 pages, $59, 3 business days, Gold rate). Price, demand and conversion are left to the live test, the right unknowns for a CONDITIONAL plan.",
+    "findings": [
+     "Continue rule fixed; threshold, ledger and stop rules agree at 4 of 600.",
+     "Owner time for Stripe verification is an UNKNOWN asked first; the owner's 0-hour limit makes it the first gate.",
+     "Deliverability from two new free mailboxes is the main practical risk; a miss stops at $0."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:37:55.622Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Make $1,000 within 14 days. I have no money to start with and I will not do any of the work myself.",
+    "terms": "ae06da868dd2b8d1",
+    "openings": {
+     "cop_bc6f8a27cf2442ebadfc": "3d6b755fa309e6e6",
+     "cop_d4859051c9dd435f850e": "beb74a98cebfc790"
+    }
+   },
+   "at": "2026-11-28T03:38:52.061Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

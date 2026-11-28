@@ -1,0 +1,743 @@
+[
+  {
+    "id": "ar-01-phone-repair-owner-hours",
+    "heldOut": true,
+    "description": "2 owner hours a week over 30 days is 2 × 30/7 ≈ 8.6, so 9 owner hours. The warranty-claim workbook is Brain's: its own page drew 1,800 visitors in 30 days and converted 54 (3%) at $79 ($77 kept). The same 30 days of traffic again ≈ 54 sales ≈ $4,266; $1,500 needs 19 sales, and half the measured rate (27 sales, $2,133) still carries it. Payouts land 2 days after each sale, so sales through day 28 settle by day 30. The owner's micro-soldering course is signed but takes 10 owner hours per course, over the 9 allowed even for one: it may not be used. Executable on the workbook alone, with no owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent phone repair",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $1,500 of settled cash within 30 days with no more than 2 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "claimsWorkbook",
+        "title": "Supplier-warranty claim tracker workbook for independent phone repair shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "independent phone repair",
+        "payer": "Owners of independent phone and tablet repair shops",
+        "channel": "This offer's own landing page, linked from its pinned post on a repair-parts supplier's community forum",
+        "offer": "A downloadable workbook Brain generates and delivers automatically at checkout; the card processor pays out 2 days after each sale.",
+        "price": 79,
+        "priceEvidence": "The offer's checkout sells the tracker at $79; 54 shop owners paid $79 each in the 30 days to Nov 25, 2026 (payment-processor report).",
+        "cost": 2,
+        "capital": 0,
+        "daysToCash": 2,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "This offer's own landing page drew 1,800 unique visitors in the 30 days to Nov 25, 2026 (its own analytics), a steady 55–65 a day with no paid promotion.",
+        "conversion": {
+          "paid": 54,
+          "of": 1800,
+          "unit": "VISITORS"
+        }
+      },
+      {
+        "key": "boardTraining",
+        "title": "Owner-taught one-day micro-soldering board-repair course for repair technicians",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "independent phone repair",
+        "payer": "Lead technicians at independent repair shops",
+        "channel": "Signed booking forms",
+        "offer": "The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course.",
+        "price": 650,
+        "priceEvidence": "Three shops signed booking forms for the owner's one-day micro-soldering course at $650 each (Nov 2026).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 7,
+        "hours": 10,
+        "performer": "OWNER",
+        "agreements": [
+          650,
+          650,
+          650
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "mustNotUse": [
+        "boardTraining"
+      ],
+      "ownerHoursMax": 9,
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ar-02-aerial-applicator-short-window",
+    "heldOut": true,
+    "description": "Three operators signed at $1,200 = $3,600 against $3,000 in 14 days (day 0 = Nov 28, deadline Dec 12). Brain delivers each pack within 3 days of its letter (all by Dec 1, day 3); net 7 from delivery puts all three payments by Dec 8 (day 10), inside the window. Capital tied up is 3 × $25 retrieval fees = $75, under the $200 limit; $25 cost against $1,200. Executable.",
+    "dimensions": {
+      "capital": "small",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "agricultural aviation",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $3,000 of settled cash within 14 days with at most $200 of capital.",
+    "openings": [
+      {
+        "key": "part137",
+        "title": "FAA Part 137 application-record audit packs for agricultural aviation operators",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "agricultural aviation",
+        "payer": "Chief pilots and owners of aerial-application (crop-dusting) operators",
+        "channel": "Signed engagement letters; delivery by email",
+        "offer": "Brain compiles each operator's dispatch and chemical-application records into the audit pack and delivers it within 3 days of the signed letter (all three by Dec 1); each operator pays net 7 from delivery. A $25 records-retrieval fee per operator is paid up front.",
+        "price": 1200,
+        "priceEvidence": "Three aerial-application operators signed engagement letters at $1,200 per audit pack (signed Nov 24–26, 2026), payable net 7 from delivery.",
+        "cost": 25,
+        "capital": 75,
+        "daysToCash": 10,
+        "hours": 0.5,
+        "performer": "BRAIN",
+        "agreements": [
+          1200,
+          1200,
+          1200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 200
+    }
+  },
+  {
+    "id": "ar-03-coworking-acoustic-net",
+    "heldOut": true,
+    "description": "A net objective: $5,000 kept after supplier costs. Five operators signed at $2,600; QuietWall installs at $1,400, so each keeps $1,200 and five keep $6,000 ≥ $5,000 (four would keep only $4,800, so all five are needed — they are signed and booked). Calendar (day 0 = Nov 28, deadline Dec 28 = day 30): installs Dec 1, 4, 8, 11, 15 (days 3, 6, 10, 13, 17); clients pay within 5 days (by days 8, 11, 15, 18, 22); QuietWall is paid net 3 after each client (last by day 25). No capital is tied up because the crew is paid from the client payment. Gross $13,000 is not the measure; net $6,000 is, and it carries. Executable.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "coworking spaces",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Keep $5,000 of net cash after supplier costs within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "acoustic",
+        "title": "Acoustic phone-booth zone installs for coworking spaces, by a subcontracted crew",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "coworking spaces",
+        "payer": "Coworking space operators and community managers",
+        "channel": "Signed fixed quotes",
+        "offer": "QuietWall installs each zone (materials included). Install dates booked: Dec 1, Dec 4, Dec 8, Dec 11, Dec 15. Each client pays within 5 days of completion; QuietWall invoices net 3 after the client pays, so nothing is paid out before the client pays.",
+        "price": 2600,
+        "priceEvidence": "Five coworking operators signed fixed quotes at $2,600 per phone-booth zone install (signed Nov 20–27, 2026), payable within 5 days of completion.",
+        "cost": 1400,
+        "capital": 0,
+        "daysToCash": 22,
+        "hours": 1,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "QuietWall Installers LLC (written quote $1,400 per zone incl. materials; two zones a week from Dec 1; invoices net 3 after the client pays)",
+        "agreements": [
+          2600,
+          2600,
+          2600,
+          2600,
+          2600
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    }
+  },
+  {
+    "id": "ar-04-allergen-lab-requote",
+    "heldOut": true,
+    "description": "Before the change: twelve signed panels at $320 = $3,840 against $3,000 in 30 days; the lab costs $180 ($140 kept); samples reach the lab Dec 1 (day 3), results Dec 8 (day 10), makers pay by Dec 10 (day 12), the lab is paid net 15 by Dec 23 (day 25) — executable. Then the lab withdraws its quote and re-quotes $340 a panel: every panel now costs $20 more than its $320 price, so collecting $3,840 loses $240. No other lab is quoted. No sound plan; the economics are the decisive gap.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "ECONOMICS",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "small-batch snack food manufacturing",
+      "mechanism": "SUBCONTRACTED_FULFILMENT"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "allergenPanels",
+        "title": "Brokered eight-allergen lab test panels for small-batch snack makers",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "small-batch snack food manufacturing",
+        "payer": "Food-safety and QA leads at small-batch snack manufacturers",
+        "channel": "Signed orders",
+        "offer": "Samples ship Mon Nov 30 and reach the lab Tue Dec 1; results in 5 business days (Tue Dec 8); each maker pays on receipt of results, within 2 days (by Dec 10); the lab invoices net 15 from results (paid by Dec 23).",
+        "price": 320,
+        "priceEvidence": "Twelve snack makers signed orders at $320 per eight-allergen test panel (signed Nov 21–27, 2026), payable on receipt of results.",
+        "cost": 180,
+        "capital": 0,
+        "daysToCash": 12,
+        "hours": 0.3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Keystone Food Lab (ISO 17025 accredited; written quote $180 per panel; results 5 business days from receipt; invoices net 15)",
+        "agreements": [
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320,
+          320
+        ]
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "SUPPLIER_COST",
+          "opening": "allergenPanels",
+          "cost": 340
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "ECONOMICS"
+        ],
+        "opening": "allergenPanels"
+      }
+    }
+  },
+  {
+    "id": "ar-05-glassblowing-target-raised",
+    "heldOut": true,
+    "description": "Before the change: 46 counted studios × a measured 45% (9 of 20 contacts) ≈ 20 packs × $240 ≈ $4,970 against $2,000 in 30 days; half the rate (10 packs, $2,480) still carries it; payouts in 3 days — executable. The owner then raises the target to $15,000 in the same 30 days. The counted market is 46 studios, each buying at most one pack a year: even if every studio bought, 46 × $240 = $11,040 < $15,000. Infeasible on the target, on a counted market.",
+    "dimensions": {
+      "capital": "none",
+      "target": "out-of-reach",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": true,
+      "industry": "glassblowing studios",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $2,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "hotShopPack",
+        "title": "Hot-shop safety inspection log and hot-work compliance pack for glassblowing studios",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "glassblowing studios",
+        "payer": "Owners of independent glassblowing studios",
+        "channel": "Email to the owner addresses published in the state glass guild's member directory",
+        "offer": "Brain produces and delivers the pack on payment; card payouts land 3 days after payment. A studio needs one pack a year.",
+        "price": 240,
+        "priceEvidence": "Nine studio owners in a neighbouring state's guild paid $240 each for the pack after one email (payment-processor report, Nov 2026).",
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "The state glass guild's 2026 member directory lists 46 glassblowing studios, each with a published owner email; none has been offered the pack yet; each needs at most one a year.",
+        "conversion": {
+          "paid": 9,
+          "of": 20,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expectInitial": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0
+    },
+    "changes": [
+      {
+        "change": {
+          "kind": "OBJECTIVE",
+          "objective": "Collect $15,000 of settled cash within 30 days using no up-front capital."
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "TARGET"
+        ],
+        "links": [
+          "MARKET_VOLUME"
+        ]
+      },
+      "targetAfterChange": 15000
+    }
+  },
+  {
+    "id": "ar-06-quilt-shops-one-sound",
+    "heldOut": true,
+    "description": "Three openings, one sound. Quilt workbook: 900 counted, not-yet-contacted shops × a measured 8% (16 of 200 contacts) = 72 sales × $149 ≈ $10,700; $4,000 needs 27 sales; half the rate (36 sales, $5,364) carries it; sends Nov 29–Dec 3, buyers pay within 7 days, payouts 3 days later, all by Dec 13 (day 15) of a 30-day window. Travel-nurse placement is priced at what nurses are paid a week — a wage, not anything a hospital pays for a placement — and has no fulfiller quote: not a purchase price, may not be counted. The fair board is one named organisation with one RFQ (at most one deal, $3,500), no measured win rate, and net 30 from a Dec 10 award settles about day 45, after the deadline: may not be used, and never modelled as repeat buyers. Executable on the quilt workbook.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "quilt and fabric shops",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $4,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "quiltWorkbook",
+        "title": "Class-roster and fabric-reorder workbook for independent quilt shops",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "quilt and fabric shops",
+        "payer": "Owners of independent quilt shops",
+        "channel": "Email to owner addresses in the national quilt-shop directory",
+        "offer": "Brain emails the remaining 900 shops over Nov 29–Dec 3; in the first send, buyers paid within 7 days of the email; card payouts land 3 days after payment (all by Dec 13).",
+        "price": 149,
+        "priceEvidence": "16 quilt-shop owners paid $149 each for the workbook after the first send (payment-processor report, Nov 10–24, 2026).",
+        "cost": 3,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "The national quilt-shop directory lists 1,100 independent quilt shops with published owner emails; 200 were contacted in the first send, leaving 900 not yet contacted.",
+        "conversion": {
+          "paid": 16,
+          "of": 200,
+          "unit": "CONTACTS"
+        }
+      },
+      {
+        "key": "travelNurse",
+        "title": "Travel-nurse placement for critical-access hospitals",
+        "mechanism": "SUBCONTRACTED_FULFILMENT",
+        "industry": "rural hospital staffing",
+        "payer": "Directors of nursing at critical-access hospitals",
+        "channel": "Hospital HR inboxes listed on their websites",
+        "price": 2400,
+        "priceEvidence": "Travel nurses in the region are paid a median of $2,400 a week (2026 travel-nurse pay survey).",
+        "capital": 0,
+        "daysToCash": 14,
+        "hours": 3,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "MedBridge Staffing (would supply the nurse; no quote)",
+        "volume": "48 critical-access hospitals operate in the state."
+      },
+      {
+        "key": "fairBoard",
+        "title": "Vendor-booth allocation workbook for the Harbor Point County Fair Board",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "county fairs",
+        "payer": "Harbor Point County Fair Board",
+        "channel": "The board's RFQ portal",
+        "offer": "One RFQ closing Dec 5; award expected Dec 10; the board pays net 30 from delivery (about Jan 12).",
+        "price": 3500,
+        "priceEvidence": "The Harbor Point County Fair Board's RFQ (closes Dec 5, 2026) budgets $3,500 for one vendor-booth allocation workbook.",
+        "cost": 20,
+        "capital": 0,
+        "daysToCash": 45,
+        "hours": 2,
+        "performer": "BRAIN"
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 0,
+      "mustNotUse": [
+        "travelNurse",
+        "fairBoard"
+      ],
+      "notAPurchasePrice": [
+        "travelNurse"
+      ],
+      "payerDealsMax": {
+        "fairBoard": 1
+      }
+    }
+  },
+  {
+    "id": "ar-07-seafood-capital-and-terms",
+    "heldOut": true,
+    "description": "Three openings, one sound, capital at most $5,000, 21 days (deadline Dec 19). HACCP packs: 100 counted unquoted plants × a measured 25% of quotes (10 of 40) = 25 wins × $1,400; $6,000 needs 5 wins, which a tenth of the quotes would still give ($14,000). Calendar: quotes Nov 29, acceptances within 4 days (by Dec 3, day 5), delivery within 4 days (by Dec 7, day 9), net 10 (by Dec 17, day 19) — inside 21. The freezer resale is signed at $18,000 but needs $12,000 paid up front, over the $5,000 limit. The offcut load is signed at $4,000 but paid net 45 from a Dec 4 delivery (about day 51), after the deadline. Executable on the HACCP packs alone.",
+    "dimensions": {
+      "capital": "large",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "seafood processing",
+      "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION"
+    },
+    "objective": "Collect $6,000 of settled cash within 21 days with at most $5,000 of capital.",
+    "openings": [
+      {
+        "key": "haccpReassess",
+        "title": "Annual seafood HACCP plan reassessment packs for seafood processing plants",
+        "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+        "industry": "seafood processing",
+        "payer": "QA managers at licensed seafood processing plants",
+        "channel": "Quotes emailed to each plant's published QA contact",
+        "offer": "Quotes go to the 100 unquoted plants on Nov 29; measured acceptances came within 4 days of a quote (by Dec 3); Brain delivers within 4 days of acceptance (by Dec 7); plants pay net 10 from delivery (by Dec 17).",
+        "price": 1400,
+        "priceEvidence": "This service's last 10 accepted quotes were paid at $1,400 per HACCP reassessment pack (invoices, Oct–Nov 2026).",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 19,
+        "hours": 0.3,
+        "performer": "BRAIN",
+        "volume": "The state agriculture department's licence list counts 140 seafood processing plants, each with a published QA contact and each required to reassess its HACCP plan at least annually; 100 have not yet been quoted by this service.",
+        "conversion": {
+          "paid": 10,
+          "of": 40,
+          "unit": "QUOTES"
+        }
+      },
+      {
+        "key": "freezerResale",
+        "title": "Resale of a decommissioned plate freezer to a seafood processor",
+        "mechanism": "RESALE_OR_ASSET",
+        "industry": "seafood processing",
+        "payer": "Plant manager at a crab processor",
+        "channel": "Signed purchase agreement",
+        "offer": "The freezer must be bought from the liquidator ($12,000, paid up front) before it is resold; the buyer pays on delivery.",
+        "price": 18000,
+        "priceEvidence": "A crab processor signed a purchase agreement for the refurbished plate freezer at $18,000 (Nov 2026).",
+        "cost": 12000,
+        "capital": 12000,
+        "daysToCash": 12,
+        "hours": 4,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Gulf Equipment Liquidators (freezer at $12,000; freight included)",
+        "agreements": [
+          18000
+        ]
+      },
+      {
+        "key": "offcutSupply",
+        "title": "Brokered fish-offcut supply to a pet-food maker",
+        "mechanism": "SUPPLY_DEMAND_MISMATCH",
+        "industry": "seafood processing",
+        "payer": "Procurement manager at a pet-food maker",
+        "channel": "Signed supply order",
+        "offer": "One load shipped Dec 4; the pet-food maker pays net 45 from delivery (about Jan 18).",
+        "price": 4000,
+        "priceEvidence": "A pet-food maker signed a supply order for one load of fish offcuts at $4,000, payable net 45 from delivery (Nov 2026).",
+        "cost": 2500,
+        "capital": 0,
+        "daysToCash": 51,
+        "hours": 2,
+        "performer": "SUBCONTRACTOR",
+        "subcontractor": "Coastal Reefer Freight (written quote $2,500 for the load delivered, product included; invoiced net 60)",
+        "agreements": [
+          4000
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "EXECUTABLE_PLAN",
+      "capitalMax": 5000,
+      "mustNotUse": [
+        "freezerResale",
+        "offcutSupply"
+      ]
+    }
+  },
+  {
+    "id": "ar-08-electric-coop-pays-late",
+    "heldOut": true,
+    "description": "Three co-ops signed at $3,200 = $9,600 against $8,000 in 21 days (deadline Dec 19, day 21). Brain delivers by Dec 3, but each co-op pays net 45 after board approval, and the boards next meet Dec 16 (day 18): the earliest payment is Jan 30, 2027 (day 63). $0 settles inside the window. Infeasible on the deadline; the settlement link carries it.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "rural electric cooperatives",
+      "mechanism": "EXPLICIT_PAID_REQUEST"
+    },
+    "objective": "Collect $8,000 of settled cash within 21 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "easementWorkbook",
+        "title": "Right-of-way easement records workbooks for rural electric cooperatives",
+        "mechanism": "EXPLICIT_PAID_REQUEST",
+        "industry": "rural electric cooperatives",
+        "payer": "Right-of-way and engineering managers at rural electric cooperatives",
+        "channel": "Signed engagement letters",
+        "offer": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+        "price": 3200,
+        "priceEvidence": "Three rural electric cooperatives signed engagement letters at $3,200 per easement records workbook (Nov 2026), invoices payable net 45 after board approval.",
+        "cost": 30,
+        "capital": 0,
+        "daysToCash": 63,
+        "hours": 1,
+        "performer": "BRAIN",
+        "agreements": [
+          3200,
+          3200,
+          3200
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "DEADLINE"
+        ],
+        "links": [
+          "SETTLES_IN_TIME"
+        ]
+      }
+    }
+  },
+  {
+    "id": "ar-09-farrier-price-contested",
+    "heldOut": true,
+    "description": "The seller's price sheet says $350; another source states $95 for the same workbook, and the 7 paid orders do not say which price they paid. At $350: 210 remaining farriers × 7% ≈ 14.7 sales ≈ $5,145 against $3,000. At $95 the same 14.7 sales ≈ $1,397, under the target. The verdict turns on the price, which the evidence contradicts: no executable plan until it is settled.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": true,
+      "objectiveChanged": false,
+      "industry": "farriery",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "farrierWorkbook",
+        "title": "Route-planning and client-invoicing workbook for farriers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "farriery",
+        "payer": "Self-employed farriers",
+        "channel": "Email to members listed in the state farriers' association directory",
+        "offer": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+        "price": 350,
+        "priceEvidence": "The workbook's seller price sheet lists it at $350 (price sheet, Nov 2026).",
+        "priceContradiction": 95,
+        "cost": 4,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "The state farriers' association lists 310 member farriers with published emails; 100 were contacted in a first send, leaving 210.",
+        "conversion": {
+          "paid": 7,
+          "of": 100,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE",
+          "ECONOMICS"
+        ],
+        "opening": "farrierWorkbook"
+      }
+    }
+  },
+  {
+    "id": "ar-10-lan-centers-volume-estimated",
+    "heldOut": true,
+    "description": "Price ($129), cost, fulfilment, settlement and a 12% contact conversion (6 of 50) are evidenced. $3,000 needs 24 sales, so 200 reachable managers at that rate. How many reachable centers exist is only Brain's own estimate from a web search (~800); no directory or count exists, and the 50 contacted are already used. Market volume is the decisive unknown; it is measured by compiling a counted contact list.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "MARKET_VOLUME",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "LAN and esports gaming centers",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "lanLeague",
+        "title": "League-fee and tournament-bracket workbook for LAN gaming centers",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "LAN and esports gaming centers",
+        "payer": "Managers of LAN and esports gaming centers",
+        "channel": "Email to managers listed on centers' own websites",
+        "offer": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+        "price": 129,
+        "priceEvidence": "Six gaming-center managers paid $129 each for the workbook after a first outreach (payment-processor report, Nov 2026).",
+        "cost": 2,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.1,
+        "performer": "BRAIN",
+        "volume": "Brain estimates roughly 800 LAN and esports gaming centers operate nationally, from a web search; no directory or count of reachable managers has been compiled.",
+        "volumeBasis": "ESTIMATE",
+        "conversion": {
+          "paid": 6,
+          "of": 50,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "MARKET_VOLUME"
+        ],
+        "opening": "lanLeague"
+      }
+    }
+  },
+  {
+    "id": "ar-11-pottery-grant-as-price",
+    "heldOut": true,
+    "description": "The $2,500 is the arts council's grant award paid TO eligible studios, not what a studio pays for a workbook. At $2,500, 210 studios × 10% would be $52,500 against $6,000; at no evidenced purchase price there is no plan. The decisive gap is the price.",
+    "dimensions": {
+      "capital": "none",
+      "target": "medium",
+      "deadline": "long",
+      "autonomy": "unlimited",
+      "missingEvidence": "OFFER_AND_PRICE",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "pottery and ceramics studios",
+      "mechanism": "PRODUCTIZED_SERVICE"
+    },
+    "objective": "Collect $6,000 of settled cash within 30 days using no up-front capital.",
+    "openings": [
+      {
+        "key": "potteryGrant",
+        "title": "Studio operations and firing-schedule workbook for community pottery studios",
+        "mechanism": "PRODUCTIZED_SERVICE",
+        "industry": "pottery and ceramics studios",
+        "payer": "Owners of community pottery studios",
+        "channel": "Email to studios on the state arts council's eligible-studio list",
+        "offer": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+        "price": 2500,
+        "priceEvidence": "The state arts council's Creative Business Grant awards eligible pottery studios $2,500 each for operational improvements (program guidelines, Oct 2026).",
+        "cost": 10,
+        "capital": 0,
+        "daysToCash": 3,
+        "hours": 0.2,
+        "performer": "BRAIN",
+        "volume": "The state arts council lists 210 pottery studios eligible for the grant, each with a published contact.",
+        "conversion": {
+          "paid": 8,
+          "of": 80,
+          "unit": "CONTACTS"
+        }
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "OFFER_AND_PRICE"
+        ],
+        "opening": "potteryGrant"
+      },
+      "notAPurchasePrice": [
+        "potteryGrant"
+      ]
+    }
+  },
+  {
+    "id": "ar-12-audiobook-owner-hours-exceeded",
+    "heldOut": true,
+    "description": "6 owner hours a week over 30 days is 6 × 30/7 ≈ 25.7, so 26 owner hours. Four publishers signed at $1,500 ($6,000), but the owner narrates personally at 30 hours a title: $4,500 needs 3 titles = 90 hours, and even one title (30 hours) exceeds 26. No other narrator is engaged. Infeasible on owner hours.",
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "long",
+      "autonomy": "owner-hours-limited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "independent audiobook publishing",
+      "mechanism": "CAPABILITY_ARBITRAGE"
+    },
+    "objective": "Collect $4,500 of settled cash within 30 days with no more than 6 hours a week of owner time.",
+    "openings": [
+      {
+        "key": "narration",
+        "title": "Owner-narrated audiobooks for independent audiobook publishers",
+        "mechanism": "CAPABILITY_ARBITRAGE",
+        "industry": "independent audiobook publishing",
+        "payer": "Acquisitions editors at independent audiobook publishers",
+        "channel": "Signed narration contracts",
+        "offer": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+        "price": 1500,
+        "priceEvidence": "Four independent audiobook publishers signed narration contracts with the owner at $1,500 per finished title (Nov 2026).",
+        "cost": 0,
+        "capital": 0,
+        "daysToCash": 10,
+        "hours": 30,
+        "performer": "OWNER",
+        "agreements": [
+          1500,
+          1500,
+          1500,
+          1500
+        ]
+      }
+    ],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "INFEASIBLE",
+        "constraints": [
+          "OWNER_HOURS"
+        ],
+        "links": [
+          "FULFILMENT"
+        ]
+      },
+      "ownerHoursMax": 26
+    }
+  }
+]

@@ -1,0 +1,383 @@
+{
+ "caseId": "ar-06-quilt-shops-one-sound",
+ "keys": {
+  "cop_f8c95c4e3e9a42799c69": "quiltWorkbook",
+  "cop_790bbc6f7ad042e89177": "travelNurse",
+  "cop_a055304c87cb4b1fbc71": "fairBoard"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Class-roster and fabric-reorder workbook for independent qui\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Class-roster and fabric-reorder workbook for independent qui\" (assumption-only coverage: it reaches the target in 84.7% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8030× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Class-roster and fabric-reorder workbook for independent quilt shops\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f8c95c4e3e9a42799c69",
+   "cop_790bbc6f7ad042e89177",
+   "cop_a055304c87cb4b1fbc71"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+    "owner": "PERSON",
+    "cost": 3
+   },
+   {
+    "label": "Collect payment for \"Class-roster and fabric-reorder workbook for independent quilt shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_f8c95c4e3e9a42799c69",
+    "title": "Class-roster and fabric-reorder workbook for independent quilt shops",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 4000,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Owners of independent quilt shops",
+     "reachableChannel": "Email to owner addresses in the national quilt-shop directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:52.930Z",
+     "offerScope": "Brain emails the remaining 900 shops over Nov 29–Dec 3; in the first send, buyers paid within 7 days of the email; card payouts land 3 days after payment (all by Dec 13).",
+     "priceCents": 14900,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "quilt and fabric shops",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to owner addresses in the national quilt-shop directory"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 149 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 16 accepted of 200 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "28 deal(s) needed, 1100 available in the window (1100 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 3, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "10 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The national quilt-shop directory lists 1,100 independent quilt shops with published owner emails; 200 were contacted in the first send, leaving 900 not yet contacted.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain emails the remaining 900 shops over Nov 29–Dec 3; in the first send, buyers paid within 7 days of the email; card payouts land 3 days after payment (all by Dec 13). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "16 paid orders from 200 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$3",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent quilt shops",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "16 quilt-shop owners paid $149 each for the workbook after the first send (payment-processor report, Nov 10–24, 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_a055304c87cb4b1fbc71",
+    "title": "Vendor-booth allocation workbook for the Harbor Point County Fair Board",
+    "missing": [
+     "CONVERSION",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Harbor Point County Fair Board",
+     "reachableChannel": "The board's RFQ portal",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:52.930Z",
+     "offerScope": "One RFQ closing Dec 5; award expected Dec 10; the board pays net 30 from delivery (about Jan 12).",
+     "priceCents": 350000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 2,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "county fairs",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The board's RFQ portal"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 3500 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 20, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "45 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell One RFQ closing Dec 5; award expected Dec 10; the board pays net 30 from delivery (about Jan 12). to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$20",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Harbor Point County Fair Board",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The Harbor Point County Fair Board's RFQ (closes Dec 5, 2026) budgets $3,500 for one vendor-booth allocation workbook.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "45 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_790bbc6f7ad042e89177",
+    "title": "Travel-nurse placement for critical-access hospitals",
+    "missing": [
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "ECONOMICS"
+    ],
+    "stage": "B_EVIDENCED",
+    "supportedReach": 0,
+    "potentialReach": 4000,
+    "card": {
+     "payer": "Directors of nursing at critical-access hospitals",
+     "reachableChannel": "Hospital HR inboxes listed on their websites",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:52.930Z",
+     "offerScope": "Travel-nurse placement for critical-access hospitals",
+     "priceCents": 240000,
+     "currency": "USD",
+     "fulfillmentOwner": "MedBridge Staffing (would supply the nurse; no quote)",
+     "peakFundingCents": 0,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "rural hospital staffing",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Hospital HR inboxes listed on their websites"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "no single price on the card"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "8 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "2 deal(s) needed, 48 available in the window (48 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by MedBridge Staffing (would supply the nurse; no quote) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "costs or money tied up are not established"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "14 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "48 critical-access hospitals operate in the state.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Travel-nurse placement for critical-access hospitals to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "MedBridge Staffing (would supply the nurse; no quote) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Directors of nursing at critical-access hospitals",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Travel nurses in the region are paid a median of $2,400 a week (2026 travel-nurse pay survey).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 400000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:31.157Z"
+ }
+}

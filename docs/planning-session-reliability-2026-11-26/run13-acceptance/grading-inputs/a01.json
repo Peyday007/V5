@@ -1,0 +1,249 @@
+{
+ "caseId": "ar-01-phone-repair-owner-hours",
+ "keys": {
+  "cop_18003cca096446f4a0db": "claimsWorkbook",
+  "cop_8b28ffbb3ad346a88868": "boardTraining"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Supplier-warranty claim tracker workbook for independent pho\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Supplier-warranty claim tracker workbook for independent pho\" (assumption-only coverage: it reaches the target in 73% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2156× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Supplier-warranty claim tracker workbook for independent phone repair \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_18003cca096446f4a0db"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Supplier-warranty claim tracker workbook for independent phone repair shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Supplier-warranty claim tracker workbook for independent phone repair shops\"",
+    "owner": "PERSON",
+    "cost": 2
+   },
+   {
+    "label": "Collect payment for \"Supplier-warranty claim tracker workbook for independent phone repair shops\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_18003cca096446f4a0db",
+    "title": "Supplier-warranty claim tracker workbook for independent phone repair shops",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 1500,
+    "potentialReach": 1500,
+    "card": {
+     "payer": "Owners of independent phone and tablet repair shops",
+     "reachableChannel": "This offer's own landing page, linked from its pinned post on a repair-parts supplier's community forum",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:26.658Z",
+     "offerScope": "A downloadable workbook Brain generates and delivers automatically at checkout; the card processor pays out 2 days after each sale.",
+     "priceCents": 7900,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "independent phone repair",
+     "mechanism": "PRODUCTIZED_SERVICE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: This offer's own landing page, linked from its pinned post on a repair-parts sup"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 79 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own inbound page: 54 money-committed pre-orders from 1800 unique visitors"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "20 deal(s) needed, 54000 available in the window (1800 visitors opportunities a day are stated, so 54000 in 30 days, each one trial of the measured rate)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 2, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "2 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "This offer's own landing page drew 1,800 unique visitors in the 30 days to Nov 25, 2026 (its own analytics), a steady 55–65 a day with no paid promotion.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A downloadable workbook Brain generates and delivers automatically at checkout; the card processor pays out 2 days after each sale. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "54 paid pre-orders from 1800 unique visitors",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$2",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent phone and tablet repair shops",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "The offer's checkout sells the tracker at $79; 54 shop owners paid $79 each in the 30 days to Nov 25, 2026 (payment-processor report).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "2 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [
+   {
+    "opportunityId": "cop_8b28ffbb3ad346a88868",
+    "title": "Owner-taught one-day micro-soldering board-repair course for repair technicians",
+    "reason": "needs the owner's physical work: delivering it needs physical work (\"in person\") and nothing names an independent supplier or subcontractor to perform it; the owner does no physical work",
+    "card": {
+     "payer": "Lead technicians at independent repair shops",
+     "reachableChannel": "Signed booking forms",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:26.658Z",
+     "offerScope": "The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course.",
+     "priceCents": 65000,
+     "currency": "USD",
+     "fulfillmentOwner": "The owner, personally",
+     "peakFundingCents": 0,
+     "humanHours": 10,
+     "requiredCapabilities": [],
+     "industry": "independent phone repair",
+     "mechanism": "CAPABILITY_ARBITRAGE",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 65000,
+      "currency": "USD",
+      "deliverable": "The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell The owner teaches each course in person: 8 hours of teaching plus 2 hours of preparation, 10 owner hours per course; paid on the day of the course. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "The owner does the work personally.",
+      "kind": "PERSON"
+     },
+     {
+      "field": "payer",
+      "value": "Lead technicians at independent repair shops",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three shops signed booking forms for the owner's one-day micro-soldering course at $650 each (Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "questions": [],
+  "scope": {
+   "targetCents": 150000,
+   "daysLeft": 30,
+   "hoursCeiling": 9,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 2
+  },
+  "at": "2026-11-28T03:15:51.877Z"
+ }
+}

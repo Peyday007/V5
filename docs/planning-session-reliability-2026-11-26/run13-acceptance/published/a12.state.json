@@ -1,0 +1,1016 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_c8295a06b1004a049bf7",
+   "words": "Collect $4,500 of settled cash within 30 days with no more than 6 hours a week of owner time.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 450000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "$4,500 of settled cash received within 30 days",
+    "ownerHoursPerWeek": 6,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "b57e25c4a76522d70ca27d1f"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_c8295a06b1004a049bf7",
+    "contractDigest": "b57e25c4a76522d70ca27d1f",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 6 owner hours a week: each narration contract needs 30 owner hours",
+     "opportunityIds": [],
+     "why": "Four publishers have signed $1,500-per-title narration contracts, but the owner narrates, edits and masters each title personally at 30 owner hours per title and no other narrator is engaged. $4,500 needs 3 finished titles = 90 owner hours; the objective allows 6 hours a week, about 26 hours over the 30 days, which does not cover even one title (30 hours). Payment also only lands 10 days after final files are accepted, so the work would have to be done by about day 20."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver 3 of the 4 signed titles",
+      "why": "Needs 90 owner hours (3 x 30) against a 26-hour ceiling."
+     },
+     {
+      "title": "Engage another narrator",
+      "why": "None is engaged or quoted on the card; the contracts are for the owner's own narration."
+     }
+    ],
+    "steps": [
+     {
+      "id": "o1",
+      "kind": "OTHER",
+      "label": "Ask the owner whether the 6 h/week limit can be raised to ~32 h/week for the first 20 days (90 hours) to fulfil three signed titles",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "owner hours per title",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "hours",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per title",
+      "status": "EVIDENCED",
+      "value": 1500,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "titles needed",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "titles",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours allowed in window",
+      "status": "EVIDENCED",
+      "value": 26,
+      "unit": "hours",
+      "sources": [],
+      "needs": null
+     },
+     {
+      "name": "days from acceptance to payment",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "s_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Owner narrates, edits and masters each title personally: 30 owner hours per title; no other narrator engaged",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#price",
+      "dated": "2026-11",
+      "claim": "Four publishers signed narration contracts at $1,500 per finished title",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#agreements",
+      "dated": "2026-11",
+      "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,500 each",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_settle",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "Paid within 10 days of final files being accepted",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: $4,500 needs 3 titles at 30 owner hours each (90 hours) and the objective allows 6 hours a week (~26 hours in the window), less than one title.",
+     "resolution": "Raise the owner-time limit to about 90 hours over the first 20 days (~32 h/week) so three signed titles are delivered by day 20 and paid by day 30; or engage and price another narrator the publishers accept.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "why": "Fulfilment needs 30 owner hours per title; 3 titles (90 hours) exceed the ~26 owner hours the objective allows."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow about 90 owner hours in the first 20 days (~32 hours a week) to narrate three signed titles, or engage another narrator",
+      "basis": [
+       {
+        "opportunityId": "cop_e2d59eac7d2e46288a8f",
+        "field": "humanHours"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_c1056f1649e0_d540b0",
+    "digest": "c1056f1649e0ec58b74f4e5f",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_efd79a0fd52747b49499/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:47.138Z"
+   },
+   {
+    "goalId": "wst_c8295a06b1004a049bf7",
+    "contractDigest": "b57e25c4a76522d70ca27d1f",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 6 owner hours a week: each narration contract needs 30 owner hours",
+     "opportunityIds": [],
+     "why": "Four publishers have signed $1,500-per-title narration contracts, but the owner narrates, edits and masters each title personally at 30 owner hours per title and no other narrator is engaged. $4,500 needs 3 finished titles = 90 owner hours; the objective allows 6 hours a week, about 26 hours over the 30 days, which does not cover even one title (30 hours). Payment also only lands 10 days after final files are accepted, so the work would have to be done by about day 20."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver 3 of the 4 signed titles",
+      "why": "Needs 90 owner hours (3 x 30) against a 26-hour ceiling."
+     },
+     {
+      "title": "Engage another narrator",
+      "why": "None is engaged or quoted on the card; the contracts are for the owner's own narration."
+     }
+    ],
+    "steps": [
+     {
+      "id": "o1",
+      "kind": "OTHER",
+      "label": "Ask the owner whether the 6 h/week limit can be raised to ~32 h/week for the first 20 days (90 hours) to fulfil three signed titles",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "owner hours per title",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "hours",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per title",
+      "status": "EVIDENCED",
+      "value": 1500,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "titles needed",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "titles",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours allowed in window",
+      "status": "EVIDENCED",
+      "value": 26,
+      "unit": "hours",
+      "sources": [
+       "s_obj"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from acceptance to payment",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "s_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_obj",
+      "url": "https://brain.local/goal/wst_c8295a06b1004a049bf7#contract",
+      "dated": "2026-11-27",
+      "claim": "Objective: no more than 6 hours a week of owner time over 30 days (stored ceiling 26 hours)",
+      "population": "the owner",
+      "matchesBuyer": false,
+      "opportunityId": null
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Owner narrates, edits and masters each title personally: 30 owner hours per title; no other narrator engaged",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#price",
+      "dated": "2026-11",
+      "claim": "Four publishers signed narration contracts at $1,500 per finished title",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#agreements",
+      "dated": "2026-11",
+      "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,500 each",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_settle",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "Paid within 10 days of final files being accepted",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: $4,500 needs 3 titles at 30 owner hours each (90 hours) and the objective allows 6 hours a week (~26 hours in the window), less than one title.",
+     "resolution": "Raise the owner-time limit to about 90 hours over the first 20 days (~32 h/week) so three signed titles are delivered by day 20 and paid by day 30; or engage and price another narrator the publishers accept.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "why": "Fulfilment needs 30 owner hours per title; 3 titles (90 hours) exceed the ~26 owner hours the objective allows."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow about 90 owner hours in the first 20 days (~32 hours a week) to narrate three signed titles, or engage another narrator",
+      "basis": [
+       {
+        "opportunityId": "cop_e2d59eac7d2e46288a8f",
+        "field": "humanHours"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_b5e75155cc7c_007d58",
+    "digest": "b5e75155cc7cad4ef1ea2bde",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_efd79a0fd52747b49499/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:54.217Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_c8295a06b1004a049bf7",
+   "contractDigest": "b57e25c4a76522d70ca27d1f",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan within 6 owner hours a week: each narration contract needs 30 owner hours",
+    "opportunityIds": [],
+    "why": "Four publishers have signed $1,500-per-title narration contracts, but the owner narrates, edits and masters each title personally at 30 owner hours per title and no other narrator is engaged. $4,500 needs 3 finished titles = 90 owner hours; the objective allows 6 hours a week, about 26 hours over the 30 days, which does not cover even one title (30 hours). Payment also only lands 10 days after final files are accepted, so the work would have to be done by about day 20."
+   },
+   "alternatives": [
+    {
+     "title": "Deliver 3 of the 4 signed titles",
+     "why": "Needs 90 owner hours (3 x 30) against a 26-hour ceiling."
+    },
+    {
+     "title": "Engage another narrator",
+     "why": "None is engaged or quoted on the card; the contracts are for the owner's own narration."
+    }
+   ],
+   "steps": [
+    {
+     "id": "o1",
+     "kind": "OTHER",
+     "label": "Ask the owner whether the 6 h/week limit can be raised to ~32 h/week for the first 20 days (90 hours) to fulfil three signed titles",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_scope",
+      "s_agree"
+     ],
+     "executor": {
+      "operation": "PLAN_DECISION",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "owner hours per title",
+     "status": "EVIDENCED",
+     "value": 30,
+     "unit": "hours",
+     "sources": [
+      "s_scope"
+     ],
+     "needs": null
+    },
+    {
+     "name": "price per title",
+     "status": "EVIDENCED",
+     "value": 1500,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "titles needed",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "titles",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "owner hours allowed in window",
+     "status": "EVIDENCED",
+     "value": 26,
+     "unit": "hours",
+     "sources": [
+      "s_obj"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days from acceptance to payment",
+     "status": "EVIDENCED",
+     "value": 10,
+     "unit": "days",
+     "sources": [
+      "s_settle"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_obj",
+     "url": "https://brain.local/goal/wst_c8295a06b1004a049bf7#contract",
+     "dated": "2026-11-27",
+     "claim": "Objective: no more than 6 hours a week of owner time over 30 days (stored ceiling 26 hours)",
+     "population": "the owner",
+     "matchesBuyer": false,
+     "opportunityId": null
+    },
+    {
+     "id": "s_scope",
+     "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#captureMechanism",
+     "dated": "2026-11-25",
+     "claim": "Owner narrates, edits and masters each title personally: 30 owner hours per title; no other narrator engaged",
+     "population": "Independent audiobook publishers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e2d59eac7d2e46288a8f"
+    },
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#price",
+     "dated": "2026-11",
+     "claim": "Four publishers signed narration contracts at $1,500 per finished title",
+     "population": "Independent audiobook publishers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e2d59eac7d2e46288a8f"
+    },
+    {
+     "id": "s_agree",
+     "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#agreements",
+     "dated": "2026-11",
+     "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,500 each",
+     "population": "Independent audiobook publishers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e2d59eac7d2e46288a8f"
+    },
+    {
+     "id": "s_settle",
+     "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "Paid within 10 days of final files being accepted",
+     "population": "Independent audiobook publishers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_e2d59eac7d2e46288a8f"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Owner hours: $4,500 needs 3 titles at 30 owner hours each (90 hours) and the objective allows 6 hours a week (~26 hours in the window), less than one title.",
+    "resolution": "Raise the owner-time limit to about 90 hours over the first 20 days (~32 h/week) so three signed titles are delivered by day 20 and paid by day 30; or engage and price another narrator the publishers accept.",
+    "decisiveLinks": []
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_e2d59eac7d2e46288a8f",
+     "missing": []
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_e2d59eac7d2e46288a8f",
+     "why": "Fulfilment needs 30 owner hours per title; 3 titles (90 hours) exceed the ~26 owner hours the objective allows."
+    }
+   ],
+   "members": [],
+   "resolves": [],
+   "constraints": [
+    {
+     "constraint": "OWNER_HOURS",
+     "suggestion": "Allow about 90 owner hours in the first 20 days (~32 hours a week) to narrate three signed titles, or engage another narrator",
+     "basis": [
+      {
+       "opportunityId": "cop_e2d59eac7d2e46288a8f",
+       "field": "humanHours"
+      }
+     ]
+    }
+   ],
+   "disagreements": [],
+   "revisionId": "rev_b5e75155cc7c_007d58",
+   "digest": "b5e75155cc7cad4ef1ea2bde",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_efd79a0fd52747b49499/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:17:54.217Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_b5e75155cc7c_007d58",
+   "digest": "b5e75155cc7cad4ef1ea2bde",
+   "contractDigest": "b57e25c4a76522d70ca27d1f",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: the agreed deals need 120 owner hours, more than the 26 owner hours this goal has. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8716× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Acquisitions editors at independent audiobook p\" needs [figure withheld] and keeps [figure withheld], 1497× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The steps found are not presented as the plan: its collection (\"Collect payment\") is cash would be usable on day 35–60 (swept by the plan's simulation: an assumption, not established), after the 30 days left, so it brings no cash inside the goal's window.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_e2d59eac7d2e46288a8f"
+    ],
+    "integrity": [],
+    "steps": [],
+    "nextTest": "Discover, construct and research openings that can reach the 4500 USD still needed — the openings held reach at most 6000 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "title": "Owner-narrated audiobooks for independent audiobook publishers",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 4500,
+      "potentialReach": 4500,
+      "card": {
+       "payer": "Acquisitions editors at independent audiobook publishers",
+       "reachableChannel": "Signed narration contracts",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:12:22.812Z",
+       "offerScope": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+       "priceCents": 150000,
+       "currency": "USD",
+       "fulfillmentOwner": "The owner, personally",
+       "peakFundingCents": 0,
+       "humanHours": 30,
+       "requiredCapabilities": [],
+       "industry": "independent audiobook publishing",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 150000,
+        "currency": "USD",
+        "deliverable": "The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Signed narration contracts"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 6000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 6000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by The owner, personally (a person says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 0, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "10 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell The owner narrates, edits and masters each title personally: 30 owner hours per finished title (a five-hour book); paid within 10 days of the final files being accepted. No other narrator is engaged or quoted. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "The owner does the work personally.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "payer",
+        "value": "Acquisitions editors at independent audiobook publishers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Four independent audiobook publishers signed narration contracts with the owner at $1,500 per finished title (Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "10 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 450000,
+     "daysLeft": 30,
+     "hoursCeiling": 26,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": 6
+    },
+    "at": "2026-11-28T03:15:35.740Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b5e75155cc7c_007d58",
+    "revisionDigest": "b5e75155cc7cad4ef1ea2bde",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_efd79a0fd52747b49499/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_20d334f5542046778c27/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN on an OWNER_HOURS constraint is right: this is a true constraint, not missing evidence. Price ($1,500 per finished title, four WRITTEN_ACCEPTANCE agreements), zero cost and exposure, and 10-day settlement after acceptance are on the record. Fulfilment is the owner personally at 30 owner hours per title, no other narrator engaged (card offerScope/humanHours, PERSON fulfillment fact). Recomputed: $4,500 / $1,500 = 3 titles = 90 owner hours; the limit is 6 h/week x 30/7 weeks = ~25.7 h, which does not cover even one 30-hour title, so even with every fact established the target cannot fit the limit. Timing also binds: payment lands 10 days after acceptance, so files must be accepted by ~day 20, i.e. 90 hours in 20 days (~31.5 h/week), matching the suggested relaxation. The only step asks the owner about the limit; it takes no orders and commits nothing.",
+    "findings": [
+     "OWNER_HOURS constraint correctly identified: 90 h needed vs ~26 h allowed; one title alone (30 h) exceeds the ceiling.",
+     "Suggested relaxation (~90 h in first 20 days, ~32 h/week) is arithmetically consistent with the 10-day payment lag.",
+     "Alternative narrator is correctly not assumed: none engaged or quoted, and the signed contracts are for the owner's own narration, so publisher acceptance of a substitute would also be needed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:39.955Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_b5e75155cc7c_007d58",
+   "digest": "b5e75155cc7cad4ef1ea2bde",
+   "contractDigest": "b57e25c4a76522d70ca27d1f",
+   "plan": {
+    "goalId": "wst_c8295a06b1004a049bf7",
+    "contractDigest": "b57e25c4a76522d70ca27d1f",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within 6 owner hours a week: each narration contract needs 30 owner hours",
+     "opportunityIds": [],
+     "why": "Four publishers have signed $1,500-per-title narration contracts, but the owner narrates, edits and masters each title personally at 30 owner hours per title and no other narrator is engaged. $4,500 needs 3 finished titles = 90 owner hours; the objective allows 6 hours a week, about 26 hours over the 30 days, which does not cover even one title (30 hours). Payment also only lands 10 days after final files are accepted, so the work would have to be done by about day 20."
+    },
+    "alternatives": [
+     {
+      "title": "Deliver 3 of the 4 signed titles",
+      "why": "Needs 90 owner hours (3 x 30) against a 26-hour ceiling."
+     },
+     {
+      "title": "Engage another narrator",
+      "why": "None is engaged or quoted on the card; the contracts are for the owner's own narration."
+     }
+    ],
+    "steps": [
+     {
+      "id": "o1",
+      "kind": "OTHER",
+      "label": "Ask the owner whether the 6 h/week limit can be raised to ~32 h/week for the first 20 days (90 hours) to fulfil three signed titles",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_scope",
+       "s_agree"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "owner hours per title",
+      "status": "EVIDENCED",
+      "value": 30,
+      "unit": "hours",
+      "sources": [
+       "s_scope"
+      ],
+      "needs": null
+     },
+     {
+      "name": "price per title",
+      "status": "EVIDENCED",
+      "value": 1500,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "titles needed",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "titles",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "owner hours allowed in window",
+      "status": "EVIDENCED",
+      "value": 26,
+      "unit": "hours",
+      "sources": [
+       "s_obj"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days from acceptance to payment",
+      "status": "EVIDENCED",
+      "value": 10,
+      "unit": "days",
+      "sources": [
+       "s_settle"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_obj",
+      "url": "https://brain.local/goal/wst_c8295a06b1004a049bf7#contract",
+      "dated": "2026-11-27",
+      "claim": "Objective: no more than 6 hours a week of owner time over 30 days (stored ceiling 26 hours)",
+      "population": "the owner",
+      "matchesBuyer": false,
+      "opportunityId": null
+     },
+     {
+      "id": "s_scope",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Owner narrates, edits and masters each title personally: 30 owner hours per title; no other narrator engaged",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#price",
+      "dated": "2026-11",
+      "claim": "Four publishers signed narration contracts at $1,500 per finished title",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_agree",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#agreements",
+      "dated": "2026-11",
+      "claim": "Four WRITTEN_ACCEPTANCE agreements of $1,500 each",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     },
+     {
+      "id": "s_settle",
+      "url": "https://brain.local/card/cop_e2d59eac7d2e46288a8f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "Paid within 10 days of final files being accepted",
+      "population": "Independent audiobook publishers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_e2d59eac7d2e46288a8f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Owner hours: $4,500 needs 3 titles at 30 owner hours each (90 hours) and the objective allows 6 hours a week (~26 hours in the window), less than one title.",
+     "resolution": "Raise the owner-time limit to about 90 hours over the first 20 days (~32 h/week) so three signed titles are delivered by day 20 and paid by day 30; or engage and price another narrator the publishers accept.",
+     "decisiveLinks": []
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "missing": []
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_e2d59eac7d2e46288a8f",
+      "why": "Fulfilment needs 30 owner hours per title; 3 titles (90 hours) exceed the ~26 owner hours the objective allows."
+     }
+    ],
+    "members": [],
+    "resolves": [],
+    "constraints": [
+     {
+      "constraint": "OWNER_HOURS",
+      "suggestion": "Allow about 90 owner hours in the first 20 days (~32 hours a week) to narrate three signed titles, or engage another narrator",
+      "basis": [
+       {
+        "opportunityId": "cop_e2d59eac7d2e46288a8f",
+        "field": "humanHours"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_b5e75155cc7c_007d58",
+    "digest": "b5e75155cc7cad4ef1ea2bde",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_efd79a0fd52747b49499/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:54.217Z"
+   },
+   "review": {
+    "revisionId": "rev_b5e75155cc7c_007d58",
+    "revisionDigest": "b5e75155cc7cad4ef1ea2bde",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_efd79a0fd52747b49499/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_20d334f5542046778c27/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN on an OWNER_HOURS constraint is right: this is a true constraint, not missing evidence. Price ($1,500 per finished title, four WRITTEN_ACCEPTANCE agreements), zero cost and exposure, and 10-day settlement after acceptance are on the record. Fulfilment is the owner personally at 30 owner hours per title, no other narrator engaged (card offerScope/humanHours, PERSON fulfillment fact). Recomputed: $4,500 / $1,500 = 3 titles = 90 owner hours; the limit is 6 h/week x 30/7 weeks = ~25.7 h, which does not cover even one 30-hour title, so even with every fact established the target cannot fit the limit. Timing also binds: payment lands 10 days after acceptance, so files must be accepted by ~day 20, i.e. 90 hours in 20 days (~31.5 h/week), matching the suggested relaxation. The only step asks the owner about the limit; it takes no orders and commits nothing.",
+    "findings": [
+     "OWNER_HOURS constraint correctly identified: 90 h needed vs ~26 h allowed; one title alone (30 h) exceeds the ceiling.",
+     "Suggested relaxation (~90 h in first 20 days, ~32 h/week) is arithmetically consistent with the 10-day payment lag.",
+     "Alternative narrator is correctly not assumed: none engaged or quoted, and the signed contracts are for the owner's own narration, so publisher acceptance of a substitute would also be needed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:39.955Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,500 of settled cash within 30 days with no more than 6 hours a week of owner time.",
+    "terms": "b200b52fce6c2dea",
+    "openings": {
+     "cop_e2d59eac7d2e46288a8f": "3c2fd79932f529b9"
+    }
+   },
+   "at": "2026-11-28T03:20:50.098Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

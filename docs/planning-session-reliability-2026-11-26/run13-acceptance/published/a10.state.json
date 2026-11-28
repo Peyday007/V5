@@ -1,0 +1,797 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_ee3fc6debae343d09eb8",
+   "words": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 300000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$3,000 of settled cash received within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "a5081d309ea3ee5a3f719be3"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_ee3fc6debae343d09eb8",
+    "contractDigest": "a5081d309ea3ee5a3f719be3",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: the number of reachable LAN-center managers is unestablished",
+     "opportunityIds": [],
+     "why": "Price ($129, six paid orders on a processor report), conversion (6 of 50), Brain fulfilment, $2 cost and 3-day settlement are evidenced. But $3,000 needs about 24 orders, i.e. roughly 200 contacts at the measured 12%, and the only buyer count is Brain's own web-search estimate (~800 centers nationally) with no directory of reachable managers compiled. An estimate is not evidence, so whether enough reachable buyers exist is not established."
+    },
+    "alternatives": [
+     {
+      "title": "Email ~200 LAN-center managers at $129",
+      "why": "Would work if ~200 reachable managers exist beyond the 50 already contacted; that count is only an estimate (RECOMMENDATION), not evidence."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Compile a directory of LAN/esports gaming centers with a manager contact published on the center's own website, excluding the 50 already contacted; count it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "r2",
+      "kind": "OTHER",
+      "label": "Re-plan: if at least ~200 uncontacted reachable managers are counted, submit an executable plan selling the $129 workbook to them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable uncontacted managers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": "a compiled count of managers reachable by email; the ~800 figure is Brain's estimate"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 129,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "orders needed",
+      "status": "ESTIMATE",
+      "value": 24,
+      "unit": "orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#price",
+      "dated": "2026-11",
+      "claim": "Six gaming-center managers paid $129 each (payment-processor report)",
+      "population": "Managers of LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "6 paid orders from 50 contacts",
+      "population": "Managers of LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Brain estimates ~800 centers nationally from a web search; no directory or count compiled (RECOMMENDATION)",
+      "population": "LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "How many LAN/esports center managers are reachable by email is not established: ~24 orders (~200 contacts at the measured 12%) are needed and the only count is an unsourced estimate of ~800 centers.",
+     "resolution": "Compile and count a directory of centers with a published manager email (excluding the 50 already contacted); with >=200 such contacts the $129 workbook at the measured conversion reaches $3,000 inside the window and an executable plan can be submitted.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_261b61ad66e744a38609",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_261b61ad66e744a38609",
+      "why": "Not planned until the reachable buyer count is established (MARKET_VOLUME)."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_03299ee58777_4c1aba",
+    "digest": "03299ee5877753ed48a56640",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b5c3b7f773be459d8536/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:05.575Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_ee3fc6debae343d09eb8",
+   "contractDigest": "a5081d309ea3ee5a3f719be3",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan yet: the number of reachable LAN-center managers is unestablished",
+    "opportunityIds": [],
+    "why": "Price ($129, six paid orders on a processor report), conversion (6 of 50), Brain fulfilment, $2 cost and 3-day settlement are evidenced. But $3,000 needs about 24 orders, i.e. roughly 200 contacts at the measured 12%, and the only buyer count is Brain's own web-search estimate (~800 centers nationally) with no directory of reachable managers compiled. An estimate is not evidence, so whether enough reachable buyers exist is not established."
+   },
+   "alternatives": [
+    {
+     "title": "Email ~200 LAN-center managers at $129",
+     "why": "Would work if ~200 reachable managers exist beyond the 50 already contacted; that count is only an estimate (RECOMMENDATION), not evidence."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Compile a directory of LAN/esports gaming centers with a manager contact published on the center's own website, excluding the 50 already contacted; count it",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s_vol"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    },
+    {
+     "id": "r2",
+     "kind": "OTHER",
+     "label": "Re-plan: if at least ~200 uncontacted reachable managers are counted, submit an executable plan selling the $129 workbook to them",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 3,
+     "dependsOn": "r1",
+     "evidence": [
+      "s_price",
+      "s_conv"
+     ],
+     "executor": {
+      "operation": "PLAN_DECISION",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "reachable uncontacted managers",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "buyers",
+     "sources": [
+      "s_vol"
+     ],
+     "needs": "a compiled count of managers reachable by email; the ~800 figure is Brain's estimate"
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 129,
+     "unit": "USD",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.12,
+     "unit": "paid orders per contact",
+     "sources": [
+      "s_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "orders needed",
+     "status": "ESTIMATE",
+     "value": 24,
+     "unit": "orders",
+     "sources": [
+      "s_price"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s_price",
+     "url": "https://brain.local/card/cop_261b61ad66e744a38609#price",
+     "dated": "2026-11",
+     "claim": "Six gaming-center managers paid $129 each (payment-processor report)",
+     "population": "Managers of LAN and esports gaming centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_261b61ad66e744a38609"
+    },
+    {
+     "id": "s_conv",
+     "url": "https://brain.local/card/cop_261b61ad66e744a38609#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "6 paid orders from 50 contacts",
+     "population": "Managers of LAN and esports gaming centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_261b61ad66e744a38609"
+    },
+    {
+     "id": "s_vol",
+     "url": "https://brain.local/card/cop_261b61ad66e744a38609#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "Brain estimates ~800 centers nationally from a web search; no directory or count compiled (RECOMMENDATION)",
+     "population": "LAN and esports gaming centers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_261b61ad66e744a38609"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "How many LAN/esports center managers are reachable by email is not established: ~24 orders (~200 contacts at the measured 12%) are needed and the only count is an unsourced estimate of ~800 centers.",
+    "resolution": "Compile and count a directory of centers with a published manager email (excluding the 50 already contacted); with >=200 such contacts the $129 workbook at the measured conversion reaches $3,000 inside the window and an executable plan can be submitted.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_261b61ad66e744a38609",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_261b61ad66e744a38609",
+     "why": "Not planned until the reachable buyer count is established (MARKET_VOLUME)."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_03299ee58777_4c1aba",
+   "digest": "03299ee5877753ed48a56640",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_b5c3b7f773be459d8536/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T03:17:05.575Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_03299ee58777_4c1aba",
+   "digest": "03299ee5877753ed48a56640",
+   "contractDigest": "a5081d309ea3ee5a3f719be3",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: League-fee and tournament-bracket workbook for LAN gaming ce\", and what it is missing first is enough buyers, buying often enough, for the deals the plan needs. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 8763× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"League-fee and tournament-bracket workbook for LAN gaming centers\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_261b61ad66e744a38609"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+      "owner": "PERSON",
+      "cost": 2
+     },
+     {
+      "label": "Collect payment for \"League-fee and tournament-bracket workbook for LAN gaming centers\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish how many buyers for \"League-fee and tournament-bracket workbook for LAN gaming centers\" exist and can be reached, and how often each buys, from a published directory, register or list.",
+    "openings": [
+     {
+      "opportunityId": "cop_261b61ad66e744a38609",
+      "title": "League-fee and tournament-bracket workbook for LAN gaming centers",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 129,
+      "potentialReach": 3000,
+      "card": {
+       "payer": "Managers of LAN and esports gaming centers",
+       "reachableChannel": "Email to managers listed on centers' own websites",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T03:12:12.974Z",
+       "offerScope": "Brain produces the workbook on payment; card payouts land 3 days after payment.",
+       "priceCents": 12900,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "LAN and esports gaming centers",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Email to managers listed on centers' own websites"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 129 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 6 accepted of 50 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "14 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 2, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Brain estimates roughly 800 LAN and esports gaming centers operate nationally, from a web search; no directory or count of reachable managers has been compiled.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Brain produces the workbook on payment; card payouts land 3 days after payment. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "6 paid orders from 50 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$2",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Managers of LAN and esports gaming centers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Six gaming-center managers paid $129 each for the workbook after a first outreach (payment-processor report, Nov 2026).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 300000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T03:15:35.603Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_03299ee58777_4c1aba",
+    "revisionDigest": "03299ee5877753ed48a56640",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b5c3b7f773be459d8536/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4a4945d98b3c426aaf6b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with MARKET_VOLUME as the decisive gap is right. Price $129 is a real purchase price for this buyer (six managers paid $129 each, payment-processor report); conversion 6/50 = 12% is measured on this offer; fulfilment, $2 cost, zero exposure and 3-day settlement are evidenced. Recomputed: $3,000 / ($129 - $2) = 23.6 -> 24 orders; 24 / 0.12 = 200 contacts beyond the 50 already used. The only buyer count is Brain's own ~800-center web-search estimate (a RECOMMENDATION fact, no directory compiled), so the reachable population is unknown and correctly not treated as known. The resolution (compile and count a directory of centers with published manager emails, then re-plan if >=200) is a research measurement, not a live test, so NO_PLAN rather than CONDITIONAL is correct; no step takes orders or spends.",
+    "findings": [
+     "Buyer volume rests only on an estimate (RECOMMENDATION); an estimate is not evidence of ~200 reachable uncontacted managers.",
+     "Arithmetic checks: 24 orders, ~200 contacts at 12%, inside the 30-day window with 3-day settlement once the count exists.",
+     "Brain's MARKET_VOLUME basis says 14 deals while its question says 24; the plan's 24 matches the full $3,000 gap and is the conservative figure."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:01.586Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_03299ee58777_4c1aba",
+   "digest": "03299ee5877753ed48a56640",
+   "contractDigest": "a5081d309ea3ee5a3f719be3",
+   "plan": {
+    "goalId": "wst_ee3fc6debae343d09eb8",
+    "contractDigest": "a5081d309ea3ee5a3f719be3",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan yet: the number of reachable LAN-center managers is unestablished",
+     "opportunityIds": [],
+     "why": "Price ($129, six paid orders on a processor report), conversion (6 of 50), Brain fulfilment, $2 cost and 3-day settlement are evidenced. But $3,000 needs about 24 orders, i.e. roughly 200 contacts at the measured 12%, and the only buyer count is Brain's own web-search estimate (~800 centers nationally) with no directory of reachable managers compiled. An estimate is not evidence, so whether enough reachable buyers exist is not established."
+    },
+    "alternatives": [
+     {
+      "title": "Email ~200 LAN-center managers at $129",
+      "why": "Would work if ~200 reachable managers exist beyond the 50 already contacted; that count is only an estimate (RECOMMENDATION), not evidence."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Compile a directory of LAN/esports gaming centers with a manager contact published on the center's own website, excluding the 50 already contacted; count it",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s_vol"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     },
+     {
+      "id": "r2",
+      "kind": "OTHER",
+      "label": "Re-plan: if at least ~200 uncontacted reachable managers are counted, submit an executable plan selling the $129 workbook to them",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 3,
+      "dependsOn": "r1",
+      "evidence": [
+       "s_price",
+       "s_conv"
+      ],
+      "executor": {
+       "operation": "PLAN_DECISION",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "reachable uncontacted managers",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "buyers",
+      "sources": [
+       "s_vol"
+      ],
+      "needs": "a compiled count of managers reachable by email; the ~800 figure is Brain's estimate"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 129,
+      "unit": "USD",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.12,
+      "unit": "paid orders per contact",
+      "sources": [
+       "s_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "orders needed",
+      "status": "ESTIMATE",
+      "value": 24,
+      "unit": "orders",
+      "sources": [
+       "s_price"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s_price",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#price",
+      "dated": "2026-11",
+      "claim": "Six gaming-center managers paid $129 each (payment-processor report)",
+      "population": "Managers of LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     },
+     {
+      "id": "s_conv",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "6 paid orders from 50 contacts",
+      "population": "Managers of LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     },
+     {
+      "id": "s_vol",
+      "url": "https://brain.local/card/cop_261b61ad66e744a38609#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "Brain estimates ~800 centers nationally from a web search; no directory or count compiled (RECOMMENDATION)",
+      "population": "LAN and esports gaming centers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_261b61ad66e744a38609"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "How many LAN/esports center managers are reachable by email is not established: ~24 orders (~200 contacts at the measured 12%) are needed and the only count is an unsourced estimate of ~800 centers.",
+     "resolution": "Compile and count a directory of centers with a published manager email (excluding the 50 already contacted); with >=200 such contacts the $129 workbook at the measured conversion reaches $3,000 inside the window and an executable plan can be submitted.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_261b61ad66e744a38609",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_261b61ad66e744a38609",
+      "why": "Not planned until the reachable buyer count is established (MARKET_VOLUME)."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_03299ee58777_4c1aba",
+    "digest": "03299ee5877753ed48a56640",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b5c3b7f773be459d8536/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T03:17:05.575Z"
+   },
+   "review": {
+    "revisionId": "rev_03299ee58777_4c1aba",
+    "revisionDigest": "03299ee5877753ed48a56640",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_b5c3b7f773be459d8536/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_4a4945d98b3c426aaf6b/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN with MARKET_VOLUME as the decisive gap is right. Price $129 is a real purchase price for this buyer (six managers paid $129 each, payment-processor report); conversion 6/50 = 12% is measured on this offer; fulfilment, $2 cost, zero exposure and 3-day settlement are evidenced. Recomputed: $3,000 / ($129 - $2) = 23.6 -> 24 orders; 24 / 0.12 = 200 contacts beyond the 50 already used. The only buyer count is Brain's own ~800-center web-search estimate (a RECOMMENDATION fact, no directory compiled), so the reachable population is unknown and correctly not treated as known. The resolution (compile and count a directory of centers with published manager emails, then re-plan if >=200) is a research measurement, not a live test, so NO_PLAN rather than CONDITIONAL is correct; no step takes orders or spends.",
+    "findings": [
+     "Buyer volume rests only on an estimate (RECOMMENDATION); an estimate is not evidence of ~200 reachable uncontacted managers.",
+     "Arithmetic checks: 24 orders, ~200 contacts at 12%, inside the 30-day window with 3-day settlement once the count exists.",
+     "Brain's MARKET_VOLUME basis says 14 deals while its question says 24; the plan's 24 matches the full $3,000 gap and is the conservative figure."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T03:19:01.586Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $3,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "30dc89726327948f",
+    "openings": {
+     "cop_261b61ad66e744a38609": "b136260a71c7f134"
+    }
+   },
+   "at": "2026-11-28T03:20:49.252Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

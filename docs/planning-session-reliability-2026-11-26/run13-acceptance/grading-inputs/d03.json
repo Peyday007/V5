@@ -1,0 +1,455 @@
+{
+ "caseId": "as-03-large-target-with-capital",
+ "keys": {},
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: cannot reach the 12000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0).",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_b2be28622a91415c8ab3",
+   "cop_e064a2c7319c4de9ba6d",
+   "cop_41fbff5b57f34cbd96bc"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Establish an offer and a price",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 12000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_b2be28622a91415c8ab3",
+    "title": "Year-end bookkeeping catch-up for small businesses, subcontracted",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1320,
+    "card": {
+     "payer": "Small business owner behind on books before tax season",
+     "reachableChannel": "Cold email via Instantly to small businesses",
+     "offerScope": "Flat-fee QuickBooks catch-up for up to 12 months of transactions, done by a contracted bookkeeper",
+     "priceCents": 132000,
+     "currency": "USD",
+     "fulfillmentOwner": "Freelance QuickBooks bookkeeper hired on Upwork",
+     "peakFundingCents": 60000,
+     "humanHours": 2,
+     "requiredCapabilities": [],
+     "industry": "Bookkeeping",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email via Instantly to small businesses"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1320 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 600, tied up 600"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "10 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email via Instantly to small businesses",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Flat-fee QuickBooks catch-up for up to 12 months of transactions, done by a contracted bookkeeper to Small business owner behind on books before tax season, reached through Cold email via Instantly to small businesses, at $1,320; Freelance QuickBooks bookkeeper hired on Upwork delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$600",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Freelance QuickBooks bookkeeper hired on Upwork.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "2 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Flat-fee QuickBooks catch-up for up to 12 months of transactions, done by a contracted bookkeeper",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Small business owner behind on books before tax season",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,320",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$1,320",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://theintegritybookkeeping.odoo.com/pricing; https://www.bench.co/campaign/catch-up-service; https://www.bench.co/campaign/catch-up-service",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "10 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_e064a2c7319c4de9ba6d",
+    "title": "Resell white-label websites to local businesses without one (AgencyPlatform fulfils)",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 1000,
+    "card": {
+     "payer": "Owner of a US local service business without a website",
+     "reachableChannel": "Cold email via Instantly Growth ($47/mo) to Google Maps listings with no website",
+     "offerScope": "Up-to-10-page mobile website with on-page SEO, delivered in about a week, paid in full up front",
+     "priceCents": 100000,
+     "currency": "USD",
+     "fulfillmentOwner": "AgencyPlatform white-label web team (AI Growth package, $99 wholesale, 3 business days)",
+     "peakFundingCents": 40000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Local services / web design",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email via Instantly Growth ($47/mo) to Google Maps listings with no website"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 1000 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 99, tied up 400"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email via Instantly Growth ($47/mo) to Google Maps listings with no website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Up-to-10-page mobile website with on-page SEO, delivered in about a week, paid in full up front to Owner of a US local service business without a website, reached through Cold email via Instantly Growth ($47/mo) to Google Maps listings with no website, at $1,000; AgencyPlatform white-label web team (AI Growth package, $99 wholesale, 3 business days) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$99",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "AgencyPlatform white-label web team (AI Growth package, $99 wholesale, 3 business days).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Up-to-10-page mobile website with on-page SEO, delivered in about a week, paid in full up front",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a US local service business without a website",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$1,000",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "A cost guide last updated 22 September 2026 states a basic small-business website typically costs $300 to $1,000 when built with a platform, a freelancer or an agency; its own table gives $700-$1,800 for basic websites.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://www.fiverr.com/resources/guides/graphic-design/website-design-costs; https://www.webfx.com/web-design/pricing/website-costs/; https://www.agencyplatform.com/seo-friendly-mobile-website.html; https://clutch.co/press-releases/smb-websites-2025; https://clutch.co/press-releases/smb-websites-2025; https://instantly.ai/pricing.md; https://www.agencyplatform.com/membership-pricing; https://support.stripe.com/questions/waiting-period-for-first-payout-on-stripe",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   },
+   {
+    "opportunityId": "cop_41fbff5b57f34cbd96bc",
+    "title": "Resell white-label local SEO (Google Business Profile) retainers to local businesses",
+    "missing": [
+     "CURRENT_DEMAND",
+     "OFFER_AND_PRICE",
+     "CONVERSION",
+     "FULFILMENT",
+     "ECONOMICS",
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 0,
+    "potentialReach": 400,
+    "card": {
+     "payer": "Owner of a US local service business",
+     "reachableChannel": "Cold email via Instantly to local service businesses",
+     "offerScope": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+     "priceCents": 40000,
+     "currency": "USD",
+     "fulfillmentOwner": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate)",
+     "peakFundingCents": 40000,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "Local SEO",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Cold email via Instantly to local service businesses"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": false,
+      "basis": "no buying signal recorded"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": false,
+      "basis": "price 400 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "1 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": false,
+      "basis": "nobody has established who would do the work"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "cost 119, tied up 400"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "14 days to usable cash against 45 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "access",
+      "value": "Cold email via Instantly to local service businesses",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Monthly local SEO / Google Business Profile management, billed monthly up front to Owner of a US local service business, reached through Cold email via Instantly to local service businesses, at $400; AgencyPlatform white-label local SEO team (from $119/mo at Gold rate) delivers it.",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "directCosts",
+      "value": "$119",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "exposure",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "fulfillment",
+      "value": "AgencyPlatform white-label local SEO team (from $119/mo at Gold rate).",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "hours",
+      "value": "1 owner hours per sale",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "offer",
+      "value": "Monthly local SEO / Google Business Profile management, billed monthly up front",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a US local service business",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "price",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "revenueRange",
+      "value": "$400",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeSearches",
+      "value": "https://agencyplatform.com/?p=42; https://www.agencyplatform.com/membership-pricing",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "routeStage",
+      "value": "ROUTE",
+      "kind": "RECOMMENDATION"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "14 days",
+      "kind": "RECOMMENDATION"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 45,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:27:06.481Z"
+ }
+}

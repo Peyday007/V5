@@ -406,6 +406,8 @@ export const BRAIN_CALL_BUDGET_MS = 45_000;
 
 /** Planner runs in progress, per goal: a later call waits on the one already running instead of starting another. */
 const runningReads = new Map<string, Promise<BrainRunSummary>>();
+/** When each running read began, so a read that began before the latest contribution is never joined. */
+const readStarted = new WeakMap<Promise<BrainRunSummary>, string>();
 /**
  * The planner call itself, per goal, which outlives a read that timed out: it holds the process's one scenario slot
  * until it ends, so the next read waits for it (bounded) rather than being refused as busy.
@@ -439,6 +441,16 @@ async function summarize(reading: NonNullable<Awaited<ReturnType<typeof import('
 export async function runBrain(input: { goalId: string; actor: PlanExecutor; evaluations?: number; timeoutMs?: number; budgetMs?: number }): Promise<BrainRunSummary & { running?: boolean }> {
   await liveGoal(input.goalId);
   let pending = runningReads.get(input.goalId);
+  /*
+   * A read already running is joined only if it began after the session's latest contribution. One that began before
+   * cannot have seen it (production, 2026-11-28: a reading begun before the session filed its routes was handed back
+   * to the next call and to submitRevision, and weighed none of them), so a fresh read starts behind it.
+   */
+  if (pending) {
+    const began = readStarted.get(pending);
+    const lastContribution = (await events(input.goalId, PLANNING_EVENTS.contribution)).pop();
+    if (began && lastContribution && began < lastContribution.createdAt) pending = undefined;
+  }
   if (!pending) {
     const at = new Date().toISOString();
     const limit = input.timeoutMs ?? BRAIN_RUN_TIMEOUT_MS;
@@ -465,6 +477,7 @@ export async function runBrain(input: { goalId: string; actor: PlanExecutor; eva
       return summary;
     })();
     runningReads.set(input.goalId, pending);
+    readStarted.set(pending, at);
     const mine = pending;
     void mine.finally(() => { if (runningReads.get(input.goalId) === mine) runningReads.delete(input.goalId); });
   }
@@ -745,6 +758,23 @@ export async function verifyResearch(input: {
   const fragment = await getFragment(String(submitted.detail['fragmentId']));
   if (!fragment) throw new PlanningRefusal('the research fragment is gone', 'planning:research');
   if (fragment.status === 'ACCEPTED' || fragment.status === 'BLOCKED') throw new PlanningRefusal('this research was already judged; submit new research to try again', 'planning:research');
+  /*
+   * A verdict is a reading of one claim of the CURRENT submission (run 13, fleet-2): a verdict keyed `claim_id`, or
+   * keyed to the claims of a submission since replaced, was taken as judging nothing, and the gate blocked the research
+   * on it. Every current claim needs exactly one verdict, and no verdict may name another claim.
+   */
+  const current = ((submitted.detail['claims'] as { claimId: string }[] | undefined) ?? []).map((c) => c.claimId);
+  const named = input.verdicts.map((v) => (v as { claimId?: unknown }).claimId);
+  const stray = named.filter((id) => typeof id !== 'string' || !current.includes(id));
+  const unread = current.filter((id) => !named.includes(id));
+  if (current.length && (stray.length || unread.length)) {
+    throw new PlanningRefusal(
+      `each verdict names one claim of the current submission by claimId (${current.join(', ')})` +
+        `${stray.length ? `; not among them: ${stray.map((x) => (typeof x === 'string' ? x : 'a verdict with no claimId')).join(', ')}` : ''}` +
+        `${unread.length ? `; without a verdict: ${unread.join(', ')}` : ''} — nothing was recorded`,
+      'planning:research',
+    );
+  }
   const opportunityId = String(submitted.detail['opportunityId']);
   const field = String(submitted.detail['field']);
   const before = await brainOpening(input.goalId, opportunityId);
@@ -800,6 +830,27 @@ export function incompleteSections(r: Partial<PlanRevisionInput>): string[] {
  * rather than crashing a check downstream (production, 2026-11-28, the owner's app journey: a NO_PLAN revision sent a
  * strategy with no `opportunityIds`, and every submit failed with "ids is not iterable").
  */
+/**
+ * The source URLs whose claims Brain's evidence gate rejected on this goal's research and accepted on none, with the
+ * gate's reason, so a revision cannot mark a quantity EVIDENCED on them (`REJECTED_EVIDENCE_USED`).
+ */
+async function rejectedSourcesOf(goalId: string): Promise<Record<string, string>> {
+  const { listClaimsForFragment } = await import('../../repos/research.ts');
+  const verified = (await events(goalId, PLANNING_EVENTS.research)).filter((e) => e.detail['phase'] === 'VERIFIED');
+  const fragments = [...new Set((await events(goalId, PLANNING_EVENTS.research)).filter((e) => e.detail['phase'] === 'SUBMITTED' && verified.some((v) => v.detail['needId'] === e.detail['needId'])).map((e) => String(e.detail['fragmentId'])))];
+  const rejected: Record<string, string> = {};
+  const accepted = new Set<string>();
+  for (const id of fragments) {
+    for (const c of await listClaimsForFragment(id).catch(() => [])) {
+      if (!c.sourceUrl) continue;
+      if (c.accepted) accepted.add(c.sourceUrl);
+      else if (c.rejectionReason) rejected[c.sourceUrl] = c.rejectionReason;
+    }
+  }
+  for (const u of accepted) delete rejected[u];
+  return rejected;
+}
+
 export function shapeProblems(r: Partial<PlanRevisionInput>): string[] {
   const out: string[] = [];
   const arr = (v: unknown) => Array.isArray(v);
@@ -871,7 +922,7 @@ export async function submitRevision(input: { revision: Partial<PlanRevisionInpu
   const weighed = [...new Set([...r.strategy.opportunityIds, ...(r.chain ?? []).map((c) => c.opportunityId)])];
   const facts = await cardFactsOf(weighed);
   const reviewConditions = r.parentRevisionId ? await conditionsOn(goalId, r.parentRevisionId) : [];
-  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed) };
+  const brain: BrainFacts = { admittedOpportunityIds: admitted, integrity: integrityFor(brainRun, r.strategy.opportunityIds), completed: brainRun.completed, error: brainRun.error, fulfilment, hoursCeiling: (await storedTerms(goalId)).hoursCeiling, links, facts, reviewConditions, excluded: Object.fromEntries((brainRun.excluded ?? []).map((x) => [x.opportunityId, x.reason])), discovered: await discoveredIds(goalId, weighed), rejectedSources: await rejectedSourcesOf(goalId) };
   const today = input.today ?? new Date().toISOString().slice(0, 10);
   const problems: CheckProblem[] = [
     ...missing.map((k) => ({ code: 'INCOMPLETE_OUTPUT' as const, detail: `the submission has no "${k}"`, at: k })),

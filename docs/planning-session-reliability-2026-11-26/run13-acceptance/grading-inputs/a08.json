@@ -1,0 +1,164 @@
+{
+ "caseId": "ar-08-electric-coop-pays-late",
+ "keys": {
+  "cop_bbcd80aa91774b2a858b": "easementWorkbook"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: inside the goal's own limits the openings held bring at most $0 of the $8,000 still needed, even with every buyer agreeing at the top price. To make it supportable, deadline: move the deadline to at least 63 days from now, when enough lots have settled; or target: lower the target: the openings held bring nothing inside the goal's limits even with every buyer agreeing. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_bbcd80aa91774b2a858b"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_bbcd80aa91774b2a858b",
+    "title": "Right-of-way easement records workbooks for rural electric cooperatives",
+    "missing": [
+     "SETTLES_IN_TIME"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 0,
+    "potentialReach": 0,
+    "card": {
+     "payer": "Right-of-way and engineering managers at rural electric cooperatives",
+     "reachableChannel": "Signed engagement letters",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:12:03.135Z",
+     "offerScope": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+     "priceCents": 320000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "rural electric cooperatives",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 320000,
+      "currency": "USD",
+      "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 320000,
+      "currency": "USD",
+      "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 320000,
+      "currency": "USD",
+      "deliverable": "Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Signed engagement letters"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 9600 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 9600 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "no new deals needed"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": false,
+      "basis": "63 days to usable cash against 21 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain delivers each workbook by Dec 3. Each co-op pays invoices net 45 after its board approves them; all three boards next meet Dec 16, so the earliest payment is Jan 30, 2027. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Right-of-way and engineering managers at rural electric cooperatives",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Three rural electric cooperatives signed engagement letters at $3,200 per easement records workbook (Nov 2026), invoices payable net 45 after board approval.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "63 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 800000,
+   "daysLeft": 21,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:15:31.086Z"
+ }
+}

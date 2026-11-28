@@ -1,0 +1,149 @@
+{
+ "caseId": "ar-05-glassblowing-target-raised",
+ "keys": {
+  "cop_98017b9c6c8c42e1bee3": "hotShopPack"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "INFEASIBLE AS STATED: the openings held sell into markets research counted whole: every buyer in them agreeing at the top price brings at most $11,040, so they cannot reach the $15,000 still needed. To make it supportable, target: lower the target to about $11,040, the most the openings held bring with every buyer agreeing at the top price. The conclusion covers the openings held; markets nobody has counted are not ruled out, so Brain keeps searching for openings outside them.",
+  "acceptance": "NOT_SUPPORTED",
+  "considered": [
+   "cop_98017b9c6c8c42e1bee3"
+  ],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [
+   {
+    "opportunityId": "cop_98017b9c6c8c42e1bee3",
+    "title": "Hot-shop safety inspection log and hot-work compliance pack for glassblowing studios",
+    "missing": [
+     "MARKET_VOLUME"
+    ],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 11040,
+    "potentialReach": 15000,
+    "card": {
+     "payer": "Owners of independent glassblowing studios",
+     "reachableChannel": "Email to the owner addresses published in the state glass guild's member directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T03:11:47.643Z",
+     "offerScope": "Brain produces and delivers the pack on payment; card payouts land 3 days after payment. A studio needs one pack a year.",
+     "priceCents": 24000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "glassblowing studios",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the owner addresses published in the state glass guild's member directo"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 240 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 9 accepted of 20 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "50 deal(s) needed but only 46 in the window (46 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 4, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The state glass guild's 2026 member directory lists 46 glassblowing studios, each with a published owner email; none has been offered the pack yet; each needs at most one a year.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell Brain produces and delivers the pack on payment; card payouts land 3 days after payment. A studio needs one pack a year. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "9 paid orders from 20 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$4",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owners of independent glassblowing studios",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Nine studio owners in a neighbouring state's guild paid $240 each for the pack after one email (payment-processor report, Nov 2026).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T03:22:10.519Z"
+ }
+}
