@@ -1,0 +1,1505 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_a15e231ce9954f408662",
+   "words": "Collect $5,000 of settled cash within 30 days with at most $5,000 of capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": 3500000,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": null,
+    "proofCondition": "Target settled cash collected within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 2,
+   "digest": "43f1de45e6089dc3ead346d6"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_a15e231ce9954f408662",
+    "contractDigest": "25cf8f1ccc06d42e9dafdf56",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within the $5,000 capital limit",
+     "opportunityIds": [],
+     "why": "The only opening, resale of a compact track loader to a signed buyer at $38,500, needs $31,900 paid out before the buyer wires payment on delivery (unit $31,000 released only after payment, haul $900). That is 6.4x the $5,000 capital the owner allows, so no plan inside the goal's limits exists."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the capital limit to $31,900",
+      "why": "With $31,900 of capital the signed deal settles $38,500 by day 12 (net $6,600), above the $5,000 target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the owner to allow $31,900 of capital, or find a dealer that releases the unit against the buyer's payment (deferred/escrowed purchase) so peak funding falls under $5,000",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "exposure",
+       "fulfillment"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "peak funding needed",
+      "status": "EVIDENCED",
+      "value": 31900,
+      "unit": "USD",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sale price agreed",
+      "status": "EVIDENCED",
+      "value": 38500,
+      "unit": "USD",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "capital allowed",
+      "status": "EVIDENCED",
+      "value": 5000,
+      "unit": "USD",
+      "sources": [],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $31,900 (unit $31,000 paid before release + $900 haul)",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#price",
+      "dated": "2026-11-25",
+      "claim": "Agreed price $38,500, wired on delivery",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Midstate sells the unit for $31,000 and releases it within 3 days of payment; Hartley hauls for $900",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The deal needs $31,900 of capital tied up before the buyer pays on delivery, against a $5,000 capital limit; no other opening exists.",
+     "resolution": "Relax the capital limit to at least $31,900, or secure supplier terms (payment from the buyer's wire / escrow) that keep peak funding at or under $5,000; then the signed $38,500 sale settles by day 12.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "why": "Peak funding $31,900 exceeds the $5,000 capital limit."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [
+     {
+      "constraint": "CAPITAL",
+      "suggestion": "Allow at least $31,900 of capital (the card's stated exposure); the signed sale then settles $38,500 within 12 days.",
+      "basis": [
+       {
+        "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+        "field": "exposure"
+       }
+      ]
+     }
+    ],
+    "disagreements": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "link": "ECONOMICS",
+      "reason": "Brain's basis 'cost 31900, tied up 31900' itself shows $31,900 tied up (card exposure EVIDENCE $31,900), which exceeds the goal's $5,000 capital ceiling; the economics do not hold inside the goal's limits."
+     }
+    ],
+    "revisionId": "rev_3485e5304dda_1747f5",
+    "digest": "3485e5304dda87aa5a33e5ce",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:11.142Z"
+   },
+   {
+    "goalId": "wst_a15e231ce9954f408662",
+    "contractDigest": "25cf8f1ccc06d42e9dafdf56",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan within the $5,000 capital limit",
+     "opportunityIds": [],
+     "why": "The only opening, resale of a compact track loader to a signed buyer at $38,500, needs $31,900 paid out before the buyer wires payment on delivery (unit $31,000 released only after payment, haul $900). That is 6.4x the $5,000 capital the owner allows, so no plan inside the goal's limits exists."
+    },
+    "alternatives": [
+     {
+      "title": "Raise the capital limit to $31,900",
+      "why": "With $31,900 of capital the signed deal settles $38,500 by day 12 (net $6,600), above the $5,000 target."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Ask the owner to allow $31,900 of capital, or find a dealer that releases the unit against the buyer's payment (deferred/escrowed purchase) so peak funding falls under $5,000",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "exposure",
+       "fulfillment"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "peak funding needed",
+      "status": "EVIDENCED",
+      "value": 31900,
+      "unit": "USD",
+      "sources": [
+       "c1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "sale price agreed",
+      "status": "EVIDENCED",
+      "value": 38500,
+      "unit": "USD",
+      "sources": [
+       "c2"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $31,900 (unit $31,000 paid before release + $900 haul)",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#price",
+      "dated": "2026-11-25",
+      "claim": "Agreed price $38,500, wired on delivery",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Midstate sells the unit for $31,000 and releases it within 3 days of payment; Hartley hauls for $900",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "The deal needs $31,900 of capital tied up before the buyer pays on delivery, against a $5,000 capital limit; no other opening exists.",
+     "resolution": "Relax the capital limit to at least $31,900, or secure supplier terms (payment from the buyer's wire / escrow) that keep peak funding at or under $5,000; then the signed $38,500 sale settles by day 12.",
+     "decisiveLinks": [
+      "ECONOMICS"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "missing": [
+       "ECONOMICS"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "why": "Peak funding $31,900 exceeds the $5,000 capital limit."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "ECONOMICS"
+    ],
+    "constraints": [
+     {
+      "constraint": "CAPITAL",
+      "suggestion": "Allow at least $31,900 of capital (the card's stated exposure); the signed sale then settles $38,500 within 12 days.",
+      "basis": [
+       {
+        "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+        "field": "exposure"
+       }
+      ]
+     }
+    ],
+    "disagreements": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "link": "ECONOMICS",
+      "reason": "Brain's basis 'cost 31900, tied up 31900' itself shows $31,900 tied up (card exposure EVIDENCE $31,900), which exceeds the goal's $5,000 capital ceiling; the economics do not hold inside the goal's limits."
+     }
+    ],
+    "revisionId": "rev_288c06561896_6cf391",
+    "digest": "288c065618966b9f35eb74cb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:17.475Z"
+   },
+   {
+    "goalId": "wst_a15e231ce9954f408662",
+    "contractDigest": "43f1de45e6089dc3ead346d6",
+    "parentRevisionId": "rev_288c06561896_6cf391",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Resell the off-rent compact track loader from Midstate to the signed excavation contractor",
+     "opportunityIds": [
+      "cop_a1fab47c5c4e4759ac2f"
+     ],
+     "why": "The goal's stored capital ceiling is now $35,000. The buyer accepted in writing $38,500 for the 2023 loader delivered to their yard, wired on delivery. Midstate sells the unit for $31,000 (released within 3 days of payment) and Hartley hauls for $900 (within 2 days): $31,900 of capital, inside $35,000. The wire settles by day 12, collecting $38,500 (net $6,600) against the $5,000 target in 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "No plan",
+      "why": "Only correct while capital was capped at $5,000; the stored ceiling is now $35,000, which covers the $31,900 need."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the signed $38,500 purchase and delivery date with the buyer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 3850000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "ORDER",
+      "label": "Buy the 2023 compact track loader from Midstate Equipment Rentals for $31,000",
+      "performer": "Midstate Equipment Rentals",
+      "costCents": 3100000,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Midstate Equipment Rentals",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Hartley Heavy Haul hauls the released unit to the buyer's yard",
+      "performer": "Hartley Heavy Haul",
+      "costCents": 90000,
+      "day": 4,
+      "dependsOn": "s2",
+      "evidence": [
+       "fulfillment"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hartley Heavy Haul",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Buyer wires $38,500 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 3190000,
+      "label": "Owner's capital advanced (within the $35,000 ceiling)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 3100000,
+      "label": "Pay Midstate for the unit",
+      "stepId": "s2"
+     },
+     {
+      "day": 4,
+      "kind": "SPEND",
+      "amountCents": 90000,
+      "label": "Pay Hartley for the haul",
+      "stepId": "s3"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 3850000,
+      "label": "Buyer's wire on delivery",
+      "settlesDay": 12,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "agreed price",
+      "status": "EVIDENCED",
+      "value": 38500,
+      "unit": "USD",
+      "sources": [
+       "c1",
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "unit cost",
+      "status": "EVIDENCED",
+      "value": 31000,
+      "unit": "USD",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "haul cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 31900,
+      "unit": "USD",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#price",
+      "dated": "2026-11-25",
+      "claim": "Price $38,500",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#agreements",
+      "dated": "2026-11-25",
+      "claim": "Written acceptance at $38,500, wired on delivery",
+      "population": "The signed buyer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Midstate sells the unit for $31,000 and releases within 3 days of payment; Hartley quoted $900 and can haul within 2 days",
+      "population": "Midstate Equipment Rentals and Hartley Heavy Haul (fulfillers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $31,900",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "12 days to first cash",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "The published NO_PLAN went stale: the goal's stored capital ceiling changed from $5,000 to $35,000.",
+      "resolution": "Re-planned: the $31,900 capital need now fits the $35,000 ceiling, so the signed resale is executable."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "deals": 1,
+      "price": 38500,
+      "directCost": 31900,
+      "capital": 31900,
+      "settlesDay": 12,
+      "ownerHours": null,
+      "dealsMax": 1
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5d35e78cb554_a5a425",
+    "digest": "5d35e78cb5549832e8416c0e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:30.702Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_a15e231ce9954f408662",
+   "contractDigest": "43f1de45e6089dc3ead346d6",
+   "parentRevisionId": "rev_288c06561896_6cf391",
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Resell the off-rent compact track loader from Midstate to the signed excavation contractor",
+    "opportunityIds": [
+     "cop_a1fab47c5c4e4759ac2f"
+    ],
+    "why": "The goal's stored capital ceiling is now $35,000. The buyer accepted in writing $38,500 for the 2023 loader delivered to their yard, wired on delivery. Midstate sells the unit for $31,000 (released within 3 days of payment) and Hartley hauls for $900 (within 2 days): $31,900 of capital, inside $35,000. The wire settles by day 12, collecting $38,500 (net $6,600) against the $5,000 target in 30 days."
+   },
+   "alternatives": [
+    {
+     "title": "No plan",
+     "why": "Only correct while capital was capped at $5,000; the stored ceiling is now $35,000, which covers the $31,900 need."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "SELL",
+     "label": "Confirm the signed $38,500 purchase and delivery date with the buyer",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "agreements",
+      "price"
+     ],
+     "priceCents": 3850000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "ORDER",
+     "label": "Buy the 2023 compact track loader from Midstate Equipment Rentals for $31,000",
+     "performer": "Midstate Equipment Rentals",
+     "costCents": 3100000,
+     "day": 1,
+     "dependsOn": "s1",
+     "evidence": [
+      "fulfillment",
+      "directCosts"
+     ],
+     "executor": {
+      "operation": "PAY_SUPPLIER",
+      "performedBy": "BRAIN",
+      "provider": "Midstate Equipment Rentals",
+      "capabilities": [
+       {
+        "id": "PAY_A_SUPPLIER",
+        "state": "NOT_DECLARED"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Hartley Heavy Haul hauls the released unit to the buyer's yard",
+     "performer": "Hartley Heavy Haul",
+     "costCents": 90000,
+     "day": 4,
+     "dependsOn": "s2",
+     "evidence": [
+      "fulfillment"
+     ],
+     "executor": {
+      "operation": "SUPPLIER_DELIVERS",
+      "performedBy": "PROVIDER",
+      "provider": "Hartley Heavy Haul",
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Buyer wires $38,500 on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 6,
+     "dependsOn": "s3",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 1,
+     "kind": "FUNDING",
+     "amountCents": 3190000,
+     "label": "Owner's capital advanced (within the $35,000 ceiling)",
+     "stepId": "s2"
+    },
+    {
+     "day": 1,
+     "kind": "SPEND",
+     "amountCents": 3100000,
+     "label": "Pay Midstate for the unit",
+     "stepId": "s2"
+    },
+    {
+     "day": 4,
+     "kind": "SPEND",
+     "amountCents": 90000,
+     "label": "Pay Hartley for the haul",
+     "stepId": "s3"
+    },
+    {
+     "day": 6,
+     "kind": "RECEIPT",
+     "amountCents": 3850000,
+     "label": "Buyer's wire on delivery",
+     "settlesDay": 12,
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 12,
+   "quantities": [
+    {
+     "name": "agreed price",
+     "status": "EVIDENCED",
+     "value": 38500,
+     "unit": "USD",
+     "sources": [
+      "c1",
+      "c2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "unit cost",
+     "status": "EVIDENCED",
+     "value": 31000,
+     "unit": "USD",
+     "sources": [
+      "c3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "haul cost",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "USD",
+     "sources": [
+      "c3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "peak capital",
+     "status": "EVIDENCED",
+     "value": 31900,
+     "unit": "USD",
+     "sources": [
+      "c4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 12,
+     "unit": "days",
+     "sources": [
+      "c5"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "c1",
+     "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#price",
+     "dated": "2026-11-25",
+     "claim": "Price $38,500",
+     "population": "Owner of a small excavation contracting firm (one signed buyer)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+    },
+    {
+     "id": "c2",
+     "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#agreements",
+     "dated": "2026-11-25",
+     "claim": "Written acceptance at $38,500, wired on delivery",
+     "population": "The signed buyer",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+    },
+    {
+     "id": "c3",
+     "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#fulfillment",
+     "dated": "2026-11-25",
+     "claim": "Midstate sells the unit for $31,000 and releases within 3 days of payment; Hartley quoted $900 and can haul within 2 days",
+     "population": "Midstate Equipment Rentals and Hartley Heavy Haul (fulfillers)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+    },
+    {
+     "id": "c4",
+     "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#exposure",
+     "dated": "2026-11-25",
+     "claim": "Exposure $31,900",
+     "population": "Owner of a small excavation contracting firm (one signed buyer)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+    },
+    {
+     "id": "c5",
+     "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "12 days to first cash",
+     "population": "Owner of a small excavation contracting firm (one signed buyer)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [
+    {
+     "finding": "The published NO_PLAN went stale: the goal's stored capital ceiling changed from $5,000 to $35,000.",
+     "resolution": "Re-planned: the $31,900 capital need now fits the $35,000 ceiling, so the signed resale is executable."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+     "missing": []
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+     "deals": 1,
+     "price": 38500,
+     "directCost": 31900,
+     "capital": 31900,
+     "settlesDay": 12,
+     "ownerHours": null,
+     "dealsMax": 1
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_5d35e78cb554_a5a425",
+   "digest": "5d35e78cb5549832e8416c0e",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_3e12f5039c894677b12d/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:13:30.702Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_5d35e78cb554_a5a425",
+   "digest": "5d35e78cb5549832e8416c0e",
+   "contractDigest": "43f1de45e6089dc3ead346d6",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 3190000,
+    "committedOpenCents": 0,
+    "preProofCents": 3190000,
+    "maxExposureCents": 3190000,
+    "minCashCents": 3500000,
+    "minCashDay": 4,
+    "collectedCents": 3850000,
+    "collectedInWindowCents": 3850000,
+    "refundsCents": 0,
+    "ownerFundedCents": 3190000,
+    "netCents": 660000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Resale of an off-rent compact track loader from a rental fle\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Resale of an off-rent compact track loader from a rental fle\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies.",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_a1fab47c5c4e4759ac2f"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+      "owner": "PERSON",
+      "cost": 31900
+     },
+     {
+      "label": "Collect payment for \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "title": "Resale of an off-rent compact track loader from a rental fleet to an excavation contractor",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 5000,
+      "potentialReach": 5000,
+      "card": {
+       "payer": "Owner of a small excavation contracting firm",
+       "reachableChannel": "The signed buyer",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:42.402Z",
+       "offerScope": "A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery.",
+       "priceCents": 3850000,
+       "currency": "USD",
+       "fulfillmentOwner": "Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 days of payment) and Hartley Heavy Haul (quoted $900, can haul within 2 days)",
+       "peakFundingCents": 3190000,
+       "humanHours": 3,
+       "requiredCapabilities": [],
+       "industry": "construction equipment rental",
+       "mechanism": "SUPPLY_DEMAND_MISMATCH",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 3850000,
+        "currency": "USD",
+        "deliverable": "A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The signed buyer"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 38500 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 38500 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "fulfilled by Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 day (a source says so)"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 31900, tied up 31900"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "12 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$31900",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$31900",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "fulfillment",
+        "value": "Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 days of payment) and Hartley Heavy Haul (quoted $900, can haul within 2 days) quoted to do the work.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Owner of a small excavation contracting firm",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$38500",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "12 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:12:48.723Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_288c06561896_6cf391",
+    "revisionDigest": "288c065618966b9f35eb74cb",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_33bb34020f94443cb6b2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: the one opening (signed $38,500 track-loader resale) needs the $31,000 unit paid to Midstate before release plus $900 haul = $31,900 spent and tied up before the buyer's wire on delivery (card directCosts and exposure both EVIDENCE $31,900; fulfillment fact says the unit is released only after payment). The contract caps capital/spend at $5,000, so peak funding is 6.38x the limit. This is a genuine constraint, not missing evidence: with every link evidenced (price, buyer agreement, fulfiller quotes, 12-day settlement inside 30) the deal still cannot fit the limit. No other opening is held. NO_PLAN with decisiveLinks [ECONOMICS] names the right gap, and the resolution (raise the cap to >= $31,900, or supplier terms releasing the unit against the buyer's escrowed payment) is the correct path. Brain's own verdict (NOT_VIABLE, capital >= $31,900) agrees.",
+    "findings": [
+     "Arithmetic check of the alternative: with $31,900 capital, $38,500 - $31,900 = $6,600 net and $38,500 gross settled by day 12, so the target is carried if the owner relaxes the cap.",
+     "The research step (deferred/escrowed dealer release) is the only in-limit route and should be pursued; nothing on the card currently shows Midstate offers such terms."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:14.858Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_5d35e78cb554_a5a425",
+    "revisionDigest": "5d35e78cb5549832e8416c0e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_33bb34020f94443cb6b2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The stored contract now caps total spend at $35,000 (contract digest 43f1...), so the earlier NO_PLAN is correctly superseded. Recomputed: Midstate unit $31,000 + Hartley haul $900 = $31,900 capital (card directCosts/exposure/peakFunding EVIDENCE), inside $35,000. Timeline: pay day 1, release within 3 days (day 4), haul within 2 days (day 6), buyer wires on delivery, usable by day 12 (card timeToFirstCash 12 days) inside 30. Collected $38,500 >= $5,000 target; net $6,600 also clears it. Price is this buyer's own written acceptance of $38,500, a real purchase price. Fulfillers in the steps are the card's recorded fulfillmentOwner (Midstate, Hartley). The ledger matches the steps (funding $31,900 day 1, spends day 1 and 4, receipt day 6 settling day 12), and Brain's check trace agrees (spent $31,900, collected $38,500, net $6,600). All links established from this offer's own record; no contradicting record. EXECUTABLE is right.",
+    "findings": [
+     "Concentration risk: one deal carries the whole target and $31,900 of owner capital is committed on day 1 before the buyer pays. A written acceptance is not payment; asking the buyer for a deposit, or an escrow / payment-on-release arrangement with Midstate, before paying would protect the capital. If the buyer defaults the owner holds a loader worth roughly what was paid, not cash.",
+     "Executor PAY_A_SUPPLIER is NOT_DECLARED and SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED; payment to Midstate and wire collection must be set up before day 1.",
+     "Card humanHours 3 while members[].ownerHours is null; no hours ceiling applies, but the figure should be carried.",
+     "The owner's original words say 'at most $5,000 of capital'; the plan relies on the stored ceiling of $35,000. That change should be visibly the owner's decision on the goal before $31,900 is committed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:14:43.290Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_5d35e78cb554_a5a425",
+   "digest": "5d35e78cb5549832e8416c0e",
+   "contractDigest": "43f1de45e6089dc3ead346d6",
+   "plan": {
+    "goalId": "wst_a15e231ce9954f408662",
+    "contractDigest": "43f1de45e6089dc3ead346d6",
+    "parentRevisionId": "rev_288c06561896_6cf391",
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Resell the off-rent compact track loader from Midstate to the signed excavation contractor",
+     "opportunityIds": [
+      "cop_a1fab47c5c4e4759ac2f"
+     ],
+     "why": "The goal's stored capital ceiling is now $35,000. The buyer accepted in writing $38,500 for the 2023 loader delivered to their yard, wired on delivery. Midstate sells the unit for $31,000 (released within 3 days of payment) and Hartley hauls for $900 (within 2 days): $31,900 of capital, inside $35,000. The wire settles by day 12, collecting $38,500 (net $6,600) against the $5,000 target in 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "No plan",
+      "why": "Only correct while capital was capped at $5,000; the stored ceiling is now $35,000, which covers the $31,900 need."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "SELL",
+      "label": "Confirm the signed $38,500 purchase and delivery date with the buyer",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 3850000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "ORDER",
+      "label": "Buy the 2023 compact track loader from Midstate Equipment Rentals for $31,000",
+      "performer": "Midstate Equipment Rentals",
+      "costCents": 3100000,
+      "day": 1,
+      "dependsOn": "s1",
+      "evidence": [
+       "fulfillment",
+       "directCosts"
+      ],
+      "executor": {
+       "operation": "PAY_SUPPLIER",
+       "performedBy": "BRAIN",
+       "provider": "Midstate Equipment Rentals",
+       "capabilities": [
+        {
+         "id": "PAY_A_SUPPLIER",
+         "state": "NOT_DECLARED"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Hartley Heavy Haul hauls the released unit to the buyer's yard",
+      "performer": "Hartley Heavy Haul",
+      "costCents": 90000,
+      "day": 4,
+      "dependsOn": "s2",
+      "evidence": [
+       "fulfillment"
+      ],
+      "executor": {
+       "operation": "SUPPLIER_DELIVERS",
+       "performedBy": "PROVIDER",
+       "provider": "Hartley Heavy Haul",
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Buyer wires $38,500 on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 6,
+      "dependsOn": "s3",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 1,
+      "kind": "FUNDING",
+      "amountCents": 3190000,
+      "label": "Owner's capital advanced (within the $35,000 ceiling)",
+      "stepId": "s2"
+     },
+     {
+      "day": 1,
+      "kind": "SPEND",
+      "amountCents": 3100000,
+      "label": "Pay Midstate for the unit",
+      "stepId": "s2"
+     },
+     {
+      "day": 4,
+      "kind": "SPEND",
+      "amountCents": 90000,
+      "label": "Pay Hartley for the haul",
+      "stepId": "s3"
+     },
+     {
+      "day": 6,
+      "kind": "RECEIPT",
+      "amountCents": 3850000,
+      "label": "Buyer's wire on delivery",
+      "settlesDay": 12,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 12,
+    "quantities": [
+     {
+      "name": "agreed price",
+      "status": "EVIDENCED",
+      "value": 38500,
+      "unit": "USD",
+      "sources": [
+       "c1",
+       "c2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "unit cost",
+      "status": "EVIDENCED",
+      "value": 31000,
+      "unit": "USD",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "haul cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD",
+      "sources": [
+       "c3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "peak capital",
+      "status": "EVIDENCED",
+      "value": 31900,
+      "unit": "USD",
+      "sources": [
+       "c4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 12,
+      "unit": "days",
+      "sources": [
+       "c5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "c1",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#price",
+      "dated": "2026-11-25",
+      "claim": "Price $38,500",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c2",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#agreements",
+      "dated": "2026-11-25",
+      "claim": "Written acceptance at $38,500, wired on delivery",
+      "population": "The signed buyer",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c3",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#fulfillment",
+      "dated": "2026-11-25",
+      "claim": "Midstate sells the unit for $31,000 and releases within 3 days of payment; Hartley quoted $900 and can haul within 2 days",
+      "population": "Midstate Equipment Rentals and Hartley Heavy Haul (fulfillers)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c4",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $31,900",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     },
+     {
+      "id": "c5",
+      "url": "https://brain.local/card/cop_a1fab47c5c4e4759ac2f#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "12 days to first cash",
+      "population": "Owner of a small excavation contracting firm (one signed buyer)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [
+     {
+      "finding": "The published NO_PLAN went stale: the goal's stored capital ceiling changed from $5,000 to $35,000.",
+      "resolution": "Re-planned: the $31,900 capital need now fits the $35,000 ceiling, so the signed resale is executable."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "missing": []
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+      "deals": 1,
+      "price": 38500,
+      "directCost": 31900,
+      "capital": 31900,
+      "settlesDay": 12,
+      "ownerHours": null,
+      "dealsMax": 1
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_5d35e78cb554_a5a425",
+    "digest": "5d35e78cb5549832e8416c0e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:13:30.702Z"
+   },
+   "review": {
+    "revisionId": "rev_5d35e78cb554_a5a425",
+    "revisionDigest": "5d35e78cb5549832e8416c0e",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_3e12f5039c894677b12d/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_33bb34020f94443cb6b2/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "The stored contract now caps total spend at $35,000 (contract digest 43f1...), so the earlier NO_PLAN is correctly superseded. Recomputed: Midstate unit $31,000 + Hartley haul $900 = $31,900 capital (card directCosts/exposure/peakFunding EVIDENCE), inside $35,000. Timeline: pay day 1, release within 3 days (day 4), haul within 2 days (day 6), buyer wires on delivery, usable by day 12 (card timeToFirstCash 12 days) inside 30. Collected $38,500 >= $5,000 target; net $6,600 also clears it. Price is this buyer's own written acceptance of $38,500, a real purchase price. Fulfillers in the steps are the card's recorded fulfillmentOwner (Midstate, Hartley). The ledger matches the steps (funding $31,900 day 1, spends day 1 and 4, receipt day 6 settling day 12), and Brain's check trace agrees (spent $31,900, collected $38,500, net $6,600). All links established from this offer's own record; no contradicting record. EXECUTABLE is right.",
+    "findings": [
+     "Concentration risk: one deal carries the whole target and $31,900 of owner capital is committed on day 1 before the buyer pays. A written acceptance is not payment; asking the buyer for a deposit, or an escrow / payment-on-release arrangement with Midstate, before paying would protect the capital. If the buyer defaults the owner holds a loader worth roughly what was paid, not cash.",
+     "Executor PAY_A_SUPPLIER is NOT_DECLARED and SEND_A_MESSAGE / ISSUE_AN_INVOICE are NOT_CONNECTED; payment to Midstate and wire collection must be set up before day 1.",
+     "Card humanHours 3 while members[].ownerHours is null; no hours ceiling applies, but the figure should be carried.",
+     "The owner's original words say 'at most $5,000 of capital'; the plan relies on the stored ceiling of $35,000. That change should be visibly the owner's decision on the goal before $31,900 is committed."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:14:43.290Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 30 days with at most $5,000 of capital.",
+    "terms": "bec5bebe5dae38e0",
+    "openings": {
+     "cop_a1fab47c5c4e4759ac2f": "3db33f048067cf36"
+    }
+   },
+   "at": "2026-11-28T07:16:02.895Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

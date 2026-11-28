@@ -1,0 +1,878 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_a5f661c0ad9d4cb59575",
+   "words": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 1200000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 40,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$12000 of cash settled in the owner's account within 40 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "254c93f9ce3723123c9f33d1"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_a5f661c0ad9d4cb59575",
+    "contractDigest": "254c93f9ce3723123c9f33d1",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening is one community's single $3,800 RFQ, against a $12,000 target",
+     "opportunityIds": [],
+     "why": "The one opening is a single organisation (Sunbelt Pines MHC) issuing a one-time RFQ budgeted at $3,800. Even if it is won, it settles at most $3,800 (net-20 after delivery) of the $12,000 target. No other buyer of this reconciliation is counted on any card, so the remaining $8,200 has no established source."
+    },
+    "alternatives": [
+     {
+      "title": "Win the Sunbelt Pines RFQ alone",
+      "why": "Reaches at most $3,800, 32% of the target; worth bidding as part of a larger plan, but not a plan for $12,000."
+     },
+     {
+      "title": "Sell the same reconciliation to other manufactured-housing communities",
+      "why": "No card establishes any other community buyer, their demand, or a close rate; Brain's '16 new buyers' are hypothetical, not counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish whether other manufactured-housing communities buy sub-meter billing reconciliations (count of buyers with a current, dated request and their price)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2",
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Sunbelt Pines RFQ price",
+      "status": "EVIDENCED",
+      "value": 3800,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Buyers of this offer counted on the record",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "organisations",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Additional buyers beyond Sunbelt Pines",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "organisations",
+      "sources": [],
+      "needs": "A count of other communities with a current request for this work"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#price",
+      "dated": "2026-11-18",
+      "claim": "Sunbelt Pines MHC issued an RFQ budgeted at $3,800 for a one-time water sub-meter billing reconciliation",
+      "population": "One manufactured-housing community",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#payer",
+      "dated": "2026-11-25",
+      "claim": "The payer is the community manager of Sunbelt Pines Manufactured Housing Community (one organisation)",
+      "population": "One organisation",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "20 days to first cash (net-20 after delivery)",
+      "population": "Sunbelt Pines",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Only one buyer is counted: Sunbelt Pines' single one-time RFQ at $3,800 caps this opening at $3,800, and no card establishes any further buyer (MARKET_VOLUME) or a close rate on new buyers (CONVERSION) for the other $8,200.",
+     "resolution": "Bid the Sunbelt Pines RFQ at $3,800 (no capital, Brain produces the spreadsheet) and in parallel research other manufactured-housing communities with current, dated requests for sub-meter billing reconciliation; replan once enough counted buyers at an established price cover $12,000, or lower the target to $3,800.",
+     "decisiveLinks": [
+      "MARKET_VOLUME",
+      "CONVERSION"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "why": "One organisation's single one-time RFQ: at most $3,800 of a $12,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [
+     {
+      "constraint": "TARGET",
+      "suggestion": "With the evidence held, the most reachable is one deal × $3,800 = $3,800; lower the target to $3,800 or add counted buyers.",
+      "basis": [
+       {
+        "opportunityId": "cop_f35395e55a614b95bfbb",
+        "field": "price"
+       },
+       {
+        "opportunityId": "cop_f35395e55a614b95bfbb",
+        "field": "payer"
+       }
+      ]
+     }
+    ],
+    "disagreements": [],
+    "revisionId": "rev_c49842b34017_27811b",
+    "digest": "c49842b34017e3a6cf8d988d",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2100f3fa2de4470eaf08/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:30.718Z"
+   },
+   {
+    "goalId": "wst_a5f661c0ad9d4cb59575",
+    "contractDigest": "254c93f9ce3723123c9f33d1",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening is one community's single $3,800 RFQ, against a $12,000 target",
+     "opportunityIds": [],
+     "why": "The one opening is a single organisation (Sunbelt Pines MHC) issuing a one-time RFQ budgeted at $3,800. Even if it is won, it settles at most $3,800 (net-20 after delivery) of the $12,000 target. No other buyer of this reconciliation is counted on any card, so the remaining $8,200 has no established source."
+    },
+    "alternatives": [
+     {
+      "title": "Win the Sunbelt Pines RFQ alone",
+      "why": "Reaches at most $3,800, 32% of the target; worth bidding as part of a larger plan, but not a plan for $12,000."
+     },
+     {
+      "title": "Sell the same reconciliation to other manufactured-housing communities",
+      "why": "No card establishes any other community buyer, their demand, or a close rate; Brain's '16 new buyers' are hypothetical, not counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish whether other manufactured-housing communities buy sub-meter billing reconciliations (count of buyers with a current, dated request and their price)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2",
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Sunbelt Pines RFQ price",
+      "status": "EVIDENCED",
+      "value": 3800,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Buyers of this offer counted on the record",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "organisations",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Additional buyers beyond Sunbelt Pines",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "organisations",
+      "sources": [],
+      "needs": "A count of other communities with a current request for this work"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#price",
+      "dated": "2026-11-18",
+      "claim": "Sunbelt Pines MHC issued an RFQ budgeted at $3,800 for a one-time water sub-meter billing reconciliation",
+      "population": "One manufactured-housing community",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#payer",
+      "dated": "2026-11-25",
+      "claim": "The payer is the community manager of Sunbelt Pines Manufactured Housing Community (one organisation)",
+      "population": "One organisation",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "20 days to first cash (net-20 after delivery)",
+      "population": "Sunbelt Pines",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Only one buyer is counted: Sunbelt Pines' single one-time RFQ at $3,800 caps this opening at $3,800, and no card establishes any further buyer (MARKET_VOLUME) or a close rate on new buyers (CONVERSION) for the other $8,200.",
+     "resolution": "Bid the Sunbelt Pines RFQ at $3,800 (no capital, Brain produces the spreadsheet) and in parallel research other manufactured-housing communities with current, dated requests for sub-meter billing reconciliation; replan once enough counted buyers at an established price cover $12,000, or the owner lowers the target.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "why": "One organisation's single one-time RFQ: at most $3,800 of a $12,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e084fb679721_ce6222",
+    "digest": "e084fb679721b68ce49f7c24",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2100f3fa2de4470eaf08/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:38.228Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_a5f661c0ad9d4cb59575",
+   "contractDigest": "254c93f9ce3723123c9f33d1",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the only opening is one community's single $3,800 RFQ, against a $12,000 target",
+    "opportunityIds": [],
+    "why": "The one opening is a single organisation (Sunbelt Pines MHC) issuing a one-time RFQ budgeted at $3,800. Even if it is won, it settles at most $3,800 (net-20 after delivery) of the $12,000 target. No other buyer of this reconciliation is counted on any card, so the remaining $8,200 has no established source."
+   },
+   "alternatives": [
+    {
+     "title": "Win the Sunbelt Pines RFQ alone",
+     "why": "Reaches at most $3,800, 32% of the target; worth bidding as part of a larger plan, but not a plan for $12,000."
+    },
+    {
+     "title": "Sell the same reconciliation to other manufactured-housing communities",
+     "why": "No card establishes any other community buyer, their demand, or a close rate; Brain's '16 new buyers' are hypothetical, not counted."
+    }
+   ],
+   "steps": [
+    {
+     "id": "r1",
+     "kind": "RESEARCH",
+     "label": "Establish whether other manufactured-housing communities buy sub-meter billing reconciliations (count of buyers with a current, dated request and their price)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s2",
+      "s1"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Sunbelt Pines RFQ price",
+     "status": "EVIDENCED",
+     "value": 3800,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Buyers of this offer counted on the record",
+     "status": "EVIDENCED",
+     "value": 1,
+     "unit": "organisations",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Additional buyers beyond Sunbelt Pines",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "organisations",
+     "sources": [],
+     "needs": "A count of other communities with a current request for this work"
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#price",
+     "dated": "2026-11-18",
+     "claim": "Sunbelt Pines MHC issued an RFQ budgeted at $3,800 for a one-time water sub-meter billing reconciliation",
+     "population": "One manufactured-housing community",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f35395e55a614b95bfbb"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#payer",
+     "dated": "2026-11-25",
+     "claim": "The payer is the community manager of Sunbelt Pines Manufactured Housing Community (one organisation)",
+     "population": "One organisation",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f35395e55a614b95bfbb"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "20 days to first cash (net-20 after delivery)",
+     "population": "Sunbelt Pines",
+     "matchesBuyer": true,
+     "opportunityId": "cop_f35395e55a614b95bfbb"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "Only one buyer is counted: Sunbelt Pines' single one-time RFQ at $3,800 caps this opening at $3,800, and no card establishes any further buyer (MARKET_VOLUME) or a close rate on new buyers (CONVERSION) for the other $8,200.",
+    "resolution": "Bid the Sunbelt Pines RFQ at $3,800 (no capital, Brain produces the spreadsheet) and in parallel research other manufactured-housing communities with current, dated requests for sub-meter billing reconciliation; replan once enough counted buyers at an established price cover $12,000, or the owner lowers the target.",
+    "decisiveLinks": [
+     "MARKET_VOLUME"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_f35395e55a614b95bfbb",
+     "missing": [
+      "CONVERSION",
+      "MARKET_VOLUME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_f35395e55a614b95bfbb",
+     "why": "One organisation's single one-time RFQ: at most $3,800 of a $12,000 target."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "MARKET_VOLUME",
+    "CONVERSION"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_e084fb679721_ce6222",
+   "digest": "e084fb679721b68ce49f7c24",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_2100f3fa2de4470eaf08/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:05:38.228Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_e084fb679721_ce6222",
+   "digest": "e084fb679721b68ce49f7c24",
+   "contractDigest": "254c93f9ce3723123c9f33d1",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: Water sub-meter billing reconciliation for Sunbelt Pines Man\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 25528× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Community manager Sunbelt Pines Manufactured Ho\" needs [figure withheld] and keeps [figure withheld], 3747× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured \".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_f35395e55a614b95bfbb"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+      "owner": "PERSON",
+      "cost": 30
+     },
+     {
+      "label": "Collect payment for \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Sell \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\": offer it to its reachable buyers at 3800 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+    "openings": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "title": "Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Community",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ],
+      "stage": "C_MARKET_TEST_READY",
+      "supportedReach": 3800,
+      "potentialReach": 12000,
+      "card": {
+       "payer": "Community manager, Sunbelt Pines Manufactured Housing Community",
+       "reachableChannel": "Reply to the community manager's RFQ email",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:09.160Z",
+       "offerScope": "A reconciliation of 2025 water sub-meter readings against resident bills; paid net-20 after delivery.",
+       "priceCents": 380000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "manufactured housing communities",
+       "mechanism": "EXPLICIT_PAID_REQUEST",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Reply to the community manager's RFQ email"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "price 3800 USD (EVIDENCE)"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": false,
+        "basis": "16 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "4 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 30, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "20 days to usable cash against 40 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A reconciliation of 2025 water sub-meter readings against resident bills; paid net-20 after delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$30",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Community manager, Sunbelt Pines Manufactured Housing Community",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "Sunbelt Pines Manufactured Housing Community issued a request for quotes budgeted at $3,800 for a one-time water sub-meter billing reconciliation (RFQ, 2026-11-18).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "20 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 1200000,
+     "daysLeft": 40,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:14.857Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_e084fb679721_ce6222",
+    "revisionDigest": "e084fb679721b68ce49f7c24",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2100f3fa2de4470eaf08/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7274581a82ba4ca48aa1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and names the decisive gap. The only opening is one organisation (Sunbelt Pines MHC) with a single one-time RFQ budgeted at $3,800 (EVIDENCE, RFQ 2026-11-18). Even if won, it settles at most $3,800 net-20, which is 31.7% of the $12,000 target. One organisation is not a population. The card holds no buyerVolume fact and no conversionRates fact, so no further buyer and no close rate is established for the remaining $8,200. The card also names no reachable channel to other communities, only a reply to this RFQ email, so no live test is startable, and a CONDITIONAL stance would rest on a channel that does not exist on the record. The decisive link MARKET_VOLUME is the right one: CONVERSION only matters once there are other buyers to convert. The resolution has Brain bid the RFQ (fulfilment proved, $30 cost, $0 exposure, net-20 settles inside 40 days) and research other communities with dated requests in parallel, which is consistent with the evidence. Brain's planner agrees that CONVERSION and MARKET_VOLUME are unestablished.",
+    "findings": [
+     "Arithmetic: maximum from the record is 1 x $3,800 = $3,800 against $12,000, a $8,200 shortfall with no counted source.",
+     "The gap is missing evidence (market volume), not a constraint. The plan correctly does not call it infeasible, and leaves replanning open once buyers are counted.",
+     "The RFQ bid is worth executing in parallel: delivery is a Brain-produced spreadsheet and the net-20 term settles inside the 40-day window if delivered by about day 18."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:54.251Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_e084fb679721_ce6222",
+   "digest": "e084fb679721b68ce49f7c24",
+   "contractDigest": "254c93f9ce3723123c9f33d1",
+   "plan": {
+    "goalId": "wst_a5f661c0ad9d4cb59575",
+    "contractDigest": "254c93f9ce3723123c9f33d1",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the only opening is one community's single $3,800 RFQ, against a $12,000 target",
+     "opportunityIds": [],
+     "why": "The one opening is a single organisation (Sunbelt Pines MHC) issuing a one-time RFQ budgeted at $3,800. Even if it is won, it settles at most $3,800 (net-20 after delivery) of the $12,000 target. No other buyer of this reconciliation is counted on any card, so the remaining $8,200 has no established source."
+    },
+    "alternatives": [
+     {
+      "title": "Win the Sunbelt Pines RFQ alone",
+      "why": "Reaches at most $3,800, 32% of the target; worth bidding as part of a larger plan, but not a plan for $12,000."
+     },
+     {
+      "title": "Sell the same reconciliation to other manufactured-housing communities",
+      "why": "No card establishes any other community buyer, their demand, or a close rate; Brain's '16 new buyers' are hypothetical, not counted."
+     }
+    ],
+    "steps": [
+     {
+      "id": "r1",
+      "kind": "RESEARCH",
+      "label": "Establish whether other manufactured-housing communities buy sub-meter billing reconciliations (count of buyers with a current, dated request and their price)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s2",
+       "s1"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Sunbelt Pines RFQ price",
+      "status": "EVIDENCED",
+      "value": 3800,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Buyers of this offer counted on the record",
+      "status": "EVIDENCED",
+      "value": 1,
+      "unit": "organisations",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Additional buyers beyond Sunbelt Pines",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "organisations",
+      "sources": [],
+      "needs": "A count of other communities with a current request for this work"
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#price",
+      "dated": "2026-11-18",
+      "claim": "Sunbelt Pines MHC issued an RFQ budgeted at $3,800 for a one-time water sub-meter billing reconciliation",
+      "population": "One manufactured-housing community",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#payer",
+      "dated": "2026-11-25",
+      "claim": "The payer is the community manager of Sunbelt Pines Manufactured Housing Community (one organisation)",
+      "population": "One organisation",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_f35395e55a614b95bfbb#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "20 days to first cash (net-20 after delivery)",
+      "population": "Sunbelt Pines",
+      "matchesBuyer": true,
+      "opportunityId": "cop_f35395e55a614b95bfbb"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "Only one buyer is counted: Sunbelt Pines' single one-time RFQ at $3,800 caps this opening at $3,800, and no card establishes any further buyer (MARKET_VOLUME) or a close rate on new buyers (CONVERSION) for the other $8,200.",
+     "resolution": "Bid the Sunbelt Pines RFQ at $3,800 (no capital, Brain produces the spreadsheet) and in parallel research other manufactured-housing communities with current, dated requests for sub-meter billing reconciliation; replan once enough counted buyers at an established price cover $12,000, or the owner lowers the target.",
+     "decisiveLinks": [
+      "MARKET_VOLUME"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "missing": [
+       "CONVERSION",
+       "MARKET_VOLUME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_f35395e55a614b95bfbb",
+      "why": "One organisation's single one-time RFQ: at most $3,800 of a $12,000 target."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "MARKET_VOLUME",
+     "CONVERSION"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_e084fb679721_ce6222",
+    "digest": "e084fb679721b68ce49f7c24",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2100f3fa2de4470eaf08/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:38.228Z"
+   },
+   "review": {
+    "revisionId": "rev_e084fb679721_ce6222",
+    "revisionDigest": "e084fb679721b68ce49f7c24",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_2100f3fa2de4470eaf08/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_7274581a82ba4ca48aa1/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and names the decisive gap. The only opening is one organisation (Sunbelt Pines MHC) with a single one-time RFQ budgeted at $3,800 (EVIDENCE, RFQ 2026-11-18). Even if won, it settles at most $3,800 net-20, which is 31.7% of the $12,000 target. One organisation is not a population. The card holds no buyerVolume fact and no conversionRates fact, so no further buyer and no close rate is established for the remaining $8,200. The card also names no reachable channel to other communities, only a reply to this RFQ email, so no live test is startable, and a CONDITIONAL stance would rest on a channel that does not exist on the record. The decisive link MARKET_VOLUME is the right one: CONVERSION only matters once there are other buyers to convert. The resolution has Brain bid the RFQ (fulfilment proved, $30 cost, $0 exposure, net-20 settles inside 40 days) and research other communities with dated requests in parallel, which is consistent with the evidence. Brain's planner agrees that CONVERSION and MARKET_VOLUME are unestablished.",
+    "findings": [
+     "Arithmetic: maximum from the record is 1 x $3,800 = $3,800 against $12,000, a $8,200 shortfall with no counted source.",
+     "The gap is missing evidence (market volume), not a constraint. The plan correctly does not call it infeasible, and leaves replanning open once buyers are counted.",
+     "The RFQ bid is worth executing in parallel: delivery is a Brain-produced spreadsheet and the net-20 term settles inside the 40-day window if delivered by about day 18."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:54.251Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $12,000 of settled cash within 40 days using no up-front capital.",
+    "terms": "5054cb240df37fc9",
+    "openings": {
+     "cop_f35395e55a614b95bfbb": "25e2e4c1e89c3f3f"
+    }
+   },
+   "at": "2026-11-28T07:09:35.042Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

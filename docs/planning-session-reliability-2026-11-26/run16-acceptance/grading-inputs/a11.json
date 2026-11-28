@@ -1,0 +1,185 @@
+{
+ "caseId": "ax-11-jeweler-appraisals-owner-hours",
+ "keys": {
+  "cop_04bb0504aef442a5b140": "appraisals"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Subcontracted insurance-appraisal documentation for independ\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Subcontracted insurance-appraisal documentation for independ\" (reaches the target in 0% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 4971× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Independent jewelry store owners — A batch of 1\" needs [figure withheld] and keeps [figure withheld], 403× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Subcontracted insurance-appraisal documentation for independent jewele\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_04bb0504aef442a5b140"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+    "owner": "PERSON",
+    "cost": 1050
+   },
+   {
+    "label": "Collect payment for \"Subcontracted insurance-appraisal documentation for independent jewelers\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_04bb0504aef442a5b140",
+    "title": "Subcontracted insurance-appraisal documentation for independent jewelers",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 7000,
+    "potentialReach": 7000,
+    "card": {
+     "payer": "Independent jewelry store owners",
+     "reachableChannel": "The four signed jewelers",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:49.072Z",
+     "offerScope": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+     "priceCents": 225000,
+     "currency": "USD",
+     "fulfillmentOwner": "Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "independent jewelers",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 225000,
+      "currency": "USD",
+      "deliverable": "A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four signed jewelers"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 9000 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 9000 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a we (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 1050, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "3 days to usable cash against 28 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A batch of 15 insurance-replacement appraisal documents, prepared by a credentialed appraiser; each batch paid by card on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1050",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Hollis Appraisal Group (quoted $70 an appraisal; can complete 40 appraisals a week from Dec 1) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Independent jewelry store owners",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$2250",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "3 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 700000,
+   "daysLeft": 28,
+   "hoursCeiling": 8,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": 2
+  },
+  "at": "2026-11-28T07:04:17.397Z"
+ }
+}

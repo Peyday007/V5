@@ -1,0 +1,163 @@
+{
+ "caseId": "ax-12-language-school-target-then-net",
+ "keys": {
+  "cop_e571873f32fa42d39199": "visaAudit"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Student-visa attendance audit workbook for private English-l\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Student-visa attendance audit workbook for private English-l\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 49050× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Student-visa attendance audit workbook for private English-language sc\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_e571873f32fa42d39199"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Student-visa attendance audit workbook for private English-language schools\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Student-visa attendance audit workbook for private English-language schools\"",
+    "owner": "PERSON",
+    "cost": 30
+   },
+   {
+    "label": "Collect payment for \"Student-visa attendance audit workbook for private English-language schools\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_e571873f32fa42d39199",
+    "title": "Student-visa attendance audit workbook for private English-language schools",
+    "missing": [],
+    "stage": "D_BUYER_VALIDATED",
+    "supportedReach": 3000,
+    "potentialReach": 3000,
+    "card": {
+     "payer": "Directors of studies at accredited private English-language schools",
+     "reachableChannel": "Email to the director addresses published in the accreditation body's school directory",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:55.726Z",
+     "offerScope": "A term's attendance audit against student-visa reporting rules, built by Brain from the school's register export; paid by card at checkout.",
+     "priceCents": 48000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 0.3,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "private English-language schools",
+     "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Email to the director addresses published in the accreditation body's school dir"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 480 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "measured on this offer's own sales: 18 accepted of 150 contacts"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "8 deal(s) needed, 150 available in the window (150 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "4 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "buyerVolume",
+      "value": "The national accreditation body lists 150 accredited private English-language schools, each with a published director email; each must audit attendance once per term for student-visa reporting.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "captureMechanism",
+      "value": "Sell A term's attendance audit against student-visa reporting rules, built by Brain from the school's register export; paid by card at checkout. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "conversionRates",
+      "value": "18 paid orders from 150 contacts",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Directors of studies at accredited private English-language schools",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Schools in the pilot paid $480 by card for this workbook (pilot invoices, 2026-11).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "4 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 300000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:12:55.586Z"
+ }
+}

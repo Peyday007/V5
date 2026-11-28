@@ -1,0 +1,1279 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_c3e5386fe399456ca84c",
+   "words": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 250000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$2,500 of cash settled into the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "f6d1853cf4d2e9ef1e829f6e"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_c3e5386fe399456ca84c",
+    "contractDigest": "f6d1853cf4d2e9ef1e829f6e",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the bond court-date/forfeiture tracker at $350, then sell to the licensed-agent list",
+     "opportunityIds": [
+      "cop_a76e749b3d6942069735"
+     ],
+     "why": "Buyer, channel (410 licensed agencies), demand, conversion (18 paid of 300), Brain fulfilment ($5 cost, $0 exposure) and 3-day settlement are evidenced; the only unestablished link is the price: $350 is only what the owner says, with no invoice or published price. A zero-cost live offer at $350 to the first 100 agencies measures it within days; if it holds, 9 sales ($3,150) of the expected ~24 cover $2,500."
+    },
+    "alternatives": [
+     {
+      "title": "No plan until a paid price is found by research",
+      "why": "Rejected: the price is measurable by a zero-cost live offer inside the window, which is faster than desk research and spends nothing."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Offer the tracker at $350 (card on delivery) to the first 100 agencies on the licensed bail agent list by email/phone; count paid orders at $350",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_channel",
+       "src_volume",
+       "src_price"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "If the price holds (>=3 paid at $350 of 100), offer to the remaining 310 agencies at $350; 9 sales needed",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_conv",
+       "src_volume"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Build each agency's tracker from its bond register",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 9,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments on delivery settle to usable cash (3 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost $5 x 9 trackers, paid from settled receipts (card records $0 exposure)",
+      "stepId": "s3"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 315000,
+      "label": "9 card payments at $350 (price UNKNOWN until the test)",
+      "settlesDay": 12,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per tracker",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "paid orders at $350 in the live test (only the owner's statement exists; no invoice or published price)"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.06,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "agencies",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD per tracker",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "time to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says bail agents will pay $350; no invoice or published price shows what any agency paid (PERSON, not evidence)",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 paid orders from 300 contacts (price paid not recorded)",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "410 licensed bail bond agencies with addresses, phones and emails",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_channel",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Offer sold to each agency on the licensed agent list",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $5",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 100 contacted agencies pay $350 by card by day 7",
+     "stop": [
+      "Fewer than 3 paid orders at $350 from 100 contacts by day 7: the price is not established; stop selling at $350 and record the price gap",
+      "Any buyer pays only below $350: re-plan at the price actually paid"
+     ],
+     "continue": [
+      "3 or more paid at $350 of 100: offer the remaining 310 agencies at $350"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a76e749b3d6942069735",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_a76e749b3d6942069735",
+      "deals": 9,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": null,
+      "dealsMax": 410
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1876231d9c6b_5f315b",
+    "digest": "1876231d9c6bfb20346323b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6055458c115f448b8f3c/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:24.196Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_c3e5386fe399456ca84c",
+   "contractDigest": "f6d1853cf4d2e9ef1e829f6e",
+   "parentRevisionId": null,
+   "stance": "CONDITIONAL",
+   "strategy": {
+    "title": "Test-sell the bond court-date/forfeiture tracker at $350, then sell to the licensed-agent list",
+    "opportunityIds": [
+     "cop_a76e749b3d6942069735"
+    ],
+    "why": "Buyer, channel (410 licensed agencies), demand, conversion (18 paid of 300), Brain fulfilment ($5 cost, $0 exposure) and 3-day settlement are evidenced; the only unestablished link is the price: $350 is only what the owner says, with no invoice or published price. A zero-cost live offer at $350 to the first 100 agencies measures it within days; if it holds, 9 sales ($3,150) of the expected ~24 cover $2,500."
+   },
+   "alternatives": [
+    {
+     "title": "No plan until a paid price is found by research",
+     "why": "Rejected: the price is measurable by a zero-cost live offer inside the window, which is faster than desk research and spends nothing."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "TEST",
+     "label": "Offer the tracker at $350 (card on delivery) to the first 100 agencies on the licensed bail agent list by email/phone; count paid orders at $350",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_channel",
+      "src_volume",
+      "src_price"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "SELL",
+     "label": "If the price holds (>=3 paid at $350 of 100), offer to the remaining 310 agencies at $350; 9 sales needed",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 8,
+     "dependsOn": "s1",
+     "evidence": [
+      "src_conv",
+      "src_volume"
+     ],
+     "priceCents": 35000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "DELIVER",
+     "label": "Build each agency's tracker from its bond register",
+     "performer": "BRAIN",
+     "costCents": 4500,
+     "day": 9,
+     "dependsOn": "s2",
+     "evidence": [
+      "src_delivery",
+      "src_cost"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s4",
+     "kind": "COLLECT",
+     "label": "Card payments on delivery settle to usable cash (3 days)",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 12,
+     "dependsOn": "s3",
+     "evidence": [
+      "src_ttc"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 12,
+     "kind": "SPEND",
+     "amountCents": 4500,
+     "label": "Direct cost $5 x 9 trackers, paid from settled receipts (card records $0 exposure)",
+     "stepId": "s3"
+    },
+    {
+     "day": 9,
+     "kind": "RECEIPT",
+     "amountCents": 315000,
+     "label": "9 card payments at $350 (price UNKNOWN until the test)",
+     "settlesDay": 12,
+     "stepId": "s4"
+    }
+   ],
+   "proofDay": 8,
+   "quantities": [
+    {
+     "name": "price buyers pay",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD per tracker",
+     "sources": [
+      "src_price"
+     ],
+     "needs": "paid orders at $350 in the live test (only the owner's statement exists; no invoice or published price)"
+    },
+    {
+     "name": "conversion",
+     "status": "EVIDENCED",
+     "value": 0.06,
+     "unit": "paid orders per contact",
+     "sources": [
+      "src_conv"
+     ],
+     "needs": null
+    },
+    {
+     "name": "reachable buyers",
+     "status": "EVIDENCED",
+     "value": 410,
+     "unit": "agencies",
+     "sources": [
+      "src_volume"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "USD per tracker",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    },
+    {
+     "name": "time to usable cash",
+     "status": "EVIDENCED",
+     "value": 3,
+     "unit": "days",
+     "sources": [
+      "src_ttc"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#price",
+     "dated": "2026-11-25",
+     "claim": "The owner says bail agents will pay $350; no invoice or published price shows what any agency paid (PERSON, not evidence)",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_conv",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "18 paid orders from 300 contacts (price paid not recorded)",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_volume",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "410 licensed bail bond agencies with addresses, phones and emails",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_channel",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#captureMechanism",
+     "dated": "2026-11-25",
+     "claim": "Offer sold to each agency on the licensed agent list",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_delivery",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#delivery",
+     "dated": "2026-11-25",
+     "claim": "A spreadsheet Brain produces",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct cost $5",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    },
+    {
+     "id": "src_ttc",
+     "url": "https://brain.local/card/cop_a76e749b3d6942069735#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "3 days to first cash",
+     "population": "Licensed bail bond agencies (state insurance department list)",
+     "matchesBuyer": true,
+     "opportunityId": "cop_a76e749b3d6942069735"
+    }
+   ],
+   "validation": {
+    "proof": "At least 3 of the first 100 contacted agencies pay $350 by card by day 7",
+    "stop": [
+     "Fewer than 3 paid orders at $350 from 100 contacts by day 7: the price is not established; stop selling at $350 and record the price gap",
+     "Any buyer pays only below $350: re-plan at the price actually paid"
+    ],
+    "continue": [
+     "3 or more paid at $350 of 100: offer the remaining 310 agencies at $350"
+    ],
+    "decides": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_a76e749b3d6942069735",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_a76e749b3d6942069735",
+     "deals": 9,
+     "price": 350,
+     "directCost": 5,
+     "capital": 0,
+     "settlesDay": 12,
+     "ownerHours": null,
+     "dealsMax": 410
+    }
+   ],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_1876231d9c6b_5f315b",
+   "digest": "1876231d9c6bfb20346323b4",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_6055458c115f448b8f3c/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:06:24.196Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_1876231d9c6b_5f315b",
+   "digest": "1876231d9c6bfb20346323b4",
+   "contractDigest": "f6d1853cf4d2e9ef1e829f6e",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 4500,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 9,
+    "collectedCents": 315000,
+    "collectedInWindowCents": 315000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 310500
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 2500 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 19320× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Court-date and forfeiture-deadline tracker for bail bond age\" needs [figure withheld] and keeps [figure withheld], 345× the [figure withheld] behind the plan (bound ×20), on a price no bu), so none of its figures is shown or adopted. The plan's steps are for \"Bail bond agency owners\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_a76e749b3d6942069735"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+      "owner": "PERSON",
+      "cost": 5
+     },
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Bail bond agency owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Bail bond agency owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 9.97939167364267
+     },
+     {
+      "label": "Collect payment for \"Court-date and forfeiture-deadline tracker for bail bond agencies\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 2500 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_a76e749b3d6942069735",
+      "title": "Court-date and forfeiture-deadline tracker for bail bond agencies",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 2500,
+      "card": {
+       "payer": "Bail bond agency owners",
+       "reachableChannel": "Phone and email from the state insurance department's licensed bail agent list",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T06:59:49.513Z",
+       "offerScope": "A tracker of every open bond's court dates and forfeiture deadlines, built by Brain from the agency's bond register; paid by card on delivery.",
+       "priceCents": 35000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "bail bond agencies",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Phone and email from the state insurance department's licensed bail agent list"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "price 350 USD is a guess (ASSUMPTION), not something buyers are shown to pay"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 18 accepted of 300 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "9 deal(s) needed, 410 available in the window (410 reachable buyers are stated and no repeat purchase is, so one purchase each)"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 5, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "3 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state insurance department lists 410 licensed bail bond agencies with addresses, phones and emails; each tracks forfeiture deadlines on every open bond.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A tracker of every open bond's court dates and forfeiture deadlines, built by Brain from the agency's bond register; paid by card on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "18 paid orders from 300 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$5",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Bail bond agency owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The owner says bail agents will pay $350 for it; no invoice or published price shows what any agency paid.",
+        "kind": "PERSON"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 250000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:10.321Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_1876231d9c6b_5f315b",
+    "revisionDigest": "1876231d9c6bfb20346323b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6055458c115f448b8f3c/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0be602c811a42f1a0a9/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance. The only unestablished link is OFFER_AND_PRICE: the $350 price is the owner's word (PERSON), with no invoice or published price, and the 18/300 conversion did not record the price paid. A published benchmark of what other sellers charge would not establish what these agencies pay, so a zero-cost live offer at $350 is the measurement that decides it, and the plan names it (validation.decides = OFFER_AND_PRICE). Other links are EVIDENCE on the card: 410 licensed agencies reachable by phone/email, demand verified 2026-11-25, Brain-produced spreadsheet (PRODUCE_SPREADSHEET proved), $5 direct cost below price, $0 exposure, 3-day settlement. The test takes payment on delivery, after Brain builds the tracker, so it takes no orders that cannot be fulfilled. Recomputed at the pass threshold: 3/100 = 3% at $350; 3 test sales + 310 x 3% = 9.3, so about 12 sales x $350 = about $4,200, against the 8 sales ($2,800) the $2,500 target needs. Passing at the threshold therefore carries the target. Timing: test days 1-7, sell from day 8, delivery day 9, settlement around day 12, with slack before day 30 for late replies.",
+    "findings": [
+     "Price is PERSON-only ($350 the owner says); correctly treated as UNKNOWN and made the decisive test link.",
+     "Threshold check: at exactly 3% conversion at $350 over 410 agencies, about 12 sales and about $4,300 gross, at least the 8 sales needed for $2,500. At the evidenced 6%, about 24 sales.",
+     "The 18/300 conversion has no recorded price, so conversion at $350 is also measured by the test, not known in advance. The plan's threshold measures it directly, which covers this.",
+     "The ledger books 9 receipts on day 9 but does not count the test-phase sales separately. Test sales are real revenue and add to the total, so this is a presentation gap, not a shortfall.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. Both must be connected before day 1 or the test window slips.",
+     "Card humanHours 0.5 per deal against the plan's ownerHours null. The goal sets no hours limit, so this does not bind, but phone outreach that needs a person should be stated."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:39.014Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_1876231d9c6b_5f315b",
+   "digest": "1876231d9c6bfb20346323b4",
+   "contractDigest": "f6d1853cf4d2e9ef1e829f6e",
+   "plan": {
+    "goalId": "wst_c3e5386fe399456ca84c",
+    "contractDigest": "f6d1853cf4d2e9ef1e829f6e",
+    "parentRevisionId": null,
+    "stance": "CONDITIONAL",
+    "strategy": {
+     "title": "Test-sell the bond court-date/forfeiture tracker at $350, then sell to the licensed-agent list",
+     "opportunityIds": [
+      "cop_a76e749b3d6942069735"
+     ],
+     "why": "Buyer, channel (410 licensed agencies), demand, conversion (18 paid of 300), Brain fulfilment ($5 cost, $0 exposure) and 3-day settlement are evidenced; the only unestablished link is the price: $350 is only what the owner says, with no invoice or published price. A zero-cost live offer at $350 to the first 100 agencies measures it within days; if it holds, 9 sales ($3,150) of the expected ~24 cover $2,500."
+    },
+    "alternatives": [
+     {
+      "title": "No plan until a paid price is found by research",
+      "why": "Rejected: the price is measurable by a zero-cost live offer inside the window, which is faster than desk research and spends nothing."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "TEST",
+      "label": "Offer the tracker at $350 (card on delivery) to the first 100 agencies on the licensed bail agent list by email/phone; count paid orders at $350",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_channel",
+       "src_volume",
+       "src_price"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "SELL",
+      "label": "If the price holds (>=3 paid at $350 of 100), offer to the remaining 310 agencies at $350; 9 sales needed",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 8,
+      "dependsOn": "s1",
+      "evidence": [
+       "src_conv",
+       "src_volume"
+      ],
+      "priceCents": 35000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "DELIVER",
+      "label": "Build each agency's tracker from its bond register",
+      "performer": "BRAIN",
+      "costCents": 4500,
+      "day": 9,
+      "dependsOn": "s2",
+      "evidence": [
+       "src_delivery",
+       "src_cost"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s4",
+      "kind": "COLLECT",
+      "label": "Card payments on delivery settle to usable cash (3 days)",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 12,
+      "dependsOn": "s3",
+      "evidence": [
+       "src_ttc"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 12,
+      "kind": "SPEND",
+      "amountCents": 4500,
+      "label": "Direct cost $5 x 9 trackers, paid from settled receipts (card records $0 exposure)",
+      "stepId": "s3"
+     },
+     {
+      "day": 9,
+      "kind": "RECEIPT",
+      "amountCents": 315000,
+      "label": "9 card payments at $350 (price UNKNOWN until the test)",
+      "settlesDay": 12,
+      "stepId": "s4"
+     }
+    ],
+    "proofDay": 8,
+    "quantities": [
+     {
+      "name": "price buyers pay",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD per tracker",
+      "sources": [
+       "src_price"
+      ],
+      "needs": "paid orders at $350 in the live test (only the owner's statement exists; no invoice or published price)"
+     },
+     {
+      "name": "conversion",
+      "status": "EVIDENCED",
+      "value": 0.06,
+      "unit": "paid orders per contact",
+      "sources": [
+       "src_conv"
+      ],
+      "needs": null
+     },
+     {
+      "name": "reachable buyers",
+      "status": "EVIDENCED",
+      "value": 410,
+      "unit": "agencies",
+      "sources": [
+       "src_volume"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "USD per tracker",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     },
+     {
+      "name": "time to usable cash",
+      "status": "EVIDENCED",
+      "value": 3,
+      "unit": "days",
+      "sources": [
+       "src_ttc"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#price",
+      "dated": "2026-11-25",
+      "claim": "The owner says bail agents will pay $350; no invoice or published price shows what any agency paid (PERSON, not evidence)",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_conv",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "18 paid orders from 300 contacts (price paid not recorded)",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_volume",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "410 licensed bail bond agencies with addresses, phones and emails",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_channel",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "Offer sold to each agency on the licensed agent list",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_delivery",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#delivery",
+      "dated": "2026-11-25",
+      "claim": "A spreadsheet Brain produces",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct cost $5",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_a76e749b3d6942069735#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "3 days to first cash",
+      "population": "Licensed bail bond agencies (state insurance department list)",
+      "matchesBuyer": true,
+      "opportunityId": "cop_a76e749b3d6942069735"
+     }
+    ],
+    "validation": {
+     "proof": "At least 3 of the first 100 contacted agencies pay $350 by card by day 7",
+     "stop": [
+      "Fewer than 3 paid orders at $350 from 100 contacts by day 7: the price is not established; stop selling at $350 and record the price gap",
+      "Any buyer pays only below $350: re-plan at the price actually paid"
+     ],
+     "continue": [
+      "3 or more paid at $350 of 100: offer the remaining 310 agencies at $350"
+     ],
+     "decides": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_a76e749b3d6942069735",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_a76e749b3d6942069735",
+      "deals": 9,
+      "price": 350,
+      "directCost": 5,
+      "capital": 0,
+      "settlesDay": 12,
+      "ownerHours": null,
+      "dealsMax": 410
+     }
+    ],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_1876231d9c6b_5f315b",
+    "digest": "1876231d9c6bfb20346323b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6055458c115f448b8f3c/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:06:24.196Z"
+   },
+   "review": {
+    "revisionId": "rev_1876231d9c6b_5f315b",
+    "revisionDigest": "1876231d9c6bfb20346323b4",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_6055458c115f448b8f3c/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_a0be602c811a42f1a0a9/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "CONDITIONAL is the right stance. The only unestablished link is OFFER_AND_PRICE: the $350 price is the owner's word (PERSON), with no invoice or published price, and the 18/300 conversion did not record the price paid. A published benchmark of what other sellers charge would not establish what these agencies pay, so a zero-cost live offer at $350 is the measurement that decides it, and the plan names it (validation.decides = OFFER_AND_PRICE). Other links are EVIDENCE on the card: 410 licensed agencies reachable by phone/email, demand verified 2026-11-25, Brain-produced spreadsheet (PRODUCE_SPREADSHEET proved), $5 direct cost below price, $0 exposure, 3-day settlement. The test takes payment on delivery, after Brain builds the tracker, so it takes no orders that cannot be fulfilled. Recomputed at the pass threshold: 3/100 = 3% at $350; 3 test sales + 310 x 3% = 9.3, so about 12 sales x $350 = about $4,200, against the 8 sales ($2,800) the $2,500 target needs. Passing at the threshold therefore carries the target. Timing: test days 1-7, sell from day 8, delivery day 9, settlement around day 12, with slack before day 30 for late replies.",
+    "findings": [
+     "Price is PERSON-only ($350 the owner says); correctly treated as UNKNOWN and made the decisive test link.",
+     "Threshold check: at exactly 3% conversion at $350 over 410 agencies, about 12 sales and about $4,300 gross, at least the 8 sales needed for $2,500. At the evidenced 6%, about 24 sales.",
+     "The 18/300 conversion has no recorded price, so conversion at $350 is also measured by the test, not known in advance. The plan's threshold measures it directly, which covers this.",
+     "The ledger books 9 receipts on day 9 but does not count the test-phase sales separately. Test sales are real revenue and add to the total, so this is a presentation gap, not a shortfall.",
+     "SEND_A_MESSAGE and ISSUE_AN_INVOICE show NOT_CONNECTED. Both must be connected before day 1 or the test window slips.",
+     "Card humanHours 0.5 per deal against the plan's ownerHours null. The goal sets no hours limit, so this does not bind, but phone outreach that needs a person should be stated."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:08:39.014Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $2,500 of settled cash within 30 days using no up-front capital.",
+    "terms": "5f67e7635aeeb057",
+    "openings": {
+     "cop_a76e749b3d6942069735": "79e6b10e96bd83e3"
+    }
+   },
+   "at": "2026-11-28T07:10:28.700Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

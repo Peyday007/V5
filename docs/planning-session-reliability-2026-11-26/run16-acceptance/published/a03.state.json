@@ -1,0 +1,1074 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_fe5f93412fc944bdaf51",
+   "words": "Collect $6,000 of settled cash within 45 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 600000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 45,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$6,000 of cash settled into the owner's account within 45 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "6528e6d018f0312563bf2a88"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_fe5f93412fc944bdaf51",
+    "contractDigest": "6528e6d018f0312563bf2a88",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the three signed cemetery surveys have no fulfiller",
+     "opportunityIds": [],
+     "why": "Three written acceptances at $2,400 ($7,200) would cover $6,000 inside 45 days (14 days to cash, $900 cost, $0 exposure), but the deliverable is an on-site GPS survey of every plot (30 human hours per survey) and the record names no fulfiller: fulfillmentOwner is empty and requiredCapabilities is empty, so Brain cannot perform it and nobody else is established. Without a fulfiller the agreements cannot be delivered or collected."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the surveys",
+      "why": "Not on the record: nothing says the owner can or will do 30 hours of on-site GPS survey per association, and an on-site survey is physical work the owner is not named for."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Find a GPS cemetery-mapping or land-survey provider who will survey the three associations' grounds and build the burial register for no more than the card's $900 direct cost per job, paid on completion, within the window; record the provider, quote and hours on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_cost",
+       "src_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "src_scope"
+      ],
+      "needs": "a named provider with a quote and capacity for three on-site GPS surveys"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 2400,
+      "unit": "USD per association",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per survey",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#price",
+      "dated": "2026-11-25",
+      "claim": "$2400 per association; three written acceptances recorded",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$900 direct cost",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_scope",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "14 days to first cash",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller exists for the on-site GPS survey: the card names no fulfillmentOwner and no Brain capability covers it, so the three signed $2,400 agreements cannot be delivered or paid.",
+     "resolution": "Research and record a GPS cemetery-mapping/land-survey provider that will do all three surveys and registers within ~30 days for at most $900 each, paid on completion from the associations' payments; with that on the card the plan is 3 x $2,400 = $7,200 settled by about day 44.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_11290488e3fd_249a53",
+    "digest": "11290488e3fdfd3025448f60",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:08.293Z"
+   },
+   {
+    "goalId": "wst_fe5f93412fc944bdaf51",
+    "contractDigest": "6528e6d018f0312563bf2a88",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the three signed cemetery surveys have no fulfiller",
+     "opportunityIds": [],
+     "why": "Three written acceptances at $2,400 ($7,200) would cover $6,000 inside 45 days (14 days to cash, $900 cost, $0 exposure), but the deliverable is an on-site GPS survey of every plot (30 human hours per survey) and the record names no fulfiller: fulfillmentOwner is empty and requiredCapabilities is empty, so Brain cannot perform it and nobody else is established. Without a fulfiller the agreements cannot be delivered or collected."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the surveys",
+      "why": "Not on the record: nothing says the owner can or will do 30 hours of on-site GPS survey per association, and an on-site survey is physical work the owner is not named for."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Find a GPS cemetery-mapping or land-survey provider who will survey the three associations' grounds and build the burial register for no more than the card's $900 direct cost per job, paid on completion, within the window; record the provider, quote and hours on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_cost",
+       "src_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "src_scope"
+      ],
+      "needs": "a named provider with a quote and capacity for three on-site GPS surveys"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 2400,
+      "unit": "USD per association",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per survey",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#price",
+      "dated": "2026-11-25",
+      "claim": "$2400 per association; three written acceptances recorded",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$900 direct cost",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_scope",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "14 days to first cash",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller exists for the on-site GPS survey: the card names no fulfillmentOwner and no Brain capability covers it, so the three signed $2,400 agreements cannot be delivered or paid.",
+     "resolution": "Research and record a GPS cemetery-mapping/land-survey provider that will do all three surveys and registers within ~30 days for at most $900 each, paid on completion from the associations' payments; with that on the card the plan is 3 x $2,400 = $7,200 settled by about day 44.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "deals": 3,
+      "price": 2400,
+      "directCost": 900,
+      "capital": 0,
+      "settlesDay": null,
+      "ownerHours": null,
+      "dealsMax": 3
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_839b2099c772_5d09ed",
+    "digest": "839b2099c772679a6dc17080",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:24.021Z"
+   },
+   {
+    "goalId": "wst_fe5f93412fc944bdaf51",
+    "contractDigest": "6528e6d018f0312563bf2a88",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the three signed cemetery surveys have no fulfiller",
+     "opportunityIds": [],
+     "why": "Three written acceptances at $2,400 ($7,200) would cover $6,000 inside 45 days (14 days to cash, $900 cost, $0 exposure), but the deliverable is an on-site GPS survey of every plot (30 human hours per survey) and the record names no fulfiller: fulfillmentOwner is empty and requiredCapabilities is empty, so Brain cannot perform it and nobody else is established. Without a fulfiller the agreements cannot be delivered or collected."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the surveys",
+      "why": "Not on the record: nothing says the owner can or will do 30 hours of on-site GPS survey per association, and an on-site survey is physical work the owner is not named for."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Find a GPS cemetery-mapping or land-survey provider who will survey the three associations' grounds and build the burial register for no more than the card's $900 direct cost per job, paid on completion, within the window; record the provider, quote and hours on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_cost",
+       "src_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "src_scope"
+      ],
+      "needs": "a named provider with a quote and capacity for three on-site GPS surveys"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 2400,
+      "unit": "USD per association",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per survey",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#price",
+      "dated": "2026-11-25",
+      "claim": "$2400 per association; three written acceptances recorded",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$900 direct cost",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_scope",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "14 days to first cash",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller exists for the on-site GPS survey: the card names no fulfillmentOwner and no Brain capability covers it, so the three signed $2,400 agreements cannot be delivered or paid.",
+     "resolution": "Research and record a GPS cemetery-mapping/land-survey provider that will do all three surveys and registers within ~30 days for at most $900 each, paid on completion from the associations' payments; with that on the card the plan is 3 x $2,400 = $7,200 settled by about day 44.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "deals": 3,
+      "price": 2400,
+      "directCost": 900,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": null,
+      "dealsMax": 3
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dd6bdbca07e7_392a0d",
+    "digest": "dd6bdbca07e77acc1ed61ce9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:30.758Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_fe5f93412fc944bdaf51",
+   "contractDigest": "6528e6d018f0312563bf2a88",
+   "parentRevisionId": null,
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No executable plan: the three signed cemetery surveys have no fulfiller",
+    "opportunityIds": [],
+    "why": "Three written acceptances at $2,400 ($7,200) would cover $6,000 inside 45 days (14 days to cash, $900 cost, $0 exposure), but the deliverable is an on-site GPS survey of every plot (30 human hours per survey) and the record names no fulfiller: fulfillmentOwner is empty and requiredCapabilities is empty, so Brain cannot perform it and nobody else is established. Without a fulfiller the agreements cannot be delivered or collected."
+   },
+   "alternatives": [
+    {
+     "title": "Owner performs the surveys",
+     "why": "Not on the record: nothing says the owner can or will do 30 hours of on-site GPS survey per association, and an on-site survey is physical work the owner is not named for."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "RESEARCH",
+     "label": "Find a GPS cemetery-mapping or land-survey provider who will survey the three associations' grounds and build the burial register for no more than the card's $900 direct cost per job, paid on completion, within the window; record the provider, quote and hours on the card",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "src_cost",
+      "src_scope"
+     ],
+     "executor": {
+      "operation": "RESEARCH",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "CHEAP_MODEL_READS",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": false
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "fulfiller",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "provider",
+     "sources": [
+      "src_scope"
+     ],
+     "needs": "a named provider with a quote and capacity for three on-site GPS surveys"
+    },
+    {
+     "name": "price",
+     "status": "EVIDENCED",
+     "value": 2400,
+     "unit": "USD per association",
+     "sources": [
+      "src_price"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "USD per survey",
+     "sources": [
+      "src_cost"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "src_price",
+     "url": "https://brain.local/card/cop_c587c5f08b944440994b#price",
+     "dated": "2026-11-25",
+     "claim": "$2400 per association; three written acceptances recorded",
+     "population": "The three signed cemetery associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c587c5f08b944440994b"
+    },
+    {
+     "id": "src_cost",
+     "url": "https://brain.local/card/cop_c587c5f08b944440994b#directCosts",
+     "dated": "2026-11-25",
+     "claim": "$900 direct cost",
+     "population": "The three signed cemetery associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c587c5f08b944440994b"
+    },
+    {
+     "id": "src_scope",
+     "url": "https://brain.local/card/cop_c587c5f08b944440994b#captureMechanism",
+     "dated": "2026-11-25",
+     "claim": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion",
+     "population": "The three signed cemetery associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c587c5f08b944440994b"
+    },
+    {
+     "id": "src_ttc",
+     "url": "https://brain.local/card/cop_c587c5f08b944440994b#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "14 days to first cash",
+     "population": "The three signed cemetery associations",
+     "matchesBuyer": true,
+     "opportunityId": "cop_c587c5f08b944440994b"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No fulfiller exists for the on-site GPS survey: the card names no fulfillmentOwner and no Brain capability covers it, so the three signed $2,400 agreements cannot be delivered or paid.",
+    "resolution": "Research and record a GPS cemetery-mapping/land-survey provider that will do all three surveys and registers within ~30 days for at most $900 each, paid on completion from the associations' payments; with that on the card the plan is 3 x $2,400 = $7,200 settled by about day 44.",
+    "decisiveLinks": [
+     "FULFILMENT"
+    ]
+   },
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_c587c5f08b944440994b",
+     "missing": [
+      "FULFILMENT"
+     ]
+    }
+   ],
+   "excluded": [],
+   "members": [
+    {
+     "opportunityId": "cop_c587c5f08b944440994b",
+     "deals": 3,
+     "price": 2400,
+     "directCost": 900,
+     "capital": 0,
+     "settlesDay": 14,
+     "ownerHours": null,
+     "dealsMax": 3
+    }
+   ],
+   "resolves": [
+    "FULFILMENT"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_dd6bdbca07e7_392a0d",
+   "digest": "dd6bdbca07e77acc1ed61ce9",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:07:30.758Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_dd6bdbca07e7_392a0d",
+   "digest": "dd6bdbca07e77acc1ed61ce9",
+   "contractDigest": "6528e6d018f0312563bf2a88",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "Not yet proven. The closest plan is \"Only: GPS plot mapping and digitised burial register for cemetery \", and what it is missing first is proof it can be delivered — by Brain or by whoever is named to do it. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 5991× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Cemetery association trustees — An on-site GPS \" needs [figure withheld] and keeps [figure withheld], 817× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"GPS plot mapping and digitised burial register for cemetery associatio\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_c587c5f08b944440994b"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"GPS plot mapping and digitised burial register for cemetery associations\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"GPS plot mapping and digitised burial register for cemetery associations\"",
+      "owner": "PERSON",
+      "cost": 900
+     },
+     {
+      "label": "Collect payment for \"GPS plot mapping and digitised burial register for cemetery associations\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Establish who would do the work for \"GPS plot mapping and digitised burial register for cemetery associations\" — Brain, a partner, a subcontractor or a supplier — from a published source or the owner, and the hours it takes.",
+    "openings": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "title": "GPS plot mapping and digitised burial register for cemetery associations",
+      "missing": [
+       "FULFILMENT"
+      ],
+      "stage": "E_COMMITTED",
+      "supportedReach": 6000,
+      "potentialReach": 6000,
+      "card": {
+       "payer": "Cemetery association trustees",
+       "reachableChannel": "The three signed associations' board secretaries",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T06:59:56.136Z",
+       "offerScope": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+       "priceCents": 240000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 30,
+       "requiredCapabilities": [],
+       "industry": "cemetery associations",
+       "mechanism": "PAIN_TRIGGERED_IMPLEMENTATION",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 240000,
+        "currency": "USD",
+        "deliverable": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The three signed associations' board secretaries"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 7200 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 7200 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": false,
+        "basis": "nobody has established who would do the work"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 900, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "14 days to usable cash against 45 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$900",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Cemetery association trustees",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$2400",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "14 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [
+     "cnd_d6243fbc853648c6990a"
+    ],
+    "scope": {
+     "targetCents": 600000,
+     "daysLeft": 45,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:10.428Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_dd6bdbca07e7_392a0d",
+    "revisionDigest": "dd6bdbca07e77acc1ed61ce9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1cdc19734c864b4c8763/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and the decisive gap is the right one. Three WRITTEN_ACCEPTANCE agreements at $2,400 ($7,200) establish price and conversion. Recomputed: $7,200 is at least $6,000, and 14 days to cash fits 45. But the deliverable is an on-site GPS survey of every plot (30 human hours each), and the card names no fulfillmentOwner and no requiredCapabilities, so nobody on the record can deliver it. Brain's FULFILMENT link is false ('nobody has established who would do the work'). Without delivery, 'paid on completion' agreements never pay. Treating the owner as the surveyor would rest on nothing in the record (ownerPhysicalWork UNSTATED, no statement that the owner can do GPS surveys), so the plan rightly does not assume it. decisiveLinks = FULFILMENT, and the resolution (record a provider with quote, capacity and pay-on-completion terms within $900 per job) is what would make it executable.",
+    "findings": [
+     "Arithmetic: 3 x $2,400 = $7,200 against $6,000. Two surveys ($4,800) would not reach the target, so all three must be delivered.",
+     "Timing is tight: if surveys take about 30 days and cash arrives 14 days after completion, the last payment lands about day 44 of 45. Any provider found must finish within about 30 days, or the target slips out of the window.",
+     "The card's $900 direct cost per job has no fulfiller behind it. For a 30-human-hour on-site survey, $900 is about $30 an hour, which may be low for a GPS survey provider. A quote must establish the cost, and any quote above $2,400 minus margin must be checked against exposure $0 (paid from completion receipts)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:19.770Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_dd6bdbca07e7_392a0d",
+   "digest": "dd6bdbca07e77acc1ed61ce9",
+   "contractDigest": "6528e6d018f0312563bf2a88",
+   "plan": {
+    "goalId": "wst_fe5f93412fc944bdaf51",
+    "contractDigest": "6528e6d018f0312563bf2a88",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No executable plan: the three signed cemetery surveys have no fulfiller",
+     "opportunityIds": [],
+     "why": "Three written acceptances at $2,400 ($7,200) would cover $6,000 inside 45 days (14 days to cash, $900 cost, $0 exposure), but the deliverable is an on-site GPS survey of every plot (30 human hours per survey) and the record names no fulfiller: fulfillmentOwner is empty and requiredCapabilities is empty, so Brain cannot perform it and nobody else is established. Without a fulfiller the agreements cannot be delivered or collected."
+    },
+    "alternatives": [
+     {
+      "title": "Owner performs the surveys",
+      "why": "Not on the record: nothing says the owner can or will do 30 hours of on-site GPS survey per association, and an on-site survey is physical work the owner is not named for."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "RESEARCH",
+      "label": "Find a GPS cemetery-mapping or land-survey provider who will survey the three associations' grounds and build the burial register for no more than the card's $900 direct cost per job, paid on completion, within the window; record the provider, quote and hours on the card",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "src_cost",
+       "src_scope"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "fulfiller",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "provider",
+      "sources": [
+       "src_scope"
+      ],
+      "needs": "a named provider with a quote and capacity for three on-site GPS surveys"
+     },
+     {
+      "name": "price",
+      "status": "EVIDENCED",
+      "value": 2400,
+      "unit": "USD per association",
+      "sources": [
+       "src_price"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "USD per survey",
+      "sources": [
+       "src_cost"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "src_price",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#price",
+      "dated": "2026-11-25",
+      "claim": "$2400 per association; three written acceptances recorded",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_cost",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#directCosts",
+      "dated": "2026-11-25",
+      "claim": "$900 direct cost",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_scope",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#captureMechanism",
+      "dated": "2026-11-25",
+      "claim": "An on-site GPS survey of every plot plus a searchable digitised burial register; paid on completion",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     },
+     {
+      "id": "src_ttc",
+      "url": "https://brain.local/card/cop_c587c5f08b944440994b#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "14 days to first cash",
+      "population": "The three signed cemetery associations",
+      "matchesBuyer": true,
+      "opportunityId": "cop_c587c5f08b944440994b"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No fulfiller exists for the on-site GPS survey: the card names no fulfillmentOwner and no Brain capability covers it, so the three signed $2,400 agreements cannot be delivered or paid.",
+     "resolution": "Research and record a GPS cemetery-mapping/land-survey provider that will do all three surveys and registers within ~30 days for at most $900 each, paid on completion from the associations' payments; with that on the card the plan is 3 x $2,400 = $7,200 settled by about day 44.",
+     "decisiveLinks": [
+      "FULFILMENT"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "missing": [
+       "FULFILMENT"
+      ]
+     }
+    ],
+    "excluded": [],
+    "members": [
+     {
+      "opportunityId": "cop_c587c5f08b944440994b",
+      "deals": 3,
+      "price": 2400,
+      "directCost": 900,
+      "capital": 0,
+      "settlesDay": 14,
+      "ownerHours": null,
+      "dealsMax": 3
+     }
+    ],
+    "resolves": [
+     "FULFILMENT"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_dd6bdbca07e7_392a0d",
+    "digest": "dd6bdbca07e77acc1ed61ce9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:07:30.758Z"
+   },
+   "review": {
+    "revisionId": "rev_dd6bdbca07e7_392a0d",
+    "revisionDigest": "dd6bdbca07e77acc1ed61ce9",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_f192fd2ee4234ab2b00b/author-A",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_1cdc19734c864b4c8763/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "NO_PLAN is correct and the decisive gap is the right one. Three WRITTEN_ACCEPTANCE agreements at $2,400 ($7,200) establish price and conversion. Recomputed: $7,200 is at least $6,000, and 14 days to cash fits 45. But the deliverable is an on-site GPS survey of every plot (30 human hours each), and the card names no fulfillmentOwner and no requiredCapabilities, so nobody on the record can deliver it. Brain's FULFILMENT link is false ('nobody has established who would do the work'). Without delivery, 'paid on completion' agreements never pay. Treating the owner as the surveyor would rest on nothing in the record (ownerPhysicalWork UNSTATED, no statement that the owner can do GPS surveys), so the plan rightly does not assume it. decisiveLinks = FULFILMENT, and the resolution (record a provider with quote, capacity and pay-on-completion terms within $900 per job) is what would make it executable.",
+    "findings": [
+     "Arithmetic: 3 x $2,400 = $7,200 against $6,000. Two surveys ($4,800) would not reach the target, so all three must be delivered.",
+     "Timing is tight: if surveys take about 30 days and cash arrives 14 days after completion, the last payment lands about day 44 of 45. Any provider found must finish within about 30 days, or the target slips out of the window.",
+     "The card's $900 direct cost per job has no fulfiller behind it. For a 30-human-hour on-site survey, $900 is about $30 an hour, which may be low for a GPS survey provider. A quote must establish the cost, and any quote above $2,400 minus margin must be checked against exposure $0 (paid from completion receipts)."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:10:19.770Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $6,000 of settled cash within 45 days using no up-front capital.",
+    "terms": "535bb2257c32150e",
+    "openings": {
+     "cop_c587c5f08b944440994b": "9366242a9478e64b"
+    }
+   },
+   "at": "2026-11-28T07:12:26.638Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

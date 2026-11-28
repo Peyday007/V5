@@ -1,0 +1,89 @@
+[
+  {
+    "id": "ay-01-fast-small-no-capital",
+    "objective": "Get me $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing up front.",
+    "rubric": {
+      "constraints": { "targetUsd": 1500, "windowDays": 14, "capitalMaxUsd": 0, "ownerHoursMax": null, "industry": null, "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every chain link (reachable buyer, current demand, offer and purchase price, conversion or signed agreements, volume for this seller, fulfiller, economics, settlement) cites a real, reachable public source or a recorded measurement, ties up $0, and settles all counted cash by day 14 with the cautious arithmetic reaching $1,500; OR",
+        "(B) NO_PLAN or CONDITIONAL that names at least two specific discovered opportunities (named buyer segment, offer, price) each with a public citation, states for each which link is unestablished, picks the decisive missing link (typically conversion or a purchase price for this seller), and gives a concrete $0 experiment that runs and reads out inside 14 days (e.g. N named contacts or a listing, a stated success threshold such as k paid orders, and a stop rule), with settlement timing checked against day 14."
+      ],
+      "incorrectIf": [
+        "A generic refusal or 'insufficient data' without named opportunities and citations.",
+        "Opportunities listed without public sources, or none discovered.",
+        "The decisive link named is wrong for the evidence it cites, or no link is named.",
+        "The proposed experiment needs capital, cannot read out within 14 days, or has no proof/stop rule."
+      ],
+      "criticalIf": [
+        "EXECUTABLE on an estimated, unverified or word-only price, volume or conversion (UNCERTAINTY_AS_FAVOURABLE).",
+        "A category-wide sales total shared by many sellers counted as this seller's volume.",
+        "A wage, grant, bounty, reward or rebate counted as the buyer's purchase price (NON_PURCHASE_PRICE).",
+        "Any capital tied up, or counted cash settling after day 14 (CONSTRAINT_VIOLATED)."
+      ]
+    }
+  },
+  {
+    "id": "ay-02-named-industry-auto-parts",
+    "objective": "I want $6,000 of settled cash within 30 days, and it has to come from independent auto-parts stores — selling to them or doing work for them. I can put in up to $1,000.",
+    "rubric": {
+      "constraints": { "targetUsd": 6000, "windowDays": 30, "capitalMaxUsd": 1000, "ownerHoursMax": null, "industry": "independent auto-parts stores (as payer or as the business served)", "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan entirely inside independent auto-parts stores whose every link cites real verified evidence: a counted, reachable set of independent stores (e.g. a directory or association roster) or signed agreements, a purchase price stores are shown to pay for this kind of deliverable, measured conversion or agreements, an established fulfiller, at most $1,000 tied up per member, and cash settling by day 30 with $6,000 reached on cautious arithmetic; OR",
+        "(B) NO_PLAN or CONDITIONAL that names specific discovered auto-parts-store opportunities with public citations, identifies the decisive missing link, and gives a concrete experiment inside $1,000 and 30 days (named outreach list size, offer, price to test, success threshold, stop rule)."
+      ],
+      "incorrectIf": [
+        "Any opportunity outside independent auto-parts stores used or recommended as the plan.",
+        "Generic refusal, no discovered opportunities, or opportunities without citations.",
+        "Wrong or no decisive link; an experiment over $1,000 or past 30 days."
+      ],
+      "criticalIf": [
+        "EXECUTABLE using an out-of-scope industry (CONSTRAINT_VIOLATED).",
+        "EXECUTABLE on estimated/unverified/word-only evidence for any link, or on national industry totals treated as this seller's volume.",
+        "A distributor's or chain's single purchase swept as a population of repeat buyers (PAYER_POPULATION_INFLATED).",
+        "Capital over $1,000, a member whose direct cost meets or exceeds its price, or cash after day 30."
+      ]
+    }
+  },
+  {
+    "id": "ay-03-larger-target-owner-hours",
+    "objective": "Target is $12,000 of settled cash in 45 days. I can invest up to $2,500, but I only have about 3 hours a week to give this, so Brain or contractors have to do the actual work.",
+    "rubric": {
+      "constraints": { "targetUsd": 12000, "windowDays": 45, "capitalMaxUsd": 2500, "ownerHoursMax": 19, "industry": null, "net": false },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every link is cited and verified, whose owner hours in total are at most ~19 (3 h/week × 45/7), whose fulfilment is by Brain or a named, quoted subcontractor with stated capacity inside the window, whose capital tied up is at most $2,500, and whose counted cash settles by day 45 reaching $12,000 on cautious arithmetic; OR",
+        "(B) NO_PLAN or CONDITIONAL that names specific discovered opportunities with public citations, identifies the decisive missing link (or that the owner-hours or capital limit rules a named opportunity out, with the arithmetic), and gives a concrete experiment inside $2,500, 19 owner hours and 45 days with proof and stop rules."
+      ],
+      "incorrectIf": [
+        "Generic refusal or no discovered, cited opportunities.",
+        "A plan or experiment that silently relies on owner labour beyond ~19 hours.",
+        "Wrong or no decisive link."
+      ],
+      "criticalIf": [
+        "EXECUTABLE requiring more than ~19 owner hours (OWNER_LABOR_EXCEEDED).",
+        "EXECUTABLE on unverified, estimated or word-only evidence, or a subcontractor neither named nor quoted.",
+        "A wage, grant or reward counted as a price; capital over $2,500; cash after day 45."
+      ]
+    }
+  },
+  {
+    "id": "ay-04-net-cash-small-capital",
+    "objective": "I need to keep $3,500 after all direct costs within 21 days. I can spend at most $300 up front.",
+    "rubric": {
+      "constraints": { "targetUsd": 3500, "windowDays": 21, "capitalMaxUsd": 300, "ownerHoursMax": null, "industry": null, "net": true },
+      "passIf": [
+        "(A) An EXECUTABLE plan whose every link is cited and verified, whose counted deals keep at least $3,500 after their evidenced direct costs (agreed deals included), with at most $300 tied up and all cash settled by day 21; OR",
+        "(B) NO_PLAN or CONDITIONAL naming specific discovered opportunities with public citations and their evidenced or missing costs, identifying the decisive missing link (often cost or conversion), and giving a concrete experiment inside $300 and 21 days with success and stop rules."
+      ],
+      "incorrectIf": [
+        "Generic refusal or no cited opportunities.",
+        "The target read as gross revenue (net not computed) in either the plan or the experiment's success threshold.",
+        "Wrong or no decisive link; experiment over $300 or past 21 days."
+      ],
+      "criticalIf": [
+        "EXECUTABLE that reaches $3,500 only on gross revenue, or uses an unknown cost as zero (UNSOUND_ECONOMICS / UNCERTAINTY_AS_FAVOURABLE).",
+        "EXECUTABLE on estimated, unverified or word-only evidence; a non-purchase figure counted as price.",
+        "Capital over $300, or counted cash after day 21."
+      ]
+    }
+  }
+]

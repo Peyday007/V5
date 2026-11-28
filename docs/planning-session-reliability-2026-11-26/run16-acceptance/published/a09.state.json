@@ -1,0 +1,1683 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_dba9fb61563a4c54be2c",
+   "words": "Collect $4,500 of settled cash within 21 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 450000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 21,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "Target settled cash collected within the window",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "bbc8c1cc10bb55e89a877a1d"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_dba9fb61563a4c54be2c",
+    "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the permit-renewal and inspection calendar to the four signed billboard operators",
+     "opportunityIds": [
+      "cop_72f013d530a643c799f6"
+     ],
+     "why": "Four operators have each accepted in writing a $1,250 calendar Brain builds in 2 days, paid by card on delivery; 4 x $1,250 = $5,000 settles by day 5, above the $4,500 target, with $15 direct cost per deal paid from receipts and $0 exposure."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly lease-expiry lead lists at $249",
+      "why": "Price and conversion (5/80) are measured, but buyer volume is only an estimate and the target would need 19 deals; not needed and not established."
+     },
+     {
+      "title": "Outsourced permit-clerk service",
+      "why": "Its 'price' is a DOT job-posting wage, not a purchase price, and cash takes 30 days against a 21-day window."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OFFER",
+      "label": "Confirm the agreed $1,250 calendar order and collect each structure list from the four signed operators",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 125000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Build and deliver the four permit-renewal and inspection calendars (spreadsheets)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "directCosts",
+       "delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect the four card payments on delivery",
+      "performer": "BRAIN",
+      "costCents": null,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "RECEIPT",
+      "amountCents": 500000,
+      "label": "Four card payments of $1,250 on delivery",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 6000,
+      "label": "Direct costs $15 x 4, paid from receipts",
+      "stepId": "s2"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per calendar",
+      "status": "EVIDENCED",
+      "value": 1250,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "written acceptances",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "USD",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#price",
+      "dated": "2026-11-25",
+      "claim": "Price $1,250 per calendar",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances of the $1,250 calendar, paid by card on delivery",
+      "population": "The four signed operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $15 per deal",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "5 days to first cash",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "why": "Buyer volume is only a recommendation-grade estimate; not needed since the signed calendar orders carry the target."
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "why": "The price is a state job-posting wage, not a purchase price, and first cash arrives in 30 days, after the 21-day deadline."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "deals": 4,
+      "price": 1250,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null,
+      "dealsMax": 4
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_deffdb79dd3d_fa5a4d",
+    "digest": "deffdb79dd3d0ac225b8cf30",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_301cbdd0ba75499da7d5/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:40.982Z"
+   },
+   {
+    "goalId": "wst_dba9fb61563a4c54be2c",
+    "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the permit-renewal and inspection calendar to the four signed billboard operators",
+     "opportunityIds": [
+      "cop_72f013d530a643c799f6"
+     ],
+     "why": "Four operators have each accepted in writing a $1,250 calendar Brain builds in 2 days, paid by card on delivery; 4 x $1,250 = $5,000 settles by day 5, above the $4,500 target, with $15 direct cost per deal paid from receipts and $0 exposure."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly lease-expiry lead lists at $249",
+      "why": "Price and conversion (5/80) are measured, but buyer volume is only an estimate and the target would need 19 deals; not needed and not established."
+     },
+     {
+      "title": "Outsourced permit-clerk service",
+      "why": "Its 'price' is a DOT job-posting wage, not a purchase price, and cash takes 30 days against a 21-day window."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OFFER",
+      "label": "Confirm the agreed $1,250 calendar order and collect each structure list from the four signed operators",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 125000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Build and deliver the four permit-renewal and inspection calendars (spreadsheets)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "directCosts",
+       "delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect the four card payments on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "RECEIPT",
+      "amountCents": 500000,
+      "label": "Four card payments of $1,250 on delivery",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 6000,
+      "label": "Direct costs $15 x 4, paid from receipts",
+      "stepId": "s2"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per calendar",
+      "status": "EVIDENCED",
+      "value": 1250,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "written acceptances",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "USD",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#price",
+      "dated": "2026-11-25",
+      "claim": "Price $1,250 per calendar",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances of the $1,250 calendar, paid by card on delivery",
+      "population": "The four signed operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $15 per deal",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "5 days to first cash",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "why": "Buyer volume is only a recommendation-grade estimate; not needed since the signed calendar orders carry the target."
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "why": "The price is a state job-posting wage, not a purchase price, and first cash arrives in 30 days, after the 21-day deadline."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "deals": 4,
+      "price": 1250,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null,
+      "dealsMax": 4
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The opening's own card carries a single price of $249 as EVIDENCE, measured on its own paid orders (5 paid orders from 80 contacts); the other bases Brain lists belong to the sibling openings."
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "link": "SETTLES_IN_TIME",
+      "reason": "The card's timeToFirstCash is 3 days (EVIDENCE), inside the 21 days left; the 30-day figure belongs to the clerk-service opening."
+     }
+    ],
+    "revisionId": "rev_0e947fe40ced_521d3d",
+    "digest": "0e947fe40cedec11089c6da7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_301cbdd0ba75499da7d5/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:54.718Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_dba9fb61563a4c54be2c",
+   "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+   "parentRevisionId": null,
+   "stance": "EXECUTABLE",
+   "strategy": {
+    "title": "Deliver the permit-renewal and inspection calendar to the four signed billboard operators",
+    "opportunityIds": [
+     "cop_72f013d530a643c799f6"
+    ],
+    "why": "Four operators have each accepted in writing a $1,250 calendar Brain builds in 2 days, paid by card on delivery; 4 x $1,250 = $5,000 settles by day 5, above the $4,500 target, with $15 direct cost per deal paid from receipts and $0 exposure."
+   },
+   "alternatives": [
+    {
+     "title": "Weekly lease-expiry lead lists at $249",
+     "why": "Price and conversion (5/80) are measured, but buyer volume is only an estimate and the target would need 19 deals; not needed and not established."
+    },
+    {
+     "title": "Outsourced permit-clerk service",
+     "why": "Its 'price' is a DOT job-posting wage, not a purchase price, and cash takes 30 days against a 21-day window."
+    }
+   ],
+   "steps": [
+    {
+     "id": "s1",
+     "kind": "OFFER",
+     "label": "Confirm the agreed $1,250 calendar order and collect each structure list from the four signed operators",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 0,
+     "dependsOn": null,
+     "evidence": [
+      "agreements",
+      "price"
+     ],
+     "priceCents": 125000,
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s2",
+     "kind": "DELIVER",
+     "label": "Build and deliver the four permit-renewal and inspection calendars (spreadsheets)",
+     "performer": "BRAIN",
+     "costCents": 6000,
+     "day": 2,
+     "dependsOn": "s1",
+     "evidence": [
+      "directCosts",
+      "delivery"
+     ],
+     "executor": {
+      "operation": "BRAIN_PRODUCES",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "PRODUCE_SPREADSHEET",
+        "state": "PRESENT"
+       }
+      ],
+      "routine": true
+     }
+    },
+    {
+     "id": "s3",
+     "kind": "COLLECT",
+     "label": "Collect the four card payments on delivery",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 2,
+     "dependsOn": "s2",
+     "evidence": [
+      "timeToFirstCash"
+     ],
+     "executor": {
+      "operation": "COLLECT_PAYMENT",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "ISSUE_AN_INVOICE",
+        "state": "NOT_CONNECTED"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [
+    {
+     "day": 2,
+     "kind": "RECEIPT",
+     "amountCents": 500000,
+     "label": "Four card payments of $1,250 on delivery",
+     "settlesDay": 5,
+     "stepId": "s3"
+    },
+    {
+     "day": 5,
+     "kind": "SPEND",
+     "amountCents": 6000,
+     "label": "Direct costs $15 x 4, paid from receipts",
+     "stepId": "s2"
+    }
+   ],
+   "proofDay": 5,
+   "quantities": [
+    {
+     "name": "price per calendar",
+     "status": "EVIDENCED",
+     "value": 1250,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": null
+    },
+    {
+     "name": "written acceptances",
+     "status": "EVIDENCED",
+     "value": 4,
+     "unit": "deals",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "direct cost per deal",
+     "status": "EVIDENCED",
+     "value": 15,
+     "unit": "USD",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    },
+    {
+     "name": "days to usable cash",
+     "status": "EVIDENCED",
+     "value": 5,
+     "unit": "days",
+     "sources": [
+      "s4"
+     ],
+     "needs": null
+    },
+    {
+     "name": "exposure",
+     "status": "EVIDENCED",
+     "value": 0,
+     "unit": "USD",
+     "sources": [
+      "s5"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_72f013d530a643c799f6#price",
+     "dated": "2026-11-25",
+     "claim": "Price $1,250 per calendar",
+     "population": "Billboard operators' real-estate and permitting managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72f013d530a643c799f6"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_72f013d530a643c799f6#agreements",
+     "dated": "2026-11-25",
+     "claim": "Four written acceptances of the $1,250 calendar, paid by card on delivery",
+     "population": "The four signed operators",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72f013d530a643c799f6"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_72f013d530a643c799f6#directCosts",
+     "dated": "2026-11-25",
+     "claim": "Direct costs $15 per deal",
+     "population": "Billboard operators' real-estate and permitting managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72f013d530a643c799f6"
+    },
+    {
+     "id": "s4",
+     "url": "https://brain.local/card/cop_72f013d530a643c799f6#timeToFirstCash",
+     "dated": "2026-11-25",
+     "claim": "5 days to first cash",
+     "population": "Billboard operators' real-estate and permitting managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72f013d530a643c799f6"
+    },
+    {
+     "id": "s5",
+     "url": "https://brain.local/card/cop_72f013d530a643c799f6#exposure",
+     "dated": "2026-11-25",
+     "claim": "Exposure $0",
+     "population": "Billboard operators' real-estate and permitting managers",
+     "matchesBuyer": true,
+     "opportunityId": "cop_72f013d530a643c799f6"
+    }
+   ],
+   "validation": null,
+   "noPlan": null,
+   "reach": null,
+   "answers": [],
+   "chain": [
+    {
+     "opportunityId": "cop_72f013d530a643c799f6",
+     "missing": []
+    },
+    {
+     "opportunityId": "cop_6e62f034b42749468095",
+     "missing": [
+      "MARKET_VOLUME"
+     ]
+    },
+    {
+     "opportunityId": "cop_0536a735577f4112b55f",
+     "missing": [
+      "OFFER_AND_PRICE",
+      "MARKET_VOLUME",
+      "SETTLES_IN_TIME"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_6e62f034b42749468095",
+     "why": "Buyer volume is only a recommendation-grade estimate; not needed since the signed calendar orders carry the target."
+    },
+    {
+     "opportunityId": "cop_0536a735577f4112b55f",
+     "why": "The price is a state job-posting wage, not a purchase price, and first cash arrives in 30 days, after the 21-day deadline."
+    }
+   ],
+   "members": [
+    {
+     "opportunityId": "cop_72f013d530a643c799f6",
+     "deals": 4,
+     "price": 1250,
+     "directCost": 15,
+     "capital": 0,
+     "settlesDay": 5,
+     "ownerHours": null,
+     "dealsMax": 4
+    }
+   ],
+   "resolves": [],
+   "constraints": [],
+   "disagreements": [
+    {
+     "opportunityId": "cop_6e62f034b42749468095",
+     "link": "OFFER_AND_PRICE",
+     "reason": "The opening's own card carries a single price of $249 as EVIDENCE, measured on its own paid orders (5 paid orders from 80 contacts); the other bases Brain lists belong to the sibling openings."
+    },
+    {
+     "opportunityId": "cop_6e62f034b42749468095",
+     "link": "SETTLES_IN_TIME",
+     "reason": "The card's timeToFirstCash is 3 days (EVIDENCE), inside the 21 days left; the 30-day figure belongs to the clerk-service opening."
+    }
+   ],
+   "revisionId": "rev_0e947fe40ced_521d3d",
+   "digest": "0e947fe40cedec11089c6da7",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_301cbdd0ba75499da7d5/author-C",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:05:54.718Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_0e947fe40ced_521d3d",
+   "digest": "0e947fe40cedec11089c6da7",
+   "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 6000,
+    "committedOpenCents": 0,
+    "preProofCents": 6000,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": 2,
+    "collectedCents": 500000,
+    "collectedInWindowCents": 500000,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 494000
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NEEDS_EVIDENCE",
+    "summary": "\"Only: Permit-renewal and structure-inspection calendar for billboa\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Only: Permit-renewal and structure-inspection calendar for billboa\" (assumption-only coverage: it reaches the target in 100% of worlds only by counting 1 of 1 leg(s) with no reachable channel, offer, fulfiller or settled cash yet — not the plan's outcome); Brain keeps constructing, combining and comparing strategies. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 13157× the [figure withheld] behind it (bound ×20)), so none of its figures is shown or adopted. The plan's steps are for \"Permit-renewal and structure-inspection calendar for billboard operato\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_72f013d530a643c799f6",
+     "cop_6e62f034b42749468095",
+     "cop_0536a735577f4112b55f"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Sell \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Deliver \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+      "owner": "PERSON",
+      "cost": 15
+     },
+     {
+      "label": "Collect payment for \"Permit-renewal and structure-inspection calendar for billboard operators\"",
+      "owner": "BRAIN",
+      "cost": 0
+     }
+    ],
+    "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+    "openings": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "title": "Permit-renewal and structure-inspection calendar for billboard operators",
+      "missing": [],
+      "stage": "E_COMMITTED",
+      "supportedReach": 4500,
+      "potentialReach": 4500,
+      "card": {
+       "payer": "Billboard operators' real-estate and permitting managers",
+       "reachableChannel": "The four signed operators",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:35.830Z",
+       "offerScope": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+       "priceCents": 125000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.5,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "outdoor advertising (billboard operators)",
+       "mechanism": "PRODUCTIZED_SERVICE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [
+       {
+        "amountCents": 125000,
+        "currency": "USD",
+        "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 125000,
+        "currency": "USD",
+        "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 125000,
+        "currency": "USD",
+        "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       },
+       {
+        "amountCents": 125000,
+        "currency": "USD",
+        "deliverable": "A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery.",
+        "evidenceKind": "WRITTEN_ACCEPTANCE",
+        "state": "AGREED",
+        "recordedBy": "PERSON"
+       }
+      ],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four signed operators"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": true,
+        "basis": "a buyer agreed to 5000 USD"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5000 USD"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "no new deals needed"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 15, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "5 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "captureMechanism",
+        "value": "Sell A calendar of every structure's state and local permit renewals and inspection dates, built by Brain in 2 days; paid by card on delivery. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$15",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Billboard operators' real-estate and permitting managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$1250",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "5 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "title": "Weekly landowner lease-expiry lead lists for billboard operators",
+      "missing": [
+       "MARKET_VOLUME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 249,
+      "potentialReach": 4500,
+      "card": {
+       "payer": "Billboard site-leasing managers",
+       "reachableChannel": "Email to operators listed with the state DOT outdoor advertising program",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:35.830Z",
+       "offerScope": "Weekly landowner lease-expiry lead lists for billboard operators",
+       "priceCents": 24900,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 0.2,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "outdoor advertising (billboard operators)",
+       "mechanism": "INFORMATION_ASYMMETRY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four signed operators | reach: Email to operators listed with the state DOT outdoor advertising program | reach: Email to operators listed with the state DOT outdoor advertising program"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "a buyer agreed to 5000 USD | price 249 USD (EVIDENCE) | no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5000 USD | measured on this offer's own sales: 5 accepted of 80 contacts | measured on this offer's own sales: 4 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "no new deals needed | 7 deal(s) needed and nobody has established how many buyers exist or how often they buy | 4 deal(s) needed at the measured rate means asking 116 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 2.9"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 15, tied up 0 | cost 0, tied up 0 | cost 40, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "5 days to usable cash against 21 left | 3 days to usable cash against 21 left | 30 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "Operators in the region probably buy lease-expiry lead lists every week.",
+        "kind": "RECOMMENDATION"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Weekly landowner lease-expiry lead lists for billboard operators to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "5 paid orders from 80 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Billboard site-leasing managers",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "$249",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "3 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "title": "Outsourced billboard-permit compliance clerk service",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME",
+       "SETTLES_IN_TIME"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 0,
+      "card": {
+       "payer": "Billboard operators",
+       "reachableChannel": "Email to operators listed with the state DOT outdoor advertising program",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:35.830Z",
+       "offerScope": "Outsourced billboard-permit compliance clerk service",
+       "priceCents": 224000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "outdoor advertising (billboard operators)",
+       "mechanism": "CAPABILITY_ARBITRAGE",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: The four signed operators | reach: Email to operators listed with the state DOT outdoor advertising program | reach: Email to operators listed with the state DOT outdoor advertising program"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25 | VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "a buyer agreed to 5000 USD | price 249 USD (EVIDENCE) | no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "buyers have agreed to 5000 USD | measured on this offer's own sales: 5 accepted of 80 contacts | measured on this offer's own sales: 4 accepted of 60 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": false,
+        "basis": "no new deals needed | 7 deal(s) needed and nobody has established how many buyers exist or how often they buy | 4 deal(s) needed at the measured rate means asking 116 prospects, but the market holds only 85 (85 reachable buyers are stated and no repeat purchase is, so one purchase each): at that rate it yields about 2.9"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET | Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 15, tied up 0 | cost 0, tied up 0 | cost 40, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": false,
+        "basis": "5 days to usable cash against 21 left | 3 days to usable cash against 21 left | 30 days to usable cash against 21 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state DOT outdoor advertising program lists 85 permitted billboard operators with contacts.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell Outsourced billboard-permit compliance clerk service to each buyer, billed monthly.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "4 paid orders from 60 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$40",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Billboard operators",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state DOT advertises an outdoor-advertising permit clerk position at $28 an hour, $2,240 for an 80-hour month (job posting, 2026-11).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "30 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 450000,
+     "daysLeft": 21,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:17.672Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_0e947fe40ced_521d3d",
+    "revisionDigest": "0e947fe40cedec11089c6da7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_301cbdd0ba75499da7d5/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_829fb007c6bb4dc78692/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: 4 written acceptances x $1,250 = $5,000 >= $4,500 target; direct cost 4 x $15 = $60 < price; card exposure $0 and peak funding $0 so no up-front capital; card payment on delivery day 2 settles day 5, inside 21 days. Price is a purchase price agreed by these buyers themselves (WRITTEN_ACCEPTANCE agreements, price fact EVIDENCE), not a benchmark or a wage. Fulfilment is Brain-produced spreadsheet (PRODUCE_SPREADSHEET present), matching the card's delivery fact. Every chain link for the single member is established by Brain from this offer's own record; I find no contradicting record. Excluded openings are correctly set aside (lead lists: buyer volume is only a RECOMMENDATION; clerk service: wage not purchase price, 30-day cash). Stance EXECUTABLE is right.",
+    "findings": [
+     "Zero margin on deal count: all 4 of 4 signed operators must pay; 3 payments = $3,750 < $4,500. The plan should treat any non-payment as a stop and has no fallback member in-window (lead lists are unestablished on volume).",
+     "Ledger timing: step s2 incurs $60 direct cost on day 2 but the cash ledger books it on day 5 'paid from receipts'; this is consistent only because the card records exposure $0 / peak funding $0. If the $15 is payable at delivery, it would be $60 of up-front spend against a $0 exposure cap.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: a payment/invoicing connection must be set up before day 2 for card collection on delivery.",
+     "Card humanHours 0.5 per deal (about 2 owner hours total) while members[].ownerHours is null; no hours ceiling in the contract so it fits, but it should be stated, not left unknown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:07:38.038Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_0e947fe40ced_521d3d",
+   "digest": "0e947fe40cedec11089c6da7",
+   "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+   "plan": {
+    "goalId": "wst_dba9fb61563a4c54be2c",
+    "contractDigest": "bbc8c1cc10bb55e89a877a1d",
+    "parentRevisionId": null,
+    "stance": "EXECUTABLE",
+    "strategy": {
+     "title": "Deliver the permit-renewal and inspection calendar to the four signed billboard operators",
+     "opportunityIds": [
+      "cop_72f013d530a643c799f6"
+     ],
+     "why": "Four operators have each accepted in writing a $1,250 calendar Brain builds in 2 days, paid by card on delivery; 4 x $1,250 = $5,000 settles by day 5, above the $4,500 target, with $15 direct cost per deal paid from receipts and $0 exposure."
+    },
+    "alternatives": [
+     {
+      "title": "Weekly lease-expiry lead lists at $249",
+      "why": "Price and conversion (5/80) are measured, but buyer volume is only an estimate and the target would need 19 deals; not needed and not established."
+     },
+     {
+      "title": "Outsourced permit-clerk service",
+      "why": "Its 'price' is a DOT job-posting wage, not a purchase price, and cash takes 30 days against a 21-day window."
+     }
+    ],
+    "steps": [
+     {
+      "id": "s1",
+      "kind": "OFFER",
+      "label": "Confirm the agreed $1,250 calendar order and collect each structure list from the four signed operators",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 0,
+      "dependsOn": null,
+      "evidence": [
+       "agreements",
+       "price"
+      ],
+      "priceCents": 125000,
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s2",
+      "kind": "DELIVER",
+      "label": "Build and deliver the four permit-renewal and inspection calendars (spreadsheets)",
+      "performer": "BRAIN",
+      "costCents": 6000,
+      "day": 2,
+      "dependsOn": "s1",
+      "evidence": [
+       "directCosts",
+       "delivery"
+      ],
+      "executor": {
+       "operation": "BRAIN_PRODUCES",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "PRODUCE_SPREADSHEET",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": true
+      }
+     },
+     {
+      "id": "s3",
+      "kind": "COLLECT",
+      "label": "Collect the four card payments on delivery",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 2,
+      "dependsOn": "s2",
+      "evidence": [
+       "timeToFirstCash"
+      ],
+      "executor": {
+       "operation": "COLLECT_PAYMENT",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "ISSUE_AN_INVOICE",
+         "state": "NOT_CONNECTED"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [
+     {
+      "day": 2,
+      "kind": "RECEIPT",
+      "amountCents": 500000,
+      "label": "Four card payments of $1,250 on delivery",
+      "settlesDay": 5,
+      "stepId": "s3"
+     },
+     {
+      "day": 5,
+      "kind": "SPEND",
+      "amountCents": 6000,
+      "label": "Direct costs $15 x 4, paid from receipts",
+      "stepId": "s2"
+     }
+    ],
+    "proofDay": 5,
+    "quantities": [
+     {
+      "name": "price per calendar",
+      "status": "EVIDENCED",
+      "value": 1250,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": null
+     },
+     {
+      "name": "written acceptances",
+      "status": "EVIDENCED",
+      "value": 4,
+      "unit": "deals",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "direct cost per deal",
+      "status": "EVIDENCED",
+      "value": 15,
+      "unit": "USD",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     },
+     {
+      "name": "days to usable cash",
+      "status": "EVIDENCED",
+      "value": 5,
+      "unit": "days",
+      "sources": [
+       "s4"
+      ],
+      "needs": null
+     },
+     {
+      "name": "exposure",
+      "status": "EVIDENCED",
+      "value": 0,
+      "unit": "USD",
+      "sources": [
+       "s5"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#price",
+      "dated": "2026-11-25",
+      "claim": "Price $1,250 per calendar",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#agreements",
+      "dated": "2026-11-25",
+      "claim": "Four written acceptances of the $1,250 calendar, paid by card on delivery",
+      "population": "The four signed operators",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#directCosts",
+      "dated": "2026-11-25",
+      "claim": "Direct costs $15 per deal",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s4",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#timeToFirstCash",
+      "dated": "2026-11-25",
+      "claim": "5 days to first cash",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     },
+     {
+      "id": "s5",
+      "url": "https://brain.local/card/cop_72f013d530a643c799f6#exposure",
+      "dated": "2026-11-25",
+      "claim": "Exposure $0",
+      "population": "Billboard operators' real-estate and permitting managers",
+      "matchesBuyer": true,
+      "opportunityId": "cop_72f013d530a643c799f6"
+     }
+    ],
+    "validation": null,
+    "noPlan": null,
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "missing": []
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "missing": [
+       "MARKET_VOLUME"
+      ]
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "missing": [
+       "OFFER_AND_PRICE",
+       "MARKET_VOLUME",
+       "SETTLES_IN_TIME"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "why": "Buyer volume is only a recommendation-grade estimate; not needed since the signed calendar orders carry the target."
+     },
+     {
+      "opportunityId": "cop_0536a735577f4112b55f",
+      "why": "The price is a state job-posting wage, not a purchase price, and first cash arrives in 30 days, after the 21-day deadline."
+     }
+    ],
+    "members": [
+     {
+      "opportunityId": "cop_72f013d530a643c799f6",
+      "deals": 4,
+      "price": 1250,
+      "directCost": 15,
+      "capital": 0,
+      "settlesDay": 5,
+      "ownerHours": null,
+      "dealsMax": 4
+     }
+    ],
+    "resolves": [],
+    "constraints": [],
+    "disagreements": [
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "link": "OFFER_AND_PRICE",
+      "reason": "The opening's own card carries a single price of $249 as EVIDENCE, measured on its own paid orders (5 paid orders from 80 contacts); the other bases Brain lists belong to the sibling openings."
+     },
+     {
+      "opportunityId": "cop_6e62f034b42749468095",
+      "link": "SETTLES_IN_TIME",
+      "reason": "The card's timeToFirstCash is 3 days (EVIDENCE), inside the 21 days left; the 30-day figure belongs to the clerk-service opening."
+     }
+    ],
+    "revisionId": "rev_0e947fe40ced_521d3d",
+    "digest": "0e947fe40cedec11089c6da7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_301cbdd0ba75499da7d5/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:54.718Z"
+   },
+   "review": {
+    "revisionId": "rev_0e947fe40ced_521d3d",
+    "revisionDigest": "0e947fe40cedec11089c6da7",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_301cbdd0ba75499da7d5/author-C",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_829fb007c6bb4dc78692/fleet-2",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "Recomputed: 4 written acceptances x $1,250 = $5,000 >= $4,500 target; direct cost 4 x $15 = $60 < price; card exposure $0 and peak funding $0 so no up-front capital; card payment on delivery day 2 settles day 5, inside 21 days. Price is a purchase price agreed by these buyers themselves (WRITTEN_ACCEPTANCE agreements, price fact EVIDENCE), not a benchmark or a wage. Fulfilment is Brain-produced spreadsheet (PRODUCE_SPREADSHEET present), matching the card's delivery fact. Every chain link for the single member is established by Brain from this offer's own record; I find no contradicting record. Excluded openings are correctly set aside (lead lists: buyer volume is only a RECOMMENDATION; clerk service: wage not purchase price, 30-day cash). Stance EXECUTABLE is right.",
+    "findings": [
+     "Zero margin on deal count: all 4 of 4 signed operators must pay; 3 payments = $3,750 < $4,500. The plan should treat any non-payment as a stop and has no fallback member in-window (lead lists are unestablished on volume).",
+     "Ledger timing: step s2 incurs $60 direct cost on day 2 but the cash ledger books it on day 5 'paid from receipts'; this is consistent only because the card records exposure $0 / peak funding $0. If the $15 is payable at delivery, it would be $60 of up-front spend against a $0 exposure cap.",
+     "Executor capabilities SEND_A_MESSAGE and ISSUE_AN_INVOICE are NOT_CONNECTED: a payment/invoicing connection must be set up before day 2 for card collection on delivery.",
+     "Card humanHours 0.5 per deal (about 2 owner hours total) while members[].ownerHours is null; no hours ceiling in the contract so it fits, but it should be stated, not left unknown."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:07:38.038Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $4,500 of settled cash within 21 days using no up-front capital.",
+    "terms": "bcccf4d446cb3af2",
+    "openings": {
+     "cop_0536a735577f4112b55f": "963f75ef5cd01de3",
+     "cop_6e62f034b42749468095": "65e9c8fc890bd231",
+     "cop_72f013d530a643c799f6": "42ef9d91e9ff2db2"
+    }
+   },
+   "at": "2026-11-28T07:09:23.623Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

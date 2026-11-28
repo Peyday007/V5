@@ -1,0 +1,222 @@
+{
+ "caseId": "ax-08-thrift-tagging-loses-money",
+ "keys": {
+  "cop_9e77bf9a75824319a4d0": "thriftTagging"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NOT_VIABLE",
+  "summary": "No modelled strategy can work under the current limits: \"Subcontracted donation-intake sorting and price tagging for \" costs at least what it pays. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 2202× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Thrift store managers — A crew sorts prices and\" needs [figure withheld] and keeps [figure withheld], 850× the [figure withheld] behind the plan (bound ×20), on a price no buy), so none of its figures is shown or adopted. The plan's steps are for \"Thrift store managers\".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_9e77bf9a75824319a4d0"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Research the buyers",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the price",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research settlement",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research the cost per deal",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Research repeat purchases",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Reach Thrift store managers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Validate the offer with Thrift store managers",
+    "owner": "BRAIN",
+    "cost": null
+   },
+   {
+    "label": "Deliver and confirm",
+    "owner": "PERSON",
+    "cost": 1899.9764171826005
+   },
+   {
+    "label": "Collect payment",
+    "owner": "PERSON",
+    "cost": 0
+   },
+   {
+    "label": "Renew",
+    "owner": "BRAIN",
+    "cost": null
+   }
+  ],
+  "nextTest": "Discover, construct and research openings that can reach the 6000 USD still needed — the openings held reach at most 7200 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+  "openings": [
+   {
+    "opportunityId": "cop_9e77bf9a75824319a4d0",
+    "title": "Subcontracted donation-intake sorting and price tagging for thrift stores",
+    "missing": [
+     "ECONOMICS"
+    ],
+    "stage": "E_COMMITTED",
+    "supportedReach": 6000,
+    "potentialReach": 6000,
+    "card": {
+     "payer": "Thrift store managers",
+     "reachableChannel": "The four signed store managers",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:28.765Z",
+     "offerScope": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+     "priceCents": 180000,
+     "currency": "USD",
+     "fulfillmentOwner": "TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2)",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [],
+     "industry": "thrift stores",
+     "mechanism": "SUBCONTRACTED_FULFILMENT",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     },
+     {
+      "amountCents": 180000,
+      "currency": "USD",
+      "deliverable": "A crew sorts, prices and tags a store's donation backlog in two days; paid on completion.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The four signed store managers"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 7200 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 7200 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2) (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": false,
+      "basis": "each deal loses money: a cost of 1950 against a price of 1800"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "7 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A crew sorts, prices and tags a store's donation backlog in two days; paid on completion. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$1950",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "TagRight Retail Services (quoted $1,950 per backlog clearance; can start Dec 2) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Thrift store managers",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$1800",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "7 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 600000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:15.506Z"
+ }
+}

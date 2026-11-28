@@ -1,0 +1,161 @@
+{
+ "caseId": "ax-10-loader-resale-capital-raised",
+ "keys": {
+  "cop_a1fab47c5c4e4759ac2f": "loaderResale"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "\"Only: Resale of an off-rent compact track loader from a rental fle\" is a qualified candidate, not an accepted plan: NOT ACCEPTED: no plan has a defensible 90% probability of collecting the target before the deadline. The strongest candidate is \"Resale of an off-rent compact track loader from a rental fle\" (reaches the target in 100% of worlds, coverage, not a probability); Brain keeps constructing, combining and comparing strategies.",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_a1fab47c5c4e4759ac2f"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+    "owner": "PERSON",
+    "cost": 31900
+   },
+   {
+    "label": "Collect payment for \"Resale of an off-rent compact track loader from a rental fleet to an excavation \"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Every link is established and the cautious numbers reach the target, but no calibrated evidence shows a 90% chance of collecting it before the deadline: sell to measure conversion, add independent openings, and try other transaction sizes, prices, channels and combinations until one does.",
+  "openings": [
+   {
+    "opportunityId": "cop_a1fab47c5c4e4759ac2f",
+    "title": "Resale of an off-rent compact track loader from a rental fleet to an excavation contractor",
+    "missing": [],
+    "stage": "E_COMMITTED",
+    "supportedReach": 5000,
+    "potentialReach": 5000,
+    "card": {
+     "payer": "Owner of a small excavation contracting firm",
+     "reachableChannel": "The signed buyer",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:42.402Z",
+     "offerScope": "A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery.",
+     "priceCents": 3850000,
+     "currency": "USD",
+     "fulfillmentOwner": "Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 days of payment) and Hartley Heavy Haul (quoted $900, can haul within 2 days)",
+     "peakFundingCents": 3190000,
+     "humanHours": 3,
+     "requiredCapabilities": [],
+     "industry": "construction equipment rental",
+     "mechanism": "SUPPLY_DEMAND_MISMATCH",
+     "state": "DISCOVERED"
+    },
+    "agreements": [
+     {
+      "amountCents": 3850000,
+      "currency": "USD",
+      "deliverable": "A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery.",
+      "evidenceKind": "WRITTEN_ACCEPTANCE",
+      "state": "AGREED",
+      "recordedBy": "PERSON"
+     }
+    ],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: The signed buyer"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "a buyer agreed to 38500 USD"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": true,
+      "basis": "buyers have agreed to 38500 USD"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": true,
+      "basis": "a one-off needs its one buyer"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "fulfilled by Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 day (a source says so)"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 31900, tied up 31900"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "12 days to usable cash against 30 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A 2023 compact track loader with 1,400 hours, delivered to the buyer's yard; buyer wires payment on delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$31900",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$31900",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "fulfillment",
+      "value": "Midstate Equipment Rentals (sells the unit for $31,000, releases it within 3 days of payment) and Hartley Heavy Haul (quoted $900, can haul within 2 days) quoted to do the work.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Owner of a small excavation contracting firm",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "$38500",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "12 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 500000,
+   "daysLeft": 30,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:12:48.723Z"
+ }
+}

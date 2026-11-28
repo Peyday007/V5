@@ -1,0 +1,156 @@
+{
+ "caseId": "ax-05-manufactured-housing-one-rfq",
+ "keys": {
+  "cop_f35395e55a614b95bfbb": "sunbeltPines"
+ },
+ "run": {
+  "completed": true,
+  "error": null,
+  "verdict": "NEEDS_EVIDENCE",
+  "summary": "Not yet proven. The closest plan is \"Only: Water sub-meter billing reconciliation for Sunbelt Pines Man\", and what it is missing first is buyers who have actually agreed to it, or a sized measure of how many agree. The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 25528× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Community manager Sunbelt Pines Manufactured Ho\" needs [figure withheld] and keeps [figure withheld], 3747× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured \".",
+  "acceptance": "CANDIDATE_ONLY",
+  "considered": [
+   "cop_f35395e55a614b95bfbb"
+  ],
+  "integrity": [],
+  "steps": [
+   {
+    "label": "Sell \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+    "owner": "BRAIN",
+    "cost": 0
+   },
+   {
+    "label": "Deliver \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+    "owner": "PERSON",
+    "cost": 30
+   },
+   {
+    "label": "Collect payment for \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\"",
+    "owner": "BRAIN",
+    "cost": 0
+   }
+  ],
+  "nextTest": "Sell \"Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Co\": offer it to its reachable buyers at 3800 USD for an actual sale, contract or deposit. Each answer is a sale or a refusal, and is recorded as the demand and price evidence. Tie up no more than 0 USD until money comes in.",
+  "openings": [
+   {
+    "opportunityId": "cop_f35395e55a614b95bfbb",
+    "title": "Water sub-meter billing reconciliation for Sunbelt Pines Manufactured Housing Community",
+    "missing": [
+     "CONVERSION",
+     "MARKET_VOLUME"
+    ],
+    "stage": "C_MARKET_TEST_READY",
+    "supportedReach": 3800,
+    "potentialReach": 12000,
+    "card": {
+     "payer": "Community manager, Sunbelt Pines Manufactured Housing Community",
+     "reachableChannel": "Reply to the community manager's RFQ email",
+     "buyingSignal": "Posted asking for this work",
+     "signalObservedAt": "2026-11-25T07:00:09.160Z",
+     "offerScope": "A reconciliation of 2025 water sub-meter readings against resident bills; paid net-20 after delivery.",
+     "priceCents": 380000,
+     "currency": "USD",
+     "peakFundingCents": 0,
+     "humanHours": 1,
+     "requiredCapabilities": [
+      "PRODUCE_SPREADSHEET"
+     ],
+     "industry": "manufactured housing communities",
+     "mechanism": "EXPLICIT_PAID_REQUEST",
+     "state": "DISCOVERED"
+    },
+    "agreements": [],
+    "links": [
+     {
+      "link": "REACHABLE_BUYER",
+      "ok": true,
+      "basis": "reach: Reply to the community manager's RFQ email"
+     },
+     {
+      "link": "CURRENT_DEMAND",
+      "ok": true,
+      "basis": "VERIFIED: signal dated 2026-11-25"
+     },
+     {
+      "link": "OFFER_AND_PRICE",
+      "ok": true,
+      "basis": "price 3800 USD (EVIDENCE)"
+     },
+     {
+      "link": "CONVERSION",
+      "ok": false,
+      "basis": "16 new buyer(s) would be offered and nobody knows how many would agree (close rate is not established)"
+     },
+     {
+      "link": "MARKET_VOLUME",
+      "ok": false,
+      "basis": "4 deal(s) needed and nobody has established how many buyers exist or how often they buy"
+     },
+     {
+      "link": "FULFILMENT",
+      "ok": true,
+      "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+     },
+     {
+      "link": "ECONOMICS",
+      "ok": true,
+      "basis": "cost 30, tied up 0"
+     },
+     {
+      "link": "SETTLES_IN_TIME",
+      "ok": true,
+      "basis": "20 days to usable cash against 40 left"
+     }
+    ],
+    "facts": [
+     {
+      "field": "captureMechanism",
+      "value": "Sell A reconciliation of 2025 water sub-meter readings against resident bills; paid net-20 after delivery. to each buyer.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "delivery",
+      "value": "A spreadsheet Brain produces.",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "directCosts",
+      "value": "$30",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "exposure",
+      "value": "$0",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "payer",
+      "value": "Community manager, Sunbelt Pines Manufactured Housing Community",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "price",
+      "value": "Sunbelt Pines Manufactured Housing Community issued a request for quotes budgeted at $3,800 for a one-time water sub-meter billing reconciliation (RFQ, 2026-11-18).",
+      "kind": "EVIDENCE"
+     },
+     {
+      "field": "timeToFirstCash",
+      "value": "20 days",
+      "kind": "EVIDENCE"
+     }
+    ]
+   }
+  ],
+  "excluded": [],
+  "questions": [],
+  "scope": {
+   "targetCents": 1200000,
+   "daysLeft": 40,
+   "hoursCeiling": null,
+   "industry": null,
+   "recurring": null,
+   "hoursPerWeek": null
+  },
+  "at": "2026-11-28T07:04:14.857Z"
+ }
+}

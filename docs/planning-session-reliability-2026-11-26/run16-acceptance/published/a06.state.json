@@ -1,0 +1,1008 @@
+{
+ "value": {
+  "contract": {
+   "goalId": "wst_c82871dfb66c48dba055",
+   "words": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+   "source": {
+    "kind": "OWNER_MESSAGE",
+    "ref": "OBJECTIVE.txt",
+    "at": "2026-11-27"
+   },
+   "terms": {
+    "targetCents": 500000,
+    "currency": "USD",
+    "metric": "SETTLED_CASH",
+    "windowDays": 30,
+    "totalSpendCapCents": null,
+    "preProofSpendCapCents": null,
+    "exposureCapCents": 0,
+    "proofCondition": "$5000 of cash settled in the owner's account within 30 days",
+    "ownerHoursPerWeek": null,
+    "ownerPhysicalWork": "UNSTATED",
+    "exclusions": [],
+    "evidenceExclusions": []
+   },
+   "explanations": {},
+   "version": 1,
+   "digest": "42304d5c55eda058c82715f7"
+  },
+  "revisions": [
+   {
+    "goalId": "wst_c82871dfb66c48dba055",
+    "contractDigest": "42304d5c55eda058c82715f7",
+    "parentRevisionId": null,
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the dairy energy-audit workbook has no established purchase price",
+     "opportunityIds": [],
+     "why": "The card's only price is the state dairy innovation grant's $4,000 award per selected farm. A grant award is paid by the state to the farm; it is not what a farm pays for this workbook. With no purchase price established, no number of sales can be shown to reach $5,000 within 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the workbook to registry farms at $4,000 each (2 sales)",
+      "why": "Rests on treating a grant award as a price; nobody has established that any farm pays $4,000, or any amount, for the workbook."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "RESEARCH",
+      "label": "Establish what dairy farms actually pay for an on-farm energy-audit workbook: quote a stated price to registry farms and record paid orders, or find a sourced price paid by farms",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "RESEARCH",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "CHEAP_MODEL_READS",
+         "state": "PRESENT"
+        }
+       ],
+       "routine": false
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Purchase price a farm pays for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": "A price a farm paid or agreed to pay for the workbook (not a grant award)"
+     },
+     {
+      "name": "Licensed dairy farms on the state registry",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "farms",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Recorded close rate",
+      "status": "EVIDENCED",
+      "value": 0.075,
+      "unit": "paid orders per contact (15 of 200)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#price",
+      "dated": "2026-10-31",
+      "claim": "The state dairy innovation grant awards $4,000 to each farm selected for its on-farm energy round — a grant award, not a purchase price",
+      "population": "Farms selected by the state grant round",
+      "matchesBuyer": false,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state milk-producer registry lists 900 licensed dairy farms; the grant round received 210 applications",
+      "population": "Licensed dairy farms in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "15 paid orders from 200 contacts",
+      "population": "Dairy farm owners contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No purchase price for the workbook is established: the only figure on the card ($4,000) is a state grant award to selected farms, which is not a price a farm pays, so the revenue per sale — and whether any number of the 900 registry farms reaches $5,000 in 30 days — is unknown.",
+     "resolution": "Brain quotes a stated price for the workbook to registry farms by mail and phone (no capital needed) and records paid orders or written acceptances at that price, or sources a price farms actually pay for comparable energy audits; replan once a price paid by farms is established.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [],
+    "chain": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "why": "No purchase price: the $4,000 on the card is a grant award, not what a farm pays."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_b10eb5aba3db_44afba",
+    "digest": "b10eb5aba3db2df7e03a9a78",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:05:57.981Z"
+   },
+   {
+    "goalId": "wst_c82871dfb66c48dba055",
+    "contractDigest": "42304d5c55eda058c82715f7",
+    "parentRevisionId": "rev_b10eb5aba3db_44afba",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the dairy energy-audit workbook has no established purchase price",
+     "opportunityIds": [],
+     "why": "The card's only price is the state dairy innovation grant's $4,000 award per selected farm. A grant award is paid by the state to the farm; it is not what a farm pays for this workbook. With no purchase price established, no number of sales can be shown to reach $5,000 within 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the workbook to registry farms at $4,000 each (2 sales)",
+      "why": "Rests on treating a grant award as a price; nobody has established that any farm pays $4,000, or any amount, for the workbook."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Priced zero-capital offer to the first 200 registry farms at one stated price; record paid orders by day 10 to establish the price farms pay",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Purchase price a farm pays for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": "A price a farm paid or agreed to pay for the workbook (not a grant award)"
+     },
+     {
+      "name": "Licensed dairy farms on the state registry",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "farms",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Recorded close rate",
+      "status": "EVIDENCED",
+      "value": 0.075,
+      "unit": "paid orders per contact (15 of 200)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#price",
+      "dated": "2026-10-31",
+      "claim": "The state dairy innovation grant awards $4,000 to each farm selected for its on-farm energy round — a grant award, not a purchase price",
+      "population": "Farms selected by the state grant round",
+      "matchesBuyer": false,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state milk-producer registry lists 900 licensed dairy farms; the grant round received 210 applications",
+      "population": "Licensed dairy farms in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "15 paid orders from 200 contacts",
+      "population": "Dairy farm owners contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No purchase price for the workbook is established: the only figure on the card ($4,000) is a state grant award to selected farms, which is not a price a farm pays, so the revenue per sale — and whether any number of the 900 registry farms reaches $5,000 in 30 days — is unknown.",
+     "resolution": "Brain runs a zero-capital priced offer: by day 3 mail/phone the first 200 registry farms (card `buyerVolume`) with the workbook at one stated price (e.g. $400) and by day 10 record paid orders or written acceptances at that price. That establishes OFFER_AND_PRICE and conversion at the price together; replan as soon as paid orders × price, extended over the 900 farms, credibly carries $5,000 with 7-day settlement inside day 30 (at $400: 13 paid orders). Until then no plan is established.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Agreed: $4,000 is a grant award paid by the state to selected farms (NOT_A_PURCHASE), not a price; selling at $4,000 is correctly rejected.",
+      "resolution": "Accepted; unchanged: the plan does not use the $4,000 grant award as a price (card fact `price` is a grant award; Brain's OFFER_AND_PRICE basis: 'no single price on the card')."
+     },
+     {
+      "finding": "Stance defect: a startable, zero-capital live test resolves the only missing link (OFFER_AND_PRICE), so the stance should be CONDITIONAL with proof/stop/continue, not NO_PLAN.",
+      "resolution": "Rebutted. The brief defines the missing-price case explicitly: 'a price nobody established' sets no constraint and is named 'as a decisive gap (noPlan.decisiveLinks) to research'. A CONDITIONAL plan would need a per-sale price as a plan quantity; the only figures available are the grant (not a price) or a number I invent, and an estimate is not evidence. Brain's own planner reads the same record as NOT_VIABLE: 'cannot reach the 5000 USD still needed at prices buyers are shown to pay ... (at most 0)'. With price unknown, the revenue side of the plan is entirely unmeasured, so no plan is established; the zero-capital priced offer is kept, sharpened, as the resolution that establishes the decisive link."
+     },
+     {
+      "finding": "Arithmetic: 900 farms x 7.5% = about 67 expected orders; $5,000 / 67 = about $75 minimum price. At $400, 13 orders are needed, about 173 contacts at 7.5%.",
+      "resolution": "Rebutted as a basis for a plan: $5,000/67 ≈ $75 is a break-even floor, not an established price; nothing on the record says any farm pays $75, $400 or any amount. The arithmetic is now carried in the resolution as the test's pass bar."
+     },
+     {
+      "finding": "Caveat to carry into the conditional plan: the 15/200 conversion has no recorded price, so conversion at the quoted price is also measured by the test and must be part of the threshold.",
+      "resolution": "Accepted, and it strengthens NO_PLAN: the 15/200 conversion (card fact `conversionRates`) carries no price, so neither the price nor the close rate at any price is established. The resolution's test measures both together."
+     },
+     {
+      "finding": "Timing: the test must finish by about day 14 so that the remaining sales plus the 7-day settlement land before day 30.",
+      "resolution": "Accepted: the resolution now fixes the test to finish by day 10 so follow-on sales plus the 7-day settlement (card `timeToFirstCash`) land before day 30."
+     },
+     {
+      "finding": "The grant round's 210 applicants are a possible warm segment, but a grant applicant is not a buyer until it pays; do not count the grant as revenue.",
+      "resolution": "Accepted: the 210 grant applicants are not counted as buyers and the grant is not counted as revenue."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "why": "No purchase price: the $4,000 on the card is a grant award, not what a farm pays."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_992b59e90d6f_207cef",
+    "digest": "992b59e90d6f174796ee58e6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:11:50.804Z"
+   }
+  ],
+  "current": {
+   "goalId": "wst_c82871dfb66c48dba055",
+   "contractDigest": "42304d5c55eda058c82715f7",
+   "parentRevisionId": "rev_b10eb5aba3db_44afba",
+   "stance": "NO_PLAN",
+   "strategy": {
+    "title": "No plan: the dairy energy-audit workbook has no established purchase price",
+    "opportunityIds": [],
+    "why": "The card's only price is the state dairy innovation grant's $4,000 award per selected farm. A grant award is paid by the state to the farm; it is not what a farm pays for this workbook. With no purchase price established, no number of sales can be shown to reach $5,000 within 30 days."
+   },
+   "alternatives": [
+    {
+     "title": "Sell the workbook to registry farms at $4,000 each (2 sales)",
+     "why": "Rests on treating a grant award as a price; nobody has established that any farm pays $4,000, or any amount, for the workbook."
+    }
+   ],
+   "steps": [
+    {
+     "id": "t1",
+     "kind": "TEST",
+     "label": "Priced zero-capital offer to the first 200 registry farms at one stated price; record paid orders by day 10 to establish the price farms pay",
+     "performer": "BRAIN",
+     "costCents": 0,
+     "day": 1,
+     "dependsOn": null,
+     "evidence": [
+      "s1",
+      "s2"
+     ],
+     "executor": {
+      "operation": "SEND_OFFER",
+      "performedBy": "BRAIN",
+      "provider": null,
+      "capabilities": [
+       {
+        "id": "SEND_A_MESSAGE",
+        "state": "NOT_CONNECTED"
+       },
+       {
+        "id": "READ_REPLIES",
+        "state": "UNREAD"
+       }
+      ],
+      "routine": true
+     }
+    }
+   ],
+   "cash": [],
+   "proofDay": null,
+   "quantities": [
+    {
+     "name": "Purchase price a farm pays for the workbook",
+     "status": "UNKNOWN",
+     "value": null,
+     "unit": "USD",
+     "sources": [
+      "s1"
+     ],
+     "needs": "A price a farm paid or agreed to pay for the workbook (not a grant award)"
+    },
+    {
+     "name": "Licensed dairy farms on the state registry",
+     "status": "EVIDENCED",
+     "value": 900,
+     "unit": "farms",
+     "sources": [
+      "s2"
+     ],
+     "needs": null
+    },
+    {
+     "name": "Recorded close rate",
+     "status": "EVIDENCED",
+     "value": 0.075,
+     "unit": "paid orders per contact (15 of 200)",
+     "sources": [
+      "s3"
+     ],
+     "needs": null
+    }
+   ],
+   "sources": [
+    {
+     "id": "s1",
+     "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#price",
+     "dated": "2026-10-31",
+     "claim": "The state dairy innovation grant awards $4,000 to each farm selected for its on-farm energy round — a grant award, not a purchase price",
+     "population": "Farms selected by the state grant round",
+     "matchesBuyer": false,
+     "opportunityId": "cop_7a2a0f9fd4034887ab05"
+    },
+    {
+     "id": "s2",
+     "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#buyerVolume",
+     "dated": "2026-11-25",
+     "claim": "The state milk-producer registry lists 900 licensed dairy farms; the grant round received 210 applications",
+     "population": "Licensed dairy farms in the state",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7a2a0f9fd4034887ab05"
+    },
+    {
+     "id": "s3",
+     "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#conversionRates",
+     "dated": "2026-11-25",
+     "claim": "15 paid orders from 200 contacts",
+     "population": "Dairy farm owners contacted",
+     "matchesBuyer": true,
+     "opportunityId": "cop_7a2a0f9fd4034887ab05"
+    }
+   ],
+   "validation": null,
+   "noPlan": {
+    "decisiveGap": "No purchase price for the workbook is established: the only figure on the card ($4,000) is a state grant award to selected farms, which is not a price a farm pays, so the revenue per sale — and whether any number of the 900 registry farms reaches $5,000 in 30 days — is unknown.",
+    "resolution": "Brain runs a zero-capital priced offer: by day 3 mail/phone the first 200 registry farms (card `buyerVolume`) with the workbook at one stated price (e.g. $400) and by day 10 record paid orders or written acceptances at that price. That establishes OFFER_AND_PRICE and conversion at the price together; replan as soon as paid orders × price, extended over the 900 farms, credibly carries $5,000 with 7-day settlement inside day 30 (at $400: 13 paid orders). Until then no plan is established.",
+    "decisiveLinks": [
+     "OFFER_AND_PRICE"
+    ]
+   },
+   "reach": null,
+   "answers": [
+    {
+     "finding": "Agreed: $4,000 is a grant award paid by the state to selected farms (NOT_A_PURCHASE), not a price; selling at $4,000 is correctly rejected.",
+     "resolution": "Accepted; unchanged: the plan does not use the $4,000 grant award as a price (card fact `price` is a grant award; Brain's OFFER_AND_PRICE basis: 'no single price on the card')."
+    },
+    {
+     "finding": "Stance defect: a startable, zero-capital live test resolves the only missing link (OFFER_AND_PRICE), so the stance should be CONDITIONAL with proof/stop/continue, not NO_PLAN.",
+     "resolution": "Rebutted. The brief defines the missing-price case explicitly: 'a price nobody established' sets no constraint and is named 'as a decisive gap (noPlan.decisiveLinks) to research'. A CONDITIONAL plan would need a per-sale price as a plan quantity; the only figures available are the grant (not a price) or a number I invent, and an estimate is not evidence. Brain's own planner reads the same record as NOT_VIABLE: 'cannot reach the 5000 USD still needed at prices buyers are shown to pay ... (at most 0)'. With price unknown, the revenue side of the plan is entirely unmeasured, so no plan is established; the zero-capital priced offer is kept, sharpened, as the resolution that establishes the decisive link."
+    },
+    {
+     "finding": "Arithmetic: 900 farms x 7.5% = about 67 expected orders; $5,000 / 67 = about $75 minimum price. At $400, 13 orders are needed, about 173 contacts at 7.5%.",
+     "resolution": "Rebutted as a basis for a plan: $5,000/67 ≈ $75 is a break-even floor, not an established price; nothing on the record says any farm pays $75, $400 or any amount. The arithmetic is now carried in the resolution as the test's pass bar."
+    },
+    {
+     "finding": "Caveat to carry into the conditional plan: the 15/200 conversion has no recorded price, so conversion at the quoted price is also measured by the test and must be part of the threshold.",
+     "resolution": "Accepted, and it strengthens NO_PLAN: the 15/200 conversion (card fact `conversionRates`) carries no price, so neither the price nor the close rate at any price is established. The resolution's test measures both together."
+    },
+    {
+     "finding": "Timing: the test must finish by about day 14 so that the remaining sales plus the 7-day settlement land before day 30.",
+     "resolution": "Accepted: the resolution now fixes the test to finish by day 10 so follow-on sales plus the 7-day settlement (card `timeToFirstCash`) land before day 30."
+    },
+    {
+     "finding": "The grant round's 210 applicants are a possible warm segment, but a grant applicant is not a buyer until it pays; do not count the grant as revenue.",
+     "resolution": "Accepted: the 210 grant applicants are not counted as buyers and the grant is not counted as revenue."
+    }
+   ],
+   "chain": [
+    {
+     "opportunityId": "cop_7a2a0f9fd4034887ab05",
+     "missing": [
+      "OFFER_AND_PRICE"
+     ]
+    }
+   ],
+   "excluded": [
+    {
+     "opportunityId": "cop_7a2a0f9fd4034887ab05",
+     "why": "No purchase price: the $4,000 on the card is a grant award, not what a farm pays."
+    }
+   ],
+   "members": [],
+   "resolves": [
+    "OFFER_AND_PRICE"
+   ],
+   "constraints": [],
+   "disagreements": [],
+   "revisionId": "rev_992b59e90d6f_207cef",
+   "digest": "992b59e90d6f174796ee58e6",
+   "author": {
+    "kind": "APP_SESSION",
+    "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+    "model": "claude-opus-5-5"
+   },
+   "createdAt": "2026-11-28T07:11:50.804Z"
+  },
+  "currentCheck": {
+   "revisionId": "rev_992b59e90d6f_207cef",
+   "digest": "992b59e90d6f174796ee58e6",
+   "contractDigest": "42304d5c55eda058c82715f7",
+   "problems": [],
+   "trace": {
+    "totalSpentCents": 0,
+    "committedOpenCents": 0,
+    "preProofCents": 0,
+    "maxExposureCents": 0,
+    "minCashCents": 0,
+    "minCashDay": null,
+    "collectedCents": 0,
+    "collectedInWindowCents": 0,
+    "refundsCents": 0,
+    "ownerFundedCents": 0,
+    "netCents": 0
+   },
+   "brain": {
+    "completed": true,
+    "error": null,
+    "verdict": "NOT_VIABLE",
+    "summary": "No modelled strategy can work under the current limits: cannot reach the 5000 USD still needed at prices buyers are shown to pay, even if every buyer it offers to agreed (at most 0). The reconstruction is hypothetical, not the plan: the reconstruction is flagged implausible (RETURN: median kept [figure withheld] is 17388× the [figure withheld] behind it (bound ×20); SCALE: one deal of \"Constructed: Dairy farm owners — A workbook that audits milk\" needs [figure withheld] and keeps [figure withheld], 3965× the [figure withheld] behind the plan (bound ×20), on a price no b), so none of its figures is shown or adopted. The plan's steps are for \"Dairy farm owners\".",
+    "acceptance": "CANDIDATE_ONLY",
+    "considered": [
+     "cop_7a2a0f9fd4034887ab05"
+    ],
+    "integrity": [],
+    "steps": [
+     {
+      "label": "Research the buyers",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the price",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research settlement",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research the cost per deal",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Research repeat purchases",
+      "owner": "BRAIN",
+      "cost": 0
+     },
+     {
+      "label": "Reach Dairy farm owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Validate the offer with Dairy farm owners",
+      "owner": "BRAIN",
+      "cost": null
+     },
+     {
+      "label": "Deliver and confirm",
+      "owner": "PERSON",
+      "cost": 221.80364680802435
+     },
+     {
+      "label": "Collect payment",
+      "owner": "PERSON",
+      "cost": 0
+     },
+     {
+      "label": "Run the next group",
+      "owner": "BRAIN",
+      "cost": null
+     }
+    ],
+    "nextTest": "Discover, construct and research openings that can reach the 5000 USD still needed — the openings held reach at most 0 USD — and establish each one's buyer, price, fulfilment, costs and settlement so the quant engine can combine them.",
+    "openings": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "title": "On-farm energy audit workbook for dairy farmers",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ],
+      "stage": "D_BUYER_VALIDATED",
+      "supportedReach": 0,
+      "potentialReach": 4000,
+      "card": {
+       "payer": "Dairy farm owners",
+       "reachableChannel": "Mail and phone to the farms on the state milk-producer registry",
+       "buyingSignal": "Posted asking for this work",
+       "signalObservedAt": "2026-11-25T07:00:15.660Z",
+       "offerScope": "A workbook that audits milking-parlour and cooling energy use from twelve months of utility bills; built by Brain.",
+       "priceCents": 400000,
+       "currency": "USD",
+       "peakFundingCents": 0,
+       "humanHours": 1,
+       "requiredCapabilities": [
+        "PRODUCE_SPREADSHEET"
+       ],
+       "industry": "dairy farms",
+       "mechanism": "DIAGNOSTIC_OPPORTUNITY",
+       "state": "DISCOVERED"
+      },
+      "agreements": [],
+      "links": [
+       {
+        "link": "REACHABLE_BUYER",
+        "ok": true,
+        "basis": "reach: Mail and phone to the farms on the state milk-producer registry"
+       },
+       {
+        "link": "CURRENT_DEMAND",
+        "ok": true,
+        "basis": "VERIFIED: signal dated 2026-11-25"
+       },
+       {
+        "link": "OFFER_AND_PRICE",
+        "ok": false,
+        "basis": "no single price on the card"
+       },
+       {
+        "link": "CONVERSION",
+        "ok": true,
+        "basis": "measured on this offer's own sales: 15 accepted of 200 contacts"
+       },
+       {
+        "link": "MARKET_VOLUME",
+        "ok": true,
+        "basis": "a one-off needs its one buyer"
+       },
+       {
+        "link": "FULFILMENT",
+        "ok": true,
+        "basis": "Brain has proved: PRODUCE_SPREADSHEET"
+       },
+       {
+        "link": "ECONOMICS",
+        "ok": true,
+        "basis": "cost 20, tied up 0"
+       },
+       {
+        "link": "SETTLES_IN_TIME",
+        "ok": true,
+        "basis": "7 days to usable cash against 30 left"
+       }
+      ],
+      "facts": [
+       {
+        "field": "buyerVolume",
+        "value": "The state milk-producer registry lists 900 licensed dairy farms with mailing addresses and phones; the grant round received 210 applications.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "captureMechanism",
+        "value": "Sell A workbook that audits milking-parlour and cooling energy use from twelve months of utility bills; built by Brain. to each buyer.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "conversionRates",
+        "value": "15 paid orders from 200 contacts",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "delivery",
+        "value": "A spreadsheet Brain produces.",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "directCosts",
+        "value": "$20",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "exposure",
+        "value": "$0",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "payer",
+        "value": "Dairy farm owners",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "price",
+        "value": "The state dairy innovation grant awards $4,000 to each dairy farm selected for its on-farm energy round (award announcement, 2026-10).",
+        "kind": "EVIDENCE"
+       },
+       {
+        "field": "timeToFirstCash",
+        "value": "7 days",
+        "kind": "EVIDENCE"
+       }
+      ]
+     }
+    ],
+    "excluded": [],
+    "questions": [],
+    "scope": {
+     "targetCents": 500000,
+     "daysLeft": 30,
+     "hoursCeiling": null,
+     "industry": null,
+     "recurring": null,
+     "hoursPerWeek": null
+    },
+    "at": "2026-11-28T07:04:15.299Z"
+   }
+  },
+  "reviews": [
+   {
+    "revisionId": "rev_b10eb5aba3db_44afba",
+    "revisionDigest": "b10eb5aba3db2df7e03a9a78",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d5c58fd087ec4427918e/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "REVISE",
+    "reasons": "The plan is right that the card's only price fact, $4,000, is a state grant award to selected farms (NOT_A_PURCHASE: a grant) and not what a farm pays for the workbook, so OFFER_AND_PRICE is unestablished. The stance is still wrong. NO_PLAN is for a gap that even all the evidence could not close, or one no startable action can measure. Here the missing price is exactly an unknown that a zero-capital live offer measures, and every other link is EVIDENCE on the card: 900 registry farms reachable by mail and phone, demand verified 2026-11-25, conversion measured on this offer at 15/200 = 7.5%, Brain-produced spreadsheet (PRODUCE_SPREADSHEET proved), $20 direct cost, $0 exposure, 7 days to usable cash in a 30-day window. The plan's own resolution describes that test (quote a stated price to registry farms and record paid orders) but does not commit to it as a plan. Recomputed: at 7.5% over 900 farms, about 67 sales, so any price at or above about $75 carries $5,000. At a quoted $400, 13 sales are needed. The revision should be a CONDITIONAL plan: a named quoted price, a proof threshold (for example at least N paid orders at that price from the first 100-200 contacts by about day 7), stop and continue rules, and validation.decides = OFFER_AND_PRICE. It should also check that passing at the threshold still carries $5,000 with settlement (7 days) inside day 30.",
+    "findings": [
+     "Agreed: $4,000 is a grant award paid by the state to selected farms (NOT_A_PURCHASE), not a price; selling at $4,000 is correctly rejected.",
+     "Stance defect: a startable, zero-capital live test resolves the only missing link (OFFER_AND_PRICE), so the stance should be CONDITIONAL with proof/stop/continue, not NO_PLAN.",
+     "Arithmetic: 900 farms x 7.5% = about 67 expected orders; $5,000 / 67 = about $75 minimum price. At $400, 13 orders are needed, about 173 contacts at 7.5%.",
+     "Caveat to carry into the conditional plan: the 15/200 conversion has no recorded price, so conversion at the quoted price is also measured by the test and must be part of the threshold.",
+     "Timing: the test must finish by about day 14 so that the remaining sales plus the 7-day settlement land before day 30.",
+     "The grant round's 210 applicants are a possible warm segment, but a grant applicant is not a buyer until it pays; do not count the grant as revenue."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:09:16.288Z",
+    "conditions": []
+   },
+   {
+    "revisionId": "rev_992b59e90d6f_207cef",
+    "revisionDigest": "992b59e90d6f174796ee58e6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d5c58fd087ec4427918e/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "This revision addresses the earlier review. It keeps the correct finding that the card's $4,000 is a state grant award (NOT_A_PURCHASE: grant), not a price a farm pays, so OFFER_AND_PRICE is unestablished and no sales arithmetic can yet be shown to reach $5,000. It now commits to the zero-capital measurement as its step: a priced offer to the first 200 of the 900 registry farms (EVIDENCE: buyerVolume), with paid orders recorded by day 10. That establishes price and conversion at that price together. The decisive gap is named and is one a live test decides. No price hypothesis exists on the record (no owner figure, no invoice), so declining to call this a plan until a paid price exists is defensible. Recomputed: at a stated $400, 13 paid orders carry $5,000. At the 7.5% close rate measured on this offer (15/200), 900 farms give about 67 orders, so the opening can carry the target at any price above about $75 once a real price is paid. Timing: test by day 10 + 7-day settlement leaves room inside day 30 only if the remaining sends start right after the test.",
+    "findings": [
+     "Grant award correctly excluded as a price (NOT_A_PURCHASE: grant).",
+     "Test is zero-capital, Brain-fulfilled (PRODUCE_SPREADSHEET proved, $20 cost), and pay-on-delivery, so it takes no orders that cannot be fulfilled.",
+     "Recommend stating the test's thresholds explicitly when replanning: at $400, at least 3 paid of the first 200 by day 10 (13 x 200/900 = 2.9) continues to the remaining 700 farms; fewer stops at $400 and records the price gap.",
+     "SEND_A_MESSAGE is NOT_CONNECTED and must be connected before day 1, or the day-10 measurement slips and the 7-day settlement no longer fits comfortably before day 30.",
+     "The 15/200 close rate has no recorded price, so it is only a prior for conversion at the quoted price."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:13:06.847Z",
+    "conditions": []
+   }
+  ],
+  "final": {
+   "revisionId": "rev_992b59e90d6f_207cef",
+   "digest": "992b59e90d6f174796ee58e6",
+   "contractDigest": "42304d5c55eda058c82715f7",
+   "plan": {
+    "goalId": "wst_c82871dfb66c48dba055",
+    "contractDigest": "42304d5c55eda058c82715f7",
+    "parentRevisionId": "rev_b10eb5aba3db_44afba",
+    "stance": "NO_PLAN",
+    "strategy": {
+     "title": "No plan: the dairy energy-audit workbook has no established purchase price",
+     "opportunityIds": [],
+     "why": "The card's only price is the state dairy innovation grant's $4,000 award per selected farm. A grant award is paid by the state to the farm; it is not what a farm pays for this workbook. With no purchase price established, no number of sales can be shown to reach $5,000 within 30 days."
+    },
+    "alternatives": [
+     {
+      "title": "Sell the workbook to registry farms at $4,000 each (2 sales)",
+      "why": "Rests on treating a grant award as a price; nobody has established that any farm pays $4,000, or any amount, for the workbook."
+     }
+    ],
+    "steps": [
+     {
+      "id": "t1",
+      "kind": "TEST",
+      "label": "Priced zero-capital offer to the first 200 registry farms at one stated price; record paid orders by day 10 to establish the price farms pay",
+      "performer": "BRAIN",
+      "costCents": 0,
+      "day": 1,
+      "dependsOn": null,
+      "evidence": [
+       "s1",
+       "s2"
+      ],
+      "executor": {
+       "operation": "SEND_OFFER",
+       "performedBy": "BRAIN",
+       "provider": null,
+       "capabilities": [
+        {
+         "id": "SEND_A_MESSAGE",
+         "state": "NOT_CONNECTED"
+        },
+        {
+         "id": "READ_REPLIES",
+         "state": "UNREAD"
+        }
+       ],
+       "routine": true
+      }
+     }
+    ],
+    "cash": [],
+    "proofDay": null,
+    "quantities": [
+     {
+      "name": "Purchase price a farm pays for the workbook",
+      "status": "UNKNOWN",
+      "value": null,
+      "unit": "USD",
+      "sources": [
+       "s1"
+      ],
+      "needs": "A price a farm paid or agreed to pay for the workbook (not a grant award)"
+     },
+     {
+      "name": "Licensed dairy farms on the state registry",
+      "status": "EVIDENCED",
+      "value": 900,
+      "unit": "farms",
+      "sources": [
+       "s2"
+      ],
+      "needs": null
+     },
+     {
+      "name": "Recorded close rate",
+      "status": "EVIDENCED",
+      "value": 0.075,
+      "unit": "paid orders per contact (15 of 200)",
+      "sources": [
+       "s3"
+      ],
+      "needs": null
+     }
+    ],
+    "sources": [
+     {
+      "id": "s1",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#price",
+      "dated": "2026-10-31",
+      "claim": "The state dairy innovation grant awards $4,000 to each farm selected for its on-farm energy round — a grant award, not a purchase price",
+      "population": "Farms selected by the state grant round",
+      "matchesBuyer": false,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s2",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#buyerVolume",
+      "dated": "2026-11-25",
+      "claim": "The state milk-producer registry lists 900 licensed dairy farms; the grant round received 210 applications",
+      "population": "Licensed dairy farms in the state",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     },
+     {
+      "id": "s3",
+      "url": "https://brain.local/card/cop_7a2a0f9fd4034887ab05#conversionRates",
+      "dated": "2026-11-25",
+      "claim": "15 paid orders from 200 contacts",
+      "population": "Dairy farm owners contacted",
+      "matchesBuyer": true,
+      "opportunityId": "cop_7a2a0f9fd4034887ab05"
+     }
+    ],
+    "validation": null,
+    "noPlan": {
+     "decisiveGap": "No purchase price for the workbook is established: the only figure on the card ($4,000) is a state grant award to selected farms, which is not a price a farm pays, so the revenue per sale — and whether any number of the 900 registry farms reaches $5,000 in 30 days — is unknown.",
+     "resolution": "Brain runs a zero-capital priced offer: by day 3 mail/phone the first 200 registry farms (card `buyerVolume`) with the workbook at one stated price (e.g. $400) and by day 10 record paid orders or written acceptances at that price. That establishes OFFER_AND_PRICE and conversion at the price together; replan as soon as paid orders × price, extended over the 900 farms, credibly carries $5,000 with 7-day settlement inside day 30 (at $400: 13 paid orders). Until then no plan is established.",
+     "decisiveLinks": [
+      "OFFER_AND_PRICE"
+     ]
+    },
+    "reach": null,
+    "answers": [
+     {
+      "finding": "Agreed: $4,000 is a grant award paid by the state to selected farms (NOT_A_PURCHASE), not a price; selling at $4,000 is correctly rejected.",
+      "resolution": "Accepted; unchanged: the plan does not use the $4,000 grant award as a price (card fact `price` is a grant award; Brain's OFFER_AND_PRICE basis: 'no single price on the card')."
+     },
+     {
+      "finding": "Stance defect: a startable, zero-capital live test resolves the only missing link (OFFER_AND_PRICE), so the stance should be CONDITIONAL with proof/stop/continue, not NO_PLAN.",
+      "resolution": "Rebutted. The brief defines the missing-price case explicitly: 'a price nobody established' sets no constraint and is named 'as a decisive gap (noPlan.decisiveLinks) to research'. A CONDITIONAL plan would need a per-sale price as a plan quantity; the only figures available are the grant (not a price) or a number I invent, and an estimate is not evidence. Brain's own planner reads the same record as NOT_VIABLE: 'cannot reach the 5000 USD still needed at prices buyers are shown to pay ... (at most 0)'. With price unknown, the revenue side of the plan is entirely unmeasured, so no plan is established; the zero-capital priced offer is kept, sharpened, as the resolution that establishes the decisive link."
+     },
+     {
+      "finding": "Arithmetic: 900 farms x 7.5% = about 67 expected orders; $5,000 / 67 = about $75 minimum price. At $400, 13 orders are needed, about 173 contacts at 7.5%.",
+      "resolution": "Rebutted as a basis for a plan: $5,000/67 ≈ $75 is a break-even floor, not an established price; nothing on the record says any farm pays $75, $400 or any amount. The arithmetic is now carried in the resolution as the test's pass bar."
+     },
+     {
+      "finding": "Caveat to carry into the conditional plan: the 15/200 conversion has no recorded price, so conversion at the quoted price is also measured by the test and must be part of the threshold.",
+      "resolution": "Accepted, and it strengthens NO_PLAN: the 15/200 conversion (card fact `conversionRates`) carries no price, so neither the price nor the close rate at any price is established. The resolution's test measures both together."
+     },
+     {
+      "finding": "Timing: the test must finish by about day 14 so that the remaining sales plus the 7-day settlement land before day 30.",
+      "resolution": "Accepted: the resolution now fixes the test to finish by day 10 so follow-on sales plus the 7-day settlement (card `timeToFirstCash`) land before day 30."
+     },
+     {
+      "finding": "The grant round's 210 applicants are a possible warm segment, but a grant applicant is not a buyer until it pays; do not count the grant as revenue.",
+      "resolution": "Accepted: the 210 grant applicants are not counted as buyers and the grant is not counted as revenue."
+     }
+    ],
+    "chain": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "missing": [
+       "OFFER_AND_PRICE"
+      ]
+     }
+    ],
+    "excluded": [
+     {
+      "opportunityId": "cop_7a2a0f9fd4034887ab05",
+      "why": "No purchase price: the $4,000 on the card is a grant award, not what a farm pays."
+     }
+    ],
+    "members": [],
+    "resolves": [
+     "OFFER_AND_PRICE"
+    ],
+    "constraints": [],
+    "disagreements": [],
+    "revisionId": "rev_992b59e90d6f_207cef",
+    "digest": "992b59e90d6f174796ee58e6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "createdAt": "2026-11-28T07:11:50.804Z"
+   },
+   "review": {
+    "revisionId": "rev_992b59e90d6f_207cef",
+    "revisionDigest": "992b59e90d6f174796ee58e6",
+    "author": {
+     "kind": "APP_SESSION",
+     "id": "wkr_1c0c2d91ce8749c7aa54/author-B",
+     "model": "claude-opus-5-5"
+    },
+    "reviewer": {
+     "kind": "MODEL",
+     "id": "wkr_d5c58fd087ec4427918e/fleet-1",
+     "model": "claude-opus-5-5"
+    },
+    "verdict": "PASS",
+    "reasons": "This revision addresses the earlier review. It keeps the correct finding that the card's $4,000 is a state grant award (NOT_A_PURCHASE: grant), not a price a farm pays, so OFFER_AND_PRICE is unestablished and no sales arithmetic can yet be shown to reach $5,000. It now commits to the zero-capital measurement as its step: a priced offer to the first 200 of the 900 registry farms (EVIDENCE: buyerVolume), with paid orders recorded by day 10. That establishes price and conversion at that price together. The decisive gap is named and is one a live test decides. No price hypothesis exists on the record (no owner figure, no invoice), so declining to call this a plan until a paid price exists is defensible. Recomputed: at a stated $400, 13 paid orders carry $5,000. At the 7.5% close rate measured on this offer (15/200), 900 farms give about 67 orders, so the opening can carry the target at any price above about $75 once a real price is paid. Timing: test by day 10 + 7-day settlement leaves room inside day 30 only if the remaining sends start right after the test.",
+    "findings": [
+     "Grant award correctly excluded as a price (NOT_A_PURCHASE: grant).",
+     "Test is zero-capital, Brain-fulfilled (PRODUCE_SPREADSHEET proved, $20 cost), and pay-on-delivery, so it takes no orders that cannot be fulfilled.",
+     "Recommend stating the test's thresholds explicitly when replanning: at $400, at least 3 paid of the first 200 by day 10 (13 x 200/900 = 2.9) continues to the remaining 700 farms; fewer stops at $400 and records the price gap.",
+     "SEND_A_MESSAGE is NOT_CONNECTED and must be connected before day 1, or the day-10 measurement slips and the 7-day settlement no longer fits comfortably before day 30.",
+     "The 15/200 close rate has no recorded price, so it is only a prior for conversion at the quoted price."
+    ],
+    "resolution": null,
+    "at": "2026-11-28T07:13:06.847Z",
+    "conditions": []
+   },
+   "basis": {
+    "intent": "Collect $5,000 of settled cash within 30 days using no up-front capital.",
+    "terms": "6068d42e192a9a6e",
+    "openings": {
+     "cop_7a2a0f9fd4034887ab05": "1c0bb70de9965ebd"
+    }
+   },
+   "at": "2026-11-28T07:13:50.949Z"
+  },
+  "staleFinal": null,
+  "staleBecause": []
+ }
+}

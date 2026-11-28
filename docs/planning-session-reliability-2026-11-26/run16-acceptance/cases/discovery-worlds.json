@@ -1,0 +1,110 @@
+[
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "ay-01-fast-small-no-capital",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Get me $1,500 of settled cash in the next 14 days. I have no money to put in, so nothing up front.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "ay-02-named-industry-auto-parts",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "I want $6,000 of settled cash within 30 days, and it has to come from independent auto-parts stores \u2014 selling to them or doing work for them. I can put in up to $1,000.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "ay-03-larger-target-owner-hours",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "Target is $12,000 of settled cash in 45 days. I can invest up to $2,500, but I only have about 3 hours a week to give this, so Brain or contractors have to do the actual work.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  },
+  {
+    "heldOut": true,
+    "dimensions": {
+      "capital": "none",
+      "target": "small",
+      "deadline": "short",
+      "autonomy": "unlimited",
+      "missingEvidence": "none",
+      "contradictoryEvidence": false,
+      "objectiveChanged": false,
+      "industry": "discovery",
+      "mechanism": "INFORMATION_ASYMMETRY"
+    },
+    "id": "ay-04-net-cash-small-capital",
+    "description": "raw-objective discovery world (graded by hidden rubric)",
+    "objective": "I need to keep $3,500 after all direct costs within 21 days. I can spend at most $300 up front.",
+    "openings": [],
+    "expect": {
+      "verdict": "NO_PLAN",
+      "blocker": {
+        "kind": "MISSING_EVIDENCE",
+        "links": [
+          "CURRENT_DEMAND"
+        ]
+      }
+    }
+  }
+]

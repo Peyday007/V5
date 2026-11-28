@@ -1,0 +1,20 @@
+{
+ "caseId": "ay-04-net-cash-small-capital",
+ "keys": {},
+ "run": {
+  "completed": false,
+  "error": "the planner returned no reading",
+  "verdict": null,
+  "summary": null,
+  "acceptance": null,
+  "considered": [],
+  "integrity": [],
+  "steps": [],
+  "nextTest": null,
+  "openings": [],
+  "excluded": [],
+  "questions": [],
+  "scope": null,
+  "at": "2026-11-28T07:25:38.158Z"
+ }
+}
